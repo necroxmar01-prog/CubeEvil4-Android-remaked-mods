@@ -1722,6 +1722,45 @@ extern "C" int re4probe_free_move(void)
         pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
     }
 
+    // the camera follows his way by itself while he walks sideways (after the right stick rested), and not when
+    // he walks toward it
+    {
+        re4_aim_set(100 << 8 | 0x10);
+        pl->r_no_1 = 0;
+        pl->r_no_2 = 0;
+        pl->ang.y = 0.0f;
+        pl->pos.x = 90000.0f;  // a jump: the camera starts behind him (0)
+        Key.stickX = 0;
+        Key.stickY = 0;
+        Key.substickX = 0;
+        re4_player_input(pl);
+        pl->r_no_1 = 1;
+        Key.stickX = 56;  // right, held
+        for (int i = 0; i < 90; i++) {
+            Key.on = 4;
+            re4_player_input(pl);
+        }
+        const f32 followed = camYaw();
+        bad |= followed > -0.3f ? 0x80000 : 0;  // it turned his way (right: a smaller yaw)
+        // toward the camera: it stays
+        Key.stickX = 0;
+        Key.stickY = -56;
+        for (int i = 0; i < 20; i++) {
+            Key.on = 2;
+            re4_player_input(pl);
+        }
+        const f32 before = camYaw();
+        for (int i = 0; i < 30; i++) {
+            Key.on = 2;
+            re4_player_input(pl);
+        }
+        bad |= fabsf(camYaw() - before) > 0.01f ? 0x100000 : 0;
+        Key.stickY = 0;
+        Key.on = 0;
+        pl->r_no_1 = 0;
+        re4_aim_set(100 << 8 | 0x10 | 0x20);
+    }
+
     // back in the walk routines after a door (his position jumped): the camera starts behind him
     pl->r_no_1 = 0;
     pl->ang.y = 1.0f;

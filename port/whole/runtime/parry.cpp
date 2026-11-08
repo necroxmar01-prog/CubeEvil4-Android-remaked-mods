@@ -8,10 +8,12 @@
 // r_no_2 2, as the routine sets it on the fire key), the knife key kept down until his stance is up; the slash
 // hits the attacker as any knife slash does (he is at arm's length), so it staggers him by the game's own rules.
 // Grabs and the like (SetPlDamage, PlSetDamage called straight) are not attack spheres and are not parried.
-// The clash rings as metal (device report 08.11.2026: no sound): the enemies' own armour hit, SE 0xD of the
-// attacker's block (SndCall(8, 0xD, pos, em->id, 0, em), as em10 / em25 / em2c / em2d / em32 play it when a hit
-// strikes armour), the attacker being the enemy nearest the blow; for the villagers' family (em10's ids, those
-// of Dmg_tbl_em10) only, where that SE is the armour's for sure.
+// The clash rings as metal: the villagers' own "weapon knocked away" SE, 0x3F of the attacker's block (em10
+// gives every axe, sickle and knife it throws setSeDamage(8, 0x3F, em->id): the clink when Leon shoots it out
+// of the air), else their armour hit 0xD (em10 / em25 / em2c / em2d / em32 when a hit strikes armour); the
+// attacker being the villager (em10's ids, those of Dmg_tbl_em10) nearest the blow, the sound at his position
+// as the game plays its own (0.99.4-mods 6b5329d played only 0xD, at the blow, and stayed silent on the device:
+// the plain villagers' block has no armour hit).
 #include "types.h"
 #include "global.h"
 #include "main.h"
@@ -59,7 +61,13 @@ void clash(Vec* pos)
         }
     }
     if (best) {
-        SndCall(8, 0xD, pos, best->id, 0, best);
+        const u32 se = SndCall(8, 0x3F, &best->pos, best->id, 0, best);
+        if (se == 0) {
+            SndCall(8, 0xD, &best->pos, best->id, 0, best);
+        }
+        re4_log("parry: clash SE %s (enemy id 0x%x)", se ? "0x3F" : "0xD", (unsigned) best->id);
+    } else {
+        re4_log("parry: no villager near the blow, no clash SE");
     }
 }
 

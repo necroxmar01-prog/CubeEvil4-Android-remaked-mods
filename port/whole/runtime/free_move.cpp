@@ -15,7 +15,10 @@
 //    re4_free_cam_matrix (CameraQuasiFPS::calcBaseMatrix) builds the camera's base frame from that yaw
 //    instead of Leon's.
 //    The right stick pressed (R3, CoreBridge.recenterCamera: a toggling bit of the aim bits) turns the camera
-//    back behind him, where his body faces, in a few frames (re4_camera_recenter).
+//    back behind him, where his body faces, in a few frames (re4_camera_recenter). While he walks or runs and the
+//    right stick has rested for kFollowDelay frames, the camera follows his way by itself, as the remake's does
+//    (wish of DevJunior, 08.11.2026): it turns toward his facing by a share of the difference (kFollowWalk /
+//    kFollowRun, at most kFollowStep a frame), not when he walks toward the camera (beyond kFollowAngle).
 //  - "Move while aiming": while a weapon or the knife is ready (r_no_1 6 / 0xB, cPlayer::isKamae) the C stick
 //    walks Leon forward, back and sideways, relative to where he aims, at kAimWalk. The game has no strafe
 //    motions; re4_player_after_routine (cPlayer::move, after the routines posed him) plays his own walk motion
@@ -84,6 +87,11 @@ const f32 kLegSpeed = 0.9f;       // the walk motion's frames per game frame at 
 const f32 kSwayAim = 0.5f;        // share of the walk's hip turn while aiming (all of it while reloading)
 const f32 kSwayMean = 0.08f;      // the hips' running mean per frame (a walk step lasts about 15 frames)
 const f32 kRecenter = 0.35f;      // share per frame the camera turns back behind him after R3
+const int kFollowDelay = 15;      // frames the right stick rests before the camera follows his way (half a second)
+const f32 kFollowWalk = 0.025f;   // share of the difference to his facing per frame, walking
+const f32 kFollowRun = 0.04f;     // running
+const f32 kFollowStep = 0.035f;   // at most this turn per frame (about 60 degrees a second)
+const f32 kFollowAngle = 2.35f;   // no following beyond this (135 degrees: he walks toward the camera)
 const int kMaxParts = 160;
 const f32 kTeleport = 1500.0f;    // a jump of his position this far (a door, a new room, an event): camera reset
 const f32 kWalkDefault = 42.0f;   // his walk and run per game frame until measured (gWalkSpeed, gRunSpeed)
@@ -96,6 +104,7 @@ cPlayer* gLastPl = 0;
 Vec gLastPos = {0.0f, 0.0f, 0.0f};
 std::atomic<bool> gRecenterAsked(false);  // R3 pressed (any thread)
 bool gRecentering = false;
+int gStickRest = 0;                       // frames since the right stick last turned the camera
 std::atomic<bool> gReloadAsked(false);    // the touch RLOAD button (any thread)
 f32 gWalkSpeed = kWalkDefault;            // his walk and run as measured (units per game frame)
 f32 gRunSpeed = kRunDefault;
@@ -181,6 +190,7 @@ void freeMove(cPlayer* pl)
     if (!gCamValid || pl != gLastPl || dx * dx + dz * dz > kTeleport * kTeleport) {
         gCamYaw = pl->ang.y;
         gCamValid = true;
+        gStickRest = 0;
     }
     const bool reloading = directReload(pl);
     if (!walkRoutine(pl) && !reloading) {
@@ -204,13 +214,19 @@ void freeMove(cPlayer* pl)
     if (fabsf(cx) > kOrbitDead) {
         gCamYaw = wrap(gCamYaw - cx * kOrbitSpeed);
         gRecentering = false;  // turning it by hand ends the way back
+        gStickRest = 0;
     } else if (gRecentering) {
+        if (gStickRest < 1000) {
+            gStickRest++;
+        }
         const f32 d = wrap(pl->ang.y - gCamYaw);
         gCamYaw = wrap(gCamYaw + d * kRecenter);
         if (fabsf(d) < 0.01f) {
             gCamYaw = pl->ang.y;
             gRecentering = false;
         }
+    } else if (gStickRest < 1000) {
+        gStickRest++;
     }
     Key.substickX = 0;
     if (reloading) {
@@ -237,6 +253,16 @@ void freeMove(cPlayer* pl)
     Key.trg &= ~(u64) 0xF;
     if (moving || fabsf(diff - step) < kWalkStart) {
         Key.on |= 1;
+    }
+    // the camera follows his way by itself (as the remake's) once the right stick rested
+    if (moving && !gRecentering && gStickRest >= kFollowDelay) {
+        const f32 d = wrap(pl->ang.y - gCamYaw);
+        if (fabsf(d) < kFollowAngle) {
+            const f32 mag = sqrtf(sx * sx + sy * sy);
+            f32 turn = d * (pl->r_no_1 == 3 ? kFollowRun : kFollowWalk) * (mag > 1.0f ? 1.0f : mag);
+            turn = turn > kFollowStep ? kFollowStep : turn < -kFollowStep ? -kFollowStep : turn;
+            gCamYaw = wrap(gCamYaw + turn);
+        }
     }
 }
 
