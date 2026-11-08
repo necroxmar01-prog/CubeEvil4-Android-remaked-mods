@@ -75,6 +75,8 @@
     <string name="ingame_aim_move_help">Muoversi mirando: con un\'arma o il coltello pronti, lo stick destro muove Leon in ogni direzione (con i controlli alternativi quello sinistro, mentre il destro mira). Intanto le sue gambe riproducono l\'animazione della camminata. Con i controlli touch lo stick di movimento cammina e il lato destro mira. Premi R e B insieme (touch: aggiungi il pulsante RLOAD nell\'editor del layout) per ricaricare senza mirare, continuando a camminare.</string>
     <string name="ingame_quick_slots">Scorciatoie della croce</string>
     <string name="ingame_quick_slots_help">Scorciatoie della croce: durante il gioco la croce direzionale equipaggia subito un\'arma, come nel remake: su pistole e magnum, destra fucili a pompa, TMP e lanciatori, giù fucili, sinistra granate. Premi di nuovo la stessa direzione per passare alla successiva di quel tipo che porti. La croce non muove più Leon. Tieni premuta una direzione per mezzo secondo per riporre l\'arma e camminare senza.</string>
+    <string name="ingame_parry">Parata col coltello</string>
+    <string name="ingame_parry_help">Parata col coltello: premi il tasto del coltello (L) proprio quando un colpo nemico sta per arrivare per deviarlo; Leon risponde con un fendente, come nel remake. Le prese non si possono parare.</string>
     <string name="ingame_touch_aim">Mira touch</string>
     <string name="ingame_aim_move_stick">Stick di movimento</string>
     <string name="ingame_aim_touch_area">Area touch</string>

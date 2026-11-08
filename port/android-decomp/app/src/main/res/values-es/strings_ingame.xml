@@ -75,6 +75,8 @@
     <string name="ingame_aim_move_help">Moverse al apuntar: con un arma o el cuchillo preparados, el stick derecho mueve a Leon en cualquier dirección (con los controles alternativos, el izquierdo, mientras el derecho apunta). Mientras tanto, sus piernas reproducen la animación de caminar. En los controles táctiles el stick de movimiento camina y el lado derecho apunta. Pulsa R y B a la vez (táctil: añade el botón RLOAD en el editor del diseño) para recargar sin apuntar y sin dejar de caminar.</string>
     <string name="ingame_quick_slots">Accesos rápidos en la cruceta</string>
     <string name="ingame_quick_slots_help">Accesos rápidos en la cruceta: durante el juego la cruceta equipa un arma al instante, como en el remake: arriba pistolas y magnums, derecha escopetas, TMP y lanzadores, abajo rifles, izquierda granadas. Pulsa otra vez la misma dirección para pasar a la siguiente de ese tipo que lleves. La cruceta deja de mover a Leon. Mantén pulsada cualquier dirección medio segundo para guardar el arma y andar sin ella.</string>
+    <string name="ingame_parry">Parry con cuchillo</string>
+    <string name="ingame_parry_help">Parry con cuchillo: pulsa el botón del cuchillo (L) justo cuando un golpe enemigo va a dar para desviarlo; Leon responde con un tajo de cuchillo, como en el remake. Los agarres no se pueden desviar.</string>
     <string name="ingame_touch_aim">Apuntar táctil</string>
     <string name="ingame_aim_move_stick">Stick de movimiento</string>
     <string name="ingame_aim_touch_area">Zona táctil</string>

@@ -1533,6 +1533,8 @@ extern "C" void re4_player_input(cPlayer* pl);
 extern "C" void re4_free_cam_matrix(Mtx mat);
 extern "C" void re4_player_after_routine(cPlayer* pl);
 extern "C" void re4_camera_recenter(void);
+extern "C" void re4_move_speeds(f32* walk, f32* run);
+extern "C" void re4_reload_request(void);
 extern "C" int re4probe_free_move(void)
 {
     if (!pSys) {
@@ -1665,8 +1667,21 @@ extern "C" int re4probe_free_move(void)
         Joy[0].on = 0x20 | 0x200;
         re4_player_input(pl);
         bad |= pl->r_no_1 != 0 ? 0x4000 : 0;
+        re4_reload_request();  // the touch RLOAD: without a weapon object nothing either
         Joy[0].trg = 0;
         Joy[0].on = 0;
+        re4_player_input(pl);
+        bad |= pl->r_no_1 != 0 ? 0x4000 : 0;
+        // his walk as the game moves him: measured in the walk routine (60 a frame here)
+        pl->r_no_1 = 1;
+        for (int i = 0; i < 60; i++) {
+            pl->pos.x += 60.0f;
+            re4_player_input(pl);
+        }
+        f32 walk = 0.0f;
+        f32 run = 0.0f;
+        re4_move_speeds(&walk, &run);
+        bad |= fabsf(walk - 60.0f) > 1.0f || run < 50.0f ? 0x20000 : 0;
         pl->r_no_1 = 6;
         pl->r_no_2 = 4;
         PlReloadDirect = 1;
@@ -1675,7 +1690,14 @@ extern "C" int re4probe_free_move(void)
         Key.stickX = 0;
         Key.stickY = 56;
         re4_player_input(pl);
-        bad |= !near(pl->pos.x, sinf(0.5f) * 38.0f) || !near(pl->pos.z, cosf(0.5f) * 38.0f) ? 0x8000 : 0;
+        // reloading he keeps his walk
+        bad |= fabsf(pl->pos.x - sinf(0.5f) * walk) > 0.01f || fabsf(pl->pos.z - cosf(0.5f) * walk) > 0.01f ? 0x8000 : 0;
+        // the run key held: his run
+        pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+        Key.on = 0x40000000;
+        re4_player_input(pl);
+        Key.on = 0;
+        bad |= fabsf(pl->pos.x - sinf(0.5f) * run) > 0.01f ? 0x40000 : 0;
         // free movement: the stick up walks him the camera's way (the camera behind him at 0.5 - 0.3)
         re4_aim_set(100 << 8 | 0x10 | 0x20);
         pl->r_no_1 = 0;
@@ -1688,7 +1710,7 @@ extern "C" int re4probe_free_move(void)
         pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
         Key.stickY = 56;
         re4_player_input(pl);
-        bad |= !near(pl->pos.x, sinf(0.415f) * 38.0f) || !near(pl->pos.z, cosf(0.415f) * 38.0f)
+        bad |= fabsf(pl->pos.x - sinf(0.415f) * walk) > 0.05f || fabsf(pl->pos.z - cosf(0.415f) * walk) > 0.05f
             || !near(pl->ang.y, 0.5f) ? 0x10000 : 0;
         re4_player_after_routine(pl);  // the legs: a stand-in without motions is left alone
         Key.stickY = 0;
@@ -1864,6 +1886,73 @@ extern "C" int re4probe_quick_slots(void)
     if (keepEvent) {
         StaFlagOn(pG, STA_EVENT);
     }
+    return bad;
+}
+
+// "Knife parry" (runtime/parry.cpp): the knife key opens a short window, a blow in it misses and so do those of
+// the next frames, Leon slashes (the knife routine's slash step); without the key, after the window or with the
+// switch off no blow misses. 0: all right, else the failed checks' bits.
+extern "C" int re4_parry_hit(void);
+extern "C" int re4probe_parry(void)
+{
+    if (!pSys) {
+        return 0x8000;
+    }
+    cPlayer* keepPl = pPL;
+    const u8 keepType = pG->pl_type;
+    const KEY keepKey = Key;
+    const JOY keepJoy = Joy[0];
+    cPlayer* pl = (cPlayer*) (unsigned long) 0x82E40000ul;
+    memset((void*) pl, 0, sizeof(cPlayer));
+    pPL = pl;
+    pG->pl_type = 0;
+    memset(&Key, 0, sizeof(Key));
+    memset(&Joy[0], 0, sizeof(Joy[0]));
+    int bad = 0;
+    re4_aim_set(100 << 8 | 1 << 21);
+    re4_player_input(pl);
+    bad |= re4_parry_hit() != 0 ? 1 : 0;  // no key: the blow lands
+    Joy[0].trg = 0x40;  // L: the knife key
+    re4_player_input(pl);
+    Joy[0].trg = 0;
+    bad |= re4_parry_hit() != 1 ? 2 : 0;  // parried
+    bad |= re4_parry_hit() != 1 ? 4 : 0;  // the rest of the swing too
+    for (int i = 0; i < 30; i++) {
+        re4_player_input(pl);
+    }
+    bad |= re4_parry_hit() != 0 ? 8 : 0;  // later blows land again
+    // in the knife stance: the slash follows the parry
+    pl->r_no_1 = 0xB;
+    pl->r_no_2 = 1;
+    Joy[0].trg = 0x40;
+    re4_player_input(pl);
+    Joy[0].trg = 0;
+    re4_parry_hit();
+    re4_player_input(pl);
+    bad |= pl->r_no_2 != 2 || pl->r_no_3 != 0 ? 0x10 : 0;
+    for (int i = 0; i < 30; i++) {
+        re4_player_input(pl);
+    }
+    // the window closes after a quarter second
+    pl->r_no_1 = 0;
+    pl->r_no_2 = 0;
+    Joy[0].trg = 0x40;
+    re4_player_input(pl);
+    Joy[0].trg = 0;
+    for (int i = 0; i < 9; i++) {
+        re4_player_input(pl);
+    }
+    bad |= re4_parry_hit() != 0 ? 0x20 : 0;
+    // off: nothing
+    re4_aim_set(100 << 8);
+    Joy[0].trg = 0x40;
+    re4_player_input(pl);
+    Joy[0].trg = 0;
+    bad |= re4_parry_hit() != 0 ? 0x40 : 0;
+    Key = keepKey;
+    Joy[0] = keepJoy;
+    pPL = keepPl;
+    pG->pl_type = keepType;
     return bad;
 }
 

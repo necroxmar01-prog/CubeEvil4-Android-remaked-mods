@@ -77,6 +77,8 @@
     <string name="ingame_aim_move_help">Bouger en visant : arme ou couteau en main, le stick droit déplace Leon dans toutes les directions (avec les commandes alternatives, le stick gauche, pendant que le droit vise). Ses jambes jouent alors son animation de marche. Avec les commandes tactiles, le stick de déplacement fait marcher et le côté droit vise. Appuyez sur R et B ensemble (tactile : ajoutez le bouton RLOAD dans l\'éditeur de disposition) pour recharger sans viser, en continuant à marcher.</string>
     <string name="ingame_quick_slots">Raccourcis de la croix</string>
     <string name="ingame_quick_slots_help">Raccourcis de la croix : en jeu, la croix directionnelle équipe une arme aussitôt, comme dans le remake : haut pistolets et magnums, droite fusils à pompe, TMP et lanceurs, bas fusils, gauche grenades. Appuyez à nouveau sur la même direction pour passer à la suivante de ce type que vous portez. La croix ne déplace alors plus Leon. Maintenez une direction une demi-seconde pour ranger l\'arme et marcher sans elle.</string>
+    <string name="ingame_parry">Parade au couteau</string>
+    <string name="ingame_parry_help">Parade au couteau : appuyez sur la touche du couteau (L) juste quand un coup ennemi arrive pour le dévier ; Leon riposte d\'un coup de couteau, comme dans le remake. Les saisies ne peuvent pas être parées.</string>
     <string name="ingame_touch_aim">Visée tactile</string>
     <string name="ingame_aim_move_stick">Stick de déplacement</string>
     <string name="ingame_aim_touch_area">Zone tactile</string>

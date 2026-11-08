@@ -27,6 +27,7 @@ public final class CoreTouchTests {
     @Override public void select(boolean down) { calls.add("select " + down); }
     @Override public void latched(String action, boolean on) { calls.add(action + " " + on); }
     @Override public void r3(boolean down) { calls.add("r3 " + down); }
+    @Override public void reload() { calls.add("reload"); }
   }
 
   public static void main(String[] args) {
@@ -48,14 +49,12 @@ public final class CoreTouchTests {
     t.action("unknown", true);
     check(in.pad()[0] == 0);
 
-    // RELOAD: R and B at once while held (the mods' reload without aiming)
+    // RELOAD: the core's request when it goes down (the mods' reload without aiming), no GameCube button
+    host.calls.clear();
     t.action(CoreTouch.RELOAD, true);
-    int[] rl = in.pad();
-    check((rl[0] & (CoreInput.GC_R | CoreInput.GC_B)) == (CoreInput.GC_R | CoreInput.GC_B) && rl[6] == 255);
     t.action(CoreTouch.RELOAD, false);
-    for (int i = 0; i < 8; i++) rl = in.pad();
-    check((rl[0] & CoreInput.GC_B) == 0);
-    in.touchClear();
+    check(in.pad()[0] == 0 && host.calls.size() == 1 && host.calls.get(0).equals("reload"));
+    host.calls.clear();
     // R3: the app's graphics capture, no GameCube button; offered to the editor with its label
     host.calls.clear();
     t.action(CoreTouch.R3, true);
@@ -338,7 +337,8 @@ public final class CoreTouchTests {
       // short labels: RetroTouch shrinks the text to the button, five letters stay readable
       check(!CoreTouch.LABELS[i].isEmpty() && CoreTouch.LABELS[i].length() <= 5);
       check(CoreTouch.label(a).equals(CoreTouch.LABELS[i]));
-      boolean noButton = a.equals(CoreTouch.MENU) || a.equals(CoreTouch.R3) || CoreTouch.isStick(a);  // app / C stick actions
+      boolean noButton = a.equals(CoreTouch.MENU) || a.equals(CoreTouch.R3) || a.equals(CoreTouch.RELOAD)
+          || CoreTouch.isStick(a);  // app / C stick actions
       check(noButton ? CoreTouch.gcButton(a) == 0 : CoreTouch.gcButton(a) != 0);
     }
     Set<String> ids = new HashSet<>(), used = new HashSet<>();

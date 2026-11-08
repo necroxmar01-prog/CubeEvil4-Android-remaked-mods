@@ -6,8 +6,9 @@
 # camera round him, R3 brings it back behind him. With "Move while aiming" the C stick walks him while a weapon or
 # the knife is ready; cPlayer::move calls re4_player_after_routine after the routines, which puts his walk motion
 # on his legs meanwhile. CameraQuasiFPS::calcBaseMatrix asks re4_free_cam_matrix to turn the camera's base frame
-# to the free camera's yaw (only in the walk routines, and on the way back behind him after them). Both off:
-# nothing changes.
+# to the free camera's yaw (only in the walk routines, and on the way back behind him after them).
+# EmAtkHitCk2 (em_sub.cpp) asks re4_parry_hit (runtime/parry.cpp, "Knife parry") once an enemy's attack sphere
+# found Leon: a parried blow misses. All off: nothing changes.
 --- a/src/game/player.cpp
 +++ b/src/game/player.cpp
 @@ -290,6 +290,8 @@
@@ -61,3 +62,24 @@
      }
      if (m_pl_ofs.x != 0.0f || m_pl_ofs.y != 0.0f || m_pl_ofs.z != 0.0f) {
          PSMTXMultVec(mat, &m_pl_ofs, &v0);
+--- a/src/game/em_sub.cpp
++++ b/src/game/em_sub.cpp
+@@ -2098,6 +2098,8 @@
+     return ret;
+ }
+ 
++extern "C" int re4_parry_hit(void); /* port: runtime/parry.cpp (patch 0900) */
++
+ // Attack sphere against the player: 0 = miss, else the damage motion type + 1 (front/back, and the
+ // height: 4 low, 2 middle).
+ int EmAtkHitCk2(ATK_INFO* pAtk, Vec* pPos, Vec* pPosOld)
+@@ -2126,6 +2128,9 @@
+     if (part == 0) {
+         return 0;
+     }
++    if (re4_parry_hit()) {
++        return 0; /* port (patch 0900): "Knife parry" turned the blow aside */
++    }
+     part->flag &= 0xBFFF;
+     pPL->dmg.m_pDamageYarare = part;
+     if ((pPos->x - pPosOld->x) * (pPos->x - pPosOld->x) + (pPos->z - pPosOld->z) * (pPos->z - pPosOld->z) < 10000.0f) {

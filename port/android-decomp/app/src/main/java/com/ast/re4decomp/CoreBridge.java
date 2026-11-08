@@ -188,10 +188,12 @@ public final class CoreBridge {
   /** "Free movement" (the stick moves Leon where it points, seen from a camera the right stick turns round him) and
    *  "Move while aiming" (the C stick walks him while a weapon is ready); patch 0900, runtime/free_move.cpp, sent with
    *  the aim settings (bits 4 and 5); "D-pad quick slots" (the D-pad equips weapons by their kind, runtime/quick_slots.cpp,
-   *  bit 7). */
-  public static native void setMovement(boolean freeMove, boolean aimMove, boolean quickSlots);
+   *  bit 7); "Knife parry" (the knife key at the right moment turns a blow aside, runtime/parry.cpp, bit 21). */
+  public static native void setMovement(boolean freeMove, boolean aimMove, boolean quickSlots, boolean parry);
   /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0900). */
   public static native void recenterCamera();
+  /** The touch RLOAD button: with "Move while aiming" Leon reloads without aiming, walking or running on (patch 0900). */
+  public static native void requestReload();
   /** "Field of view" (PLAYER VIEW): the shoulder camera's vertical field of view changed by `degrees`
    *  (-15 .. +15; 0 as the game; patch 0205), sent with the aim settings. */
   public static native void setFov(int degrees);

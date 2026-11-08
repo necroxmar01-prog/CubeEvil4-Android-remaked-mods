@@ -75,6 +75,8 @@
     <string name="ingame_aim_move_help">Beim Zielen bewegen: Mit gezogener Waffe oder gezücktem Messer bewegt der rechte Stick Leon in jede Richtung (mit der alternativen Steuerung der linke, während der rechte zielt). Seine Beine spielen dabei die Gehbewegung ab. Bei der Touch-Steuerung geht der Bewegungsstick, die rechte Seite zielt. Drück R und B zusammen (Touch: den Knopf RLOAD im Layout-Editor hinzufügen), um ohne Zielen nachzuladen und dabei weiterzugehen.</string>
     <string name="ingame_quick_slots">Schnellwahl per Steuerkreuz</string>
     <string name="ingame_quick_slots_help">Schnellwahl per Steuerkreuz: Im Spiel rüstet das Steuerkreuz sofort eine Waffe aus, wie im Remake: oben Pistolen und Magnums, rechts Schrotflinten, TMP und Werfer, unten Gewehre, links Granaten. Drück dieselbe Richtung noch einmal für die nächste Waffe dieser Art, die du dabeihast. Das Steuerkreuz bewegt Leon dann nicht mehr. Halte eine Richtung eine halbe Sekunde gedrückt, um die Waffe wegzustecken und ohne sie zu gehen.</string>
+    <string name="ingame_parry">Messer-Parade</string>
+    <string name="ingame_parry_help">Messer-Parade: Drück die Messertaste (L) genau, wenn ein gegnerischer Schlag trifft, um ihn abzuwehren; Leon antwortet mit einem Messerhieb, wie im Remake. Griffe lassen sich nicht parieren.</string>
     <string name="ingame_touch_aim">Touch-Zielen</string>
     <string name="ingame_aim_move_stick">Bewegungsstick</string>
     <string name="ingame_aim_touch_area">Touchfläche</string>

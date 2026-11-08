@@ -76,6 +76,8 @@
     <string name="ingame_aim_move_help">Mover-se ao mirar: com uma arma ou a faca preparadas, o analógico direito move Leon em qualquer direção (com os controles alternativos, o esquerdo, enquanto o direito mira). Enquanto isso, as pernas dele reproduzem a animação de andar. Nos controles de toque, o analógico de movimento anda e o lado direito mira. Pressione R e B juntos (toque: adicione o botão RLOAD no editor do layout) para recarregar sem mirar, continuando a andar.</string>
     <string name="ingame_quick_slots">Atalhos no direcional</string>
     <string name="ingame_quick_slots_help">Atalhos no direcional: durante o jogo o direcional equipa uma arma na hora, como no remake: cima pistolas e magnums, direita escopetas, TMP e lançadores, baixo rifles, esquerda granadas. Pressione a mesma direção de novo para a próxima desse tipo que você carrega. O direcional deixa de mover o Leon. Segure qualquer direção por meio segundo para guardar a arma e andar sem ela.</string>
+    <string name="ingame_parry">Aparar com faca</string>
+    <string name="ingame_parry_help">Aparar com faca: pressione o botão da faca (L) bem quando um golpe inimigo for acertar para desviá-lo; Leon responde com um golpe de faca, como no remake. Agarrões não podem ser aparados.</string>
     <string name="ingame_touch_aim">Mira por toque</string>
     <string name="ingame_aim_move_stick">Analógico de movimento</string>
     <string name="ingame_aim_touch_area">Área de toque</string>

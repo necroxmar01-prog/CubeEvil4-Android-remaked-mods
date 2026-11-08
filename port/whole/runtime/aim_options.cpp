@@ -37,7 +37,9 @@ std::atomic<int> gFov(0);           // the app's "Field of view" in degrees, -15
 std::atomic<bool> gFreeMove(false); // the app's "Free movement" (patch 0900, runtime/free_move.cpp)
 std::atomic<bool> gAimMove(false);  // the app's "Move while aiming" (patch 0900, runtime/free_move.cpp)
 std::atomic<bool> gQuickSlots(false); // the app's "D-pad quick slots" (runtime/quick_slots.cpp)
-std::atomic<int> gRecenterBit(-1);  // bit 6 as last sent (-1: nothing yet); each change is one press of R3
+std::atomic<int> gRecenterBit(-1);
+std::atomic<int> gReloadBit(-1);    // bit 20 as last sent; each change is one press of the touch RLOAD button
+std::atomic<bool> gParry(false);    // the app's "Knife parry" (bit 21, runtime/parry.cpp)  // bit 6 as last sent (-1: nothing yet); each change is one press of R3
 
 // The field of view from the aim bits: bits 24..29 hold degrees + 32 (0: an app without it, as the game).
 int fovOf(int bits)
@@ -127,15 +129,25 @@ extern "C" {
 
 // The app (core_api.cpp re4_core_set_aim): bit 0 "Invert vertical", bit 1 "Auto aim", bit 2 "Always run",
 // bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0900), bit 6 toggled by each press of
-// R3 (the camera back behind Leon, patch 0900), bit 7 "D-pad quick slots" (runtime/quick_slots.cpp), bits 8..19 the aim speed in percent, bits 24..29 "Field of view"
+// R3 (the camera back behind Leon, patch 0900), bit 7 "D-pad quick slots" (runtime/quick_slots.cpp), bit 20 toggled by each press of the touch RLOAD button (reload without aiming, runtime/free_move.cpp), bit 21 "Knife parry" (runtime/parry.cpp), bits 8..19 the aim speed in percent, bits 24..29 "Field of view"
 // (degrees + 32; 0.98.4). Any thread.
 extern "C" void re4_camera_recenter(void);  // runtime/free_move.cpp
+extern "C" void re4_reload_request(void);   // runtime/free_move.cpp
 void re4_aim_set(int bits)
 {
     const int recenter = (bits >> 6) & 1;
     const int before = gRecenterBit.exchange(recenter);
     if (before >= 0 && before != recenter) {
         re4_camera_recenter();
+    }
+    const int reload = (bits >> 20) & 1;
+    const int reloadBefore = gReloadBit.exchange(reload);
+    if (reloadBefore >= 0 && reloadBefore != reload) {
+        re4_reload_request();
+    }
+    const bool parry = (bits & (1 << 21)) != 0;
+    if (gParry.exchange(parry) != parry) {
+        re4_log("aim: knife parry %s", parry ? "on" : "off");
     }
     int speed = (bits >> 8) & 0xFFF;
     if (speed < 50) speed = 50;
@@ -186,6 +198,12 @@ int re4_free_move_on(void)
 int re4_aim_move_on(void)
 {
     return gAimMove.load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+// runtime/parry.cpp: "Knife parry", the knife key at the right moment turns a blow aside.
+int re4_parry_on(void)
+{
+    return gParry.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
 // runtime/quick_slots.cpp: "D-pad quick slots", the D-pad equips weapons by their kind.

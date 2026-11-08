@@ -226,6 +226,8 @@ final class TouchControls implements CoreTouch.Host {
 
   @Override public void r3(boolean down) { host.r3(down); }
 
+  @Override public void reload() { CoreBridge.requestReload(); }
+
   /** Before the window's touch event goes to the views (CoreActivity.dispatchTouchEvent). */
   void before(MotionEvent e) {
     if (shown) touch.beginEvent();

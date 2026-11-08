@@ -38,10 +38,10 @@ final class CoreTouch {
   // the actions registered with RetroTouch (the layout's contract: lower case, never renamed)
   static final String A = "a", B = "b", X = "x", Y = "y", Z = "z", L = "l", R = "r",
       START = "start", MENU = "menu", R3 = "r3",
-      // R and B at once (the game's reload: aim + B); with "Move while aiming" the core takes both pressed
-      // together, not aiming, as the remake's reload without aiming (runtime/free_move.cpp, patch 0900). In the
-      // default layout left of B, and in the editor's ACTION right after B (wish of DevJunior, 08.11.2026: the
-      // editor's cycle had it last, after the C stick, where it was not found)
+      // reload without aiming (with "Move while aiming", wish of DevJunior, 08.11.2026, as in the remake): the
+      // core's own request (Host.reload, CoreBridge.requestReload), not R + B, so that it also reloads while B
+      // runs (runtime/free_move.cpp, patch 0900). In the default layout left of B, and in the editor's ACTION
+      // right after B (the editor's cycle had it last, after the C stick, where it was not found)
       RELOAD = "reload",
       // the C stick as an analog stick the editor adds (RetroTouch's stick action, registerStickAction)
       C_STICK = "cstick";
@@ -128,6 +128,8 @@ final class CoreTouch {
     void latched(String action, boolean on);
     /** R3 went down or up: the app's graphics capture. */
     void r3(boolean down);
+    /** RLOAD went down: reload without aiming (the core's request). */
+    void reload();
   }
 
   private final CoreInput input;
@@ -168,7 +170,6 @@ final class CoreTouch {
       case L: return CoreInput.GC_L;
       case R: return CoreInput.GC_R;
       case START: return CoreInput.GC_START;
-      case RELOAD: return CoreInput.GC_R | CoreInput.GC_B;
       case UP: return CoreInput.GC_UP;
       case DOWN: return CoreInput.GC_DOWN;
       case LEFT: return CoreInput.GC_LEFT;
@@ -184,6 +185,8 @@ final class CoreTouch {
       host.select(down);
     } else if (R3.equals(action)) {
       host.r3(down);
+    } else if (RELOAD.equals(action)) {
+      if (down) host.reload();
     } else if (latch && (L.equals(action) || R.equals(action))) {
       if (!down) return;
       boolean on = L.equals(action) ? (l = !l) : (r = !r);

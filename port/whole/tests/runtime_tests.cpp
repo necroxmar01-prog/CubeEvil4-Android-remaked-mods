@@ -1196,6 +1196,7 @@ int re4probe_picture_still(void);
 int re4probe_knife_swipe(void);
 int re4probe_free_move(void);
 int re4probe_quick_slots(void);
+int re4probe_parry(void);
 int re4probe_qte_touch(void);
 int re4probe_qte_auto(void);
 int re4probe_cheat_extras(void);
@@ -2049,6 +2050,16 @@ static void testQuickSlots()
     report("quickslots", bad == 0);
 }
 
+// "Knife parry" (runtime/parry.cpp; game_probe.cpp re4probe_parry): the window, the guard, the slash
+static void testParry()
+{
+    const int bad = re4probe_parry();
+    if (bad) {
+        re4_log("  parry: failed checks 0x%x", bad);
+    }
+    report("parry", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2430,6 +2441,7 @@ int re4_runtime_tests()
     testKnifeSwipe();
     testFreeMove();
     testQuickSlots();
+    testParry();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

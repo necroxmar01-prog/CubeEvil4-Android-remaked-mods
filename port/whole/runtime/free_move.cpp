@@ -31,13 +31,15 @@
 //    With "Alternate Controls" the app sends the left stick as the C stick while L1 / L2 hold the weapon ready
 //    (CoreInput), so the left stick moves and the right one aims, as in the remake.
 //  - Reloading without aiming (with "Move while aiming", wish of DevJunior, 08.11.2026, as in the remake): R
-//    and B pressed together in the walk routines (the app's reload action, a mapped reload key or the touch
-//    controls' RLOAD button press both at once; aiming first and then B stays the game's reload) start the
+//    and B pressed together in the walk routines (the app's reload action or a mapped reload key press both at
+//    once; aiming first and then B stays the game's reload), or the touch controls' RLOAD button (its own
+//    request, re4_reload_request: running holds B already, so R + B would not be new together), start the
 //    prototype's own direct reload: the weapon routine's reload step (setRno 0/6/4, m_Work0 1) with
 //    PlReloadDirect = 1, as cPlayer::actionSelect does with the reload key type 1 (keyReload; isKamae is 0
-//    then), so Leon does not aim. Meanwhile the main stick walks him (kAimWalk, his legs as above), seen from
-//    the camera with "Free movement", else relative to where he faces; the right stick keeps turning the free
-//    camera.
+//    then), so Leon does not aim; also while he runs. Meanwhile the main stick moves him at the speed he walks
+//    or, while the run key stays held (or "Always run"), runs (gWalkSpeed / gRunSpeed: measured from his own
+//    walk and run, 0.99.4-mods), his legs walking or running as above, seen from the camera with "Free
+//    movement", else relative to where he faces; the right stick keeps turning the free camera.
 //
 // For tests on the PC: RE4_TEST_AIM with bits 0x10 / 0x20 (runtime/aim_options.cpp).
 #include "types.h"
@@ -57,6 +59,8 @@ extern cPlayer* pPL;
 extern "C" int re4_free_move_on(void);  // runtime/aim_options.cpp
 extern "C" int re4_aim_move_on(void);
 extern "C" void re4_quick_slots_input(cPlayer* pl);  // runtime/quick_slots.cpp
+extern "C" int re4_run_held(int held);               // runtime/aim_options.cpp (patch 0156)
+extern "C" void re4_parry_input(cPlayer* pl);         // runtime/parry.cpp
 
 namespace {
 
@@ -78,6 +82,8 @@ const f32 kLegSpeed = 0.9f;       // the walk motion's frames per game frame at 
 const f32 kRecenter = 0.35f;      // share per frame the camera turns back behind him after R3
 const int kMaxParts = 160;
 const f32 kTeleport = 1500.0f;    // a jump of his position this far (a door, a new room, an event): camera reset
+const f32 kWalkDefault = 42.0f;   // his walk and run per game frame until measured (gWalkSpeed, gRunSpeed)
+const f32 kRunDefault = 95.0f;
 
 f32 gCamYaw = 0.0f;   // the free camera's yaw (the game's convention: forward (sin, cos), right = a smaller angle)
 bool gCamValid = false;
@@ -86,6 +92,10 @@ cPlayer* gLastPl = 0;
 Vec gLastPos = {0.0f, 0.0f, 0.0f};
 std::atomic<bool> gRecenterAsked(false);  // R3 pressed (any thread)
 bool gRecentering = false;
+std::atomic<bool> gReloadAsked(false);    // the touch RLOAD button (any thread)
+f32 gWalkSpeed = kWalkDefault;            // his walk and run as measured (units per game frame)
+f32 gRunSpeed = kRunDefault;
+bool gLegRun = false;                     // the legs run (the direct reload while he runs)
 
 // this frame's move while aiming (aimMove), for the legs (re4_player_after_routine)
 bool gAimMoving = false;
@@ -206,17 +216,36 @@ void freeMove(cPlayer* pl)
 void reloadInput(cPlayer* pl)
 {
     const u32 both = 0x20 | 0x200;  // R, B
-    if ((Joy[0].trg & both) != both || !walkRoutine(pl) || !pl->Wep || !pl->Wep->m_pWep
-        || !pl->Wep->m_pWep->reloadable()) {
+    const bool together = (Joy[0].trg & both) == both;
+    const bool asked = gReloadAsked.exchange(false);
+    if ((!together && !asked) || !walkRoutine(pl) || !pl->Wep || !pl->Wep->m_pWep || !pl->Wep->m_pWep->reloadable()) {
         return;
     }
     pl->setRno(0, 6, 4, 0);
     pl->m_Work0 = 1;
     PlReloadDirect = 1;
-    Joy[0].on &= ~both;
-    Joy[0].trg &= ~both;
-    Key.on &= ~(u64) 0x40000000;  // the run key (B)
-    Key.trg &= ~(u64) 0x40000000;
+    if (together) {
+        Joy[0].on &= ~both;
+        Joy[0].trg &= ~both;
+        Key.on &= ~(u64) 0x40000000;  // the run key (B)
+        Key.trg &= ~(u64) 0x40000000;
+    }
+}
+
+// His walk and run as the game moves him (root motion): the way of the last frame in the walk / run routines.
+void measure(cPlayer* pl)
+{
+    if (pl != gLastPl || pl->r_no_0 != 0 || (pl->r_no_1 != 1 && pl->r_no_1 != 3)) {
+        return;
+    }
+    const f32 dx = pl->pos.x - gLastPos.x;
+    const f32 dz = pl->pos.z - gLastPos.z;
+    const f32 d = sqrtf(dx * dx + dz * dz);
+    if (d < 5.0f || d > 300.0f) {
+        return;
+    }
+    f32& v = pl->r_no_1 == 3 ? gRunSpeed : gWalkSpeed;
+    v = v * 0.9f + d * 0.1f;
 }
 
 // Walking during the direct reload: the main stick, seen from the free camera (or relative to his facing).
@@ -237,8 +266,11 @@ void reloadMove(cPlayer* pl)
     if (mag > 1.0f) {
         mag = 1.0f;
     }
-    pl->pos.x += sinf(dir) * kAimWalk * mag;
-    pl->pos.z += cosf(dir) * kAimWalk * mag;
+    // his own speed: running while the run key stays held (or "Always run"), else walking
+    gLegRun = re4_run_held((Key.on & 0x40000000) != 0) != 0;
+    const f32 speed = (gLegRun ? gRunSpeed : gWalkSpeed) * mag;
+    pl->pos.x += sinf(dir) * speed;
+    pl->pos.z += cosf(dir) * speed;
     // for the legs: the way relative to where he faces
     const f32 rel = wrap(dir - pl->ang.y);
     gAimMoving = true;
@@ -339,10 +371,11 @@ void legs(cPlayer* pl)
     }
     // the walk motion, the back step when he moves back (as the routines choose them: dmMotCk, player.cpp)
     const bool back = gAimSy < -0.3f && -gAimSy > fabsf(gAimSx);
+    const bool run = gLegRun && !back && directReload(pl);  // running while reloading: his run (pl_R1_Run's)
     void** tbl = pl->m_MotTbl;
     const bool own = dmMotCk() != 0;
-    void* mot = own ? tbl[back ? 8 : 2] : tbl[back ? 0x63 : 0x61];
-    void* seq = own ? tbl[back ? 9 : 3] : tbl[back ? 0x64 : 0x62];
+    void* mot = own ? tbl[run ? 6 : back ? 8 : 2] : tbl[run ? 0x65 : back ? 0x63 : 0x61];
+    void* seq = own ? tbl[run ? 7 : back ? 9 : 3] : tbl[run ? 0x66 : back ? 0x64 : 0x62];
     if (!mot) {
         gLegW = 0.0f;
         return;
@@ -447,6 +480,20 @@ void re4_player_after_routine(cPlayer* pl)
     legs(pl);
 }
 
+// The app (the touch RLOAD button, the aim bits' toggling bit 20 through re4_aim_set; any thread): reload
+// without aiming.
+void re4_reload_request(void)
+{
+    gReloadAsked = true;
+}
+
+// For the runtime test: his walk and run as measured (units per game frame).
+void re4_move_speeds(f32* walk, f32* run)
+{
+    *walk = gWalkSpeed;
+    *run = gRunSpeed;
+}
+
 // The app (R3, the aim bits' toggling bit 6 through re4_aim_set; any thread): the free camera back behind Leon.
 void re4_camera_recenter(void)
 {
@@ -461,7 +508,10 @@ void re4_player_input(cPlayer* pl)
     if (!pl) {
         return;
     }
+    measure(pl);
+    gLegRun = false;
     re4_quick_slots_input(pl);  // first: the D-pad's bits out of the keys when it equips weapons
+    re4_parry_input(pl);
     if (re4_aim_move_on()) {
         reloadInput(pl);  // before the camera: a reload started now keeps the free camera
     }
