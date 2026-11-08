@@ -1194,6 +1194,7 @@ int re4probe_menu_touch(void);
 int re4probe_letterbox(void);
 int re4probe_picture_still(void);
 int re4probe_knife_swipe(void);
+int re4probe_free_move(void);
 int re4probe_qte_touch(void);
 int re4probe_qte_auto(void);
 int re4probe_cheat_extras(void);
@@ -2025,6 +2026,17 @@ static void testKnifeSwipe()
     report("knifeswipe", ok);
 }
 
+// "Free movement" and "Move while aiming" (runtime/free_move.cpp, patch 0219; game_probe.cpp re4probe_free_move):
+// the stick seen from the camera, the camera by the C stick, the move while aiming, both off as the game
+static void testFreeMove()
+{
+    const int bad = re4probe_free_move();
+    if (bad) {
+        re4_log("  freemove: failed checks 0x%x", bad);
+    }
+    report("freemove", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2404,6 +2416,7 @@ int re4_runtime_tests()
     testMenuTouch();
     testLetterbox();
     testKnifeSwipe();
+    testFreeMove();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

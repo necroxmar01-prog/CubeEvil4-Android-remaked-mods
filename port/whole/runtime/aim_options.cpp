@@ -34,6 +34,8 @@ std::atomic<int> gLock(-1);         // the app's "Auto aim", -1 before it sent a
 std::atomic<bool> gRun(false);      // the app's "Always run"
 std::atomic<bool> gFar(false);      // the app's "Far camera" (patch 0171)
 std::atomic<int> gFov(0);           // the app's "Field of view" in degrees, -15 .. 15 (patch 0205)
+std::atomic<bool> gFreeMove(false); // the app's "Free movement" (patch 0219, runtime/free_move.cpp)
+std::atomic<bool> gAimMove(false);  // the app's "Move while aiming" (patch 0219, runtime/free_move.cpp)
 
 // The field of view from the aim bits: bits 24..29 hold degrees + 32 (0: an app without it, as the game).
 int fovOf(int bits)
@@ -107,6 +109,8 @@ struct StartSetting {
             gLock = (bits >> 1) & 1;
             gRun = (bits & 4) != 0;
             gFar = (bits & 8) != 0;
+            gFreeMove = (bits & 0x10) != 0;
+            gAimMove = (bits & 0x20) != 0;
             gHooked = true;
             gPending = true;
             re4_add_frame_hook(hook);
@@ -119,8 +123,8 @@ struct StartSetting {
 extern "C" {
 
 // The app (core_api.cpp re4_core_set_aim): bit 0 "Invert vertical", bit 1 "Auto aim", bit 2 "Always run",
-// bit 3 "Far camera", bits 8..19 the aim speed in percent, bits 24..29 "Field of view" (degrees + 32; 0.98.4).
-// Any thread.
+// bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0219), bits 8..19 the aim speed in
+// percent, bits 24..29 "Field of view" (degrees + 32; 0.98.4). Any thread.
 void re4_aim_set(int bits)
 {
     int speed = (bits >> 8) & 0xFFF;
@@ -135,11 +139,17 @@ void re4_aim_set(int bits)
     const bool locked = gLock.exchange(lock) != lock;
     const bool ran = gRun.exchange(run) != run;
     const bool farther = gFar.exchange(far) != far;
+    const bool freeMove = (bits & 0x10) != 0;
+    const bool aimMove = (bits & 0x20) != 0;
+    const bool freed = gFreeMove.exchange(freeMove) != freeMove;
+    const bool aimMoved = gAimMove.exchange(aimMove) != aimMove;
     const int fov = fovOf(bits);
     const bool wider = gFov.exchange(fov) != fov;
-    if (inverted || faster || locked || ran || farther || wider) {
-        re4_log("aim: stick aiming %s, speed %d %%, auto aim %s, always run %s, far camera %s, field of view %+d degrees",
-                invert ? "inverted" : "normal", speed, lock ? "on" : "off", run ? "on" : "off", far ? "on" : "off", fov);
+    if (inverted || faster || locked || ran || farther || wider || freed || aimMoved) {
+        re4_log("aim: stick aiming %s, speed %d %%, auto aim %s, always run %s, far camera %s, field of view %+d degrees, "
+                "free movement %s, move while aiming %s",
+                invert ? "inverted" : "normal", speed, lock ? "on" : "off", run ? "on" : "off", far ? "on" : "off", fov,
+                freeMove ? "on" : "off", aimMove ? "on" : "off");
     }
     if (!gHooked.exchange(true)) {
         re4_add_frame_hook(hook);
@@ -151,6 +161,19 @@ void re4_aim_set(int bits)
 int re4_far_camera(void)
 {
     return gFar.load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+// Patch 0219 (runtime/free_move.cpp): "Free movement", the stick moves Leon where it points, seen from a camera the
+// C stick turns round him.
+int re4_free_move_on(void)
+{
+    return gFreeMove.load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+// Patch 0219 (runtime/free_move.cpp): "Move while aiming", the C stick walks Leon while a weapon is ready.
+int re4_aim_move_on(void)
+{
+    return gAimMove.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
 // Patch 0205 (cam_qfps.cpp): degrees added to the shoulder camera's vertical field of view (0: as the game).

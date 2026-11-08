@@ -697,6 +697,9 @@ int potatoSent = -1;  // what the core was told last (-1: nothing yet; the GPU b
 // project owner, 30.10.2026): bit 0 inverted, bits 8.. the speed in percent (the core's runtime/aim_options.cpp).
 std::atomic<int> optAim{100 << 8};
 std::atomic<int> optFarCamera{0};  // the menu's "Far camera" (CoreBridge.setFarCamera), bit 3 of the aim bits
+// the menu's "Free movement" (bit 4) and "Move while aiming" (bit 5) of the aim bits (CoreBridge.setMovement, patch 0219,
+// the core's runtime/free_move.cpp)
+std::atomic<int> optMovement{0};
 // the menu's "Field of view" (CoreBridge.setFov, -15 .. +15 degrees, patch 0205): bits 24..29 of the aim bits as
 // degrees + 32 (0: as the game; the core's runtime/aim_options.cpp)
 std::atomic<int> optFov{0};
@@ -2030,6 +2033,7 @@ bool drawGx() {
       potatoSent = potato;
     }
     const int aim = optAim.load() | (optFarCamera.load() ? 8 : 0)  // bit 3 "Far camera" (patch 0171)
+                    | optMovement.load() << 4                         // bits 4, 5 "Free movement", "Move while aiming"
                     | (optFov.load() + 32) << 24;                     // bits 24.. "Field of view" (patch 0205)
     if (api.setAim && aim != aimSent) {
       api.setAim(aim);
@@ -2870,6 +2874,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setAim(JNIEn
 // process always -1).
 extern "C" JNIEXPORT jint JNICALL Java_com_ast_re4decomp_CoreBridge_aimFromGame(JNIEnv *, jclass) {
   return api.aimFromGame ? api.aimFromGame() : -1;
+}
+
+// "Free movement" and "Move while aiming" (the menu, Controls; patch 0219), sent with the aim settings (bits 4, 5).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMovement(JNIEnv *, jclass, jboolean freeMove,
+                                                                              jboolean aimMove) {
+  const int want = (freeMove == JNI_TRUE ? 1 : 0) | (aimMove == JNI_TRUE ? 2 : 0);
+  if (optMovement.exchange(want) != want)
+    LOG("movement: free movement %s, move while aiming %s", want & 1 ? "on" : "off", want & 2 ? "on" : "off");
 }
 
 // "Far camera" (the menu, Controls): the shoulder camera further back while walking and standing (patch 0171),

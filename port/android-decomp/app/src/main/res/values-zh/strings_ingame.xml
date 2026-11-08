@@ -65,6 +65,10 @@
     <string name="ingame_auto_aim_help">自动瞄准：举起武器时，准星会跳到你前方最近的敌人身上并短暂跟随（游戏自带的瞄准辅助）。</string>
     <string name="ingame_always_run_help">始终奔跑：只要移动，里昂就会奔跑；按住奔跑键（例如 B）即可改为行走。</string>
     <string name="ingame_far_camera_help">行走和站立时让肩后镜头离 Leon 稍远一些。瞄准时和狭窄处会像以前一样靠近；两者之间平滑过渡。</string>
+    <string name="ingame_free_move">自由移动</string>
+    <string name="ingame_aim_move">瞄准时移动</string>
+    <string name="ingame_free_move_help">自由移动：以镜头为参照，摇杆推向哪里，里昂就走向哪里；右摇杆让镜头绕他旋转。举起武器时，他会转向镜头所看的方向。十字键保留经典操作。</string>
+    <string name="ingame_aim_move_help">瞄准时移动：举起武器或小刀时，右摇杆让里昂朝任意方向移动（使用替代操作时为左摇杆，右摇杆负责瞄准）。他的脚会滑动：游戏没有横移步伐。</string>
     <string name="ingame_touch_aim">触控瞄准</string>
     <string name="ingame_aim_move_stick">移动摇杆</string>
     <string name="ingame_aim_touch_area">触控区域</string>

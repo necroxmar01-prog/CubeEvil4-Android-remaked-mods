@@ -130,6 +130,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // the menu's "Auto aim" (the game's own lock-on) and "Always run" (the run key walks instead; wish of the
   // project owner, 30.10.2026; CoreBridge.setAim, runtime/aim_options.cpp; both off)
   static final String AUTO_AIM = "autoAim", ALWAYS_RUN = "alwaysRun", FAR_CAMERA = "farCamera";
+  // the menu's "Free movement" and "Move while aiming" (patch 0219, runtime/free_move.cpp; both off)
+  static final String FREE_MOVE = "freeMovement", AIM_MOVE = "moveWhileAiming";
   static final float AIM_SPEED_MIN = 0.5f, AIM_SPEED_MAX = 3f, AIM_SPEED_STEP = 0.25f;
   // the menu's "Field of view" (PLAYER VIEW; wish of the project owner, 05.11.2026): degrees added to the shoulder
   // camera's vertical field of view, -FOV_RANGE .. FOV_RANGE, 0 as the game (CoreBridge.setFov, patch 0205)
@@ -271,6 +273,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     SharedPreferences inputPrefs = getSharedPreferences(INPUT_PREFS, MODE_PRIVATE);
     input.setSwapFace(inputPrefs.getBoolean(SWAP_FACE, false));
     input.setAlternate(inputPrefs.getBoolean(ALT_CONTROLS, false));
+    input.setAimMove(inputPrefs.getBoolean(AIM_MOVE, false));
     if (inputPrefs.contains(OLD_KEY_MAP)) {
       Log.i(TAG, "layout: the free keys of the controller configuration (" + inputPrefs.getString(OLD_KEY_MAP, "")
           + ") dropped; the button mapping starts from the default");
@@ -385,6 +388,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setLaserColour(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getInt(LASER_COLOUR, 0));
       CoreBridge.setMerge(g.getBoolean("mergeDraws", false));
       CoreBridge.setFarCamera(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(FAR_CAMERA, false));
+      CoreBridge.setMovement(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(FREE_MOVE, false),
+          getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(AIM_MOVE, false));
       CoreBridge.setFov(fovOffset(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE)));
       CoreBridge.setVertexRing(g.getBoolean("vertexRing", false));
       // "Dynamic" up to the benchmark's levels on this device, when it ran
@@ -878,6 +883,13 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).edit().putBoolean(AUTO_AIM, on).apply();
       autoAim = on;
       CoreBridge.setAim(aimInvert, aimSpeed, autoAim, alwaysRun);
+    }
+
+    @Override public void movementChanged(boolean freeMove, boolean aimMove) {
+      getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).edit().putBoolean(FREE_MOVE, freeMove)
+          .putBoolean(AIM_MOVE, aimMove).apply();
+      input.setAimMove(aimMove);
+      CoreBridge.setMovement(freeMove, aimMove);
     }
 
     @Override public void alwaysRunChanged(boolean on) {

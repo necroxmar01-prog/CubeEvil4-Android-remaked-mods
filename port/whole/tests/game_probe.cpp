@@ -1523,6 +1523,139 @@ extern "C" void re4_core_slash(float tilt);
 // The knife by a swipe (runtime/knife_swipe.cpp): the buttons it adds to the pad (pad.cpp
 // re4_pad_add) frame by frame, while the probe moves a fake Leon through the knife routine the way
 // pl_knife.cpp would. Bits: each failed case.
+// "Free movement" and "Move while aiming" (runtime/free_move.cpp, patch 0219) on a stand-in player: Leon turns
+// toward the stick seen from the camera and gets only "forward", sets off within 60 degrees, the C stick turns the
+// camera (re4_free_cam_matrix), aiming puts the camera behind him and the C stick walks him there, a jump of his
+// position resets the camera, and with both off nothing changes. 0: all right, else the failed checks' bits.
+extern "C" void re4_aim_set(int bits);
+extern "C" void re4_player_input(cPlayer* pl);
+extern "C" void re4_free_cam_matrix(Mtx mat);
+extern "C" int re4probe_free_move(void)
+{
+    if (!pSys) {
+        return 0x8000;
+    }
+    cPlayer* keepPl = pPL;
+    const u8 keepType = pG->pl_type;
+    const int keepKnifeKey = CfgFlagChk(pSys, CFG_KNIFE_MODE);
+    const KEY keepKey = Key;
+    const f32 kHalfPi = 1.5707964f;
+
+    cPlayer* pl = (cPlayer*) (unsigned long) 0x82E40000ul;
+    memset((void*) pl, 0, sizeof(cPlayer));
+    cPlWep* wep = (cPlWep*) (unsigned long) 0x82E30000ul;
+    memset((void*) wep, 0, sizeof(cPlWep));
+    pl->Wep = wep;
+    pPL = pl;
+    pG->pl_type = 0;
+    CfgFlagOff(pSys, CFG_KNIFE_MODE);
+    memset(&Key, 0, sizeof(Key));
+    int bad = 0;
+    auto near = [](f32 a, f32 b) { return fabsf(a - b) < 0.002f; };
+    auto camYaw = [&]() -> f32 {
+        Mtx m;
+        PSMTXIdentity(m);
+        m[0][3] = 1.0f;
+        m[1][3] = 2.0f;
+        m[2][3] = 3.0f;
+        re4_free_cam_matrix(m);
+        if (m[0][3] != 1.0f || m[1][3] != 2.0f || m[2][3] != 3.0f) {
+            return 99.0f;  // the position must stay
+        }
+        return atan2f(m[0][2], m[2][2]);  // the forward column
+    };
+
+    // both off: keys, angle and position stay, the camera is Leon's
+    re4_aim_set(100 << 8);
+    Key.stickX = 56;
+    Key.on = 4;
+    Key.substickX = 59;
+    re4_player_input(pl);
+    bad |= Key.on != 4 || Key.substickX != 59 || pl->ang.y != 0.0f ? 1 : 0;
+    bad |= camYaw() != 0.0f ? 1 : 0;
+
+    // free movement, standing, the stick right (the game's "right", Key 4): he turns, does not walk yet
+    re4_aim_set(100 << 8 | 0x10);
+    Key.substickX = 0;
+    re4_player_input(pl);
+    bad |= !near(pl->ang.y, -0.42f) || (Key.on & 0xF) != 0 ? 2 : 0;
+    // within 60 degrees: forward only
+    Key.on = 4;
+    re4_player_input(pl);
+    bad |= !near(pl->ang.y, -0.84f) || (Key.on & 0xF) != 1 ? 4 : 0;
+    // walking: the walk turn rate, then he faces right of the camera
+    pl->r_no_1 = 1;
+    for (int i = 0; i < 6; i++) {
+        Key.on = 4;
+        re4_player_input(pl);
+    }
+    bad |= !near(pl->ang.y, -kHalfPi) || (Key.on & 0xF) != 1 ? 8 : 0;
+    bad |= !near(camYaw(), 0.0f) ? 8 : 0;
+    // the stick back (toward the camera): he turns to face it, still only "forward" (no quick turn)
+    Key.stickX = 0;
+    Key.stickY = -56;
+    for (int i = 0; i < 12; i++) {
+        Key.on = 2 | 0x40000000;
+        re4_player_input(pl);
+    }
+    bad |= fabsf(fabsf(pl->ang.y) - 2.0f * kHalfPi) > 0.002f || (Key.on & 0xF) != 1 ? 0x10 : 0;
+    // the C stick right turns the camera right (a smaller yaw), and the game no longer sees its X
+    Key.stickY = 0;
+    Key.on = 0;
+    pl->r_no_1 = 0;
+    Key.substickX = 59;
+    Key.substickY = 20;
+    re4_player_input(pl);
+    bad |= Key.substickX != 0 || Key.substickY != 20 || !near(camYaw(), -0.085f) ? 0x20 : 0;
+    // the stick at rest: the D-pad's keys stay as the game made them
+    Key.substickX = 0;
+    Key.on = 8;
+    re4_player_input(pl);
+    bad |= Key.on != 8 ? 0x40 : 0;
+
+    // aiming (the weapon routine, ready): the camera exactly behind him, the game's again
+    pl->ang.y = 0.5f;
+    pl->r_no_1 = 6;
+    pl->r_no_2 = 1;
+    Key.on = 0;
+    re4_player_input(pl);
+    bad |= camYaw() != 0.0f ? 0x80 : 0;  // unchanged: the identity's
+    // moving while aiming: forward with the C stick up, right with it right
+    re4_aim_set(100 << 8 | 0x10 | 0x20);
+    pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+    Key.substickY = 59;
+    re4_player_input(pl);
+    bad |= !near(pl->pos.x, sinf(0.5f) * 26.0f) || !near(pl->pos.z, cosf(0.5f) * 26.0f) || Key.substickY != 0 ? 0x100 : 0;
+    pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+    Key.substickX = 59;
+    re4_player_input(pl);
+    bad |= !near(pl->pos.x, -cosf(0.5f) * 26.0f) || !near(pl->pos.z, sinf(0.5f) * 26.0f) || Key.substickX != 0 ? 0x200 : 0;
+    // not ready (the routine's first step): no move
+    pl->r_no_2 = 0;
+    pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+    Key.substickY = 59;
+    re4_player_input(pl);
+    bad |= pl->pos.z != 0.0f ? 0x400 : 0;
+
+    // back in the walk routines after a door (his position jumped): the camera starts behind him
+    pl->r_no_1 = 0;
+    pl->ang.y = 1.0f;
+    pl->pos.x = 5000.0f;
+    Key.substickX = 0;
+    Key.substickY = 0;
+    re4_player_input(pl);
+    bad |= !near(camYaw(), 1.0f) ? 0x800 : 0;
+
+    re4_aim_set(100 << 8);
+    Key = keepKey;
+    pPL = keepPl;
+    pG->pl_type = keepType;
+    if (keepKnifeKey) {
+        CfgFlagOn(pSys, CFG_KNIFE_MODE);
+    }
+    return bad;
+}
+
 extern "C" int re4probe_knife_swipe(void)
 {
     const u16 kL = 0x0040, kLA = 0x0140;

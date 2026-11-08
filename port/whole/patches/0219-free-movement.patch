@@ -1,0 +1,41 @@
+# "Free movement" and "Move while aiming" (DevJunior's mod in the spirit of the 2023 remake; the app menu's
+# Controls page, both off by default): runtime/free_move.cpp. cPlayer::keyConfig calls re4_player_input first,
+# before the walk routines read the keys: with "Free movement" the main stick turns Leon toward where it points,
+# seen from the camera, and the game gets only "forward" (its walk and run do the rest); the C stick turns the
+# camera round him. With "Move while aiming" the C stick walks him while a weapon or the knife is ready.
+# CameraQuasiFPS::calcBaseMatrix asks re4_free_cam_matrix to turn the camera's base frame to the free camera's yaw
+# (only in the walk routines, and on the way back behind him after them). Both off: nothing changes.
+--- a/src/game/pl_class.cpp
++++ b/src/game/pl_class.cpp
+@@ -955,9 +955,12 @@
+     return 0;
+ }
+ 
++extern "C" void re4_player_input(cPlayer* pl); /* port: runtime/free_move.cpp (patch 0219) */
++
+ // Applies the controller layout (pSys->pad_type); both layouts use keyConfigTypeA.
+ void cPlayer::keyConfig()
+ {
++    re4_player_input(this); /* port (patch 0219): "Free movement" and "Move while aiming" */
+     switch (pSys->pad_type) {
+     case 0:
+         keyConfigTypeA();
+--- a/src/game/cam_qfps.cpp
++++ b/src/game/cam_qfps.cpp
+@@ -380,6 +380,8 @@
+     m_p_floor_norm = p_norm;
+ }
+ 
++extern "C" void re4_free_cam_matrix(Mtx mat); /* port: runtime/free_move.cpp (patch 0219) */
++
+ // The player-space frame the shoulder offsets are applied in: the player's matrix (or the
+ // stored one after the search delay), one-shot translation / look-direction overrides, the up
+ // axis tilted toward the floor normal by the floor ratio while not aiming, and the crouch drop
+@@ -413,6 +415,7 @@
+     }
+     if (m_state & 1) {
+         PSMTXCopy(m_pl_mat, mat);
++        re4_free_cam_matrix(mat); /* port (patch 0219): "Free movement" turns the camera round Leon */
+     }
+     if (m_pl_ofs.x != 0.0f || m_pl_ofs.y != 0.0f || m_pl_ofs.z != 0.0f) {
+         PSMTXMultVec(mat, &m_pl_ofs, &v0);

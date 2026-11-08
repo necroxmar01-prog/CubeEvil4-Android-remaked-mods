@@ -140,6 +140,16 @@ public final class CoreInputTests {
     in.motion(1, 0.3f, -1, 0, 0.8f, 1f, 0, 0, 0);  // aiming down, the left stick ignored
     a = in.pad();
     check(a[1] == 0 && a[2] == Math.round(-0.8f * 101) && a[3] == 0 && a[0] == CoreInput.GC_R);
+    // "Move while aiming" (patch 0219): the left stick goes to the game as the C stick meanwhile
+    in.setAimMove(true);
+    in.motion(1, 0.3f, -1, 0, 0.8f, 1f, 0, 0, 0);
+    a = in.pad();
+    check(a[1] == 0 && a[2] == Math.round(-0.8f * 101) && a[3] == Math.round(0.3f * 92) && a[4] == 92
+        && a[0] == CoreInput.GC_R);
+    in.setAimMove(false);
+    in.motion(1, 0.3f, -1, 0, 0.8f, 1f, 0, 0, 0);
+    a = in.pad();
+    check(a[3] == 0 && a[4] == 0);
     in.motion(1, 0.3f, -1, 0, 0.8f, 0, 0, 0, 0);
     in.key(2, L2, true);  // L2 as a key of another device (the built-in controller)
     a = in.pad();

@@ -64,6 +64,10 @@
     <string name="ingame_auto_aim_help">Apuntado automático: al levantar el arma, la mira salta al enemigo más cercano delante de ti y lo sigue un momento (la ayuda de puntería del propio juego).</string>
     <string name="ingame_always_run_help">Correr siempre: Leon corre siempre que te mueves; mantén el botón de correr (p. ej. B) para caminar.</string>
     <string name="ingame_far_camera_help">Mantiene la cámara de hombro un poco más detrás de Leon al caminar y al estar quieto. Al apuntar y en sitios estrechos se acerca como antes; entre ambos se mueve con suavidad.</string>
+    <string name="ingame_free_move">Movimiento libre</string>
+    <string name="ingame_aim_move">Moverse al apuntar</string>
+    <string name="ingame_free_move_help">Movimiento libre: Leon camina hacia donde empujas el stick, visto desde la cámara, y el stick derecho gira la cámara a su alrededor. Al preparar un arma se gira hacia donde mira la cámara. La cruceta mantiene los controles clásicos.</string>
+    <string name="ingame_aim_move_help">Moverse al apuntar: con un arma o el cuchillo preparados, el stick derecho mueve a Leon en cualquier dirección (con los controles alternativos, el izquierdo, mientras el derecho apunta). Sus pies se deslizan: el juego no tiene pasos laterales.</string>
     <string name="ingame_touch_aim">Apuntar táctil</string>
     <string name="ingame_aim_move_stick">Stick de movimiento</string>
     <string name="ingame_aim_touch_area">Zona táctil</string>
