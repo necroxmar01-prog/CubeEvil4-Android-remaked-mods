@@ -68,7 +68,7 @@
      return ret;
  }
  
-+extern "C" int re4_parry_hit(void); /* port: runtime/parry.cpp (patch 0900) */
++extern "C" int re4_parry_hit(Vec* pos); /* port: runtime/parry.cpp (patch 0900) */
 +
  // Attack sphere against the player: 0 = miss, else the damage motion type + 1 (front/back, and the
  // height: 4 low, 2 middle).
@@ -77,7 +77,7 @@
      if (part == 0) {
          return 0;
      }
-+    if (re4_parry_hit()) {
++    if (re4_parry_hit(pPos)) {
 +        return 0; /* port (patch 0900): "Knife parry" turned the blow aside */
 +    }
      part->flag &= 0xBFFF;

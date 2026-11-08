@@ -1892,7 +1892,7 @@ extern "C" int re4probe_quick_slots(void)
 // "Knife parry" (runtime/parry.cpp): the knife key opens a short window, a blow in it misses and so do those of
 // the next frames, Leon slashes (the knife routine's slash step); without the key, after the window or with the
 // switch off no blow misses. 0: all right, else the failed checks' bits.
-extern "C" int re4_parry_hit(void);
+extern "C" int re4_parry_hit(Vec* pos);
 extern "C" int re4probe_parry(void)
 {
     if (!pSys) {
@@ -1911,23 +1911,23 @@ extern "C" int re4probe_parry(void)
     int bad = 0;
     re4_aim_set(100 << 8 | 1 << 21);
     re4_player_input(pl);
-    bad |= re4_parry_hit() != 0 ? 1 : 0;  // no key: the blow lands
+    bad |= re4_parry_hit(0) != 0 ? 1 : 0;  // no key: the blow lands
     Joy[0].trg = 0x40;  // L: the knife key
     re4_player_input(pl);
     Joy[0].trg = 0;
-    bad |= re4_parry_hit() != 1 ? 2 : 0;  // parried
-    bad |= re4_parry_hit() != 1 ? 4 : 0;  // the rest of the swing too
+    bad |= re4_parry_hit(0) != 1 ? 2 : 0;  // parried
+    bad |= re4_parry_hit(0) != 1 ? 4 : 0;  // the rest of the swing too
     for (int i = 0; i < 30; i++) {
         re4_player_input(pl);
     }
-    bad |= re4_parry_hit() != 0 ? 8 : 0;  // later blows land again
+    bad |= re4_parry_hit(0) != 0 ? 8 : 0;  // later blows land again
     // in the knife stance: the slash follows the parry
     pl->r_no_1 = 0xB;
     pl->r_no_2 = 1;
     Joy[0].trg = 0x40;
     re4_player_input(pl);
     Joy[0].trg = 0;
-    re4_parry_hit();
+    re4_parry_hit(0);
     re4_player_input(pl);
     bad |= pl->r_no_2 != 2 || pl->r_no_3 != 0 ? 0x10 : 0;
     for (int i = 0; i < 30; i++) {
@@ -1942,13 +1942,13 @@ extern "C" int re4probe_parry(void)
     for (int i = 0; i < 9; i++) {
         re4_player_input(pl);
     }
-    bad |= re4_parry_hit() != 0 ? 0x20 : 0;
+    bad |= re4_parry_hit(0) != 0 ? 0x20 : 0;
     // off: nothing
     re4_aim_set(100 << 8);
     Joy[0].trg = 0x40;
     re4_player_input(pl);
     Joy[0].trg = 0;
-    bad |= re4_parry_hit() != 0 ? 0x40 : 0;
+    bad |= re4_parry_hit(0) != 0 ? 0x40 : 0;
     Key = keepKey;
     Joy[0] = keepJoy;
     pPL = keepPl;

@@ -24,8 +24,10 @@
 //    targets, not bone offsets, 0.99.4 fix of the stretched legs) on a copy of every part, which is put back
 //    afterwards; only the legs' rotations are taken from it: the thighs as the walk pose turns them against the
 //    model (not against the aiming pose's turned hips), the shins and feet as their local turn, faded in and out
-//    by a quaternion blend (kLegFade, at most kLegMax); every bone keeps the aiming pose's offset, the hips and
-//    everything above keep the aiming pose. The walk motion runs in a work of its own (gWalk) with its own key
+//    by a quaternion blend (kLegFade, at most kLegMax); every bone keeps the aiming pose's offset. The hips take
+//    the walk's sway (its bob and roll, device report 08.11.2026: the body stood stiff): the walk pose's hips
+//    against their own running mean (gHipT, gHipQ), so only the swing is added, all of the bob, kSwayAim of the
+//    turn while aiming (the gun steadier), all of it while reloading; everything above follows the hips. The walk motion runs in a work of its own (gWalk) with its own key
 //    histories, so the aiming motion and its blend (cMot3, pMotionB) are not disturbed. The game's own collision (EmAtCheck, SatMgr: walls, then the
 //    floor) runs after the routines, so walls and floors hold him as when he walks.
 //    With "Alternate Controls" the app sends the left stick as the C stick while L1 / L2 hold the weapon ready
@@ -79,6 +81,8 @@ const f32 kAimWalk = 38.0f;       // units per game frame at full C stick while 
 const f32 kLegFade = 0.2f;        // the legs' share of the walk pose per frame, in and out
 const f32 kLegMax = 0.85f;        // at most this share (a little of the steady aiming stance stays)
 const f32 kLegSpeed = 0.9f;       // the walk motion's frames per game frame at full C stick
+const f32 kSwayAim = 0.5f;        // share of the walk's hip turn while aiming (all of it while reloading)
+const f32 kSwayMean = 0.08f;      // the hips' running mean per frame (a walk step lasts about 15 frames)
 const f32 kRecenter = 0.35f;      // share per frame the camera turns back behind him after R3
 const int kMaxParts = 160;
 const f32 kTeleport = 1500.0f;    // a jump of his position this far (a door, a new room, an event): camera reset
@@ -109,6 +113,10 @@ Mtx gWalkRot[kMaxParts];  // thighs: their turn against the model; shins, feet: 
 HERMITE_KEY gWalkHist[kMaxParts][6];
 bool gLeg[kMaxParts];
 bool gLegRoot[kMaxParts];
+Mtx gWalkHips;          // the walk pose's hips (their local matrix)
+Vec gHipT;              // their running mean: translation, turn
+Quaternion gHipQ;
+bool gHipMean = false;
 MOTION_INFO gWalk;
 void* gWalkMot = 0;
 cPlayer* gWalkPl = 0;
@@ -123,6 +131,28 @@ f32 wrap(f32 a)
         a += 2.0f * kPi;
     }
     return a;
+}
+
+// p * q and the unit of q (the SDK's C_QUATMultiply / C_QUATNormalize are not declared for the port's build)
+void quatMul(const Quaternion& p, const Quaternion& q, Quaternion* r)
+{
+    Quaternion t;
+    t.w = p.w * q.w - p.x * q.x - p.y * q.y - p.z * q.z;
+    t.x = p.w * q.x + p.x * q.w + p.y * q.z - p.z * q.y;
+    t.y = p.w * q.y + p.y * q.w + p.z * q.x - p.x * q.z;
+    t.z = p.w * q.z + p.z * q.w + p.x * q.y - p.y * q.x;
+    *r = t;
+}
+
+void quatUnit(Quaternion* q)
+{
+    const f32 n = sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
+    if (n > 0.0f) {
+        q->x /= n;
+        q->y /= n;
+        q->z /= n;
+        q->w /= n;
+    }
 }
 
 f32 axis(s8 v, f32 range)
@@ -403,6 +433,7 @@ void legs(cPlayer* pl)
         memset(gWalkHist, 0, sizeof gWalkHist);
         gWalkMot = mot;
         gWalkPl = pl;
+        gHipMean = false;
         findLegs(pl, n);
     }
     i = 0;
@@ -419,6 +450,7 @@ void legs(cPlayer* pl)
     pl->partsWorldCalc();
     InverseKinematics(pl, 1);
     pl->partsWorldCalc();
+    PSMTXCopy(pl->pList->l_mat, gWalkHips);
     i = 0;
     for (cParts* p = pl->pList; p; p = p->pList, i++) {
         memcpy(gWalkHist[i], p->motParts.hist, sizeof gWalkHist[i]);
@@ -432,6 +464,54 @@ void legs(cPlayer* pl)
         memcpy((void*) p, gSave + i * sizeof(cParts), sizeof(cParts));
     }
     PSMTXCopy(modelMat, pl->mat);
+    // the hips: the walk's swing (the walk pose's hips against their running mean) on the aiming pose's
+    cParts* hips = pl->pList;
+    Mtx hipsWorld;
+    {
+        Quaternion qw;
+        C_QUATMtx(&qw, gWalkHips);
+        const Vec tw = {gWalkHips[0][3], gWalkHips[1][3], gWalkHips[2][3]};
+        if (!gHipMean) {
+            gHipT = tw;
+            gHipQ = qw;
+            gHipMean = true;
+        } else {
+            gHipT.x += (tw.x - gHipT.x) * kSwayMean;
+            gHipT.y += (tw.y - gHipT.y) * kSwayMean;
+            gHipT.z += (tw.z - gHipT.z) * kSwayMean;
+            const f32 dot = gHipQ.x * qw.x + gHipQ.y * qw.y + gHipQ.z * qw.z + gHipQ.w * qw.w;
+            const f32 sgn = dot < 0.0f ? -1.0f : 1.0f;
+            gHipQ.x += (qw.x * sgn - gHipQ.x) * kSwayMean;
+            gHipQ.y += (qw.y * sgn - gHipQ.y) * kSwayMean;
+            gHipQ.z += (qw.z * sgn - gHipQ.z) * kSwayMean;
+            gHipQ.w += (qw.w * sgn - gHipQ.w) * kSwayMean;
+            quatUnit(&gHipQ);
+        }
+        // the swing: this frame's turn against the mean (qw * conj(mean)), scaled
+        Quaternion inv = {-gHipQ.x, -gHipQ.y, -gHipQ.z, gHipQ.w};
+        Quaternion swing;
+        quatMul(qw, inv, &swing);
+        const Quaternion none = {0.0f, 0.0f, 0.0f, 1.0f};
+        Quaternion part;
+        C_QUATSlerp(&none, &swing, &part, gLegW * (directReload(pl) ? 1.0f : kSwayAim));
+        Quaternion qa;
+        Quaternion q;
+        C_QUATMtx(&qa, hips->l_mat);
+        quatMul(part, qa, &q);
+        Vec t;
+        t.x = hips->l_mat[0][3] + (tw.x - gHipT.x) * gLegW;
+        t.y = hips->l_mat[1][3] + (tw.y - gHipT.y) * gLegW;
+        t.z = hips->l_mat[2][3] + (tw.z - gHipT.z) * gLegW;
+        PSMTXQuat(hips->l_mat, &q);
+        TransMatrix(hips->l_mat, &t);
+        ScaleMatrix(hips->l_mat, &hips->scale);
+        // their world as partsWorldCalc will make it, for the thighs below
+        if (hips->pParent == (cCoord*) pl || !hips->pParent) {
+            PSMTXConcat(pl->mat, hips->l_mat, hipsWorld);
+        } else {
+            PSMTXConcat(hips->pParent->mat, hips->l_mat, hipsWorld);
+        }
+    }
     // the legs: the aiming pose's turn toward the walk pose's, the bones' offsets kept
     const f32 w = gLegW * kLegMax;
     i = 0;
@@ -443,7 +523,7 @@ void legs(cPlayer* pl)
         if (gLegRoot[i]) {
             // the thigh as the walk pose turns it against the model, under the aiming pose's hips
             Mtx inv;
-            PSMTXInverse(p->pParent->mat, inv);
+            PSMTXInverse(p->pParent == hips ? hipsWorld : p->pParent->mat, inv);
             PSMTXConcat(inv, gWalkRot[i], walk);
         } else {
             PSMTXCopy(gWalkRot[i], walk);
