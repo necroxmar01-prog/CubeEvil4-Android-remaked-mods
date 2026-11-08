@@ -30,11 +30,20 @@
 //    floor) runs after the routines, so walls and floors hold him as when he walks.
 //    With "Alternate Controls" the app sends the left stick as the C stick while L1 / L2 hold the weapon ready
 //    (CoreInput), so the left stick moves and the right one aims, as in the remake.
+//  - Reloading without aiming (with "Move while aiming", wish of DevJunior, 08.11.2026, as in the remake): R
+//    and B pressed together in the walk routines (the app's reload action, a mapped reload key or the touch
+//    controls' RLOAD button press both at once; aiming first and then B stays the game's reload) start the
+//    prototype's own direct reload: the weapon routine's reload step (setRno 0/6/4, m_Work0 1) with
+//    PlReloadDirect = 1, as cPlayer::actionSelect does with the reload key type 1 (keyReload; isKamae is 0
+//    then), so Leon does not aim. Meanwhile the main stick walks him (kAimWalk, his legs as above), seen from
+//    the camera with "Free movement", else relative to where he faces; the right stick keeps turning the free
+//    camera.
 //
 // For tests on the PC: RE4_TEST_AIM with bits 0x10 / 0x20 (runtime/aim_options.cpp).
 #include "types.h"
 #include "global.h"
 #include "main.h"
+#include "joy.h"
 #include "player.h"
 #include "pl_wep.h"
 #include "model.h"
@@ -112,6 +121,12 @@ f32 axis(s8 v, f32 range)
     return f > 1.0f ? 1.0f : f < -1.0f ? -1.0f : f;
 }
 
+// The prototype's direct reload (no aim key: PlReloadDirect) in the weapon routine's reload step.
+bool directReload(cPlayer* pl)
+{
+    return pl->r_no_0 == 0 && pl->r_no_1 == 6 && pl->r_no_2 == 4 && PlReloadDirect == 1;
+}
+
 // The walk routines of Pl_func_move_tbl (player.cpp): footwork, walk, back step, turn, run.
 bool walkRoutine(cPlayer* pl)
 {
@@ -127,7 +142,8 @@ void freeMove(cPlayer* pl)
         gCamYaw = pl->ang.y;
         gCamValid = true;
     }
-    if (!walkRoutine(pl)) {
+    const bool reloading = directReload(pl);
+    if (!walkRoutine(pl) && !reloading) {
         gRecentering = false;
         gRecenterAsked = false;
         if (pl->isKamae()) {
@@ -157,6 +173,9 @@ void freeMove(cPlayer* pl)
         }
     }
     Key.substickX = 0;
+    if (reloading) {
+        return;  // reloadMove walks him; he keeps facing where he faces
+    }
     // (joyKamae asks the weapon; without one, between rooms, it would only log an error)
     if ((pl->Wep && pl->Wep->m_pWep && joyKamae()) || joyLKamae()) {
         pl->ang.y = gCamYaw;  // a weapon or the knife ready: he aims where the camera looks
@@ -179,6 +198,53 @@ void freeMove(cPlayer* pl)
     if (moving || fabsf(diff - step) < kWalkStart) {
         Key.on |= 1;
     }
+}
+
+// R and B pressed together in the walk routines: the prototype's direct reload (cPlayer::actionSelect with the
+// reload key type 1: setRno(0, 6, 4, 0), m_Work0 1; PlReloadDirect 1 = not aiming). Their bits out of this frame
+// (no run, no aim).
+void reloadInput(cPlayer* pl)
+{
+    const u32 both = 0x20 | 0x200;  // R, B
+    if ((Joy[0].trg & both) != both || !walkRoutine(pl) || !pl->Wep || !pl->Wep->m_pWep
+        || !pl->Wep->m_pWep->reloadable()) {
+        return;
+    }
+    pl->setRno(0, 6, 4, 0);
+    pl->m_Work0 = 1;
+    PlReloadDirect = 1;
+    Joy[0].on &= ~both;
+    Joy[0].trg &= ~both;
+    Key.on &= ~(u64) 0x40000000;  // the run key (B)
+    Key.trg &= ~(u64) 0x40000000;
+}
+
+// Walking during the direct reload: the main stick, seen from the free camera (or relative to his facing).
+void reloadMove(cPlayer* pl)
+{
+    if (!directReload(pl)) {
+        return;
+    }
+    const f32 sx = axis(Key.stickX, kMainRange);
+    const f32 sy = axis(Key.stickY, kMainRange);
+    f32 mag = sqrtf(sx * sx + sy * sy);
+    if (mag <= kMoveDead) {
+        return;
+    }
+    // the way in world yaw: the camera's (Free movement) or his own, turned by the stick
+    const f32 base = re4_free_move_on() && gCamValid ? gCamYaw : pl->ang.y;
+    const f32 dir = wrap(base - atan2f(sx, sy));
+    if (mag > 1.0f) {
+        mag = 1.0f;
+    }
+    pl->pos.x += sinf(dir) * kAimWalk * mag;
+    pl->pos.z += cosf(dir) * kAimWalk * mag;
+    // for the legs: the way relative to where he faces
+    const f32 rel = wrap(dir - pl->ang.y);
+    gAimMoving = true;
+    gAimSx = -sinf(rel) * mag;  // right = a smaller angle
+    gAimSy = cosf(rel) * mag;
+    gAimMag = mag;
 }
 
 void aimMove(cPlayer* pl)
@@ -264,7 +330,7 @@ void findLegs(cPlayer* pl, int n)
 
 void legs(cPlayer* pl)
 {
-    const bool want = gAimMoving && weaponRoutine(pl) && pl->isKamae();
+    const bool want = gAimMoving && weaponRoutine(pl) && (pl->isKamae() || directReload(pl));
     gLegW = want ? (gLegW + kLegFade > 1.0f ? 1.0f : gLegW + kLegFade) : (gLegW - kLegFade < 0.0f ? 0.0f : gLegW - kLegFade);
     if (gLegW <= 0.0f || !weaponRoutine(pl) || !pl->pList || !pl->m_MotTbl) {
         gLegW = 0.0f;
@@ -396,6 +462,9 @@ void re4_player_input(cPlayer* pl)
         return;
     }
     re4_quick_slots_input(pl);  // first: the D-pad's bits out of the keys when it equips weapons
+    if (re4_aim_move_on()) {
+        reloadInput(pl);  // before the camera: a reload started now keeps the free camera
+    }
     if (re4_free_move_on()) {
         freeMove(pl);
     } else {
@@ -403,6 +472,7 @@ void re4_player_input(cPlayer* pl)
     }
     if (re4_aim_move_on()) {
         aimMove(pl);
+        reloadMove(pl);
     }
     gLastPl = pl;
     gLastPos = pl->pos;

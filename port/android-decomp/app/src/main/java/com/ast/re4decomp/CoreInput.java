@@ -562,9 +562,9 @@ public final class CoreInput {
         && (Math.round(padL * 255f) >= TRIGGER_PRESSED || Math.round(padR * 255f) >= TRIGGER_PRESSED);
     // touch aiming: L or R held, on the touch controls or any controller
     Device touchDevice = devices.get(TOUCH);
-    boolean touchAiming = touchAim != AIM_MOVE_STICK
-        && (touchDevice != null && (touchDevice.l2Key || touchDevice.r2Key)
-            || Math.round(padL * 255f) >= TRIGGER_PRESSED || Math.round(padR * 255f) >= TRIGGER_PRESSED);
+    boolean touchHeld = touchDevice != null && (touchDevice.l2Key || touchDevice.r2Key)
+        || Math.round(padL * 255f) >= TRIGGER_PRESSED || Math.round(padR * 255f) >= TRIGGER_PRESSED;
+    boolean touchAiming = touchAim != AIM_MOVE_STICK && touchHeld;
     if (!touchAiming) swipeX = swipeY = 0;  // a swipe left over from the aim before turns nothing
     this.touchAiming = touchAiming;
     int buttons = padB ? GC_B : 0;
@@ -604,7 +604,23 @@ public final class CoreInput {
         mainX = d.rx;
         mainY = d.ry;
       }
-      if (touchAiming && touch && touchAim == AIM_LOOK) {
+      if (aimMove && touchHeld && touch) {
+        // "Move while aiming" on the touch controls (user report, 08.11.2026: the look zone moved Leon, the
+        // move stick aimed): the move stick walks (the C stick to the game, runtime/free_move.cpp), and the
+        // aim comes from the right: by swipes (AIM_LOOK, takeAimSwipe), from the touch C stick (AIM_C_STICK)
+        // or, by default, from the look zone and the touch C stick as a stick (whichever tilts further)
+        cX = d.lx;
+        cY = d.ly;
+        if (touchAim == AIM_LOOK) {
+          mainX = mainY = 0;
+        } else if (touchAim == AIM_C_STICK) {
+          mainX = d.cStickX;
+          mainY = d.cStickY;
+        } else {
+          mainX = d.rx;
+          mainY = d.ry;
+        }
+      } else if (touchAiming && touch && touchAim == AIM_LOOK) {
         // the look zone aims by swipes (takeAimSwipe), not as a stick; the C stick stays the C stick
         cX = d.cStickX;
         cY = d.cStickY;

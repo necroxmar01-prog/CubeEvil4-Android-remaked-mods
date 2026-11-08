@@ -168,6 +168,24 @@ public final class CoreInputTests {
     a = in.pad();
     check(a[2] == 101 && a[3] == 92);
     in.touchClear();
+    // "Move while aiming" on the touch controls: with R held the move stick walks (as the C stick), the look
+    // zone aims (as the control stick); with the swipe aiming the control stick rests
+    in.motion(1, 0, 0, 0, 0, 0, 0, 0, 0);  // the controller's trigger from above let go
+    in.setAimMove(true);
+    in.touchButton(CoreInput.GC_R, true);
+    in.touchStick(false, 0.5f, -1);
+    in.touchLook(0.3f, 0, 0, 0);
+    a = in.pad();
+    check(a[1] == Math.round(0.3f * 101) && a[2] == 0 && a[3] == Math.round(0.5f * 92) && a[4] == 92);
+    in.setTouchAim(1);  // AIM_LOOK
+    a = in.pad();
+    check(a[1] == 0 && a[2] == 0 && a[3] == Math.round(0.5f * 92) && a[4] == 92);
+    in.setTouchAim(0);  // AIM_MOVE_STICK
+    in.touchButton(CoreInput.GC_R, false);  // not aiming: the sticks as they are
+    a = in.pad();
+    check(a[6] == 0 && a[2] == 101 && a[3] == Math.round(0.3f * 92));
+    in.setAimMove(false);
+    in.touchClear();
     in.motion(1, 0, 0, 0, 0, 0, 0, 0, 0);
     // with the swap: the labels first (the button labelled Y sends X's code)
     in.setSwapFace(true);

@@ -38,6 +38,10 @@ final class CoreTouch {
   // the actions registered with RetroTouch (the layout's contract: lower case, never renamed)
   static final String A = "a", B = "b", X = "x", Y = "y", Z = "z", L = "l", R = "r",
       START = "start", MENU = "menu", R3 = "r3",
+      // R and B at once (the game's reload: aim + B); with "Move while aiming" the core takes both pressed
+      // together, not aiming, as the remake's reload without aiming (runtime/free_move.cpp, patch 0900). Not in
+      // the default layout, the editor adds it (wish of DevJunior, 08.11.2026)
+      RELOAD = "reload",
       // the C stick as an analog stick the editor adds (RetroTouch's stick action, registerStickAction)
       C_STICK = "cstick";
   // the D-pad's directions (RetroTouchNavigation)
@@ -51,8 +55,8 @@ final class CoreTouch {
    * graphics capture for error reports, as on a controller; not in the default layout, the editor
    * adds it.
    */
-  static final String[] ACTIONS = {A, B, X, Y, Z, L, R, START, MENU, R3, C_STICK};
-  static final String[] LABELS = {"A", "B", "X", "Y", "Z", "L", "R", "START", "MENU", "R3", "C"};
+  static final String[] ACTIONS = {A, B, X, Y, Z, L, R, START, MENU, R3, C_STICK, RELOAD};
+  static final String[] LABELS = {"A", "B", "X", "Y", "Z", "L", "R", "START", "MENU", "R3", "C", "RLOAD"};
   // the GameCube's official colours (the project owner's palette, 19.10.2026): A green, B red,
   // Z purple, the C stick yellow, the others grey (RetroTouch writes dark labels on the light grey
   // and the yellow)
@@ -61,7 +65,7 @@ final class CoreTouch {
   /** The border of every button (wish of the project owner, 03.11.2026). */
   static final int BORDER = 0xFF3E3C29;
   static final int[] COLOURS = {GC_GREEN, GC_RED, GC_GREY, GC_GREY, GC_PURPLE, GC_GREY, GC_GREY, GC_GREY, GC_GREY, GC_GREY,
-      GC_YELLOW};
+      GC_YELLOW, GC_GREY};
 
   /** Whether an action is an analog stick (RetroTouch's stick action), not a button. */
   static boolean isStick(String action) {
@@ -162,6 +166,7 @@ final class CoreTouch {
       case L: return CoreInput.GC_L;
       case R: return CoreInput.GC_R;
       case START: return CoreInput.GC_START;
+      case RELOAD: return CoreInput.GC_R | CoreInput.GC_B;
       case UP: return CoreInput.GC_UP;
       case DOWN: return CoreInput.GC_DOWN;
       case LEFT: return CoreInput.GC_LEFT;

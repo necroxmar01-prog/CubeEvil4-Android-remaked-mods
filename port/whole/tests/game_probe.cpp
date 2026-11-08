@@ -1652,6 +1652,54 @@ extern "C" int re4probe_free_move(void)
     re4_player_input(pl);
     bad |= pl->pos.z != 0.0f ? 0x400 : 0;
 
+    // reloading without aiming: R and B together without a weapon object do nothing; the direct reload (the
+    // weapon routine's step 4 with PlReloadDirect) walks him with the main stick, relative to where he faces
+    // (free movement off) or seen from the free camera (on)
+    {
+        const int keepDirect = PlReloadDirect;
+        const JOY keepJoy0 = Joy[0];
+        re4_aim_set(100 << 8 | 0x20);
+        pl->r_no_1 = 0;
+        pl->r_no_2 = 0;
+        Joy[0].trg = 0x20 | 0x200;
+        Joy[0].on = 0x20 | 0x200;
+        re4_player_input(pl);
+        bad |= pl->r_no_1 != 0 ? 0x4000 : 0;
+        Joy[0].trg = 0;
+        Joy[0].on = 0;
+        pl->r_no_1 = 6;
+        pl->r_no_2 = 4;
+        PlReloadDirect = 1;
+        pl->ang.y = 0.5f;
+        pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+        Key.stickX = 0;
+        Key.stickY = 56;
+        re4_player_input(pl);
+        bad |= !near(pl->pos.x, sinf(0.5f) * 38.0f) || !near(pl->pos.z, cosf(0.5f) * 38.0f) ? 0x8000 : 0;
+        // free movement: the stick up walks him the camera's way (the camera behind him at 0.5 - 0.3)
+        re4_aim_set(100 << 8 | 0x10 | 0x20);
+        pl->r_no_1 = 0;
+        Key.stickY = 0;
+        re4_player_input(pl);  // the walk routines: the camera starts behind him (0.5)
+        Key.substickX = 59;
+        pl->r_no_1 = 6;
+        re4_player_input(pl);  // reloading: the right stick still turns it (0.5 - 0.085)
+        Key.substickX = 0;
+        pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+        Key.stickY = 56;
+        re4_player_input(pl);
+        bad |= !near(pl->pos.x, sinf(0.415f) * 38.0f) || !near(pl->pos.z, cosf(0.415f) * 38.0f)
+            || !near(pl->ang.y, 0.5f) ? 0x10000 : 0;
+        re4_player_after_routine(pl);  // the legs: a stand-in without motions is left alone
+        Key.stickY = 0;
+        pl->r_no_1 = 0;
+        pl->r_no_2 = 0;
+        PlReloadDirect = keepDirect;
+        Joy[0] = keepJoy0;
+        re4_aim_set(100 << 8 | 0x10 | 0x20);
+        pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
+    }
+
     // back in the walk routines after a door (his position jumped): the camera starts behind him
     pl->r_no_1 = 0;
     pl->ang.y = 1.0f;

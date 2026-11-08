@@ -48,6 +48,14 @@ public final class CoreTouchTests {
     t.action("unknown", true);
     check(in.pad()[0] == 0);
 
+    // RELOAD: R and B at once while held (the mods' reload without aiming)
+    t.action(CoreTouch.RELOAD, true);
+    int[] rl = in.pad();
+    check((rl[0] & (CoreInput.GC_R | CoreInput.GC_B)) == (CoreInput.GC_R | CoreInput.GC_B) && rl[6] == 255);
+    t.action(CoreTouch.RELOAD, false);
+    for (int i = 0; i < 8; i++) rl = in.pad();
+    check((rl[0] & CoreInput.GC_B) == 0);
+    in.touchClear();
     // R3: the app's graphics capture, no GameCube button; offered to the editor with its label
     host.calls.clear();
     t.action(CoreTouch.R3, true);
@@ -353,7 +361,8 @@ public final class CoreTouchTests {
     Set<String> placed = new HashSet<>(registered);
     placed.remove(CoreTouch.R3);
     placed.remove(CoreTouch.C_STICK);
-    check(used.equals(placed) && buttons + 1 <= 16 && sticks == 1 && looks == 1 && pads == 1);
+    placed.remove(CoreTouch.RELOAD);  // the editor adds it too (the mods' reload without aiming)
+    check(used.equals(placed) && buttons + 2 <= 16 && sticks == 1 && looks == 1 && pads == 1);
     // one move stick in the default layout, room for the C stick (RetroTouch: at most two sticks)
 
     // the touch areas: a button and the stick an ellipse of half the width and height times
