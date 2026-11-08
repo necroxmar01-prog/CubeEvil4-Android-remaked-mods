@@ -7,7 +7,11 @@
 //   up     handguns and magnums     right  shotguns, the TMP, the Chicago Typewriter, the mine thrower, the
 //                                          rocket launcher
 //   down   rifles (and the bow)     left   grenades (hand, incendiary, flash)
-// Pressed again it takes the next one of that kind the case holds (the order of the lists below), round. The
+// Pressed again it takes the next one of that kind the case holds (the order of the lists below), round. A
+// direction held for kHolster frames instead puts the weapon away: bare hands (ItemMgr.arm(NULL), item 0x800,
+// weapon 0, Leon's own files wep_data_leon[0]; the state the game itself goes to when the weapon in hand is sold),
+// so Leon walks without a weapon as in the remake; the knife (L) and his kicks stay. A tap equips when the
+// direction is let go, before kHolster frames. The
 // change is the inventory's own (SubScreenExit, sscrn.cpp): ItemMgr.arm, the weapon's sounds stopped, then
 // weaponRelease / weaponLoad / weaponInit. weaponLoad reads the weapon's module from the disc and sleeps while it
 // does (ReadWepData: TaskSleep), so the change runs in a task of its own (slot 1, as the inventory; not while
@@ -51,10 +55,20 @@ const Slot kSlots[4] = {
     {kLeft, (int) (sizeof kLeft / sizeof kLeft[0]), "left"},
 };
 
+const int kHolster = 15;  // game frames (half a second) a direction is held to put the weapon away
+
 u32 gDpadPrev = 0;
-// the weapon the change task equips (a static, not the task's argument: TaskExec_hook passes that as an int,
-// scheduler.cpp, which on LP64 is not a pointer)
+int gHoldSlot = -1;     // the direction being held (slot 0..3), -1 none
+int gHoldFrames = 0;
+bool gHoldUsed = false; // the hold put the weapon away: its release equips nothing
+// the change the task makes (statics, not the task's argument: TaskExec_hook passes that as an int,
+// scheduler.cpp, which on LP64 is not a pointer): gSwapItem, or bare hands with gSwapBare
 cItem* gSwapItem = 0;
+bool gSwapBare = false;
+// for the runtime test: the requests are only noted (1 a weapon, 2 bare hands), no task
+bool gDry = false;
+int gLastRequest = 0;
+cItem* gLastItem = 0;
 
 // The weapon of a slot to equip: the next one of its kind in the case after the one held, else the first; NULL
 // when the case holds none of its kind, or only the one held.
@@ -102,10 +116,12 @@ bool field(cPlayer* pl)
 void swapTask(int)
 {
     cItem* p = gSwapItem;
+    const bool bare = gSwapBare;
     gSwapItem = 0;
+    gSwapBare = false;
     TaskSuspend(0);
     cPlayer* pl = pPL;
-    if (pl && p && (p->flags & 1) && ItemMgr.arm(p)) {
+    if (pl && (bare ? ItemMgr.arm(0) : p && (p->flags & 1) && ItemMgr.arm(p))) {
         const int no = WeaponId2WeaponNo(ItemMgr.weaponId());
         const int type = WeaponId2WeaponType(ItemMgr.weaponId());
         const int lv = ItemMgr.weapon() ? ItemMgr.weapon()->getBulletType() : 0;
@@ -116,10 +132,31 @@ void swapTask(int)
             pG->bullet_type = lv;
             pl->weaponInit();
         }
-        re4_log("quick slot: item 0x%x equipped (weapon %d, type %d)", (unsigned) p->id, no, type);
+        re4_log("quick slot: %s (item 0x%x, weapon %d, type %d)", bare ? "weapon put away" : "equipped",
+                (unsigned) ItemMgr.weaponId(), no, type);
     }
     TaskSignal(0);
     TaskExit();
+}
+
+// Starts the change task (or notes the request in the runtime test).
+void request(cItem* p, bool bare, const char* name)
+{
+    if (gDry) {
+        gLastRequest = bare ? 2 : 1;
+        gLastItem = p;
+        return;
+    }
+    if (TaskStatus(1) != 0) {
+        re4_log("quick slot %s: busy (task slot 1 in use)", name);
+        return;
+    }
+    gSwapItem = p;
+    gSwapBare = bare;
+    if (!TaskExec(1, (TaskFunc) swapTask, 0)) {
+        gSwapItem = 0;
+        gSwapBare = false;
+    }
 }
 
 }  // namespace
@@ -131,6 +168,7 @@ void re4_quick_slots_input(cPlayer* pl)
 {
     if (!pl || !pSys || !re4_quick_slots_on() || pG->pl_type == 1 || !field(pl)) {
         gDpadPrev = Joy[0].on & 0xF;
+        gHoldSlot = -1;
         return;
     }
     const u32 dpad = Joy[0].on & 0xF;  // JOY_LEFT 1, JOY_RIGHT 2, JOY_DOWN 4, JOY_UP 8
@@ -153,31 +191,55 @@ void re4_quick_slots_input(cPlayer* pl)
     Key.trg &= ~(u64) 0xF | stick;
     Joy[0].on &= ~0xFu;
     Joy[0].trg &= ~0xFu;
-    int slot = -1;
-    if (pressed & 8) {
-        slot = 0;
-    } else if (pressed & 2) {
-        slot = 1;
-    } else if (pressed & 4) {
-        slot = 2;
-    } else if (pressed & 1) {
-        slot = 3;
-    }
-    if (slot < 0) {
+    static const u32 kBit[4] = {8, 2, 4, 1};  // up, right, down, left
+    if (gHoldSlot < 0) {
+        for (int i = 0; i < 4; i++) {
+            if (pressed & kBit[i]) {
+                gHoldSlot = i;
+                gHoldFrames = 0;
+                gHoldUsed = false;
+                break;
+            }
+        }
         return;
     }
-    cItem* p = pick(slot);
-    if (!p) {
+    if (dpad & kBit[gHoldSlot]) {
+        // held: past kHolster frames the weapon goes away (once), when one is in hand
+        if (++gHoldFrames == kHolster && ItemMgr.weapon()) {
+            gHoldUsed = true;
+            request(0, true, kSlots[gHoldSlot].name);
+        }
         return;
     }
-    if (TaskStatus(1) != 0) {
-        re4_log("quick slot %s: busy (task slot 1 in use)", kSlots[slot].name);
-        return;
+    // let go: a tap equips the slot's next weapon
+    const int slot = gHoldSlot;
+    const bool used = gHoldUsed;
+    gHoldSlot = -1;
+    if (!used) {
+        cItem* p = pick(slot);
+        if (p) {
+            request(p, false, kSlots[slot].name);
+        }
     }
-    gSwapItem = p;
-    if (!TaskExec(1, (TaskFunc) swapTask, 0)) {
-        gSwapItem = 0;
+}
+
+// For the runtime test: requests only noted (on), and the last one (1 a weapon, 2 bare hands, 0 none; cleared).
+void re4_quick_slots_dry(int on)
+{
+    gDry = on != 0;
+    gLastRequest = 0;
+    gLastItem = 0;
+}
+
+int re4_quick_slots_last(cItem** item)
+{
+    const int r = gLastRequest;
+    if (item) {
+        *item = gLastItem;
     }
+    gLastRequest = 0;
+    gLastItem = 0;
+    return r;
 }
 
 // For the runtime test: the item a press of slot 0..3 would equip (NULL: nothing to change).

@@ -70,7 +70,7 @@
     <string name="ingame_free_move_help">自由移动：以镜头为参照，摇杆推向哪里，里昂就走向哪里；右摇杆让镜头绕他旋转。举起武器时，他会转向镜头所看的方向。十字键保留经典操作。按下右摇杆可让镜头回到他身后。</string>
     <string name="ingame_aim_move_help">瞄准时移动：举起武器或小刀时，右摇杆让里昂朝任意方向移动（使用替代操作时为左摇杆，右摇杆负责瞄准）。此时他的双腿会播放行走动画。</string>
     <string name="ingame_quick_slots">十字键快捷武器</string>
-    <string name="ingame_quick_slots_help">十字键快捷武器：游戏中按十字键即可立即装备武器，与重制版相同：上为手枪和马格南，右为霰弹枪、TMP和发射器，下为步枪，左为手榴弹。再次按同一方向可切换到随身携带的下一把同类武器。此时十字键不再移动里昂。</string>
+    <string name="ingame_quick_slots_help">十字键快捷武器：游戏中按十字键即可立即装备武器，与重制版相同：上为手枪和马格南，右为霰弹枪、TMP和发射器，下为步枪，左为手榴弹。再次按同一方向可切换到随身携带的下一把同类武器。此时十字键不再移动里昂。按住任意方向半秒可收起武器，空手行走。</string>
     <string name="ingame_touch_aim">触控瞄准</string>
     <string name="ingame_aim_move_stick">移动摇杆</string>
     <string name="ingame_aim_touch_area">触控区域</string>

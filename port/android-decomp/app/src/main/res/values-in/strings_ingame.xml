@@ -70,7 +70,7 @@
     <string name="ingame_free_move_help">Gerak bebas: Leon berjalan ke arah stik didorong, dilihat dari kamera, dan stik kanan memutar kamera di sekelilingnya. Saat menyiapkan senjata, ia berbalik ke arah pandangan kamera. D-pad tetap memakai kontrol klasik. Tekan stik kanan untuk mengembalikan kamera ke belakangnya.</string>
     <string name="ingame_aim_move_help">Bergerak saat membidik: saat senjata atau pisau siap, stik kanan menggerakkan Leon ke segala arah (dengan Kontrol Alternatif stik kiri, sementara stik kanan membidik). Sementara itu, kakinya memutar animasi berjalan.</string>
     <string name="ingame_quick_slots">Slot cepat D-pad</string>
-    <string name="ingame_quick_slots_help">Slot cepat D-pad: saat bermain, D-pad langsung memasang senjata, seperti di remake: atas pistol dan magnum, kanan shotgun, TMP, dan peluncur, bawah senapan, kiri granat. Tekan arah yang sama lagi untuk senjata berikutnya dari jenis itu yang kamu bawa. D-pad tidak lagi menggerakkan Leon.</string>
+    <string name="ingame_quick_slots_help">Slot cepat D-pad: saat bermain, D-pad langsung memasang senjata, seperti di remake: atas pistol dan magnum, kanan shotgun, TMP, dan peluncur, bawah senapan, kiri granat. Tekan arah yang sama lagi untuk senjata berikutnya dari jenis itu yang kamu bawa. D-pad tidak lagi menggerakkan Leon. Tahan arah mana pun setengah detik untuk menyimpan senjata dan berjalan tanpa senjata.</string>
     <string name="ingame_touch_aim">Bidik Sentuh</string>
     <string name="ingame_aim_move_stick">Stik Gerak</string>
     <string name="ingame_aim_touch_area">Area Sentuh</string>

@@ -1675,6 +1675,8 @@ extern "C" int re4probe_free_move(void)
 // and the D-pad's bits out of Key and Joy[0] in the field while the stick's stay. 0: all right, else the failed
 // checks' bits.
 extern "C" cItem* re4_quick_slot_pick(int slot);
+extern "C" void re4_quick_slots_dry(int on);
+extern "C" int re4_quick_slots_last(cItem** item);
 extern "C" int re4probe_quick_slots(void)
 {
     if (!pSys) {
@@ -1711,7 +1713,7 @@ extern "C" int re4probe_quick_slots(void)
             break;
         }
     }
-    bad |= ItemMgr.search(0x23) != &items[0] ? 0x4000 : 0;
+    bad |= ItemMgr.search(0x23) != &items[0] ? 0x10000 : 0;
     ItemMgr.arm(&items[0]);  // the handgun
     bad |= re4_quick_slot_pick(0) != &items[1] ? 1 : 0;  // up: the Red9 next
     ItemMgr.arm(&items[1]);
@@ -1747,8 +1749,51 @@ extern "C" int re4probe_quick_slots(void)
     Key.on = 1;
     re4_player_input(pl);
     bad |= Key.on != 1 || (Joy[0].on & 0xF) != JOY_UP ? 0x200 : 0;
-    // off: as the game
+    // a tap equips when let go, a hold of half a second puts the weapon away (requests only noted here)
     pG->pl_type = 0;
+    items[3].flags = 1;
+    ItemMgr.m_array_num = 6;
+    ItemMgr.arm(&items[0]);  // the handgun
+    re4_quick_slots_dry(1);
+    cItem* got = 0;
+    Joy[0].on = 0;
+    re4_player_input(pl);
+    Joy[0].on = JOY_RIGHT;
+    re4_player_input(pl);
+    bad |= re4_quick_slots_last(&got) != 0 ? 0x800 : 0;  // pressed: nothing yet
+    Joy[0].on = 0;
+    re4_player_input(pl);
+    bad |= re4_quick_slots_last(&got) != 1 || got != &items[2] ? 0x1000 : 0;  // let go: the shotgun
+    int bare = 0;
+    for (int i = 0; i < 20; i++) {
+        Joy[0].on = JOY_UP;  // held (PadRead fills it again every frame; the hook takes it out)
+        re4_player_input(pl);
+        const int r = re4_quick_slots_last(&got);
+        bare += r == 2;
+        bad |= r == 1 ? 0x2000 : 0;
+    }
+    Joy[0].on = 0;
+    re4_player_input(pl);
+    bad |= bare != 1 || re4_quick_slots_last(&got) != 0 ? 0x2000 : 0;  // once, and nothing when let go
+    ItemMgr.arm(0);  // bare hands: a tap takes the kind's first
+    Joy[0].on = JOY_UP;
+    re4_player_input(pl);
+    Joy[0].on = 0;
+    re4_player_input(pl);
+    bad |= re4_quick_slots_last(&got) != 1 || got != &items[0] ? 0x4000 : 0;
+    for (int i = 0; i < 20; i++) {  // and holding with nothing in hand: nothing
+        Joy[0].on = JOY_UP;
+        re4_player_input(pl);
+        bad |= re4_quick_slots_last(&got) == 2 ? 0x4000 : 0;
+    }
+    Joy[0].on = 0;
+    re4_player_input(pl);
+    re4_quick_slots_last(&got);
+    re4_quick_slots_dry(0);
+    ItemMgr.m_array_num = 0;
+    // off: as the game
+    Joy[0].on = JOY_UP;
+    Key.on = 1;
     re4_aim_set(100 << 8);
     re4_player_input(pl);
     bad |= Key.on != 1 || (Joy[0].on & 0xF) != JOY_UP ? 0x400 : 0;
