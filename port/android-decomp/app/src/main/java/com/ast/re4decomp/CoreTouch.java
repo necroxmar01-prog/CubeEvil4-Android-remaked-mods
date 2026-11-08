@@ -39,8 +39,9 @@ final class CoreTouch {
   static final String A = "a", B = "b", X = "x", Y = "y", Z = "z", L = "l", R = "r",
       START = "start", MENU = "menu", R3 = "r3",
       // R and B at once (the game's reload: aim + B); with "Move while aiming" the core takes both pressed
-      // together, not aiming, as the remake's reload without aiming (runtime/free_move.cpp, patch 0900). Not in
-      // the default layout, the editor adds it (wish of DevJunior, 08.11.2026)
+      // together, not aiming, as the remake's reload without aiming (runtime/free_move.cpp, patch 0900). In the
+      // default layout left of B, and in the editor's ACTION right after B (wish of DevJunior, 08.11.2026: the
+      // editor's cycle had it last, after the C stick, where it was not found)
       RELOAD = "reload",
       // the C stick as an analog stick the editor adds (RetroTouch's stick action, registerStickAction)
       C_STICK = "cstick";
@@ -55,8 +56,8 @@ final class CoreTouch {
    * graphics capture for error reports, as on a controller; not in the default layout, the editor
    * adds it.
    */
-  static final String[] ACTIONS = {A, B, X, Y, Z, L, R, START, MENU, R3, C_STICK, RELOAD};
-  static final String[] LABELS = {"A", "B", "X", "Y", "Z", "L", "R", "START", "MENU", "R3", "C", "RLOAD"};
+  static final String[] ACTIONS = {A, B, RELOAD, X, Y, Z, L, R, START, MENU, R3, C_STICK};
+  static final String[] LABELS = {"A", "B", "RLOAD", "X", "Y", "Z", "L", "R", "START", "MENU", "R3", "C"};
   // the GameCube's official colours (the project owner's palette, 19.10.2026): A green, B red,
   // Z purple, the C stick yellow, the others grey (RetroTouch writes dark labels on the light grey
   // and the yellow)
@@ -64,8 +65,8 @@ final class CoreTouch {
       GC_GREY = rgb(0xDD, 0xDD, 0xDD), GC_YELLOW = rgb(0xF7, 0xC8, 0x1E);
   /** The border of every button (wish of the project owner, 03.11.2026). */
   static final int BORDER = 0xFF3E3C29;
-  static final int[] COLOURS = {GC_GREEN, GC_RED, GC_GREY, GC_GREY, GC_PURPLE, GC_GREY, GC_GREY, GC_GREY, GC_GREY, GC_GREY,
-      GC_YELLOW, GC_GREY};
+  static final int[] COLOURS = {GC_GREEN, GC_RED, GC_GREY, GC_GREY, GC_GREY, GC_PURPLE, GC_GREY, GC_GREY, GC_GREY, GC_GREY,
+      GC_GREY, GC_YELLOW};
 
   /** Whether an action is an analog stick (RetroTouch's stick action), not a button. */
   static boolean isStick(String action) {
@@ -115,6 +116,7 @@ final class CoreTouch {
       Control.button(X, 0.955f, 0.50f, 0.11f),
       Control.button(A, 0.875f, 0.68f, 0.17f),
       Control.button(B, 0.76f, 0.86f, 0.11f),
+      Control.button(RELOAD, 0.645f, 0.89f, 0.08f),
       Control.button(MENU, 0.42f, 0.08f, 0.085f),
       Control.button(START, 0.58f, 0.08f, 0.085f),
   };

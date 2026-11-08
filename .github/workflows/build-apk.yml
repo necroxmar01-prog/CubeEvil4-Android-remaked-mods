@@ -29,13 +29,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checks without the SDK (menu texts, controller mapping)
+      - name: Checks without the SDK (menu texts, controller mapping, touch controls)
         run: |
           python3 port/android-decomp/tools/check_translations.py
           mkdir -p /tmp/jt
           src=port/android-decomp/app/src/main/java/com/ast/re4decomp
           javac -d /tmp/jt $src/CoreInput.java $src/ActionMap.java port/android-decomp/tests/CoreInputTests.java
           java -cp /tmp/jt CoreInputTests
+          javac -d /tmp/jt $src/CoreInput.java $src/ActionMap.java $src/CoreTouch.java port/android-decomp/tests/CoreTouchTests.java
+          java -cp /tmp/jt com.ast.re4decomp.CoreTouchTests
 
       - uses: actions/setup-java@v4
         with:

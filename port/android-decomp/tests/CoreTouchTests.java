@@ -361,8 +361,7 @@ public final class CoreTouchTests {
     Set<String> placed = new HashSet<>(registered);
     placed.remove(CoreTouch.R3);
     placed.remove(CoreTouch.C_STICK);
-    placed.remove(CoreTouch.RELOAD);  // the editor adds it too (the mods' reload without aiming)
-    check(used.equals(placed) && buttons + 2 <= 16 && sticks == 1 && looks == 1 && pads == 1);
+    check(used.equals(placed) && buttons + 1 <= 16 && sticks == 1 && looks == 1 && pads == 1);
     // one move stick in the default layout, room for the C stick (RetroTouch: at most two sticks)
 
     // the touch areas: a button and the stick an ellipse of half the width and height times
