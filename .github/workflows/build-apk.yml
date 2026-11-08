@@ -80,12 +80,20 @@ jobs:
           mkdir -p ~/.android
           cp "$GITHUB_WORKSPACE/.github/ci/debug.keystore" ~/.android/debug.keystore
           sed -i 's|>CubeEvil4<|>CubeEvil4 Mods<|' app/src/core/res/values/flags.xml
-          # three tries: the download of Gradle sometimes times out (HTTP 504)
-          for try in 1 2 3; do
-            bash ./gradlew --no-daemon assembleCoreDebug -Pre4.modsBuild && break
-            [ "$try" = 3 ] && exit 1
-            echo "Gradle failed (try $try), again in 30 s"; sleep 30
+          # Gradle's own download (services.gradle.org -> github.com) times out at times (HTTP 504): fetch the
+          # zip with retries, from a mirror if needed, check it against the wrapper's SHA-256, use it from disk
+          props=gradle/wrapper/gradle-wrapper.properties
+          url=$(sed -n 's/^distributionUrl=//p' $props | sed 's/\\//g')
+          sum=$(sed -n 's/^distributionSha256Sum=//p' $props)
+          zip="$RUNNER_TEMP/$(basename "$url")"
+          for u in "$url" "https://mirrors.cloud.tencent.com/gradle/$(basename "$url")"; do
+            curl -fL --retry 6 --retry-all-errors --retry-delay 20 --max-time 600 -o "$zip" "$u" &&
+              echo "$sum  $zip" | sha256sum -c - && break
+            rm -f "$zip"
           done
+          [ -f "$zip" ] || { echo "Gradle could not be downloaded"; exit 1; }
+          sed -i "s|^distributionUrl=.*|distributionUrl=file\\://$zip|" $props
+          bash ./gradlew --no-daemon assembleCoreDebug -Pre4.modsBuild
           short=$(git rev-parse --short HEAD)
           mkdir -p "$GITHUB_WORKSPACE/out"
           cp app/build/outputs/apk/core/debug/*.apk "$GITHUB_WORKSPACE/out/CubeEvil4-Mods-$short.apk"
