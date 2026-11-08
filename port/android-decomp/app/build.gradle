@@ -103,6 +103,9 @@ android {
             dimension 'engine'
             applicationId 'com.ast.cubeevil4'
             versionNameSuffix '-core'
+            // the mods fork's test builds (GitHub Actions, -Pre4.modsBuild): an app id of their own, so they install next
+            // to the official app instead of over it (.github/workflows/build-apk.yml)
+            if (project.hasProperty('re4.modsBuild')) { applicationIdSuffix '.mods' }
             // the core's libraries load each other from the APK by name
             // (the module libraries at run time): Android 6.0 and later; since 0.98.2 Android 7.0 and later
             // (decision of the project owner, 04.11.2026: Google Play's automatic protection asks for SDK 24)

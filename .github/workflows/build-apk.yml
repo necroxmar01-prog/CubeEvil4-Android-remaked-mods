@@ -1,0 +1,99 @@
+# Test APK of the mods fork: the game core (port/whole, both ABIs) with the NDK, then the app
+# (flavour "core", debug) with Gradle. Installs next to the official CubeEvil4 as "CubeEvil4 Mods"
+# (app id com.ast.cubeevil4.mods), signed with the fixed debug key in .github/ci, so a newer build
+# installs over the older one.
+#
+# Download: the release "mods-latest" of the fork (the APK itself, also from a phone), or the run's
+# artifact (a ZIP). The core's build folders are cached, so later runs rebuild only what changed.
+name: Build APK
+
+on:
+  push:
+    branches: [master, 'mods/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: 28.2.13676358
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checks without the SDK (menu texts, controller mapping)
+        run: |
+          python3 port/android-decomp/tools/check_translations.py
+          mkdir -p /tmp/jt
+          src=port/android-decomp/app/src/main/java/com/ast/re4decomp
+          javac -d /tmp/jt $src/CoreInput.java $src/ActionMap.java port/android-decomp/tests/CoreInputTests.java
+          java -cp /tmp/jt CoreInputTests
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build tools, NDK and CMake
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build patch
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore the core's build folders
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            port/build/whole-android-armv7
+            port/build/whole-android-arm64
+          key: core-${{ env.NDK_VERSION }}-${{ github.run_id }}
+          restore-keys: core-${{ env.NDK_VERSION }}-
+
+      - name: Game core (armeabi-v7a, arm64-v8a)
+        run: bash port/tools/whole_build_android.sh --ndk "$ANDROID_NDK_HOME" --abi all
+
+      - name: Save the core's build folders
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            port/build/whole-android-armv7
+            port/build/whole-android-arm64
+          key: core-${{ env.NDK_VERSION }}-${{ github.run_id }}
+
+      - name: App (core, debug)
+        working-directory: port/android-decomp
+        run: |
+          mkdir -p ~/.android
+          cp "$GITHUB_WORKSPACE/.github/ci/debug.keystore" ~/.android/debug.keystore
+          sed -i 's|>CubeEvil4<|>CubeEvil4 Mods<|' app/src/core/res/values/flags.xml
+          bash ./gradlew --no-daemon assembleCoreDebug -Pre4.modsBuild
+          short=$(git rev-parse --short HEAD)
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp app/build/outputs/apk/core/debug/*.apk "$GITHUB_WORKSPACE/out/CubeEvil4-Mods-$short.apk"
+          ls -la "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CubeEvil4-Mods-apk
+          path: out/*.apk
+          retention-days: 30
+
+      - name: Release "mods-latest" (the APK to download)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete mods-latest --yes --cleanup-tag 2> /dev/null || true
+          gh release create mods-latest out/*.apk --prerelease --target "$GITHUB_SHA" \
+            --title "CubeEvil4 Mods (test build ${GITHUB_REF_NAME}, $(git rev-parse --short HEAD))" \
+            --notes "Test build of the branch ${GITHUB_REF_NAME}, commit ${GITHUB_SHA}. Installs next to the official CubeEvil4 (app id com.ast.cubeevil4.mods): import your discs once in this app. New: Controls -> Free movement, Move while aiming."
