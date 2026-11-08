@@ -1,4 +1,4 @@
-// D-pad quick slots (the app menu's Controls page, "D-pad quick slots"; patch 0219's hook, a mod in the spirit of
+// D-pad quick slots (the app menu's Controls page, "D-pad quick slots"; patch 0900's hook, a mod in the spirit of
 // the 2023 remake). Compiled with the game's flags into libre4_main. Off (the default): nothing here changes the
 // game.
 //
@@ -163,7 +163,7 @@ void request(cItem* p, bool bare, const char* name)
 
 extern "C" {
 
-// Patch 0219's hook (re4_player_input, cPlayer::keyConfig, before the routines read the keys).
+// Patch 0900's hook (re4_player_input, cPlayer::keyConfig, before the routines read the keys).
 void re4_quick_slots_input(cPlayer* pl)
 {
     if (!pl || !pSys || !re4_quick_slots_on() || pG->pl_type == 1 || !field(pl)) {

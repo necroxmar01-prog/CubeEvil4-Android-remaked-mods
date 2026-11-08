@@ -22,6 +22,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 struct Re4GxChunk;
 
@@ -184,10 +185,31 @@ struct GxOptions {
   bool vertexRing = false;
 };
 
+// The graphics API a renderer draws with (port/docs/vulkan-bauplan.md): GLES 3 (the default and the fallback) or
+// Vulkan (experimental, later).
+enum class GxApi { kGl, kVulkan };
+
+struct GxCore;
+
+// Something the app draws over the presented picture (the minimap; GLES draws it itself, the Vulkan renderer in
+// its Present): vertices x y r g b a in a square's clip space (y up), drawn as `parts` in their order (triangles or
+// lines), the square at x, y (screen pixels from the bottom left, as GL's viewport), size pixels wide and high.
+struct GxOverlay {
+  struct Part {
+    bool lines;
+    int first, count;
+  };
+  std::vector<float> verts;
+  std::vector<Part> parts;
+  int x = 0, y = 0, size = 0;
+  float lineWidth = 1.0f;
+};
+
 class GxRenderer {
 public:
-  GxRenderer();
+  explicit GxRenderer(GxApi api = GxApi::kGl);
   ~GxRenderer();
+  GxApi Api() const { return api_; }
   GxRenderer(const GxRenderer &) = delete;
   GxRenderer &operator=(const GxRenderer &) = delete;
 
@@ -314,6 +336,23 @@ public:
   // (x, y, w, h), upright; rows > 0: only XFB rows top .. top + rows - 1
   // (the letterbox cut off). False when there is none yet.
   bool Present(int x, int y, int w, int h, unsigned top = 0, unsigned rows = 0);
+  // The latest display copy as shown (after FXAA, Sharpen and the PSone pass): RGBA8, row 0 the picture's top row,
+  // *width x *height pixels at the EFB scale; false before the first display copy. For tests and screenshots, any
+  // API (port/docs/vulkan-bauplan.md, E1).
+  bool ReadXfb(std::vector<std::uint8_t> *rgba, unsigned *width, unsigned *height);
+  // Present (x, y, w, h, top, rows as Present takes them: x, y from the bottom left) into a picture of screenW x
+  // screenH pixels, black around it, read back as RGBA8 with row 0 at the top (gx_chunk_render's RE4_GX_SCREEN).
+  bool ReadPresented(int screenW, int screenH, int x, int y, int w, int h, unsigned top, unsigned rows,
+                     std::vector<std::uint8_t> *rgba);
+  // The screen of a Vulkan renderer: the Android window (ANativeWindow*, the SurfaceView's; null when it went) and
+  // its size in pixels (Present's rectangles count in it). GL draws into the current context's surface: ignored.
+  void SetWindow(void *window, int width, int height);
+  // Drawn over the picture at the next Present, once (the Vulkan renderer; GL ignores it, the app draws it itself).
+  void SetOverlay(const GxOverlay &overlay);
+  // "OpenGL ES 3.2 ..., Adreno (TM) 650" or "Vulkan 1.1.128 ..., driver ...": for the log and the error report.
+  std::string ApiInfo() const;
+  // The Vulkan renderer's line for the log since the last call (waits, submits, shaders and pipelines made); "" for GL.
+  std::string TimingLine();
   // EFB colour texture (tests): GameCube coordinates times the scale.
   GLuint EfbColor() const;
   int Scale() const;   // whole multiples (1.5x: 1)
@@ -342,8 +381,8 @@ public:
   void Release();
 
 private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
+  GxApi api_;
+  std::unique_ptr<GxCore> impl_;  // gx_core.h: the API's renderer
 };
 
 // Shader programs made ahead (decision of the project owner, 23.10.2026: a list in the app, so the

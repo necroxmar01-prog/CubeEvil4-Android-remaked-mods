@@ -34,8 +34,8 @@ std::atomic<int> gLock(-1);         // the app's "Auto aim", -1 before it sent a
 std::atomic<bool> gRun(false);      // the app's "Always run"
 std::atomic<bool> gFar(false);      // the app's "Far camera" (patch 0171)
 std::atomic<int> gFov(0);           // the app's "Field of view" in degrees, -15 .. 15 (patch 0205)
-std::atomic<bool> gFreeMove(false); // the app's "Free movement" (patch 0219, runtime/free_move.cpp)
-std::atomic<bool> gAimMove(false);  // the app's "Move while aiming" (patch 0219, runtime/free_move.cpp)
+std::atomic<bool> gFreeMove(false); // the app's "Free movement" (patch 0900, runtime/free_move.cpp)
+std::atomic<bool> gAimMove(false);  // the app's "Move while aiming" (patch 0900, runtime/free_move.cpp)
 std::atomic<bool> gQuickSlots(false); // the app's "D-pad quick slots" (runtime/quick_slots.cpp)
 std::atomic<int> gRecenterBit(-1);  // bit 6 as last sent (-1: nothing yet); each change is one press of R3
 
@@ -126,8 +126,8 @@ struct StartSetting {
 extern "C" {
 
 // The app (core_api.cpp re4_core_set_aim): bit 0 "Invert vertical", bit 1 "Auto aim", bit 2 "Always run",
-// bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0219), bit 6 toggled by each press of
-// R3 (the camera back behind Leon, patch 0219), bit 7 "D-pad quick slots" (runtime/quick_slots.cpp), bits 8..19 the aim speed in percent, bits 24..29 "Field of view"
+// bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0900), bit 6 toggled by each press of
+// R3 (the camera back behind Leon, patch 0900), bit 7 "D-pad quick slots" (runtime/quick_slots.cpp), bits 8..19 the aim speed in percent, bits 24..29 "Field of view"
 // (degrees + 32; 0.98.4). Any thread.
 extern "C" void re4_camera_recenter(void);  // runtime/free_move.cpp
 void re4_aim_set(int bits)
@@ -175,14 +175,14 @@ int re4_far_camera(void)
     return gFar.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
-// Patch 0219 (runtime/free_move.cpp): "Free movement", the stick moves Leon where it points, seen from a camera the
+// Patch 0900 (runtime/free_move.cpp): "Free movement", the stick moves Leon where it points, seen from a camera the
 // C stick turns round him.
 int re4_free_move_on(void)
 {
     return gFreeMove.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
-// Patch 0219 (runtime/free_move.cpp): "Move while aiming", the C stick walks Leon while a weapon is ready.
+// Patch 0900 (runtime/free_move.cpp): "Move while aiming", the C stick walks Leon while a weapon is ready.
 int re4_aim_move_on(void)
 {
     return gAimMove.load(std::memory_order_relaxed) ? 1 : 0;

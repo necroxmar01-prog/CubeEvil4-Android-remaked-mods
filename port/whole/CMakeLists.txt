@@ -280,7 +280,7 @@ string(APPEND RE4_LINK_OBJECTS "runtime=$<TARGET_OBJECTS:re4_formats_obj>\n")
 # the game language (runtime/game_language.cpp), the cheat menu (runtime/cheats.cpp) and the outline of the
 # app's minimap (runtime/minimap.cpp), the laser sight's colour (runtime/laser_colour.cpp), the benchmark
 # (runtime/benchmark.cpp), the glows' test of the light itself (runtime/glow_check.cpp, patch 0213) and the free
-# movement / moving while aiming (runtime/free_move.cpp, patch 0219) and the D-pad quick slots (runtime/quick_slots.cpp).
+# movement / moving while aiming (runtime/free_move.cpp, patch 0900) and the D-pad quick slots (runtime/quick_slots.cpp).
 add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge.cpp runtime/movie_status.cpp
     runtime/dof.cpp runtime/gyro.cpp runtime/menu_touch.cpp runtime/picture.cpp runtime/knife_swipe.cpp
     runtime/qte_touch.cpp runtime/instant_game.cpp runtime/game_language.cpp runtime/cheats.cpp

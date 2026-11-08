@@ -76,6 +76,15 @@ public final class CoreBridge {
   /** Saves the graphics data of the next picture into `folder` (diagnosis; R3). */
   public static native void gxDump(String folder);
   public static native void surfaceCreated();
+  /**
+   * The Vulkan surface's window (VulkanSurface, on its render thread; null when it went): the Vulkan renderer
+   * presents to it (core started with RE4_GX_API=vulkan).
+   */
+  public static native void vkWindow(android.view.Surface surface);
+  /** Why the Vulkan renderer could not start; "" while it runs or with OpenGL ES. CoreActivity then goes to GLES. */
+  public static native String rendererProblem();
+  /** The renderer's API, device and driver ("" before the first picture); the report's renderer.txt. */
+  public static native String rendererInfo();
   public static native void resize(int width, int height);
   public static native void draw();
 
@@ -120,9 +129,16 @@ public final class CoreBridge {
   public static native void setAim(boolean invert, float speed, boolean autoAim, boolean alwaysRun);
   /** The game's own options changed "reverse" since the last call (patch 0188): -1, else 0 / 1 for "Invert vertical". */
   public static native int aimFromGame();
-  /** The Potato mode bits from the graphics settings ("weatherEffects", "specialEffects", both on by default). */
+  /** The Potato mode bits from the graphics settings ("weatherEffects", "specialEffects", both on by default; since
+   *  0.99.3 "particleEffects" 0 normal / 1 less / 2 none in bits 2..3 and "shadowsLight", on by default, bit 4 when
+   *  off; the core's runtime/potato.cpp). */
   static int potatoMask(android.content.SharedPreferences g) {
-    return (g.getBoolean("weatherEffects", true) ? 0 : 1) | (g.getBoolean("specialEffects", true) ? 0 : 2);
+    return (g.getBoolean("weatherEffects", true) ? 0 : 1) | (g.getBoolean("specialEffects", true) ? 0 : 2)
+        | (particleEffects(g) << 2) | (g.getBoolean("shadowsLight", true) ? 0 : 16);
+  }
+  /** The Potato mode's "Particle effects" (0.99.3): 0 normal (the default), 1 less, 2 none. */
+  static int particleEffects(android.content.SharedPreferences g) {
+    return Math.max(0, Math.min(2, g.getInt("particleEffects", 0)));
   }
   /**
    * The AUDIO page's volumes, "musicVolume" / "effectsVolume" in the graphics settings (100 by default); 0 while
@@ -170,11 +186,11 @@ public final class CoreBridge {
   /** "Far camera": the shoulder camera further back while walking and standing (patch 0171). */
   public static native void setFarCamera(boolean on);
   /** "Free movement" (the stick moves Leon where it points, seen from a camera the right stick turns round him) and
-   *  "Move while aiming" (the C stick walks him while a weapon is ready); patch 0219, runtime/free_move.cpp, sent with
+   *  "Move while aiming" (the C stick walks him while a weapon is ready); patch 0900, runtime/free_move.cpp, sent with
    *  the aim settings (bits 4 and 5); "D-pad quick slots" (the D-pad equips weapons by their kind, runtime/quick_slots.cpp,
    *  bit 7). */
   public static native void setMovement(boolean freeMove, boolean aimMove, boolean quickSlots);
-  /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0219). */
+  /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0900). */
   public static native void recenterCamera();
   /** "Field of view" (PLAYER VIEW): the shoulder camera's vertical field of view changed by `degrees`
    *  (-15 .. +15; 0 as the game; patch 0205), sent with the aim settings. */

@@ -7,9 +7,11 @@ import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
@@ -37,7 +39,9 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewConfiguration;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -130,7 +134,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // the menu's "Auto aim" (the game's own lock-on) and "Always run" (the run key walks instead; wish of the
   // project owner, 30.10.2026; CoreBridge.setAim, runtime/aim_options.cpp; both off)
   static final String AUTO_AIM = "autoAim", ALWAYS_RUN = "alwaysRun", FAR_CAMERA = "farCamera";
-  // the menu's "Free movement" and "Move while aiming" (patch 0219, runtime/free_move.cpp; both off)
+  // the menu's "Free movement" and "Move while aiming" (patch 0900, runtime/free_move.cpp; both off)
   static final String FREE_MOVE = "freeMovement", AIM_MOVE = "moveWhileAiming", QUICK_SLOTS = "dpadQuickSlots";
   static final float AIM_SPEED_MIN = 0.5f, AIM_SPEED_MAX = 3f, AIM_SPEED_STEP = 0.25f;
   // the menu's "Field of view" (PLAYER VIEW; wish of the project owner, 05.11.2026): degrees added to the shoulder
@@ -162,7 +166,24 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   private final InputDelay inputDelay = new InputDelay();
   // the main stick as the game reads it for walking, a line every 30 s of use (StickWatch; report of 07.11.2026)
   private final StickWatch stickWatch = new StickWatch();
-  private GLSurfaceView surface;
+  // the view the picture is drawn into: GameSurface.Gl (OpenGL ES) or VulkanSurface (Vulkan, vulkan-bauplan.md E6);
+  // picture is the same view's render calls (volatile: the beat's thread asks for pictures)
+  private SurfaceView surface;
+  private volatile GameSurface picture;
+  private int renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY;
+  // Vulkan from Android 10 (API 29) on and with Vulkan 1.1 (the plan's minimum; vulkan-bauplan.md)
+  static final int VULKAN_MIN_SDK = 29;
+  private static final int VULKAN_1_1 = (1 << 22) | (1 << 12);
+  private boolean vulkan;
+  // the menu's renderer (GRAPHICS_PREFS): "gles" (the default) or "vulkan"; the crash guard: set while Vulkan starts,
+  // cleared once it has drawn for a few seconds (vulkanGuard); still set at the next start: that one ended in Vulkan's
+  // start, OpenGL ES then (vulkan-bauplan.md E7)
+  static final String RENDERER = "renderer", VULKAN_STARTING = "vulkanStarting";
+  private static final long VULKAN_GUARD_MS = 2000;
+  private static final long VULKAN_GUARD_PICTURES = 120;
+  private int vulkanGuardChecks;
+  // the renderer of this run for the report's renderer.txt (and why it is not Vulkan when Vulkan was asked for)
+  private String rendererLine = "OpenGL ES";
   // the touch controls (RetroTouch) and its editor, during which the game stands
   private TouchControls touchControls;
   private GyroAim gyroAim;
@@ -248,12 +269,17 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     CoreLog.start(this, settings);
     shownLanguage = language();
     Log.i(TAG, "app menu: " + shownLanguage);
-    // linked shader programs kept between runs (no compile stutter the second time)
-    String programs = "RE4_GX_PROGRAM_CACHE=" + new File(getCacheDir(), "gx-programs").getAbsolutePath();
+    // the shaders the renderers built, kept between runs (no compile stutter the second time); since 0.99.4 where
+    // Android and cleaner apps do not empty them, the old cache folder moved over once (ShaderCache)
+    Log.i(TAG, "shader cache: " + ShaderCache.prepare(this));
+    String programs = "RE4_GX_PROGRAM_CACHE=" + ShaderCache.dir(this).getAbsolutePath();
     // the app's list of shader programs (port/tools/gx_program_list.py): made ahead from the first start
     String programList = programList();
     if (programList != null) programs += ";RE4_GX_PROGRAM_LIST=" + programList;
     String coreSettings = settings.isEmpty() ? programs : settings + ";" + programs;
+    // the renderer: Vulkan (the test switch RE4_GX_API=vulkan) or OpenGL ES; the core hears it as RE4_GX_API
+    vulkan = chooseVulkan();
+    coreSettings = withRenderer(coreSettings, vulkan);
     // the game's language with the European discs (retail-eu-plan.md R7; a test script's setting wins)
     String release = imports.root == null ? null
         : com.ast.re4decomp.disc.DiscInstaller.release(new File(imports.root, "disc1"));
@@ -296,23 +322,16 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
     FrameLayout root = new FrameLayout(this);
-    surface = new GLSurfaceView(this);
-    surface.setEGLContextClientVersion(3);
-    surface.setPreserveEGLContextOnPause(true);
-    surface.setRenderer(new GLSurfaceView.Renderer() {
-      @Override public void onSurfaceCreated(GL10 gl, EGLConfig config) { CoreBridge.surfaceCreated(); }
-      @Override public void onSurfaceChanged(GL10 gl, int w, int h) { CoreBridge.resize(w, h); }
-      @Override public void onDrawFrame(GL10 gl) { CoreBridge.draw(); }
-    });
+    if (vulkan) {
+      VulkanSurface v = new VulkanSurface(this, this::vulkanFailed);
+      surface = v;
+      picture = v;
+      main.postDelayed(vulkanGuard, VULKAN_GUARD_MS);
+    } else {
+      surface = glSurface();
+    }
     root.addView(surface);
-    surface.getHolder().addCallback(new SurfaceHolder.Callback() {
-      @Override public void surfaceCreated(SurfaceHolder holder) { surfaceSixtyHz(holder.getSurface()); }
-      @Override public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {}
-      @Override public void surfaceDestroyed(SurfaceHolder holder) {}
-    });
-    // the surface takes the fingers beside the touch controls: Android gives the further fingers
-    // of a touch only to views that took one, so a thumb beside the buttons would block them
-    surface.setOnTouchListener((v, e) -> true);
+    surfaceCallbacks(surface);
     // the benchmark's line at the top while it runs (Display -> GRAPHICS -> Benchmark)
     benchView = new TextView(this);
     benchView.setTextSize(14);
@@ -698,6 +717,20 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
    * ends this one and opens the start screen in a new process without starting the game. Discs, saves, the memory
    * card and the settings stay.
    */
+  /**
+   * The menu's renderer (vulkan-bauplan.md E7): it takes a new process (the renderer and its surface are chosen at the
+   * start), so the game ends as with quit(), and LauncherRestartActivity ends this process and opens the game again.
+   */
+  private void restartIntoGame(String why) {
+    Log.i(TAG, "the app restarts into the game (" + why + ")");
+    CoreLog.stop();
+    startActivity(new Intent(this, LauncherRestartActivity.class)
+        .putExtra(LauncherRestartActivity.GAME_PID, Process.myPid())
+        .putExtra(LauncherRestartActivity.BACK_TO_GAME, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    finishAndRemoveTask();
+    new Handler(Looper.getMainLooper()).postDelayed(() -> System.exit(0), 3000);
+  }
+
   private void openStartScreen(String why) {
     Log.i(TAG, "the game ends, the start screen opens (" + why + ")");
     CoreLog.stop();
@@ -950,6 +983,24 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     @Override public void restartGame() {
       Log.i(TAG, "the game restarts (extra games), its language stays");
       CoreBridge.restartGame(0);
+    }
+
+    @Override public boolean vulkanSupported() { return CoreActivity.this.vulkanSupported(); }
+
+    @Override public boolean vulkanChosen() {
+      return "vulkan".equals(getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).getString(RENDERER, "gles"));
+    }
+
+    @Override public void clearShaderCache() {
+      // emptied at the next start, before the core opens the folder (the renderer has its files open now)
+      ShaderCache.requestClear(CoreActivity.this);
+      restartIntoGame("shader cache cleared");
+    }
+
+    @Override public void rendererChanged(boolean on) {
+      getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).edit().putString(RENDERER, on ? "vulkan" : "gles")
+          .putBoolean(VULKAN_STARTING, false).commit();
+      restartIntoGame("renderer " + (on ? "Vulkan" : "OpenGL ES"));
     }
 
     @Override public int cheatAction(int what) {
@@ -1359,10 +1410,13 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     String map = CoreBridge.addressMap();
     String controllers = controllerList();
     String discs = discCheckText();
+    String renderer = rendererText();
+    String shaders = ShaderCache.describe(this);
     if (map == null || map.isEmpty())
-      return new String[][] {{"memory-card.txt", card.toString()}, {"controllers.txt", controllers}, {"disc-check.txt", discs}};
+      return new String[][] {{"memory-card.txt", card.toString()}, {"controllers.txt", controllers}, {"disc-check.txt", discs},
+          {"renderer.txt", renderer}, {"shader-cache.txt", shaders}};
     return new String[][] {{"memory-card.txt", card.toString()}, {"address-map.txt", map}, {"controllers.txt", controllers},
-        {"disc-check.txt", discs}};
+        {"disc-check.txt", discs}, {"renderer.txt", renderer}, {"shader-cache.txt", shaders}};
   }
 
   /** The report's disc-check.txt: each imported disc against the original's files, and a file the game could not read. */
@@ -1578,7 +1632,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       case CoreInput.APP_GX_DUMP:
         // R3 (right stick pressed): the graphics data of the next pictures for the
         // diagnosis in the cloud (files/gx-dumps, test-core-app.ps1 / pull-gx-dumps.ps1 fetch them);
-        // with "Free movement" also the camera back behind Leon (patch 0219)
+        // with "Free movement" also the camera back behind Leon (patch 0900)
         if (first) {
           CoreBridge.recenterCamera();
           capture();
@@ -1885,6 +1939,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   @Override
   public void onWindowFocusChanged(boolean focus) {
     super.onWindowFocusChanged(focus);
+    Log.i(TAG, "window focus: " + (focus ? "on" : "off"));
     if (!focus) releaseAll();
     else main.post(this::updateMouseCapture);
     // a car's panel (climate, notifications) closed again: its bars hidden again where the car allows it
@@ -2183,7 +2238,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       if (!resumed) return;
       CoreBridge.vsync(frameTimeNanos);
       if (pacing.vsync(frameTimeNanos) || (!paceLogged && pacing.hz() > 0)) pace();
-      if (pacing.due(frameTimeNanos)) surface.requestRender();
+      if (pacing.due(frameTimeNanos)) picture.requestRender();
       Choreographer.getInstance().postFrameCallback(this);
     }
   };
@@ -2255,7 +2310,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   private void pace() {
     paceLogged = true;
     int every = pacing.every();
-    surface.setRenderMode(every > 1 ? GLSurfaceView.RENDERMODE_WHEN_DIRTY : GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+    renderMode = every > 1 ? GLSurfaceView.RENDERMODE_WHEN_DIRTY : GLSurfaceView.RENDERMODE_CONTINUOUSLY;
+    picture.setRenderMode(renderMode);
     Log.i(TAG, String.format(Locale.ROOT, "display at %.1f Hz: the picture drawn %s", pacing.hz(),
         every > 1 ? "at every " + every + " vsyncs (the screen stayed faster than 60 Hz)" : "at each vsync"));
   }
@@ -2304,11 +2360,194 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     }
   }
 
+  /** The OpenGL ES view (GLSurfaceView, as always): its render thread draws with a GLES 3 context. */
+  private GameSurface.Gl glSurface() {
+    GameSurface.Gl gl = new GameSurface.Gl(this);
+    gl.setEGLContextClientVersion(3);
+    gl.setPreserveEGLContextOnPause(true);
+    gl.setRenderer(new GLSurfaceView.Renderer() {
+      @Override public void onSurfaceCreated(GL10 g, EGLConfig config) { CoreBridge.surfaceCreated(); }
+      @Override public void onSurfaceChanged(GL10 g, int w, int h) { CoreBridge.resize(w, h); }
+      @Override public void onDrawFrame(GL10 g) { CoreBridge.draw(); }
+    });
+    picture = gl;
+    return gl;
+  }
+
+  /** The picture's view: 60 pictures a second on a faster screen, the fingers beside the touch controls. */
+  @SuppressLint("ClickableViewAccessibility")
+  private void surfaceCallbacks(SurfaceView view) {
+    final String kind = view instanceof VulkanSurface ? "Vulkan" : "OpenGL ES";
+    // (each in the log: Home and a turn of the device show in a test's log, report of 08.11.2026)
+    view.getHolder().addCallback(new SurfaceHolder.Callback() {
+      @Override public void surfaceCreated(SurfaceHolder holder) {
+        Log.i(TAG, "picture surface (" + kind + "): made");
+        surfaceSixtyHz(holder.getSurface());
+      }
+      @Override public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
+        Log.i(TAG, "picture surface (" + kind + "): " + w + "x" + h + ", format " + format);
+      }
+      @Override public void surfaceDestroyed(SurfaceHolder holder) {
+        Log.i(TAG, "picture surface (" + kind + "): gone");
+      }
+    });
+    // the surface takes the fingers beside the touch controls: Android gives the further fingers
+    // of a touch only to views that took one, so a thumb beside the buttons would block them
+    view.setOnTouchListener((v, e) -> true);
+  }
+
+  /** Vulkan can run here: Android 10 and later with Vulkan 1.1 (the plan's minimum; vulkan-bauplan.md). */
+  boolean vulkanSupported() {
+    return Build.VERSION.SDK_INT >= VULKAN_MIN_SDK
+        && getPackageManager().hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION, VULKAN_1_1);
+  }
+
+  /**
+   * Vulkan for this run (port/docs/vulkan-bauplan.md): the menu's choice (GRAPHICS -> Renderer) or the test switch
+   * RE4_GX_API=vulkan, where Vulkan can run; else OpenGL ES. The menu's choice has the crash guard: a start that
+   * ended while Vulkan started goes to OpenGL ES (the player hears it); the test switch always tries.
+   */
+  private boolean chooseVulkan() {
+    SharedPreferences g = getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE);
+    final boolean test = settings.contains("RE4_GX_API=vulkan");
+    final boolean chosen = "vulkan".equals(g.getString(RENDERER, "gles"));
+    if (settings.contains("RE4_GX_API=gles")) {
+      rendererLine = "OpenGL ES (test switch)";  // (a comparison run, whatever the menu chose)
+      return false;
+    }
+    if (!test && !chosen) return false;
+    if (!vulkanSupported()) {
+      rendererLine = Build.VERSION.SDK_INT < VULKAN_MIN_SDK
+          ? "OpenGL ES (Vulkan asked for: needs Android 10, this is API " + Build.VERSION.SDK_INT + ")"
+          : "OpenGL ES (Vulkan asked for: the device has no Vulkan 1.1)";
+      Log.w(TAG, "renderer: " + rendererLine);
+      return false;
+    }
+    if (!test && g.getBoolean(VULKAN_STARTING, false)) {
+      // the last start with Vulkan ended before it drew (a driver's crash): OpenGL ES, the menu's choice back
+      g.edit().putString(RENDERER, "gles").putBoolean(VULKAN_STARTING, false).commit();
+      rendererLine = "OpenGL ES (the last start with Vulkan ended while Vulkan started)";
+      Log.w(TAG, "renderer: " + rendererLine);
+      main.post(() -> message(getString(R.string.ingame_vulkan_crashed)));
+      return false;
+    }
+    if (!test) g.edit().putBoolean(VULKAN_STARTING, true).commit();  // (commit: it must be on disk before Vulkan)
+    rendererLine = test ? "Vulkan (test switch)" : "Vulkan";
+    Log.i(TAG, "renderer: " + rendererLine);
+    return true;
+  }
+
+  /** The crash guard is cleared once Vulkan has drawn for a few seconds (VULKAN_GUARD_PICTURES pictures). */
+  private final Runnable vulkanGuard = new Runnable() {
+    @Override public void run() {
+      if (destroyed || !(surface instanceof VulkanSurface)) return;
+      if (CoreBridge.pictures() >= VULKAN_GUARD_PICTURES && CoreBridge.rendererProblem().isEmpty()) {
+        getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).edit().putBoolean(VULKAN_STARTING, false).apply();
+        Log.i(TAG, "renderer: Vulkan drew " + CoreBridge.pictures() + " pictures; the crash guard is cleared");
+        return;
+      }
+      if (++vulkanGuardChecks < 150) main.postDelayed(this, VULKAN_GUARD_MS);
+    }
+  };
+
+  /** The core's settings with the renderer: RE4_GX_API=vulkan for Vulkan, none for OpenGL ES. */
+  static String withRenderer(String coreSettings, boolean vulkan) {
+    StringBuilder out = new StringBuilder();
+    for (String part : coreSettings.split(";")) {
+      if (part.isEmpty() || part.startsWith("RE4_GX_API=")) continue;
+      if (out.length() > 0) out.append(';');
+      out.append(part);
+    }
+    if (vulkan) out.append(out.length() > 0 ? ";" : "").append("RE4_GX_API=vulkan");
+    return out.toString();
+  }
+
+  /**
+   * The Vulkan renderer could not start (VulkanSurface): the picture goes over to OpenGL ES in place (a GLSurfaceView
+   * where the Vulkan surface was; the core sends the whole state again), the player hears it once.
+   */
+  private void vulkanFailed(String problem) {
+    if (destroyed || !(surface instanceof VulkanSurface)) return;
+    rendererLine = "OpenGL ES (Vulkan could not start: " + problem + ")";
+    Log.w(TAG, "renderer: " + rendererLine);
+    // the next start with OpenGL ES at once (the menu shows it); the guard is done
+    getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).edit().putString(RENDERER, "gles")
+        .putBoolean(VULKAN_STARTING, false).apply();
+    VulkanSurface old = (VulkanSurface) surface;
+    ViewGroup root = (ViewGroup) old.getParent();
+    final int at = root.indexOfChild(old);
+    final boolean focused = old.hasFocus();
+    old.stop();
+    GameSurface.Gl gl = glSurface();
+    surface = gl;
+    root.removeView(old);
+    root.addView(gl, at);
+    surfaceCallbacks(gl);
+    if (Build.VERSION.SDK_INT >= 26) {
+      gl.setFocusable(true);
+      gl.setFocusableInTouchMode(true);
+      gl.setOnCapturedPointerListener((v, e) -> {
+        capturedMouse(e);
+        return true;
+      });
+    }
+    if (Build.VERSION.SDK_INT >= 30) gl.requestUnbufferedDispatch(InputDevice.SOURCE_CLASS_JOYSTICK);
+    gl.setRenderMode(renderMode);
+    if (!resumed) gl.onPause();
+    if (focused || menu == null) gl.requestFocus();
+    message(getString(R.string.ingame_vulkan_failed));
+  }
+
+  /** The report's renderer.txt: the renderer of this run, its device and driver. */
+  private String rendererText() {
+    String info;
+    try {
+      info = CoreBridge.rendererInfo();
+    } catch (UnsatisfiedLinkError e) {
+      info = "(" + e.getMessage() + ")";
+    }
+    return "Renderer: " + rendererLine + "\nDevice and driver: " + (info.isEmpty() ? "(no renderer yet)" : info)
+        + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + "), " + Build.MANUFACTURER + " "
+        + Build.MODEL + ", " + Build.HARDWARE + "\n";
+  }
+
+  // The display's turn (0, 90, 180, 270): "sensorLandscape" turns the game by 180 degrees with the device, which is no
+  // configuration change (landscape stays landscape) and changes no surface size; only the display's rotation tells
+  private int displayTurn = -1;
+  private final DisplayManager.DisplayListener displayTurns = new DisplayManager.DisplayListener() {
+    @Override public void onDisplayAdded(int id) {}
+    @Override public void onDisplayRemoved(int id) {}
+    @Override public void onDisplayChanged(int id) { logDisplayTurn(); }
+  };
+
+  private void logDisplayTurn() {
+    final int turn = getWindowManager().getDefaultDisplay().getRotation() * 90;
+    if (turn == displayTurn) return;
+    Log.i(TAG, (displayTurn < 0 ? "display rotation: " : "display rotation changed to ") + turn);
+    displayTurn = turn;
+  }
+
+  @Override
+  protected void onStart() {
+    super.onStart();
+    Log.i(TAG, "activity started");
+  }
+
+  @Override
+  protected void onStop() {
+    Log.i(TAG, "activity stopped");
+    super.onStop();
+  }
+
   @Override
   protected void onResume() {
     super.onResume();
+    Log.i(TAG, "activity resumed");
+    DisplayManager displays = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+    if (displays != null) displays.registerDisplayListener(displayTurns, main);
+    logDisplayTurn();
     hideSystemUi();
-    surface.onResume();
+    picture.onResume();
     resumed = true;
     // the game runs again unless the menu or the touch editor is open (a file picker of the menu came back)
     if (menuSupported && menu == null && !touchEditing) CoreBridge.pause(false, 0);
@@ -2327,6 +2566,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
 
   @Override
   protected void onPause() {
+    Log.i(TAG, "activity paused");
+    DisplayManager displays = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+    if (displays != null) displays.unregisterDisplayListener(displayTurns);
     resumed = false;
     // the game stands while the app is not in front (home screen, a file picker of the menu)
     if (menuSupported) CoreBridge.pause(true, 0);
@@ -2342,7 +2584,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     InputManager im = (InputManager) getSystemService(Context.INPUT_SERVICE);
     if (im != null) im.unregisterInputDeviceListener(this);
     releaseAll();
-    surface.onPause();
+    picture.onPause();
     super.onPause();
   }
 

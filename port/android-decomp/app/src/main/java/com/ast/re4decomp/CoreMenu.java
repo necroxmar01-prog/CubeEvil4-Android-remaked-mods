@@ -97,7 +97,7 @@ final class CoreMenu extends Dialog {
     void autoAimChanged(boolean on);
     /** "Always run": Leon runs without the run key, which walks instead (CoreBridge.setAim). */
     void alwaysRunChanged(boolean on);
-    /** "Free movement", "Move while aiming" and "D-pad quick slots" (patch 0219; CoreBridge.setMovement,
+    /** "Free movement", "Move while aiming" and "D-pad quick slots" (patch 0900; CoreBridge.setMovement,
      *  CoreInput.setAimMove). */
     void movementChanged(boolean freeMove, boolean aimMove, boolean quickSlots);
     /** The European discs are imported: the home page offers "Game language". */
@@ -119,6 +119,14 @@ final class CoreMenu extends Dialog {
     int cheatAction(int what);
     /** The game restarts with its language as it is (the extra games; the menu asked first). */
     void restartGame();
+    /** The renderer (port/docs/vulkan-bauplan.md): Vulkan can run here (Android 10, Vulkan 1.1). */
+    boolean vulkanSupported();
+    /** Vulkan is the menu's choice (it may not run: not supported, or it fell back to OpenGL ES). */
+    boolean vulkanChosen();
+    /** The menu's new choice: kept, and the app restarts into the game with it (the menu asked first). */
+    void rendererChanged(boolean vulkan);
+    /** Management, "Clear shader cache" (the menu asked first): emptied at the restart into the game (ShaderCache). */
+    void clearShaderCache();
     /** Asks GitHub for the newest release (AppUpdate.check), once per run; `listener` hears it. */
     void checkUpdate(AppUpdate.Listener listener);
     /** The update button: downloads the newest APK and hands it to Android's installer (AppUpdate.install). */
@@ -152,6 +160,8 @@ final class CoreMenu extends Dialog {
   private final Button back, resume, update;
   private static final int UPDATE_GREEN = 0xff2d5233, UPDATE_GREEN_EDGE = 0xff4f8a57;
   private static final int UPDATE_RED = 0xff7a2a26, UPDATE_RED_EDGE = 0xffb2463f;
+  // the warning before another player character (08.11.2026): a dark red under the text, the "Update" button's edge
+  private static final int WARN_RED = 0xff4e1f1c;
   // the Benchmark button: the green of "Up to date", quieter (wish of the project owner, 06.11.2026)
   private static final int BENCH_GREEN = 0xff223a27, BENCH_GREEN_EDGE = 0xff3b6343, BENCH_TEXT = 0xffc3d6c5;
   private final Handler main = new Handler(Looper.getMainLooper());
@@ -467,6 +477,16 @@ final class CoreMenu extends Dialog {
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
     dialog.show();
   }
+  /** "Clear shader cache": the game restarts for it (progress not saved is lost), so the menu asks first. */
+  private void askClearShaders() {
+    AlertDialog dialog = new AlertDialog.Builder(getContext())
+        .setTitle(R.string.ingame_shader_clear)
+        .setMessage(R.string.ingame_shader_clear_text)
+        .setNegativeButton(R.string.ingame_cancel, null)
+        .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.clearShaderCache(); }).create();
+    dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
+    dialog.show();
+  }
   /** "Start the benchmark?" with what it does; the menu closes for it. */
   private void askBenchmark() {
     AlertDialog dialog = new AlertDialog.Builder(getContext())
@@ -668,6 +688,7 @@ final class CoreMenu extends Dialog {
   // (effects: depth of field, lens flares; the two picture filters), then OPTIONAL FEATURES (minimap, FPS display)
   private void display() {
     heading(R.string.ingame_graphics);
+    renderer();
     int[] info = CoreBridge.graphicsInfo();
     // Unknown GPU capabilities must not enable unsupported samples or anisotropy.
     int samples = info == null ? 1 : Math.max(1, info[0]);
@@ -740,6 +761,31 @@ final class CoreMenu extends Dialog {
     int fpsNow = CoreActivity.fpsPlace(graphics);
     fpsLabel(fps, fpsLabels[fpsNow], fpsNow != 0);
   }
+  /** "Renderer": OpenGL ES or Vulkan (experimental, port/docs/vulkan-bauplan.md E7); a change restarts the game
+   *  after a question, "Cancel" keeps the one before (as the game's language). Without Vulkan here: OpenGL ES only. */
+  private void renderer() {
+    final String[] labels = {s(R.string.ingame_renderer_gles), s(R.string.ingame_renderer_vulkan)};
+    final int[] values = {0, 1};
+    final boolean supported = host != null && host.vulkanSupported();
+    final int[] current = {supported && host.vulkanChosen() ? 1 : 0};
+    final Button[][] buttons = new Button[1][];
+    buttons[0] = choices(R.string.ingame_renderer, labels, values, current[0], Integer.MAX_VALUE, labels.length, value -> {
+      if (value == current[0]) return;
+      Runnable keep = () -> select(buttons[0], labels, current[0]);
+      AlertDialog dialog = new AlertDialog.Builder(getContext())
+          .setTitle(R.string.ingame_language_restart_title)
+          .setMessage(R.string.ingame_renderer_restart_text)
+          .setNegativeButton(R.string.ingame_cancel, (d, w) -> keep.run())
+          .setPositiveButton(R.string.ingame_restart, (d, w) -> {
+            current[0] = value; close(); host.rendererChanged(value == 1);
+          }).create();
+      dialog.setOnCancelListener(d -> keep.run());
+      dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
+      dialog.show();
+    });
+    if (!supported && buttons[0].length > 1) buttons[0][1].setEnabled(false);
+    indentedHelp(s(supported ? R.string.ingame_renderer_help : R.string.ingame_renderer_unavailable));
+  }
   private void controls() {
     // the touch controls under a heading of their own, a third of the row each (wish of the project owner, 05.11.2026)
     heading(R.string.ingame_touch_controls);
@@ -778,7 +824,7 @@ final class CoreMenu extends Dialog {
     MenuLayout.Buttons third = buttonsRow(body);
     toggle(third, R.string.ingame_auto_aim, input.getBoolean(CoreActivity.AUTO_AIM, false), on -> host.autoAimChanged(on));
     toggle(third, R.string.ingame_always_run, input.getBoolean(CoreActivity.ALWAYS_RUN, false), on -> host.alwaysRunChanged(on));
-    // "Free movement" and "Move while aiming" (patch 0219, runtime/free_move.cpp): the remake's way to move
+    // "Free movement" and "Move while aiming" (patch 0900, runtime/free_move.cpp): the remake's way to move
     MenuLayout.Buttons fourth = buttonsRow(body);
     toggle(fourth, R.string.ingame_free_move, input.getBoolean(CoreActivity.FREE_MOVE, false),
         on -> host.movementChanged(on, input.getBoolean(CoreActivity.AIM_MOVE, false),
@@ -1267,6 +1313,23 @@ final class CoreMenu extends Dialog {
     toggle(potato, R.string.ingame_potato_special, graphics.getBoolean("specialEffects", true), on -> {
       graphics.edit().putBoolean("specialEffects", on).apply(); CoreBridge.setPotato(CoreBridge.potatoMask(graphics));
     });
+    // two more on a user's wish (08.11.2026, through the project owner): the particles of fights, weapons and
+    // fires in three steps (each press moves it on: normal, less, none, as the sharpening), and shadows with the
+    // light effects
+    final int[] particleLabels = {R.string.ingame_particles_normal, R.string.ingame_particles_less,
+        R.string.ingame_particles_none};
+    MenuLayout.Buttons morePotato = buttonsRow(body);
+    Button particles = cellAction(morePotato, "", v -> {
+      int next = (CoreBridge.particleEffects(graphics) + 1) % 3;
+      graphics.edit().putInt("particleEffects", next).apply();
+      valueLabel((Button) v, R.string.ingame_potato_particles, particleLabels[next], next == 0);
+      CoreBridge.setPotato(CoreBridge.potatoMask(graphics));
+    });
+    valueLabel(particles, R.string.ingame_potato_particles, particleLabels[CoreBridge.particleEffects(graphics)],
+        CoreBridge.particleEffects(graphics) == 0);
+    toggle(morePotato, R.string.ingame_potato_shadows, graphics.getBoolean("shadowsLight", true), on -> {
+      graphics.edit().putBoolean("shadowsLight", on).apply(); CoreBridge.setPotato(CoreBridge.potatoMask(graphics));
+    });
     help(R.string.ingame_potato_help);
     // the picture output under a heading of its own (wish of the project owner, 30.10.2026); since 05.11.2026
     // without a row label in two columns, frame skip | 60 FPS over merged draws | vertex ring, the explanations
@@ -1321,6 +1384,10 @@ final class CoreMenu extends Dialog {
     MenuLayout.Buttons reports = buttonsRow(body);
     cellAction(reports, s(R.string.ingame_report_send), v -> host.shareReport());
     cellAction(reports, s(R.string.ingame_report_save), v -> host.saveReport());
+    // since 0.99.4 the shaders are kept where Android's "Clear cache" does not reach them (decision of the project
+    // owner, 08.11.2026): emptied by hand here
+    heading(R.string.ingame_shader_cache); help(R.string.ingame_shader_cache_help);
+    cellAction(buttonsRow(body), s(R.string.ingame_shader_clear), v -> askClearShaders());
     heading(R.string.ingame_source);
     cellAction(buttonsRow(body), getContext().getString(R.string.ingame_source_line, SOURCE_URL), v -> openSource());
   }
@@ -1413,8 +1480,14 @@ final class CoreMenu extends Dialog {
     for (int i = 0; i < labels.length; i++) {
       final int index = i;
       Button b = cellAction(row, labels[i], v -> {
-        select(buttons, labels, index);
-        cheatBits = (cheatBits & ~CHARACTER_BITS) | (values[index] << CHARACTER_SHIFT); host.cheatsChanged(cheatBits);
+        Runnable choose = () -> {
+          select(buttons, labels, index);
+          cheatBits = (cheatBits & ~CHARACTER_BITS) | (values[index] << CHARACTER_SHIFT); host.cheatsChanged(cheatBits);
+        };
+        // a character other than Leon warns first, also from one of them to another (wish of the project owner,
+        // 08.11.2026); the character already chosen and Leon switch at once as before
+        int current = (cheatBits & CHARACTER_BITS) >> CHARACTER_SHIFT;
+        if (values[index] == 0 || values[index] == current) choose.run(); else warnCharacter(labels[index], choose);
       });
       b.setSelected(values[i] == selected);
       b.setContentDescription(labels[i] + ", " + s(b.isSelected() ? R.string.ingame_on : R.string.ingame_off));
@@ -1422,6 +1495,56 @@ final class CoreMenu extends Dialog {
     }
     costumeSwitch(row);
     help(R.string.ingame_cheat_character_help);
+  }
+  /** Before Ada, HUNK, Krauser or Wesker take Leon's place (wish of the project owner, 08.11.2026): a reddish
+   *  warning that they are not made for the main game, the menu's other questions' dialog in red: the chosen
+   *  character's name centred on top, the warning centred under it, the one button "I understand" centred below
+   *  (the owner, 08.11.2026). Only that button switches (touch, click, A, Enter); Back, B, Esc, START, SELECT or
+   *  a touch beside it keep the character (the buttons' choice is only changed by it). The other gamepad
+   *  buttons do nothing here: Android would take X and START for a confirmation. */
+  private void warnCharacter(String name, Runnable choose) {
+    LinearLayout box = column();
+    box.setPadding(dp(24), dp(20), dp(24), dp(18));
+    TextView title = text(name, 20, true);
+    title.setGravity(Gravity.CENTER); title.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
+    box.addView(title, new LinearLayout.LayoutParams(-1, -2));
+    // the text scrolls if a big font leaves too little room, the button stays below it
+    TextView message = text(s(R.string.ingame_cheat_character_warning), 16, false);
+    message.setTextColor(INK); message.setLineSpacing(0, 1.1f);
+    message.setGravity(Gravity.CENTER_HORIZONTAL); message.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
+    ScrollView scroller = new ScrollView(getContext());
+    scroller.addView(message, new ViewGroup.LayoutParams(-1, -2));
+    LinearLayout.LayoutParams between = new LinearLayout.LayoutParams(-1, -2, 1);
+    between.setMargins(0, dp(12), 0, dp(18));
+    box.addView(scroller, between);
+    final AlertDialog[] shown = new AlertDialog[1];
+    Button understood = button(s(R.string.ingame_understood), v -> { shown[0].dismiss(); choose.run(); });
+    StateListDrawable look = new StateListDrawable();
+    look.addState(new int[] {android.R.attr.state_focused}, focused(UPDATE_RED));
+    look.addState(new int[] {android.R.attr.state_pressed}, shape(UPDATE_RED, INK, 6));
+    look.addState(new int[0], shape(UPDATE_RED, UPDATE_RED_EDGE, 6));
+    understood.setBackground(look); understood.setTextColor(INK);
+    understood.setPadding(dp(24), dp(8), dp(24), dp(8));
+    LinearLayout.LayoutParams centred = new LinearLayout.LayoutParams(-2, -2);
+    centred.gravity = Gravity.CENTER_HORIZONTAL;
+    box.addView(understood, centred);
+    AlertDialog dialog = new AlertDialog.Builder(getContext()).setView(box).create();
+    shown[0] = dialog;
+    GradientDrawable frame = shape(WARN_RED, UPDATE_RED_EDGE, 10); frame.setStroke(dp(2), UPDATE_RED_EDGE);
+    dialog.getWindow().setBackgroundDrawable(frame);
+    dialog.setOnKeyListener((d, key, event) -> {
+      if (key == KeyEvent.KEYCODE_BUTTON_A) {
+        return dialog.getWindow().superDispatchKeyEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
+            event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER, event.getRepeatCount()));
+      }
+      if (key != KeyEvent.KEYCODE_ESCAPE && !KeyEvent.isGamepadButton(key)) return false;
+      if ((key == KeyEvent.KEYCODE_ESCAPE || key == KeyEvent.KEYCODE_BUTTON_B || key == KeyEvent.KEYCODE_BUTTON_START
+          || key == KeyEvent.KEYCODE_BUTTON_SELECT) && event.getAction() == KeyEvent.ACTION_DOWN
+          && event.getRepeatCount() == 0) dialog.cancel();
+      return true;
+    });
+    dialog.setOnShowListener(d -> understood.requestFocus());
+    dialog.show();
   }
   /** "Special costumes · On/Off" over a smaller "(Leon/Ashley only)", as tall as one line's button (the
    *  owner, 03.11.2026: the second row as high as the first). */

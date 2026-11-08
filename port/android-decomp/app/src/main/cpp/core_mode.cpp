@@ -28,6 +28,9 @@
 
 #include <EGL/egl.h>
 #include <android/log.h>
+#ifdef __ANDROID__
+#include <android/native_window_jni.h>
+#endif
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -520,6 +523,20 @@ std::chrono::steady_clock::time_point lastDraw;
 // else RE4_GX_SCALE
 std::unique_ptr<re4gx::GxRenderer> gx;
 int gxMode = -1;  // -1 undecided, 0 bridge, 1 GX
+// The GX renderer's graphics API (port/docs/vulkan-bauplan.md): Vulkan when CoreActivity made a Vulkan surface (it then
+// passes RE4_GX_API=vulkan) and its window came (CoreBridge.vkWindow, on the render thread); else GLES. A Vulkan
+// renderer that could not start leaves its reason in vulkanProblem: CoreActivity asks for it (CoreBridge.rendererProblem)
+// and goes over to GLES.
+bool gxVulkan() {
+  static const bool vulkan = getenv("RE4_GX_API") && std::string(getenv("RE4_GX_API")) == "vulkan";
+  return vulkan;
+}
+void *vkWindow = nullptr;  // ANativeWindow of the Vulkan surface (one reference held here)
+bool glContextLive = false;  // a GL context is current on the render thread (GLSurfaceView; not the Vulkan surface)
+std::mutex vulkanProblemLock;
+std::string vulkanProblem;
+std::string rendererInfoText;  // the renderer's API, device and driver (GxRenderer::ApiInfo; the report's renderer.txt)
+bool vulkanFailed = false;
 // the menu's picture options (M11, any thread -> GL thread): a change builds
 // the renderer anew at the next picture while the game runs (the core then
 // starts over with the full state); 0 scale: automatic
@@ -559,6 +576,15 @@ std::atomic<int> infoMaxSamples{0}, infoMaxAnisotropy{0}, infoScale{0}, infoSamp
 std::string ScaleName(int halves) {
   char s[16];
   std::snprintf(s, sizeof(s), halves % 2 ? "%d.5" : "%d", halves / 2);
+  return s;
+}
+// the Potato mode bits (not 0) as the GPU bench's log writes them: ", weather effects off, particle effects less"
+std::string PotatoName(int bits) {
+  std::string s;
+  if (bits & 1) s += ", weather effects off";
+  if (bits & 2) s += ", special effects off";
+  if ((bits >> 2) & 3) s += ((bits >> 2) & 3) == 1 ? ", particle effects less" : ", particle effects none";
+  if (bits & 16) s += ", shadows and light effects off";
   return s;
 }
 unsigned gxChunks = 0;
@@ -690,7 +716,8 @@ int renderPlaced = 0;  // the render thread set up
 std::atomic<int> optFastCores{0};
 int fastSent = -1;    // what the core was told last (-1: nothing yet)
 // The menu's Potato mode (CoreBridge.setPotato, decision of the project owner, 30.10.2026): bit 0 the weather
-// effects off, bit 1 the special effects off (the core's runtime/potato.cpp); 0 the default.
+// effects off, bit 1 the special effects off, since 0.99.3 bits 2..3 the particle effects (1 less, 2 none) and bit 4
+// shadows and light effects off (the core's runtime/potato.cpp); 0 the default.
 std::atomic<int> optPotato{0};
 int potatoSent = -1;  // what the core was told last (-1: nothing yet; the GPU bench sets its own)
 // The menu's "Invert vertical" and "Aim speed" for touch and controllers (CoreBridge.setAim, wish of the
@@ -698,10 +725,10 @@ int potatoSent = -1;  // what the core was told last (-1: nothing yet; the GPU b
 std::atomic<int> optAim{100 << 8};
 std::atomic<int> optFarCamera{0};  // the menu's "Far camera" (CoreBridge.setFarCamera), bit 3 of the aim bits
 // the menu's "Free movement" (bit 0 here, bit 4 of the aim bits), "Move while aiming" (bit 1, bit 5) and "D-pad quick
-// slots" (bit 2, bit 7) (CoreBridge.setMovement, patch 0219; the core's runtime/free_move.cpp, quick_slots.cpp)
+// slots" (bit 2, bit 7) (CoreBridge.setMovement, patch 0900; the core's runtime/free_move.cpp, quick_slots.cpp)
 std::atomic<int> optMovement{0};
 // R3 presses (CoreBridge.recenterCamera): each one toggles bit 6 of the aim bits, the core turns the free camera back
-// behind Leon (patch 0219)
+// behind Leon (patch 0900)
 std::atomic<int> optRecenter{0};
 // the menu's "Field of view" (CoreBridge.setFov, -15 .. +15 degrees, patch 0205): bits 24..29 of the aim bits as
 // degrees + 32 (0: as the game; the core's runtime/aim_options.cpp)
@@ -1004,8 +1031,7 @@ void benchTick(std::chrono::steady_clock::time_point now) {
       step.dof ? "on" : "off",
       step.dof ? (gx->HalfDof() ? " (blur at half resolution)" : " (blur at full resolution)") : "",
       gx->Invalidates() ? "yes" : "no",
-      step.potato < 0 ? "" : step.potato == 0 ? ", Potato mode off" : step.potato == 1 ? ", weather effects off"
-                           : step.potato == 2 ? ", special effects off" : ", weather and special effects off",
+      step.potato < 0 ? "" : step.potato == 0 ? ", Potato mode off" : PotatoName(step.potato).c_str(),
       gpu, present, pictures, secs > 0 ? (s.presents - bench.at.presents) / secs : 0.0,
       bench.runCount ? bench.runMs / bench.runCount : 0.0, clock, busy, work, behind,
       chunks ? static_cast<double>(s.draws - bench.at.draws) / chunks : 0.0);
@@ -1035,6 +1061,17 @@ void SaveShot(re4gx::GxRenderer &renderer, const char *path) {
   unsigned w = 0, h = 0;
   if (!renderer.Xfb(&w, &h) || !w || !h)
     return;
+  std::vector<unsigned char> rgba(static_cast<size_t>(w) * h * 4);
+  if (renderer.Api() == re4gx::GxApi::kVulkan) {
+    // Vulkan: the same picture read back (rows from the top: turned to GL's order, bottom up, for the BMP)
+    std::vector<std::uint8_t> top;
+    if (!renderer.ReadPresented(static_cast<int>(w), static_cast<int>(h), 0, 0, static_cast<int>(w),
+                                static_cast<int>(h), 0, 0, &top) || top.size() != rgba.size())
+      return;
+    const size_t row = static_cast<size_t>(w) * 4;
+    for (unsigned y = 0; y < h; y++)
+      std::memcpy(rgba.data() + (h - 1 - y) * row, top.data() + y * row, row);
+  } else {
   if (!gxShotFbo || gxShotW != w || gxShotH != h) {
     if (!gxShotFbo)
       glGenFramebuffers(1, &gxShotFbo);
@@ -1052,9 +1089,9 @@ void SaveShot(re4gx::GxRenderer &renderer, const char *path) {
   glBindFramebuffer(GL_FRAMEBUFFER, gxShotFbo);
   glDisable(GL_SCISSOR_TEST);
   renderer.Present(0, 0, static_cast<int>(w), static_cast<int>(h));
-  std::vector<unsigned char> rgba(static_cast<size_t>(w) * h * 4);
   glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
   // BMP rows go bottom up, as glReadPixels returns them
   const unsigned rowBytes = (w * 3 + 3) & ~3u;
   const uint32_t dataBytes = rowBytes * h, fileBytes = 54 + dataBytes;
@@ -1193,6 +1230,10 @@ void replayGx(int halves) {
   gxReplayDone = true;
   const char *dir = getenv("RE4_GX_REPLAY");
   if (!dir || !*dir) return;
+  if (gxVulkan() && !vulkanFailed) {
+    LOG("GX replay: GLES only (the app draws with Vulkan)");
+    return;
+  }
   std::vector<std::string> names;
   if (DIR *d = opendir(dir)) {
     while (const dirent *e = readdir(d)) {
@@ -1355,10 +1396,12 @@ bool minimapProgram() {
 
 // The map in the picture: the menu's picture format and the XFB's lines (re4mm::PictureRects / Place, where the
 // game's own gauge sits; owner's report 05.11.2026)
-void minimapDraw(int format, unsigned xh, bool wide) {
+// The minimap of this picture: its vertices and its place (false: none now); minimapDraw draws it with GLES, the
+// Vulkan renderer over its picture (GxRenderer::SetOverlay)
+bool minimapBuild(int format, unsigned xh, bool wide, re4gx::GxOverlay *out) {
   if (!optMinimap.load() || minimap.failed || !api.roomOutline || !frame.valid || frame.step[0] != 3 ||
       (frame.screen & (RE4_CORE_SCREEN_SUB | RE4_CORE_SCREEN_EVENT)))
-    return;
+    return false;
   const Re4CoreModel *player = nullptr;
   for (const Re4CoreModel &mdl : frame.models)
     if (mdl.manager == 0 && mdl.id == 0 && (mdl.beFlag & 6) == 6) {
@@ -1367,7 +1410,7 @@ void minimapDraw(int format, unsigned xh, bool wide) {
     }
   re4mm::Pose pose;
   if (!player || !re4mm::PoseFromMatrix(player->matrix, &pose))
-    return;
+    return false;
   // the outline: again when the room changed, else once a second (the room's pieces may change)
   const auto now = std::chrono::steady_clock::now();
   if (frame.room != minimap.askedRoom || now - minimap.asked > std::chrono::seconds(1)) {
@@ -1385,12 +1428,7 @@ void minimapDraw(int format, unsigned xh, bool wide) {
     }
   }
   if (minimap.room != frame.room || minimap.edges.empty())
-    return;
-  if (!minimap.program && !minimapProgram()) {
-    minimap.failed = true;
-    LOG("minimap: no shader; left out");
-    return;
-  }
+    return false;
   // around the player as far as the room's size asks (re4mm::RoomRadius: 10 to 24 m)
   re4mm::Project(minimap.edges.data(), static_cast<int>(minimap.edges.size() / 5), pose, minimap.radius, minimap.lines);
   std::vector<float> &v = minimap.verts;
@@ -1431,6 +1469,37 @@ void minimapDraw(int format, unsigned xh, bool wide) {
   re4mm::PictureRects(format, width, height, static_cast<int>(xh), &hud, &pic, wide);
   const re4mm::Rect at = re4mm::Place(hud, re4mm::Shown(format, hud, pic));
   const int size = at.w;
+  out->verts = v;
+  out->parts = {{false, 0, discVerts}, {true, triVerts, lineVerts}, {false, discVerts, triVerts - discVerts}};
+  out->x = at.x;
+  out->y = at.y;
+  out->size = size;
+  out->lineWidth = std::max(1.0f, static_cast<float>(size) / 160.0f);
+  // once, and again when the place changes (another picture format, the screen turned or resized)
+  const long long key = (static_cast<long long>(format + 1) << 48) ^ (static_cast<long long>(at.x) << 32) ^
+                        (static_cast<long long>(at.y) << 16) ^ size;
+  if (!minimap.logged || key != minimap.placeLogged) {
+    minimap.logged = true;
+    minimap.placeLogged = key;
+    LOG("minimap: drawn (%d x %d at %d %d, picture format %d)", size, size, at.x, at.y, format);
+  }
+  return true;
+}
+
+// The minimap with GLES (after the picture, at its bottom left)
+void minimapDraw(int format, unsigned xh, bool wide) {
+  re4gx::GxOverlay o;
+  if (!minimapBuild(format, xh, wide, &o))
+    return;
+  if (!minimap.program && !minimapProgram()) {
+    minimap.failed = true;
+    LOG("minimap: no shader; left out");
+    return;
+  }
+  const std::vector<float> &v = o.verts;
+  const int discVerts = o.parts[0].count, triVerts = o.parts[1].first, lineVerts = o.parts[1].count;
+  const int size = o.size;
+  const re4mm::Rect at{o.x, o.y, o.size, o.size};
   glViewport(at.x, at.y, size, size);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1450,14 +1519,6 @@ void minimapDraw(int format, unsigned xh, bool wide) {
   glUseProgram(0);
   glDisable(GL_BLEND);
   glViewport(0, 0, width, height);
-  // once, and again when the place changes (another picture format, the screen turned or resized)
-  const long long key = (static_cast<long long>(format + 1) << 48) ^ (static_cast<long long>(at.x) << 32) ^
-                        (static_cast<long long>(at.y) << 16) ^ size;
-  if (!minimap.logged || key != minimap.placeLogged) {
-    minimap.logged = true;
-    minimap.placeLogged = key;
-    LOG("minimap: drawn (%d x %d at %d %d, picture format %d)", size, size, at.x, at.y, format);
-  }
 }
 
 // Runs the chunks the core has finished and shows the latest display copy.
@@ -1684,7 +1745,7 @@ bool drawGx() {
     // the Galaxy A36 showed them green and brown)? Before any renderer, on a renderer of its own;
     // on wrong pixels it picks a way of writing the TEV's lerp that this GPU computes right.
     static bool gpuChecked = false;
-    if (!gpuChecked) {
+    if (!gpuChecked && !(gxVulkan() && !vulkanFailed)) {
       gpuChecked = true;
       LOG("%s", re4gx::MovieColourCheck(nullptr).c_str());
     }
@@ -1694,7 +1755,24 @@ bool drawGx() {
       LOG("benchmark: the new renderer at the benchmark's level %s", re4gx::BenchSteps::Name(scale).c_str());
     }
     replayGx(scale);
-    gx = std::make_unique<re4gx::GxRenderer>();
+    const bool vulkan = gxVulkan() && !vulkanFailed;
+    if (vulkan && !vkWindow)
+      return false;  // the Vulkan surface's window has not come yet
+    gx = std::make_unique<re4gx::GxRenderer>(vulkan ? re4gx::GxApi::kVulkan : re4gx::GxApi::kGl);
+    if (vulkan && gx->Api() != re4gx::GxApi::kVulkan) {
+      // a build without the Vulkan renderer: the surface has no GL context, CoreActivity goes over to GLES
+      LOG("GX renderer (Vulkan): not in this build; over to OpenGL ES");
+      {
+        std::lock_guard<std::mutex> lock(vulkanProblemLock);
+        vulkanProblem = "this build has no Vulkan renderer";
+      }
+      vulkanFailed = true;
+      gx.reset();
+      if (previous) previous->Release();
+      return false;
+    }
+    if (vulkan)
+      gx->SetWindow(vkWindow, width, height);
     re4gx::GxOptions options;
     options.samples = std::max(1, optSamples.load());
     options.anisotropy = static_cast<float>(std::max(1, optAnisotropy.load()));
@@ -1714,6 +1792,18 @@ bool drawGx() {
       gx->SetDepthSink([](const std::uint32_t *cells, std::uint32_t serial) { api.depth(cells, serial); });
     std::string error;
     if (!gx->InitHalves(scale, &error)) {
+      if (vulkan) {
+        // Vulkan could not start: CoreActivity hears it (rendererProblem) and goes over to GLES
+        LOG("GX renderer (Vulkan): %s; over to OpenGL ES", error.c_str());
+        {
+          std::lock_guard<std::mutex> lock(vulkanProblemLock);
+          vulkanProblem = error.empty() ? "Vulkan could not start" : error;
+        }
+        vulkanFailed = true;
+        gx.reset();
+        if (previous) previous->Release();
+        return false;
+      }
       LOG("GX renderer: %s; the bridge draws", error.c_str());
       gx.reset();
       if (previous) previous->Release();
@@ -1736,11 +1826,21 @@ bool drawGx() {
     // the app's list of programs (its asset gx-programs.keys, CoreActivity)
     const char *programList = getenv("RE4_GX_PROGRAM_LIST");
     if (cached && programList && *programList) gx->SetProgramList(programList);
-    if (cached)
+    // (GL's programs on a thread of its own; the Vulkan renderer keeps its SPIR-V and pipelines itself)
+    if (cached && !vulkan)
       startWarm(cache, programList ? programList : "", gx->Samples() > 1 && options.centroid ? 1u : 0u);
     int maxSamples = 1;
     float maxAnisotropy = 1.0f;
-    re4gx::GxRenderer::Limits(&maxSamples, &maxAnisotropy);
+    if (vulkan) {
+      maxSamples = 4;  // every Vulkan device draws and samples 4 (the renderer takes fewer where it must)
+      maxAnisotropy = gx->Anisotropy();
+    } else
+      re4gx::GxRenderer::Limits(&maxSamples, &maxAnisotropy);
+    LOG("GX renderer: %s", gx->ApiInfo().c_str());
+    {
+      std::lock_guard<std::mutex> lock(vulkanProblemLock);
+      rendererInfoText = gx->ApiInfo();
+    }
     infoMaxSamples = maxSamples;
     infoMaxAnisotropy = static_cast<int>(maxAnisotropy);
     infoScale = scale;
@@ -2166,6 +2266,10 @@ bool drawGx() {
             split[GxStats::kSplitState], split[GxStats::kSplitVertices], split[GxStats::kSplitProgram],
             split[GxStats::kSplitTexture], split[GxStats::kSplitBp], split[GxStats::kSplitXf],
             split[GxStats::kSplitRest]);
+        // Vulkan: its waits, submits and presents per picture, the shaders and pipelines it made (vulkan-bauplan E8)
+        const std::string vkLine = gx->TimingLine();
+        if (!vkLine.empty())
+          LOG("%s", vkLine.c_str());
         // merged draw calls (RE4_GX_MERGE=1, an experiment for low-end phones)
         if (gx->Merging())
           LOG("GX merged draw calls per chunk: %.0f GL draw calls for %.0f draws, %.0f of them in %.0f merged calls",
@@ -2214,11 +2318,15 @@ bool drawGx() {
   benchTick(now);
   unsigned xw = 0, xh = 0;
   if (!gx->Xfb(&xw, &xh)) return false;
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, width, height);
-  glDisable(GL_SCISSOR_TEST);
-  glClearColor(0, 0, 0, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  if (gx->Api() == re4gx::GxApi::kVulkan) {
+    gx->SetWindow(vkWindow, width, height);  // (Present clears the screen itself)
+  } else {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, width, height);
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  }
   // the menu's picture format (1: 4:3, 0: 16:9, 2: stretched, 3: 4:3 without the game's
   // letterbox bars while playing, Anbernic RG 477V report 22.10.2026, in an exact 4:3 box since
   // 29.10.2026; 4, the exact box's first own number, is 3; 5: "Native", the screen's own aspect,
@@ -2269,6 +2377,14 @@ bool drawGx() {
   // as 10:7; in an exact 4:3 box the 3D is right and the flat draws (HUD, menus, text) are drawn
   // 15/14 wider by the renderer, so they keep the shape they had on the television
   gx->SetWiden(format == 3 ? 15.0f / 14.0f : 1.0f);
+  // the minimap: the Vulkan renderer draws it over the picture in Present (GLES: minimapDraw after it)
+  const int mapFormat = format < 0 && aspect && std::string(aspect) == "4:3" ? 1 : format;
+  if (gx->Api() == re4gx::GxApi::kVulkan) {
+    re4gx::GxOverlay map;
+    if (!minimapBuild(mapFormat, xh, xfbWide, &map))
+      map = re4gx::GxOverlay();  // (none this picture)
+    gx->SetOverlay(map);
+  }
   if (format == 5) {
     // "Native": the shown rows over the box (whole screen, or the 16:9 box for a menu, the scope, a movie)
     const unsigned top = xh * static_cast<unsigned>(native.top) / 448,
@@ -2315,8 +2431,9 @@ bool drawGx() {
     notePicture((width - boxW) / 2, (height - boxH) / 2, boxW, boxH, xh ? float(top) / float(xh) : 0.f,
                 xh ? float(rows) / float(xh) : 1.f);
   }
-  // the map: "4:3 (GC)" also when RE4_GX_ASPECT asks for 4:3 (as above)
-  minimapDraw(format < 0 && aspect && std::string(aspect) == "4:3" ? 1 : format, xh, xfbWide);
+  // the map: "4:3 (GC)" also when RE4_GX_ASPECT asks for 4:3 (as above); the Vulkan renderer drew it in Present
+  if (gx->Api() != re4gx::GxApi::kVulkan)
+    minimapDraw(mapFormat, xh, xfbWide);
   return true;
 }
 
@@ -2761,6 +2878,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_gxDump(JNIEn
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_surfaceCreated(JNIEnv *, jclass) {
+  glContextLive = true;
   if (auto *s = currentScene()) s->contextCreated();
   lastDraw = {};
   letterboxSent = -1;
@@ -2775,6 +2893,39 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_surfaceCreat
   gx.reset();
   smoothDrop();
   if (api.gxDetach) api.gxDetach();
+}
+
+// The Vulkan surface's window (CoreActivity's VulkanSurface, on its render thread; null when it went): the renderer
+// presents to it. The renderer and its textures stay while the window is away (no new start of the core).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_vkWindow(JNIEnv *env, jclass, jobject surface) {
+#ifdef __ANDROID__
+  ANativeWindow *w = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
+#else
+  void *w = nullptr;  // (the host's link check: no windows)
+  (void)env;
+  (void)surface;
+#endif
+  if (gx && gx->Api() == re4gx::GxApi::kVulkan)
+    gx->SetWindow(w, width, height);  // (it holds a reference of its own)
+#ifdef __ANDROID__
+  if (vkWindow)
+    ANativeWindow_release(static_cast<ANativeWindow *>(vkWindow));
+#endif
+  vkWindow = w;
+  glContextLive = false;
+  LOG("Vulkan surface: %s", w ? "window came" : "window went");
+}
+
+// Why the Vulkan renderer could not start ("" when it runs or GLES was chosen); CoreActivity then goes over to GLES.
+extern "C" JNIEXPORT jstring JNICALL Java_com_ast_re4decomp_CoreBridge_rendererProblem(JNIEnv *env, jclass) {
+  std::lock_guard<std::mutex> lock(vulkanProblemLock);
+  return env->NewStringUTF(vulkanProblem.c_str());
+}
+
+// The renderer's API, device and driver ("" before the first one; the report's renderer.txt).
+extern "C" JNIEXPORT jstring JNICALL Java_com_ast_re4decomp_CoreBridge_rendererInfo(JNIEnv *env, jclass) {
+  std::lock_guard<std::mutex> lock(vulkanProblemLock);
+  return env->NewStringUTF(rendererInfoText.c_str());
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_resize(JNIEnv *, jclass, jint w,
@@ -2798,6 +2949,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_draw(JNIEnv 
                              : std::chrono::duration<double>(now - lastDraw).count();
   lastDraw = now;
   if (drawGx()) return;
+  if (gxVulkan() && !glContextLive) return;  // the Vulkan surface: no GL context for the bridge
   try {
     s->draw(frame, width, height, seconds);
   } catch (const std::exception &e) {
@@ -2881,7 +3033,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_ast_re4decomp_CoreBridge_aimFromGame(
   return api.aimFromGame ? api.aimFromGame() : -1;
 }
 
-// "Free movement" and "Move while aiming" (the menu, Controls; patch 0219), sent with the aim settings (bits 4, 5).
+// "Free movement" and "Move while aiming" (the menu, Controls; patch 0900), sent with the aim settings (bits 4, 5).
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMovement(JNIEnv *, jclass, jboolean freeMove,
                                                                               jboolean aimMove, jboolean quickSlots) {
   const int want = (freeMove == JNI_TRUE ? 1 : 0) | (aimMove == JNI_TRUE ? 2 : 0) | (quickSlots == JNI_TRUE ? 4 : 0);
@@ -2890,7 +3042,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMovement(
         want & 2 ? "on" : "off", want & 4 ? "on" : "off");
 }
 
-// R3 (the right stick pressed): the free camera back behind Leon (patch 0219), a toggle of bit 6 of the aim bits.
+// R3 (the right stick pressed): the free camera back behind Leon (patch 0900), a toggle of bit 6 of the aim bits.
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_recenterCamera(JNIEnv *, jclass) {
   optRecenter.fetch_add(1);
 }

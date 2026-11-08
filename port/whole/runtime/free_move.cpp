@@ -1,5 +1,5 @@
 // Free movement and moving while aiming (the app menu's Controls page, "Free movement" and "Move while aiming";
-// patch 0219, a mod in the spirit of the 2023 remake). Compiled with the game's flags into libre4_main. Both off
+// patch 0900, a mod in the spirit of the 2023 remake). Compiled with the game's flags into libre4_main. Both off
 // (the default): nothing here changes the game.
 //
 //  - "Free movement": the main stick moves Leon where it points, seen from the camera, instead of the tank
@@ -19,10 +19,14 @@
 //  - "Move while aiming": while a weapon or the knife is ready (r_no_1 6 / 0xB, cPlayer::isKamae) the C stick
 //    walks Leon forward, back and sideways, relative to where he aims, at kAimWalk. The game has no strafe
 //    motions; re4_player_after_routine (cPlayer::move, after the routines posed him) plays his own walk motion
-//    (the back step when he moves back) on his legs only: the parts below the hips' IK chains of that motion
-//    take its pose, faded in and out over a few frames, the hips and everything above keep the aiming pose. The
-//    walk motion is evaluated in a work of its own (gWalk) with its own key histories, so the aiming motion and
-//    its blend (cMot3, pMotionB) are not disturbed. The game's own collision (EmAtCheck, SatMgr: walls, then the
+//    (the back step when he moves back) on his legs only. The walk motion is posed the way MotionMove poses a
+//    motion (MotionMoveCore, partsMatCalc, then the motion's leg IK: IKInit, InverseKinematics; its feet are IK
+//    targets, not bone offsets, 0.99.4 fix of the stretched legs) on a copy of every part, which is put back
+//    afterwards; only the legs' rotations are taken from it: the thighs as the walk pose turns them against the
+//    model (not against the aiming pose's turned hips), the shins and feet as their local turn, faded in and out
+//    by a quaternion blend (kLegFade, at most kLegMax); every bone keeps the aiming pose's offset, the hips and
+//    everything above keep the aiming pose. The walk motion runs in a work of its own (gWalk) with its own key
+//    histories, so the aiming motion and its blend (cMot3, pMotionB) are not disturbed. The game's own collision (EmAtCheck, SatMgr: walls, then the
 //    floor) runs after the routines, so walls and floors hold him as when he walks.
 //    With "Alternate Controls" the app sends the left stick as the C stick while L1 / L2 hold the weapon ready
 //    (CoreInput), so the left stick moves and the right one aims, as in the remake.
@@ -59,8 +63,9 @@ const f32 kTurnRun = 0.18f;       // running (the game's tank turn: SPEED_WALK_T
 const f32 kWalkStart = 1.05f;     // from standing he sets off once within 60 degrees of the stick's direction
 const f32 kFollow = 0.12f;        // share per frame the camera goes back behind him outside the walk routines
 const f32 kAimWalk = 38.0f;       // units per game frame at full C stick while aiming (0.99.2-mods: 26, too slow)
-const f32 kLegFade = 0.25f;       // the legs' share of the walk pose per frame, in and out
-const f32 kLegSpeed = 1.0f;       // the walk motion's frames per game frame at full C stick
+const f32 kLegFade = 0.2f;        // the legs' share of the walk pose per frame, in and out
+const f32 kLegMax = 0.85f;        // at most this share (a little of the steady aiming stance stays)
+const f32 kLegSpeed = 0.9f;       // the walk motion's frames per game frame at full C stick
 const f32 kRecenter = 0.35f;      // share per frame the camera turns back behind him after R3
 const int kMaxParts = 160;
 const f32 kTeleport = 1500.0f;    // a jump of his position this far (a door, a new room, an event): camera reset
@@ -79,16 +84,12 @@ f32 gAimSx = 0.0f;
 f32 gAimSy = 0.0f;
 f32 gAimMag = 0.0f;
 
-// the walk motion on the legs
-struct PartSave {
-    Vec pos;
-    Vec ang;
-    Vec scale;
-    MotionParts mp;
-};
-PartSave gSave[kMaxParts];
+// the walk motion on the legs: every part as the aiming pose left it, the walk pose's rotations of the legs
+alignas(16) u8 gSave[kMaxParts * sizeof(cParts)];
+Mtx gWalkRot[kMaxParts];  // thighs: their turn against the model; shins, feet: their local turn
 HERMITE_KEY gWalkHist[kMaxParts][6];
 bool gLeg[kMaxParts];
+bool gLegRoot[kMaxParts];
 MOTION_INFO gWalk;
 void* gWalkMot = 0;
 cPlayer* gWalkPl = 0;
@@ -241,6 +242,12 @@ void findLegs(cPlayer* pl, int n)
     int i = 0;
     for (cParts* p = hips; p && i < n; p = p->pList, i++) {
         gLeg[i] = false;
+        gLegRoot[i] = false;
+        for (int r = 0; r < nRoots; r++) {
+            if (p == roots[r]) {
+                gLegRoot[i] = true;
+            }
+        }
         cCoord* c = p;
         for (int depth = 0; depth < 40 && c && c != (cCoord*) pl; depth++, c = c->pParent) {
             for (int r = 0; r < nRoots; r++) {
@@ -281,16 +288,16 @@ void legs(cPlayer* pl)
             return;
         }
     }
+    // a copy of every part (the aiming pose), the model's matrix
     int i = 0;
     for (cParts* p = pl->pList; p; p = p->pList, i++) {
-        gSave[i].pos = p->pos;
-        gSave[i].ang = p->ang;
-        gSave[i].scale = p->scale;
-        gSave[i].mp = p->motParts;
+        memcpy(gSave + i * sizeof(cParts), (void*) p, sizeof(cParts));
     }
+    Mtx modelMat;
+    PSMTXCopy(pl->mat, modelMat);
     if (mot != gWalkMot || pl != gWalkPl) {
         memset(&gWalk, 0, sizeof gWalk);
-        // keep the model's blend motion (cMot3's pitch blend), no IKInit on the model
+        // keep the model's blend motion (cMot3's pitch blend); IKInit below, on the copy only
         gWalk.Mot_flag = 0x20000000 | 0x10000000;
         MotionSetCore(pl, &gWalk, mot, seq, 0, 4, 0);
         gWalk.Mot_flag |= 0x40000000;  // MotionMoveCore: leave the model's matrix alone
@@ -303,36 +310,57 @@ void legs(cPlayer* pl)
     for (cParts* p = pl->pList; p; p = p->pList, i++) {
         memcpy(p->motParts.hist, gWalkHist[i], sizeof gWalkHist[i]);
     }
+    // the walk pose as MotionMove makes it: keys, local matrices, the motion's leg IK on the floor
     gWalk.Seq_speed = kLegSpeed * (gAimMag > 0.4f ? gAimMag : 0.4f);
     gWalk.Hokan_cnt = 0;
     MotionMoveCore(pl, &gWalk, 0);
     MotionSequenceCtrl(&gWalk);
-    const f32 w = gLegW;
+    pl->partsMatCalc();
+    IKInit(pl, &gWalk);
+    pl->partsWorldCalc();
+    InverseKinematics(pl, 1);
+    pl->partsWorldCalc();
     i = 0;
     for (cParts* p = pl->pList; p; p = p->pList, i++) {
-        const Vec wpos = p->pos;
-        const Vec wang = p->ang;
-        const Vec wscale = p->scale;
         memcpy(gWalkHist[i], p->motParts.hist, sizeof gWalkHist[i]);
-        p->pos = gSave[i].pos;
-        p->ang = gSave[i].ang;
-        p->scale = gSave[i].scale;
-        p->motParts = gSave[i].mp;
+        if (gLeg[i]) {
+            PSMTXCopy(gLegRoot[i] ? p->mat : p->l_mat, gWalkRot[i]);
+        }
+    }
+    // the aiming pose back, every part and the model
+    i = 0;
+    for (cParts* p = pl->pList; p; p = p->pList, i++) {
+        memcpy((void*) p, gSave + i * sizeof(cParts), sizeof(cParts));
+    }
+    PSMTXCopy(modelMat, pl->mat);
+    // the legs: the aiming pose's turn toward the walk pose's, the bones' offsets kept
+    const f32 w = gLegW * kLegMax;
+    i = 0;
+    for (cParts* p = pl->pList; p; p = p->pList, i++) {
         if (!gLeg[i]) {
             continue;
         }
-        p->ang.x = wrap(p->ang.x + wrap(wang.x - p->ang.x) * w);
-        p->ang.y = wrap(p->ang.y + wrap(wang.y - p->ang.y) * w);
-        p->ang.z = wrap(p->ang.z + wrap(wang.z - p->ang.z) * w);
-        p->pos.x += (wpos.x - p->pos.x) * w;
-        p->pos.y += (wpos.y - p->pos.y) * w;
-        p->pos.z += (wpos.z - p->pos.z) * w;
-        p->scale.x += (wscale.x - p->scale.x) * w;
-        p->scale.y += (wscale.y - p->scale.y) * w;
-        p->scale.z += (wscale.z - p->scale.z) * w;
-        // the local matrix as partsMatCalc builds it; partsWorldCalc (cPlayer::move) takes it from there
-        RotMatrix(p->l_mat, &p->ang);
-        TransMatrix(p->l_mat, &p->pos);
+        Mtx walk;
+        if (gLegRoot[i]) {
+            // the thigh as the walk pose turns it against the model, under the aiming pose's hips
+            Mtx inv;
+            PSMTXInverse(p->pParent->mat, inv);
+            PSMTXConcat(inv, gWalkRot[i], walk);
+        } else {
+            PSMTXCopy(gWalkRot[i], walk);
+        }
+        Quaternion qa;
+        Quaternion qw;
+        Quaternion q;
+        C_QUATMtx(&qa, p->l_mat);
+        C_QUATMtx(&qw, walk);
+        C_QUATSlerp(&qa, &qw, &q, w);
+        Vec t;
+        t.x = p->l_mat[0][3];
+        t.y = p->l_mat[1][3];
+        t.z = p->l_mat[2][3];
+        PSMTXQuat(p->l_mat, &q);
+        TransMatrix(p->l_mat, &t);
         ScaleMatrix(p->l_mat, &p->scale);
     }
 }
@@ -341,7 +369,7 @@ void legs(cPlayer* pl)
 
 extern "C" {
 
-// Patch 0219 (cPlayer::move, right after the routines, the game thread): the walk motion on the legs while he
+// Patch 0900 (cPlayer::move, right after the routines, the game thread): the walk motion on the legs while he
 // moves aiming.
 void re4_player_after_routine(cPlayer* pl)
 {
@@ -359,7 +387,7 @@ void re4_camera_recenter(void)
     gRecenterAsked = true;
 }
 
-// Patch 0219 (cPlayer::keyConfig, the game thread, every frame of Leon's move before the routines read the keys).
+// Patch 0900 (cPlayer::keyConfig, the game thread, every frame of Leon's move before the routines read the keys).
 void re4_player_input(cPlayer* pl)
 {
     gCamOn = false;
@@ -380,7 +408,7 @@ void re4_player_input(cPlayer* pl)
     gLastPos = pl->pos;
 }
 
-// Patch 0219 (CameraQuasiFPS::calcBaseMatrix, after it took Leon's matrix): the camera's frame turned to the free
+// Patch 0900 (CameraQuasiFPS::calcBaseMatrix, after it took Leon's matrix): the camera's frame turned to the free
 // camera's yaw, at his position.
 void re4_free_cam_matrix(Mtx mat)
 {

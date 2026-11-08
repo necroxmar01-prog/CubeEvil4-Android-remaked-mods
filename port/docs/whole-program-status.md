@@ -3,6 +3,311 @@
 Diese Datei ist das Gedächtnis zwischen den Sitzungen. Jede Sitzung liest sie
 zuerst und aktualisiert sie am Ende (siehe `CLAUDE.md`).
 
+## Version 0.99.4-rc: drei Nutzerberichte ohne Kontext, r100 nach dem Sofortwechsel der Spielfigur (08.11.2026, Branch `work`, Patch 0220)
+
+Version 0.99.4-rc (versionCode 106), Releasetext `port/android-decomp/docs/releases/v0.99.4-rc.md` („Changes since
+v0.99.3.“, APK `CubeEvil4-0.99.4-rc.apk`; Known issues aus 0.99.3 übernommen, eine Zeile zu zu hoher Auflösung
+neu). Patch 0220 (nächste freie Nummer 0221). Berichte unter `E:\Development\Android\reports\0994-check-*`.
+
+1. **Bericht `0994-check-20261107-182125` (Xiaomi 2109119DG „lisa“, Snapdragon 778G / Adreno 642L, Android 14,
+   0.99.2-rc, EU-Discs, Spanisch).**
+   - **Die Discs sind verändert:** 172 bzw. 145 Dateien anders (`Evd`, `St1`–`St4`, `ss/Esp`, `op`, `etc`,
+     `sys/fst.bin`). Genau dieselben Zahlen wie im Bericht 191700 (05.11.2026, Samsung SM-A135M, Abschnitt 0.98.3
+     Punkt 4): derselbe Abzug geht offenbar herum, vermutlich eine spanische Fan-Vertonung/-Übersetzung. Was sich
+     prüfen ließ, passt: `etc/core.das` 2 338 208 Bytes (Original 2 337 856) und `SS/esp/option.dat` 306 880 (Original
+     299 648) liegen auf den Ersatzplätzen des Ports (Patches 0117/0121, die App prüft die Größe); die Szenen von r100
+     haben dieselben Größen wie das Original.
+   - **Die Neustarts am Rücksetzpunkt:** 18:10:37 der Sofortwechsel Krauser → Leon im Cheat-Menü („r100 starts again
+     at …“), 18:13:42 und 18:15:36 „Retry“ aus dem Pausemenü (START, dreimal A). Kein Tod: keine „die:“-Zeile,
+     Leben 1200/1200, kein „continue after a death“.
+   - **Fehler des Ports: die Szene im ersten Haus fehlte** („ARAM over: evd/r100s03.evd“, „r100::readEvent() : out of
+     memory“, später „ARAM over: st1/r100_01.dat (1000 times)“). Ursache: `switchNow` startet den Raum durch eine Tür
+     in sich selbst; der Raumstart speichert dabei auch den Rücksetzpunkt (`game.cpp` `GameSave.save(pSaveData, -1)`),
+     „Retry“ kommt also wieder dorthin. Mit Raum-Flag 13 gesetzt und 10 frei liest `R100Init` die Startszene s40
+     (2,2 MB) ins ARAM, aber nur `r100_StartEvent` (läuft bei Flag 13 frei) gibt sie frei: s03 passte nicht mehr in
+     den ARAM-Bereich der Daten (0x800000..0xD00000). Mit Flag 0 gesetzt (Wechsel hinter Bereich 6) lädt `R100Main`
+     s03/s20 nie wieder vor. Die EU- und US-`st1_0.rel` lesen dieselben vier Szenen unter derselben einen Bedingung
+     vor (`relcalls.py`), das Original verhält sich also gleich; nur der Sofortwechsel erzeugt diese Zustände.
+     **Patch 0220** (`r100.cpp`): s40 nur bei Flag 13 frei, s03 (bis Flag 3) und s20 wieder bei Flag 0.
+   - **Am PC geprüft (WSL `~/re4-0994/RE4` = 029d0167 + Patch, i686 -O2; neues Spiel über r120 mit START, Krauser,
+     `RE4_TEST_CHEAT_SET`, `RE4_TEST_PLACE=free+500:area=6`, Haus über `RE4_TEST_PLACE2`, `RE4_TEST_EM_KILL=…:12`;
+     Skripte `~/p0994/house2.sh`, `run.sh`, `bld.sh`):** ohne Patch genau das Bild des Berichts (EU:
+     ARAM over, Szene 5 Bilder lang); mit Patch Fall A (Wechsel vor Bereich 6), B (nach Bereich 6), C (nach der
+     Haus-Szene, vor dem Tod des Ganados) und D (Wechsel, dann „Retry“, `RE4_TEST_CONTINUE`) wie der Gegenlauf ohne
+     Wechsel: Haus-Szene ab Bild 1701 bis 3176, Szene nach dem Ganado ab 3177. Ohne Patch fehlten in B beide
+     Szenen; in C blieb s40 unnötig im ARAM. Fall A auch mit Debug- und US-Discs. `whole_build.sh i686` (O2) grün.
+   - **Tempo:** Der Spiel-Thread hält den Takt (11–13 ms Rechenzeit, 33,3 ms je Bild). Mit 60 FPS, „Native“
+     (2400×1080, 3D 1,667:1) und 2× braucht die GPU in r100 12–36 ms je Spielbild; 18-mal „the renderer was behind
+     … no in-between pictures for 5 s“, das Bild wechselt also zwischen 60 und 30. Die „GX core“-Zeilen mit
+     55–169 ms je Bild zählen die Pausen im App-Menü mit (gemessen von Bildkopie zu Bildkopie; jede solche Zeile folgt
+     auf eine Pause), ohne Pause 33,3–38,6 ms. **Nicht gebaut:** die Pausen aus dieser Messung herausnehmen.
+   - **Zweiter Lauf (18:16): Hänger bis 1,75 s.** Der Shader-Zwischenspeicher der App war beim Start leer (keine
+     Raumliste, kein „GX programs made ahead“, „0 programs from the cache“); die Programme entstanden beim ersten
+     Zeichnen (14 ms je Bild, einzeln bis 1752 ms). Im Lauf davor war er voll (9246 Programme). Dazwischen beendete
+     Xiaomi die App beim Wegwischen („SwipeUpClean“, `exit.txt`), 4 s später der Neustart; die App löscht
+     `cache/gx-programs` selbst nicht. **Vermutung:** das System räumte dabei den Cache-Ordner der App
+     (`getCacheDir`). Abhilfe: Punkt 4.
+   - **App:** die Warnung des Startbildschirms nach dem Import (`RoomFileCheck.warning`) nennt jetzt auch veränderte
+     Abzüge („damaged or modified (a fan translation or a mod, for example) … made for the original discs“) statt
+     nur „damaged“; `RoomFileCheckTest` prüft den Text. Der Fehlerbericht listete die Dateien schon.
+2. **Bericht `0994-check-20261108-051045` (Infinix X6882, Mali-G57 MC2, Android 14, 0.99.2-rc, US-Discs wie das
+   Original, 26 min r321–r327).** Kein Absturz, keine Fehlerzeile. Der Nutzer probierte viele Einstellungen
+   (Bildformat, Auflösung 2× bis 4×, FXAA, Nachschärfen, Potato, Merged draw calls, Lens flares).
+   - **Vorheriger Lauf, Ton („237 ran dry“):** bei 3,5× und 4× wartete der Kern 15–33 ms je Bild auf den Renderer,
+     das Spiel lief mit 44–52 ms je Bild (65–75 % Tempo), und „ran dry“ stieg in diesen Minuten von 18 auf 68 und
+     von 79 auf 230. Bei 2× und 2,5×: 33,5 ms, kein Warten. Der Benchmark des Geräts nennt 2× (30 FPS) bzw. 1×
+     (60 FPS). Known issue im Releasetext.
+   - **Letzter Lauf (2×, 30 FPS, Frame skip):** Spiel im Takt (33,5 ms, 0,1 ms Warten), Ton fast ohne Lücken
+     (21 in 26 min). Frame skip ließ etwa 6000 von rund 47 000 Bildern aus (≈ 13 %, in r327 bis 7 je Sekunde, nach
+     „Lens flares: off“ unter 2 je Sekunde): sichtbares Ungleichmaß. Der Render-Thread rechnet dabei selbst (CPU
+     900–1400 MHz auf den Kernen 6/7). Die letzte Minute vor „core: paused“ (r327) ist unauffällig.
+   - Bericht 3 ist dasselbe Gerät (0.99.1); **Vermutung:** derselbe Tester prüft 0.99.2. Nichts zu beheben;
+     Bitte an den Nutzer in der Meldung an die Hauptsitzung.
+3. **Bericht `0994-check-20261108-005243`:** dateigleich mit `0992-43-hud-cut-20261108-005243` (`diff -rq`, dort
+   nur das Bildschirmfoto zusätzlich): die Lebensanzeige bei „4:3“ in Menüs, behoben in 0.99.2 (Abschnitt 0.99.2
+   Punkt 8). Nichts Neues.
+4. **Shader-Speicher in einen Ordner, den Android nicht leert (Entscheidung des Projektinhabers, 08.11.2026,
+   Wortlaut über die Hauptsitzung: „Ja bitte deine Empfehlung zum Shader-Speicher.“).**
+   - **Ort:** `getNoBackupFilesDir()/shader-cache` statt `getCacheDir()/gx-programs` (neue Klasse
+     `ShaderCache.java`; `CoreActivity` gibt ihn dem Kern wie bisher als `RE4_GX_PROGRAM_CACHE`). Der Ordner hält
+     alles beider Renderer: GLES-Programme (`<stem>.bin`/`.key`), die Programmlisten je Raum (`room-NNN.keys`, beide
+     Renderer), Vulkan: SPIR-V-Speicher `vk-spirv.bin` (höchstens 160 MB), Pipeline-Cache des Treibers
+     `vk-pipelines.bin`, Pipeline-Listen je Raum `room-NNN.vkpipes`. Android und Aufräum-Apps leeren ihn nicht, und
+     er geht nicht in die Cloud-Sicherung (die Binärdateien gehören zu diesem Gerät). Die App-Liste
+     `gx-programs.keys` (Kopie aus den Assets) bleibt im Cache-Ordner; sie entsteht bei jedem Start neu.
+   - **Übernahme:** beim Start vor dem Kern einmal der alte Ordner herüber (als Ganzes umbenannt, beide liegen auf
+     derselben Partition; ist der neue schon da, Datei für Datei, die neuen gewinnen, `.tmp` nicht), dann der alte
+     weg. Logzeile „shader cache: moved from the cache folder (N files, X MB)“.
+   - **Grenzen und Aufräumen unverändert.** Nach einem Treiber-Update lädt nichts Veraltetes: GLES-Dateinamen
+     enthalten den Hash von `GL_RENDERER|GL_VERSION` (neuer Treiber → neue Namen; `WarmProgramCache` löscht die alten
+     als „old files removed“; geschrieben wird über eine Zwischendatei; `glProgramBinary` mit Prüfung des
+     Link-Status). **Vulkan neu:** `PipelineCacheFits` (`gx_vk.cpp`) übernimmt `vk-pipelines.bin` nur, wenn sein
+     Kopf (Länge, Version 1, Hersteller, Gerät, `pipelineCacheUUID` des Treibers) zu diesem Gerät passt; sonst
+     Logzeile „… left out: another driver (an update)“ / „another GPU“ / „no header of version 1“, und die nächste
+     Sicherung ersetzt die Datei. SPIR-V hängt nicht am Treiber.
+   - **Fehlerbericht:** neue Datei `shader-cache.txt` (Ort, was der Start getan hat, Größe je Art: GLES-Programme,
+     Raumlisten, SPIR-V, Pipeline-Cache, Pipeline-Listen, alter Ordner noch da?); `device.txt`/`device-now.txt`
+     nennen den Ort.
+   - **Management → „Shader cache“ / „Clear shader cache“** mit Hilfetext und Rückfrage (11 Sprachen,
+     `check_translations.py` ok, 322 Texte): „Restart“ merkt das Leeren vor (`ShaderCache.requestClear`) und
+     startet das Spiel neu wie beim Renderer-Wechsel (`restartIntoGame`); geleert wird beim nächsten Start, bevor
+     der Kern den Ordner öffnet (der laufende Renderer hat seine Dateien offen). Fortschritt seit dem letzten
+     Speichern geht verloren (steht im Text).
+   - **Berührte Vulkan-Dateien:** nur `port/android-decomp/app/src/main/cpp/gx_vk.cpp` (`PipelineCacheFits`, Aufruf
+     in `SetProgramCache`). Sonst: `ShaderCache.java` (neu), `CoreActivity.java`, `CoreMenu.java`, `CoreLog.java`,
+     `strings_ingame.xml` (11), Tests `ShaderCacheTest.java` (neu), `CoreMenuLayoutTest.java`
+     (`managementClearsTheShaderCacheAfterAsking`).
+   - **Geprüft am PC:** `gx_vk.cpp` übersetzt (WSL, `port/build/app-host-gl` mit `RE4_BUILD_VK_CHECK=ON`,
+     `-Werror`); `gx_chunk_render` mit `RE4_GX_API=vulkan` (lavapipe) dreimal auf denselben Ordner: Lauf 2 nimmt den
+     Pipeline-Cache von Lauf 1, Lauf 3 mit verfälschter UUID meldet „left out: another driver (an update)“, Bilder
+     bytegleich. `ShaderCache` mit `javac` und einem Prüfprogramm (Umbenennen, Zusammenführen, Leeren,
+     Beschreibung): alles ok. `gradlew testCoreDebugUnitTest testClassicDebugUnitTest` mit eigenem Gradle-Ordner
+     (`GRADLE_USER_HOME=%TEMP%\gh0994`; der gemeinsame Gradle-Speicher des PCs ist seit 08.11. 12:16 beschädigt,
+     `caches\8.11.1\transforms` ohne `metadata.bin`): je 65 Tests, 0 Fehler, 1 übersprungen (die Menübilder),
+     darunter `ShaderCacheTest`, `managementClearsTheShaderCacheAfterAsking` und `RoomFileCheckTest` (Punkt 1).
+   - **Nicht geprüft:** auf einem Gerät (Übernahme eines gefüllten Ordners, Knopf, Neustart, Bericht).
+- **Nicht geprüft:** Patch 0220 auf einem Gerät; die veränderten Discs selbst (nicht vorhanden).
+
+## Version 0.99.3-rc: Warnung vor einer anderen Spielfigur, Potato-Modus mit Partikeleffekten und Schatten & Licht, Vulkan als Option (08.11.2026, Branch `work`, Patch 0219)
+
+**3. Vulkan (experimentell) als zweiter Renderer (Entscheidung des Projektinhabers, 08.11.2026, Wortlaut auf die
+Frage der Hauptsitzung: „Ja, in 0.99.3“).** Der Branch `vulkan` ist mit `work` 9cbf5659 zusammengeführt. Was gebaut
+und geprüft ist, steht im Abschnitt „Vulkan als zweiter Renderpfad: Bau“ weiter unten (Etappen E0–E9, zwei
+Gerätetests am Retroid).
+- Display → GRAPHICS → Renderer „OpenGL ES / Vulkan (experimental)“; Standard bleibt OpenGL ES.
+- Vulkan erst ab Android 10 mit Vulkan 1.1.
+- Rückfall auf GLES mit Meldung, Absturz-Wächter, `renderer.txt` im Fehlerbericht.
+- **Potato-Modus** (Partikel, Schatten & Licht, Punkt 2) wirkt unter Vulkan genauso: Er arbeitet im Spielkern
+  (`runtime/potato.cpp`, Patch 0219), bevor gezeichnet wird; der Renderer bekommt nur weniger Zeichnungen.
+- **Releasetext:** drei New-Zeilen und ein Known issue (erstes Auftreten einer Szene kann ruckeln, ab Android 10).
+- **Geprüft nach dem Zusammenführen (PC, WSL):**
+  - **GLES gegen `work` 9cbf5659:** Basis aus dessen Quellen gebaut. 4 300 Bilder bytegleich, auch die Arbeitszähler.
+    Die 71 Bilder der Art „flares“ sind nur verschieden, weil das Prüfprogramm von `work` die Schalter
+    `RE4_GX_FLARES`/`RE4_GX_DOF_STRONG` noch nicht kennt (seine „flares“-Bilder sind die normalen). Gegen die frühere
+    Basis mit demselben GL-Code sind auch sie bytegleich; `work` änderte keine `gx_*`-Datei.
+  - **Vulkan:** Arten normal, 4× MSAA, Filter, PSone, Reflexe/Autofokus und Native in allen 10 Folgen: 0 Meldungen,
+    kein Bild über der Grenze. `gx_gl_check` 0 Fehler mit den fünf Vulkan-Prüfungen.
+  - **Kern:** `RE4_OPT=2 whole_build.sh i686` grün, darunter der Test `potato`. `runtime-test vsync` schlug nur
+    unter voller Last fehl (drei Bauten gleichzeitig) und ist ohne Last zweimal in Ordnung.
+  - **App:** Java-Tests 59/59 (1 übersprungen), `check_translations.py` 318 Texte in 11 Sprachen in Ordnung,
+    Gradle-Bau beider ABIs (0.99.3-rc, versionCode 105).
+  - **Potato unter Vulkan:** Mit den aufgezeichneten Folgen nicht prüfbar, weil der Potato-Modus vor GX im Kern
+    wirkt. Geprüft ist er im Kern (Test `potato`), der Renderer bekommt nur weniger Zeichnungen.
+  - **Nicht geprüft:** Gerät (Läufe 2–4 macht der Projektinhaber mit diesem Bau).
+- **Läufe 2–4 am Retroid mit 0.99.3-rc (`e8a176c0`, eigener Bau des Projektinhabers, 08.11.2026; Daten
+  `E:\Development\Android\reports\0993-vulkan-devtest-20261108`):**
+  - **Drehen:** Vulkan mit 60/s, Swapchain einmal gebaut (pre-rotated), eine Spitze von 413 ms gleich am Anfang
+    (kalte Szene). Home und Drehen stehen nicht im Protokoll (nach 91 s von Hand beendet); die Hauptsitzung fragt
+    nach.
+  - **Rückfall:** richtig (Meldung, danach GLES mit 60/s).
+  - **Menü:** Der Neustart ins Spiel mit Vulkan lief sauber (neuer Prozess, Speicher geladen, 403 Programme und 486
+    Pipelines in 156 ms vorab gebaut). Das Testskript hielt den neuen Prozess aber für einen Absturz und beendete den
+    Lauf.
+  - **Behoben in `port/scripts/test-core-app.ps1`:** Wechselt die Prozessnummer und steht seit dem Start eine neue
+    Zeile „the app restarts into the game“ (`RE4Input`) im Protokoll, wartet das Skript bis 30 s auf den neuen
+    Prozess und beobachtet ihn weiter (Bilder, Kernprozess, am Ende das Protokoll beider Prozesse). Jede solche Zeile
+    zählt einmal; ein neuer Prozess ohne sie bleibt ein Absturz.
+  - **Geprüft (PC):** Das Skript liest PowerShell ohne Fehler ein. Die Erkennung lief gegen ein nachgestelltes
+    ADB: mit Zeile Neustart, ohne neue Zeile Absturz, eine zweite Zeile wieder Neustart. **Nicht geprüft:** Gerät
+    (der Menü-Lauf kommt noch einmal).
+  - **Benchmark unter Vulkan (Retroid, 08.11.2026):** dieselben Stufen wie unter OpenGL ES, ×3 für 30 FPS und ×2
+    für 60 FPS (Wortlaut des Projektinhabers: „Ein Benchmark auf Vulkan liefert nun bei 30 FPS wie zuvor x3
+    Resolution und bei 60 FPS x2 Resolution. Also idente Dynamic Werte wie mit OpenGLES“). Auf dem Adreno 650 ist
+    Vulkan damit gleich schnell; dort begrenzt der Grafikchip, nicht der Treiber.
+  - **Home und Drehen fehlten im Protokoll des Laufs „drehen“** (der Projektinhaber hat beides gemacht).
+    - **Ursache:** Die App schrieb ihren Lebenszyklus nicht ins Protokoll. Eine 180°-Drehung ist mit
+      `sensorLandscape` kein Konfigurationswechsel (Querformat bleibt Querformat, die Größe bleibt).
+    - Unter Vulkan zeigt sie sich nur an der Drehung der Fläche, und Android muss dafür kein „suboptimal“ melden.
+    - **Jetzt in `CoreActivity` (beide Renderer):**
+      - „activity started/resumed/paused/stopped“ und „window focus: on/off“;
+      - „picture surface (Vulkan|OpenGL ES): made / B×H / gone“;
+      - „display rotation: N“ beim Fortsetzen und „display rotation changed to N“ (`DisplayManager.DisplayListener`,
+        solange die App vorne ist).
+    - **Der Vulkan-Renderer** prüft die Drehung der Fläche zusätzlich einmal je Sekunde (60 Bilder) und baut bei
+      einer Änderung die Swapchain neu („Vulkan screen: the display turned …“).
+    - **`test-core-app.ps1`** behält auch die Systemzeilen, die die App beim Namen nennen (Start, Home, Zurückholen);
+      die Zeilen der App selbst (Tags `RE4…`) gingen nie verloren.
+
+Version 0.99.3-rc (versionCode 105), Releasetext `port/android-decomp/docs/releases/v0.99.3-rc.md` („Changes since
+v0.99.2.“, APK `CubeEvil4-0.99.3-rc.apk`). Der versionName ist wie seit 0.99.1 der spätere GitHub-Tag. Patch 0219
+(nächste freie Nummer 0220).
+
+1. **Warnung vor Ada, HUNK, Krauser und Wesker (Wunsch des Projektinhabers, 08.11.2026).** Wortlaut: „Im CHEAT Menu
+   soll bitte beim Auswählen einer anderen Spielfigur als Leon ein rötliches Popup erscheinen, das der User bestätigen
+   muss. Hinweistext ‚Achtung: Diese Spielfigur ist nicht für das Hauptspiel gedacht, es können und werden Fehler
+   auftreten, diese sind unumgänglich!‘ und mit OK bestätigen.“
+   - **App-Menü → Cheats → Spielfigur** (`CoreMenu.playerCharacter`, neu `warnCharacter`): Wer eine Figur außer Leon
+     wählt, bekommt zuerst den Hinweis, auch beim Wechsel von einer dieser Figuren zur anderen. Leon und die schon
+     gewählte Figur wechseln sofort wie bisher. Der Hinweis ist der übliche Dialog des Menüs (`AlertDialog`) in Rot:
+     dunkelroter Grund (`WARN_RED` 0xff4e1f1c), Rand in der Farbe des „Update“-Knopfs (2 dp). Aufbau nach Wunsch des
+     Projektinhabers (08.11.2026, nach der ersten Fassung mit Titel links und „OK“ rechts unten): **oben mittig der
+     Name der gewählten Figur**, darunter **mittig** der Text in der Schriftfarbe des Menüs (zuerst linksbündig, mittig
+     auf Wunsch des Projektinhabers vom 08.11.2026; scrollt bei großer Schrift, der Knopf
+     bleibt sichtbar), **unten mittig ein Knopf „Ich habe verstanden“** im Rot des „Update“-Knopfs mit dem
+     Fokusrahmen des Menüs (eigener Inhalt per `setView`, ohne die Knöpfe des `AlertDialog`).
+   - **Nur dieser Knopf wechselt** (Tippen, Klick, A, Enter). **Zurück, B, Esc, START, SELECT** und ein Tippen neben
+     den Dialog schließen ihn ohne Wechsel; die Auswahl bleibt bei der bisherigen Figur (die Knöpfe ändern sich erst
+     mit dem Knopf des Hinweises). Die
+     übrigen Controller-Tasten tun im Dialog nichts: Android nähme sonst X und START als Bestätigung (Ersatztasten des
+     Systems). A geht wie im Menü als Bestätigungstaste an den Knopf.
+   - **Texte in 11 Sprachen:** `ingame_cheat_character_warning` (Deutsch wörtlich wie gewünscht, Englisch „Warning:
+     This character is not meant for the main game. Bugs can and will occur, and they cannot be avoided!“),
+     `ingame_understood` (Englisch „I understand“, Deutsch „Ich habe verstanden“, Spanisch „Entendido“, Französisch
+     „J'ai compris“, Italienisch „Ho capito“, Portugiesisch „Entendi“, Russisch „Понятно“, Arabisch „فهمت“, Chinesisch
+     „我已了解“, Hindi „मैंने समझ लिया“, Indonesisch „Saya mengerti“; ersetzt `ingame_ok`), im Hilfetext der Spielfigur
+     ein Satz vor den Spezialkostümen („Characters other than Leon are not made for the main game, so choosing one
+     shows a warning first: "I understand" switches, Back keeps your current character.“).
+   - **Geprüft am PC:** `check_translations.py` ok (305 Texte je Sprache); `CoreMenuLayoutTest.cheatsPageSwitchesSendTheirBits`
+     erweitert (Hinweis mit Name mittig oben, Text mittig darunter und genau einem Knopf mittig darunter; vor dem Knopf
+     nichts gesendet, Auswahl unverändert; B, Zurück, Esc, START, SELECT schließen ohne Wechsel, X tut nichts, A =
+     der Knopf; Ada → Wesker fragt, Leon und die gewählte Figur fragen nicht); `CoreMenuShotTest` zeichnet den Hinweis je Sprache (`<sprache>-character-warning.png`, 500 dp
+     breit wie auf dem Retroid Pocket Flip 2; Bilder in `E:\Development\Android\reports\0993-character-warning\`):
+     alle 11 Sprachen brechen sauber um, Arabisch von rechts. App-Tests 59 grün (core und classic, einer übersprungen:
+     die Bilder ohne `RE4_MENU_SHOTS`), `compileClassicDebugJavaWithJavac` und `compileCoreDebugJavaWithJavac` ok.
+     **Nicht geprüft:** Gerät (Controller, Touch, Tastatur und Maus am echten Dialog).
+
+2. **Potato-Modus: Partikeleffekte und Schatten & Licht, Low-Poly-Ganados geprüft (Wunsch eines Nutzers über den
+   Projektinhaber, 08.11.2026).** Wortlaut des Nutzers (Englisch): „VFX – A Setting to disable (or heavily tone down)
+   effects like muzzle flashes, water splashes, blood splashes, and fire effects … Shadows/Lighting – disables shadows
+   and tones down lighting effects. Low-Poly Ganados – Uses the low-poly models of ganados seen in that one cabin
+   cutscene instead of the usual models. (I don't know if this one would work)“.
+   - **App-Menü → Leistung → Potato-Modus**, zweite Zeile unter Wetter-/Spezialeffekten: **„Partikeleffekte · Normal /
+     Weniger / Keine“** (jeder Druck schaltet weiter wie „Nachschärfen“; Einstellung `particleEffects` 0/1/2, ab Werk
+     Normal) und **„Schatten & Licht · An/Aus“** (`shadowsLight`, ab Werk an). `CoreBridge.potatoMask`: Bits 2..3 die
+     Stufe, Bit 4 Schatten & Licht aus (`re4_core_set_potato`, auch über den 32-bit-Kernprozess, Nachricht 34
+     unverändert). Fußtext `ingame_potato_help` neu für alle vier Schalter, neue Texte `ingame_potato_particles`,
+     `ingame_particles_normal/less/none`, `ingame_potato_shadows`, 11 Sprachen (`check_translations.py` ok, 310 Texte).
+   - **Kern (`runtime/potato.cpp`, Patch 0149 unverändert):** Die Partikelstufe zählt nur Figuren, deren Trans-Funktion
+     nichts anderes tut als zeichnen (`drawsOnly`: esp 0x00–0x03, 0x05–0x0B, 0x0D, 0x10, 0x12, 0x17, 0x1A, 0x1B, 0x40–0x42,
+     0x48, 0x49, 0x4B, 0x4F). „Weniger“ lässt jede zweite weg (nach ihrem Platz im Effekt-Speicher: eine Figur ist ihr
+     ganzes Leben lang sichtbar oder nicht, kein Flackern): Blut (Spritzer 0x1A, Lachen 0x10), Staub, Rauch, Spritzer,
+     Trümmer, Mündungsfeuer und -rauch an Leons Waffe (Besitzer `EFF_WEP*` an einem Modell), frei fliegende leuchtende
+     Teilchen (additiv, Zielfaktor ONE: Feuer, Funken, Explosionen). „Keine“ lässt die erste Art ganz weg und zeichnet
+     von den leuchtenden Teilchen weiter jede zweite: **Feuer und Explosionen bleiben als Gefahr sichtbar**. Immer
+     bleiben: alles von `EFF_CORE` (die Trefferstelle: Blutstoß beim Treffer, Staub einer Kugel in der Wand, auch Minen
+     und Granaten), Raumcode-Effekte (`EFF_ROOM`), Leuchtendes an einem Modell außer Leons Waffe (Dynamit-Zündschnur,
+     Fackeln), der Laser (0x19), alles, was keine reine Figur ist (Lichter, Bildfilter, Beben, Töne, Seile, Tuch), die
+     eigenen Figuren der Raumtabelle (dafür gibt es die Wetter-/Spezialschalter) und alles in Ereignissen.
+     **Schatten & Licht aus:** Patch **0219** (`shadow.cpp`, `foot_shadow.cpp`): `ShadowTrans` kehrt nach dem Löschen der
+     Schattenverwalter und der beiden Flags zurück (keine Schattentexturen samt EFB-Kopien, kein zweites Zeichnen der
+     Empfänger, keine projizierten Lichtbilder auf Figuren), keine Fußschatten; dazu in `re4_esp_skip` Lichtschein
+     (esp 0x0E), Lichtstrahlen (0x14) und Lichtblüte (0x45, der Filter00-Schein). Die Lichter der Räume selbst bleiben,
+     nichts wird dunkler. In Ereignissen und Zwischensequenzen bleiben alle Effektfiguren, nur die Schatten fallen auch
+     dort weg (siehe Messungen).
+   - **Spielablauf unverändert:** Nur `Esp0b_Trans` (Zittern) nimmt beim Zeichnen Zufallszahlen des Spiels
+     (`fRand1_1`, `Core_flg` 0x8000; alle anderen Trans-Funktionen geprüft: nur in `move` oder mit eigenem Seed); eine
+     weggelassene 0x0B nimmt ihre zwei Zahlen trotzdem. Geprüft: Dorfkampf r101 mit „weniger“, „keine“ und „Schatten &
+     Licht aus“, alle 178 „em:“-Zeilen (Erscheinen, Treffer, Tod der Gegner) Bild für Bild gleich wie ohne.
+   - **Messungen am PC** (i686 -O2, Debug-Discs; Grafik = App-Renderer `gx_chunk_render` auf llvmpipe, Maßstab 2,
+     Mittel über die warmen Bilder 3–6 von je vier Bildserien; Spiel-Thread = Prozessorzeit des ganzen Laufs, 3 Läufe):
+     | Szene | Einstellung | Zeichnungen | Dreiecke | EFB-Kopien | Grafikzeit (llvmpipe) |
+     |---|---|---|---|---|---|
+     | Dorfkampf r101 (Leon zielt automatisch und schießt, 16 Bilder) | normal | 648 | 69 201 | 8,2 | 50,7 ms |
+     | | Partikel weniger | 592 (−9 %) | 69 090 | 8,2 | 48,1 ms (−5 %) |
+     | | Partikel keine | 534 (−18 %) | 68 972 | 8,2 | 45,7 ms (−10 %) |
+     | | Partikel keine, Bilder mit viel Blut (1939–1942) | 829 → 636 (−23 %) | | | 58,7 → 50,6 ms (−14 %) |
+     | | Schatten & Licht aus | 604 (−7 %) | 69 113 | 8,2 | 51,0 ms (gleich) |
+     | 13 Raum-Debugstarts im Spiel (r102 … r31b, 4 Bilder je Raum) | Schatten & Licht aus | −24 bis −55 je Bild (−4 bis −22 %) | | gleich | gleich (±3 ms Streuung) |
+     | Zwischensequenz r228 | Schatten & Licht aus | 498 → 440 | 111 425 → 94 750 | 18,8 → 14,8 | 82,6 → 72,6 ms (−12 %) |
+     | Zwischensequenz r206 | Schatten & Licht aus | 244 → 162 | 37 955 → 25 670 | 16 → 10 | 42,7 → 34,1 ms (−20 %) |
+     | Zwischensequenz r215 | Schatten & Licht aus | 287 → 191 | 65 299 → 38 656 | 4 → 1 | 28,9 → 21,6 ms (−25 %) |
+     | Zwischensequenz r11b | Schatten & Licht aus | 583 → 504 | 83 221 → 57 569 | 16 → 10 | 53,8 → 41,8 ms (−22 %) |
+
+     Spiel-Thread (Prozessorzeit des ganzen Dorfkampf-Laufs, 3200 Bilder samt Laden, Mittel aus 3 Läufen): normal
+     12,37 s, Partikel weniger 12,22 s (−1 %), keine 11,93 s (−3,6 %), Schatten & Licht aus 12,16 s (−1,7 %), keine und
+     Schatten aus 11,57 s (−6,5 %); auf die Kampfbilder allein bezogen etwa doppelt so viel. **Echte Schattenbilder**
+     (Schattentexturen) zeichnet das Spiel fast nur in Zwischensequenzen: Suchlauf über die Debugstarts von 90 Räumen
+     (vorübergehende Log-Zeile nur in der PC-Kopie), Schattentexturen nur in r11b, r206, r215, r227, r228, r22b, r300 und
+     r316, jedes Bild davon in einem Ereignis. Deshalb gilt „Schatten & Licht aus“ für die Schatten **auch in
+     Zwischensequenzen** (Entscheidung des Projektinhabers, 08.11.2026, auf die Frage der Sitzung, Wortlaut: „So
+     lassen.“; das Bild ändert sich dort kaum, r206: Luis' Gesicht ohne sichtbaren Unterschied); die Effekte der
+     Ereignisse bleiben.
+   - **Low-Poly-Ganados: nicht umgesetzt.** In der Hütten-Szene (r11c, `r11cs10.evd`) sind die Ganados **dasselbe
+     Modell wie im Spiel**: `em/em10/em1000.bin` (34 Gelenke, 770 Ecken, 32 352 Bytes) ist bis auf die letzten 4
+     Füllbytes gleich dem Eintrag 0x1B8 von `em10.drs`. Es gibt keine einfacheren Ganado-Modelle auf der Disc; die übrigen
+     Szenenmodelle (`evm1000` 1787 Ecken, `evm1600` 1059, `evm1100` 907) sind nicht kleiner und nur für die Szene gemacht.
+     Der Eindruck „Low Poly“ kommt wohl von Entfernung und Licht der Szene.
+   - **Werkzeuge (Scratchpad dieser Sitzung, WSL `~/p0993`):** `ab.sh` (Lauf mit `RE4_POTATO` und GX-Serien, gezeichnet),
+     `abcmp.py` (Vergleich), `tour.sh` (Raum-Debugstarts mit/ohne), `census.py` (`RE4_ESP_CENSUS` nach Besitzergruppen),
+     `evdmodels.py`/`cmpem.py` (Modelle der Ereignisdateien).
+   - **Tests:** Kern-Test `potato` (`game_probe.cpp re4probe_potato`) um 19 Fälle erweitert (je zwei Figuren nebeneinander:
+     „weniger“ nimmt genau eine, „keine“ beide bzw. bei Leuchtendem eine; Trefferstelle, Raumcode, Zündschnur am Modell,
+     Laser, Bildfilter, Ereignis-Effekte bleiben; Mündungsfeuer an der Waffe fällt; die zwei Zufallszahlen der 0x0B;
+     Lichtschein/-strahl/-blüte; keine Schatten, auch im Ereignis, dessen Lichtschein aber bleibt).
+     `RE4_OPT=2 whole_build.sh i686`: alle Prüfungen grün. `CoreMenuLayoutTest`: die zwei neuen Knöpfe in der zweiten
+     Potato-Zeile, ab Werk wie bisher, gesendete Bits 4, 8, 8|16, 1|8|16, 1|16, 0; Seitenmaß aller Sprachen; App-Tests 59
+     grün (core und classic), Java beider Varianten und das native `externalNativeBuildCoreDebug` übersetzt.
+   - **Nicht geprüft:** Gerät (Retroid): GPU-Zeit und Bild mit Adreno; Wasser-Spritzer beim Waten (Raum mit Wasser im
+     Kampf), Verdugo-Kampf und Explosionen mit „Keine“.
+
+4. **Ada als Spielfigur: vornübergebeugt, „Oberkörper nackt“ (Nutzer-Bildschirmfoto über den Projektinhaber,
+   08.11.2026, ohne Fehlerbericht; `E:\Development\Android\reports\0993-ada-pose-20261108\screenshot-ada-castle.jpg`).**
+   Ada (Cheat „Player character“) im Schloss, Halle mit Schreibmaschine und Kandelaber, TMP mit 100 Schuss, Leben etwa
+   70 % (Ring grün), 60 FPS an („61 FPS (Layar)“, Indonesisch), ferne Kamera; sie steht stark nach vorn gebeugt, Arme
+   hängend, Kopf unten, an der Brust spitze rote Zacken des Kleids. **Nicht behoben, Ursache nicht sicher gefunden.**
+   - **„Oberkörper nackt“ ist kein Fehler:** Adas Kleid ist rückenfrei mit gekreuzten schwarzen Riemen (ihr eigenes
+     Modell, am PC mit normaler Haltung in r214, r20e, r209 genauso).
+   - **Ausgeschlossen am PC (i686, Debug-Discs, Ada über `RE4_CHEATS=64`, TMP über `RE4_TEST_WEAPON`):** Stehen ohne
+     Eingabe (4 000 Bilder r20e, Routine bleibt 0/0), Gehen mit TMP samt den 60-FPS-Zwischenbildern (`RE4_GX_INTERP`,
+     r214: alle Zeichnungen zugeordnet, Bild sauber), **alle 47 eigenen Bewegungen** ihres Archivs (0x1B–0x63, keine
+     gebeugte Haltung), die von Leon geliehenen 0x26, 0x46, 0x55, 0x57 (Verzweiflung) und 0x5B (Ducken: hockt tief,
+     „Invalid parts 110“). **Ashleys Tod** (Spieler-Routine 6, „Verzweiflung“ mit Leons Bewegung 0x57/0x58, die Ada fehlt):
+     die Anzeige verschwindet und nach etwa einer Sekunde kommt „Mission Failed“ – auf dem Nutzerbild ist die Anzeige
+     da, also nicht diese Lage. Ducken an niedrigen Stellen (Bereich Typ 0xE „stoop“) gibt es in den Schlossräumen nicht
+     (nur r107). In vier Schlossräumen mit Gegnern (r204, r20a, r212, r216, je 3 000 Bilder) griff niemand Ada an.
+   - **Wahrscheinlich:** eine Lage, in der Ada eine Bewegung spielt, die für Leons Körper gemacht ist (z. B. ein Griff
+     eines Gegners von hinten aus dessen Datei, wie in Patch 0195 für Ada beschrieben: „Leons Bewegungen auf ihrem
+     kleineren Skelett“); die Zacken am Kleid passen zu einem fremden Skelett. Ohne Fehlerbericht ist die Lage nicht
+     sicher zu finden; eine Ersatzbewegung für eine unbekannte Lage wäre geraten. Bitte an den Nutzer: Fehlerbericht
+     direkt danach (App-Menü → Verwaltung → Bericht senden) oder ein kurzes Video. Solche Fehler sammelt Issue #140;
+     der neue Warnhinweis (Punkt 1) weist auf sie hin.
+   - **Neue Testhilfen (`state_trace.cpp`):** `RE4_TEST_ASHLEY_DIES="free+N"` (Ashleys Leben einmal 0: die Verzweiflung
+     vor „Mission Failed“), `RE4_TEST_PL_MOTION="free+N:IDX[-LAST/EVERY][,SEQ][,own]"` (eine Bewegung aus Leons Archiv
+     bzw. mit `,own` aus dem eigenen auf der Spielfigur, gehalten in Routine 6/1; mit `-LAST/EVERY` alle Bewegungen
+     (Eintrag „FCV“) nacheinander). Skripte im Scratchpad dieser Sitzung (`motsweep.sh`, `motsweep2.sh`: Bilderbogen je
+     Bewegung). `RE4_OPT=2 whole_build.sh i686` grün.
+   - **Nicht geprüft:** Gerät; die Lage des Nutzers selbst (unbekannt).
+
 ## Version 0.99.2-rc: Tor nach den zwei El Gigantes, Touch-Layout beim Export, Ashleys Rock-Reaktion, Stick-Messung, Stick-Einstellungen, Controller-Vibration, Gegenstands-Randomizer, Lebensanzeige bei „4:3“ in Menüs, Knöpfe „Spieldaten“, Filter „Nachschärfen“ (07./08.11.2026, Branch `work`, Patches 0216–0218)
 
 Version 0.99.2-rc (versionCode 104), Releasetext `port/android-decomp/docs/releases/v0.99.2-rc.md` („Changes since
@@ -2092,6 +2397,323 @@ Verdrängung) – im Inventar nie. **Ursache nicht gefunden.** Offen: (1) neuer 
 mit `RE4_AUDIO_WAV`, Debug- gegen US-Discs; `retail_code.py`: die `SndCall`-Nummern der US-`Sscrn.rel` in
 `BuyMenuSelect`/`BuyItemNum`/`SellMenuSelect`/`LvUpMenuSelect` gegen den Prototyp, dazu die SITs dieser Nummern in der
 US-Kern-Tonbank (Lautstärke, Typ). Die Händlerstimme (Ereignis-Streams 0xB4–0xC2) bleibt am Rand mitzuprüfen.
+
+## Vulkan als zweiter Renderpfad: Bau (seit 07.11.2026, lokal, Branch `vulkan`)
+
+**Entscheidungen des Projektinhabers (08.11.2026, Wortlaut „Ja ich akzeptiere alle deine Empfehlungen“):** Vulkan
+erst ab Android 10 mit Vulkan 1.1 (darunter nur OpenGL ES); glslang aus dem NDK mit Lizenztexten, kein VMA (eigener
+Speicherverwalter `vk_memory`); die APK darf etwa 2–3 MB größer werden; die ersten Test-APKs dürfen Extras unter
+Vulkan noch auslassen, fertig erst mit allen. Außerdem (08.11.2026): alle Etappen bis zum Ende durchbauen, danach
+am Gerät testen; Test-APKs mit dem Debug-Schlüssel und `versionCode` ≥ 105 (auf dem Retroid ist 0.99.3-rc mit 105).
+
+Auftrag des Projektinhabers (07.11.2026, über die Hauptsitzung): einen zweiten Renderpfad über Vulkan planen und
+bauen, zusätzlich zu GLES (GLES bleibt Standard und Rückfall), Branch `vulkan` (von `master` 0.99.2-rc,
+`a6b3945f`). Die Entscheidung vom 29.10.2026 („Vulkan bis auf Weiteres ausgeschlossen“) ist damit aufgehoben.
+
+- **Plan:** `port/docs/vulkan-bauplan.md` – Stand seit der Studie (Nachschärfen, PSone, Linsenreflexe, Dynamic mit
+  Benchmark, Native, Minikarte …), Aufbau (gemeinsamer GX-Teil `GxRenderer`, Schnittstelle `GxBackend`, Backends
+  GL und Vulkan), Etappen E0–E9 mit Prüfung am PC und am Gerät, alle Pflichtpunkte (SPIR-V, Pipeline-Cache,
+  Durchgänge für Kachel-GPUs, Synchronisation, Swapchain/Pre-Rotation, Pausieren, Dynamic, Formate und Filter,
+  Bericht und Rückfall, Mindestversion, APK-Größe, Lizenzen), Zeitplan 45–69 Arbeitstage plus Testerrunden.
+- **Offene Fragen an den Projektinhaber:** Mindestversion (Vorschlag Android 10 + Vulkan 1.1), glslang aus dem NDK
+  ja / VMA nein (eigener Speicherverwalter), APK etwa +2–3 MB, anfangs fehlende Extras unter Vulkan in Test-APKs.
+- **Lizenzen (Vermerk):** glslang 11.11.0 aus dem NDK r28 (`sources/third_party/shaderc/third_party/glslang`):
+  BSD-3-Clause, BSD-2-Clause, MIT-ähnlich (Khronos), Apache-2.0 (`SPIRV/bitutils.h`, `hex_float.h`), GPL-3.0 mit
+  Bison-Ausnahme (`glslang_tab.cpp`, erzeugte Grammatik). Noch nichts davon eingebaut.
+- **Stand:** Etappenstand in der Tabelle am Ende des Bauplans.
+- **E0 Werkzeuge (07.11.2026, fertig am PC):** neu in `port/android-decomp/app/src/main/cpp`: `vk_api.h/.cpp`
+  (Vulkan-Funktionen per `dlopen` von `libvulkan.so`, als Zeiger im Namensraum `re4vk`, damit sie nie mit den
+  Symbolen des Laders kollidieren), `vk_context.h/.cpp` (Instanz, Gerät, Warteschlange, Speicherarten,
+  Formatwahl, Prüfschicht mit Zählern, `Describe()` für den Bericht: Vulkan-Version, Gerät, Treiber),
+  `vk_shader.h/.cpp` (GLSL 450 → SPIR-V 1.0 mit glslang, beliebiger Thread), `cmake/glslang.cmake` (glslang 11.11.0
+  aus dem NDK: `ANDROID_NDK`, `ANDROID_NDK_HOME/ROOT` oder `/opt/android-ndk-r28c`; ohne HLSL und Optimierer;
+  `build_info.h` aus `CHANGES.md`), `third_party/glslang/LICENSE.txt` (die Hinweise aller gebauten Dateien nach
+  Lizenz gruppiert, dazu der Text der Apache-Lizenz 2.0 aus der `NOTICE`-Datei des NDK). CMake: Option `RE4_VULKAN`
+  (an), Bibliothek `re4_vulkan`; am PC mit `RE4_BUILD_VK_CHECK=ON` das Prüfprogramm `tools/vk_probe.cpp`. Für Android
+  wird `re4_vulkan` mitgebaut, aber noch nicht in `libre4decomp.so` gelinkt (die APK ändert sich nicht).
+  `port/tools/vk_tools_linux.sh` packt `libvulkan-dev`, `vulkan-validationlayers`, `spirv-tools`, `glslang-tools`
+  und `vulkan-tools` ohne Root nach `~/vk-tools` (`. ~/vk-tools/env.sh`); `whole_setup_linux.sh` installiert sie mit
+  Root.
+  **Geprüft (WSL, Baum `~/re4-vk/RE4`):** `vk_probe` auf lavapipe (Mesa 25.2.8, Vulkan 1.4.318) mit Prüfschicht
+  1.3.275, auch mit Synchronisationsprüfung: Shader übersetzt (erster Aufruf 76 ms samt Aufbau von glslang), ein
+  falscher abgelehnt mit Meldung, Tiefenformat `D24_UNORM_S8_UINT` als Ziel und Textur, Dreieck gezeichnet und
+  zurückgelesen: Speicherzeile 0 = NDC y −1 (wie das EFB im GLES-Renderer), Farben richtig, 0 Fehler, 0 Warnungen.
+  `gx_gl_check` im selben Baum 0 Fehler. glslang für Android (NDK r28c, beide ABIs) gebaut und gemessen: gestrippt
+  2,1 MB (arm64) / 1,6 MB (armv7), gepackt zusammen ≈ 1,3 MB. **Nicht geprüft:** Gradle-Bau der App (dieselben
+  Quellen mit demselben NDK in WSL gebaut), Gerät.
+- **E1 Aufteilung, Schritt a (07.11.2026):** `GxRenderer` leitet jeden Aufruf an ein `GxCore` der gewählten
+  Grafikschnittstelle weiter (`gx_core.h`, `gx_renderer.cpp`; `enum class GxApi { kGl, kVulkan }`, Standard GL,
+  ohne Vulkan-Renderer im Bau: GL). Der bisherige `GxRenderer::Impl` heißt `GlRenderer` und erfüllt `GxCore`,
+  sein Code ist unverändert. `gx_chunk_render`: neu `RE4_GX_FLARES=1`, `RE4_GX_DOF_STRONG=1`.
+  **Vergleichsbasis für E1** (WSL `~/vk-ref`, Skripte in der Sitzung): 10 GX-Folgen (r204-Serie, perf-11b, perf-11d,
+  Film, Laser, PSone, Nebel, EU-Kapitel, r101, lf) × 9 Arten (normal, gebündelt, 60 FPS, 4× MSAA, FXAA+Schärfen+TV,
+  PSone, Reflexe+Tiefenschärfe stark, 1,5×, Native 1600×720 mit Schärfen) = **4 371 Bilder**, zweimal gezeichnet
+  bytegleich (llvmpipe ist hier also verlässlich). **Schritt a: alle 4 371 Bilder und alle Arbeitszähler bytegleich**,
+  `gx_gl_check` 0 Fehler, `core_mode.cpp`/`gx_gl.cpp`/`gx_renderer.cpp` mit dem NDK für beide ABIs übersetzt.
+- **E1 Aufteilung, Schritte b–f (07.11.2026, fertig am PC):** der GX-Nachbau liegt jetzt in `GxCore`
+  (`gx_core.h`/`gx_core.cpp`, ~3 100 Zeilen): Register (BP, XF, TMEM), Shader-Schlüssel, Inhalt der Uniform-Blöcke,
+  der Ablauf eines Bildstücks (`Run`, `Op`), Zeichnen (`Draw`), Zeichenzustand als neutrale Beschreibung
+  `DrawState` (Schere, Tiefe, Schreibmasken, Mischen, Seite, Linienbreite), EFB-Kopien (`EfbCopy` mit
+  `CopyParams`), Texturen binden/vergessen, 60-FPS-Zwischenbilder (`Interpolate`, `BlendDraw`, `RecordDraw`),
+  Bündeln (`MergePlan`, `DrawMerged`), Linsenreflex-Logik, Frame skip (`CanSkip`, `Skip`), Raumlisten, alle
+  Schalter. `GlRenderer` (`gx_gl.cpp`, jetzt ~4 000 statt 6 600 Zeilen) behält nur, was mit der GPU spricht, über
+  rund 40 Aufrufe (`RunBegin`, `UploadChunk`, `ApplyDrawState`, `UploadUniform`, `SubmitDraw`, `CopyPass`,
+  `PutBlendedVertices`, …). Die Extras (Autofokus, FXAA, Nachschärfen, PSone, Reflexe-Durchgang, Tiefenkarte)
+  sind noch ganze GL-Durchgänge; ihre Logik wird beim Vulkan-Bau (E5) geteilt. Neu: `GxRenderer::ReadXfb` und
+  `ReadPresented` (Bilder als Pixel, für jede API; `gx_chunk_render` nutzt sie). Der Code wurde mit Skripten
+  verschoben (Text unverändert), Mischstellen von Hand getrennt.
+  **Geprüft:** nach jedem der acht Schritte alle 4 371 Bilder und die Arbeitszähler der Protokolle **bytegleich**
+  zur Basis, `gx_gl_check` 0 Fehler; `core_mode.cpp` und der Renderer mit dem NDK für beide ABIs übersetzt;
+  **Gradle-Bau der nativen App-Teile** (`externalNativeBuildCoreDebug`, armeabi-v7a und arm64-v8a, mit glslang)
+  fehlerfrei. **Nicht geprüft:** Gerät (die App zeichnet wie vorher über GL; kein Test-APK gebaut).
+- **E2 Shader-Dialekt (07.11.2026, fertig am PC):** `gx_vk_shader.h/.cpp` schreibt die GLSL-ES-3.00-Texte des
+  Erzeugers (unverändert, damit auch die Programm-Caches der Geräte) Zeile für Zeile als GLSL 450 für Vulkan um:
+  `#version 450`, Uniform-Blöcke in Satz 0 (Bindungen wie in GL: XFM 0, PX 1, XFP 2, XFL 3, XFMM 4), die acht
+  Texturen in Satz 1, `uMtx`/`uWiden` als Push-Konstanten (`VkDrawConstants`, 16 Bytes), feste Plätze für die Werte
+  zwischen den Stufen, `gl_VertexIndex`, Tiefe 0..1 statt −1..1. Prüfprogramm `tools/vk_shader_check.cpp`.
+  **Geprüft (WSL):** alle 9 174 Schlüssel von `gx-programs.keys` × (Ecken, gebündelte Ecken, Pixel) = 27 522
+  Shader nach SPIR-V übersetzt, 0 Fehler, `spirv-val --target-env vulkan1.0` 0 ungültig; glslang im Mittel 1,45 ms
+  je Shader (PC), höchstens 7,8 ms, 16 KB SPIR-V. Die festen Shader des Renderers (Kopie, Anzeige, Palette, FXAA …)
+  folgen mit ihren Vulkan-Durchgängen in E3/E5.
+- **E3 Vulkan-Grundgerüst (08.11.2026, am PC):** `gx_vk.cpp` (`VkRenderer`, erfüllt alle GPU-Aufrufe von `GxCore`):
+  zwei Bilder im Flug mit eigenen Befehlspuffern (Hochladen vor den Zeichnungen), wachsende host-sichtbare Blöcke für
+  Uniforms (dynamische Offsets, Satz 0), Ecken/Indizes und Texturdaten, Deskriptor-Vorräte je Bild, Lösch-Warteliste
+  bis zum Fence; EFB als Farb- und Tiefenbild (`D24_UNORM_S8_UINT`, sonst `X8_D24`/`D32`) in Durchgängen mit „laden“;
+  Pipelines aus Programm (Shader-Schlüssel), Zeichenzustand, Grundform, Eckformat; Sampler aus `GxSamplerDesc`
+  (nur Basisstufe: maxLod 0,25); Kopien, Anzeige-Kopie, Paletten-Kopien, Löschen nach der Kopie
+  (`vkCmdClearAttachments`, bei getrennter Farb-/Alphamaske ein Rechteck), Tiefenkarte für GXPeekZ (zwei Leseplätze,
+  ein Bild später), `ReadXfb`/`ReadPresented`. `vk_memory` (`ImageHeap`): Bilder in 32-MB-Blöcken (Android erlaubt oft
+  nur 4 096 Speicherblöcke). `VK_EXT_depth_clip_control`, wo vorhanden: Tiefe in GLs Bereich, gleiche Rundung.
+  Gemeinsam gemacht (GL bytegleich): Textur-Entpacken (`Upload`), Sampler-Beschreibung, Löschen nach der Kopie,
+  Paletten-Kopie (`PalettedCopy` → `DrawPaletted`), die festen Shader in `gx_fixed_shaders.h`; `VulkanFixedGlsl`
+  (einfache Uniforms → Push-Konstanten). `gx_chunk_render`: `RE4_GX_API=vulkan`, `RE4_VK_VALIDATION=1`/`2`.
+  Noch nicht: MSAA, Auflösungswechsel/Übergabe der Kopien, FXAA/Nachschärfen/PSone-Durchgang/Linsenreflexe/Autofokus,
+  Pipeline-Cache auf Platte, Android-Anbindung.
+  **Geprüft (WSL, lavapipe, Prüfschicht 1.3.275):** alle 10 Folgen in den Arten normal, gebündelt, 60 FPS, 1,5×,
+  Native: **0 Meldungen der Prüfschicht**, kein Absturz. Bildvergleich gegen GL (llvmpipe): kein Bild bytegleich, aber
+  **kein Bild mit mehr als 1 % Pixeln über 16 Stufen Abweichung**; „gebündelt“ = „normal“. Restunterschiede: flächiges
+  Rauschen von ±1–6 Stufen und einzelne Pixel an feinen fernen Texturen (Mesa übersetzt GLSL und SPIR-V
+  unterschiedlich: Zink, also GL über dieselbe lavapipe, weicht von llvmpipe genauso ab, p11d bis 121 000 Pixel um
+  höchstens 6), die Kantenregel (Film: 357 Pixel um höchstens 8) und 1-Pixel-Linien (Laser-Strahl: andere
+  Linienregel). Ein Versuch, das EFB gespiegelt zu zeichnen (wie GL die Kantenregel wählt), machte es schlechter und
+  ist wieder heraus. GL nach allen Umzügen weiter bytegleich (4 371 Bilder), alle Renderer-Dateien mit dem NDK für
+  beide ABIs übersetzt. **Nicht geprüft:** Gerät; die Tiefenkarte und Paletten-Kopien nur gebaut, nicht gezielt
+  verglichen.
+- **E6 Vulkan in der App (08.11.2026, vor E4/E5 gezogen, damit das Gerät früh prüft):** `VulkanSurface.java`
+  (`SurfaceView` mit eigenem Zeichen-Thread wie `GLSurfaceView`: `requestRender`, `setRenderMode`, `onPause`,
+  `onResume`; das Fenster geht per `CoreBridge.vkWindow` an den Renderer und wird ihm genommen, bevor
+  `surfaceDestroyed` zurückkehrt), `GameSurface.java` (gemeinsame Aufrufe; GLES-Weg unverändert ein
+  `GLSurfaceView`). `CoreActivity`: Vulkan nur mit dem Test-Schalter `RE4_GX_API=vulkan` (Menüschalter folgt in E7),
+  ab Android 10 und Vulkan 1.1, sonst GLES; der Kern hört es als `RE4_GX_API`. Rückfall: kann Vulkan nicht starten
+  (`CoreBridge.rendererProblem`), ersetzt die App die Fläche an Ort und Stelle durch ein `GLSurfaceView` (der Kern
+  schickt alles neu) und meldet es einmal („Vulkan could not start on this device. The game draws with OpenGL ES.“);
+  Test-Schalter `RE4_VK_FAIL=1` erzwingt ihn. Fehlerbericht: neue Datei `renderer.txt` (Renderer, Gerät, Treiber,
+  Android). `gx_vk.cpp`: Swapchain (FIFO, 3 Bilder, Größe wie die Fläche der App, Drehung durch Android; eigene
+  Drehung zum Ausprobieren mit `RE4_VK_PRETRANSFORM=1`), `Present` mit Box des Bildformats und sichtbaren Zeilen,
+  Fenster weg/wieder da ohne neuen Renderer. `core_mode.cpp`: Wahl der API, ohne GL-Kontext keine Zustandsbrücke,
+  Filmfarben-Prüfung und GX-Wiedergabe nur unter GLES, Minikarte unter Vulkan noch aus (E5), Bildschirmfoto über
+  `ReadPresented`. CMake: `gx_vk.cpp` und `re4_vulkan` in `libre4decomp.so` (`RE4_GX_VULKAN=1`). Test-APKs heißen
+  per `-Pre4.versionName=0.99.2-vulkanN` (`build.gradle`; die Prüfung in `test-core-app.ps1` nimmt gleiche Nummern
+  mit anderem Zusatz an; `AppUpdateTest`: „0.99.2-vulkan1“ ist dieselbe Version wie „0.99.2-rc“).
+  **Geprüft (PC):** Kern für beide ABIs gebaut (je 0 Fehler, Stubs wie erwartet), Gradle `assembleCoreDebug` beider
+  ABIs fehlerfrei, `AppUpdateTest` 7/7; GL weiter bytegleich (4 371 Bilder, `gx_gl_check` 0 Fehler); Vulkan auf
+  lavapipe alle 10 Folgen ohne Meldung der Prüfschicht, kein Bild über 1 % Pixel mit mehr als 16 Stufen. Test-APK
+  `E:\Development\Android\builds\vulkan\CubeEvil4-0.99.2-vulkan1.apk` (22,8 MB, `versionCode` 104, beide ABIs,
+  Debug-Schlüssel dieses PCs wie Android Studio). **Nicht geprüft:** alles am Gerät (Swapchain, Drehung,
+  Pausieren, Rückfall, Bild gegen GLES); die Swapchain gibt es am PC nicht.
+- **E4 MSAA, Auflösungswechsel, Übergabe der Kopien (08.11.2026, am PC):** `gx_vk.cpp`:
+  - **Gemeinsames Gerät** (`SharedDevice`): Instanz, Gerät, Bildspeicher (`ImageHeap`) und Pipeline-Cache gehören allen
+    Renderern eines Laufs und gehen mit dem letzten. Neue Grafikoptionen machen einen neuen Renderer, während der alte
+    noch lebt (`core_mode.cpp`); er startet so ohne neues Gerät.
+  - **`HandOverCopies`:** Die EFB-Kopien des alten Renderers gehen auf den neuen über, bei anderer Stufe skaliert
+    (`vkCmdBlitImage`, linear wie GLs `glBlitFramebuffer`).
+  - **`RescaleHalves`** („Dynamic“, Stufenwechsel im Lauf): EFB neu und gelöscht, XFB und Kopien skaliert übernommen,
+    die Kopien der Zwischenbilder verworfen. Wie in GL.
+  - **MSAA:**
+    - Das EFB wird in mehrfach abgetastete Bilder gezeichnet. Die Farbe wird am Ende jedes EFB-Durchgangs aufgelöst
+      (Resolve-Anhang, auf Kachel-GPUs in den Kacheln).
+    - Die Tiefe wird nur aufgelöst, wenn sie gelesen wird (Tiefenkopie, Tiefenkarte für GXPeekZ): ein Shader nimmt
+      Probe 0 (`ResolveDepth`).
+    - Die Probenzahl ist die gewünschte, soweit das Gerät sie zeichnen und lesen kann; 4 kann jedes.
+  - **Fehler aus E3 behoben:** Das Bild der Tiefenkarte war ohne „sampled“ angelegt (Prüfschicht: 164 Meldungen, sobald
+    eine Folge GXPeekZ nutzt).
+  - `gx_gl_check`: Vulkan-Prüfungen `TestVkRescale` (Stufen 2/6/3/5 halbe) und `TestVkHandOverCopies`, wo ein
+    Vulkan-Gerät startet (sonst ausgelassen).
+
+  **Geprüft (WSL, lavapipe, Prüfschicht):**
+  - `gx_gl_check` 0 Fehler, mit den Vulkan-Prüfungen.
+  - Wechsel mitten in der Folge (`RE4_GX_RESCALE` 6:h4, 6:h2 von 2×, 6:h3, 6:h3 mit 4× MSAA), je 8 Folgen GL gegen
+    Vulkan: 0 Meldungen, kein Bild über 1 % Pixel mit mehr als 16 Stufen.
+  - 4× MSAA alle 10 Folgen: 0 Meldungen, kein Bild über der Grenze. Die Abweichungen sind kleiner als ohne MSAA
+    (r101 höchstens 2 statt 174 Stufen: die Kantenregel verschwindet).
+  - Tiefenkarten (`RE4_GX_PEEK_DUMP`) GL gegen Vulkan, 1 und 4 Proben: 162 Karten mit je 84 480 Zellen, höchstens 4
+    Randzellen je Folge um mehr als 256 (von 2²⁴) verschieden.
+  - GL weiter bytegleich (4 371 Bilder); NDK-Übersetzung beider ABIs.
+
+  **Nicht geprüft:** Gerät; der Kopie-Übergang nur im Test (`gx_chunk_render` hat keinen neuen Renderer mitten in der
+  Folge). Test-APK `E:\Development\Android\builds\vulkan\CubeEvil4-0.99.2-vulkan2.apk` (E6 und E4, ersetzt das
+  ungetestete `-vulkan1`).
+- **E5a Bildfilter unter Vulkan (08.11.2026, am PC):** FXAA, Nachschärfen und der PSone-Filter als Durchgänge der
+  gemeinsamen Shader (aus `GlRenderer` unverändert nach `gx_fixed_shaders.h` verschoben: `kFxaaVs/Fs`,
+  `kSharpenVs/Fs`, `kPsxVs/Fs`, `kSharpLight/Strong`), je in ein Bild der Größe der Anzeige-Kopie, das statt des XFB
+  gezeigt wird (`ShownImage`: `Present`, Bildschirmfoto, `ReadXfb`); der TV-Filter lag schon im Kopier-Shader.
+  **Geprüft (WSL, lavapipe):** Arten „fx“ (FXAA, Schärfen stark, TV), „psx“ und „native“ (Schärfen leicht) in allen
+  10 Folgen: 0 Meldungen, kein Bild über 1 % Pixel mit mehr als 16 Stufen; GL bytegleich (4 371 Bilder); NDK beide
+  ABIs. **Nicht geprüft:** Gerät.
+- **E5b Linsenreflexe unter Vulkan (08.11.2026, am PC):** `VulkanFixedProgram` (ersetzt `VulkanFixedGlsl`) übersetzt
+  beide Stufen eines festen Shaders zusammen:
+  - Felder und mehr als 128 Bytes Konstanten gehen in einen Uniform-Block (std140) aus dem Uniform-Strom des Bildes;
+    sonst bleiben es Push-Konstanten.
+  - Texturen sind in beiden Stufen lesbar.
+  - Jeder Wert zwischen den Stufen bekommt seinen Platz (`flat` auch).
+  - Die bisherigen Filter geben damit bytegleich dieselben Bilder (810 von 810).
+  Die Shader der Reflexe wurden unverändert nach `gx_fixed_shaders.h` verschoben. `FlarePass` macht dann, wie in GL,
+  den Sichtbarkeits-Durchgang (32 × 2, aus Tiefe und Farbe des Bildes; bei MSAA aufgelöst) und die Reflexe, die zur
+  EFB-Farbe addiert werden.
+  **Geprüft (WSL, lavapipe, Prüfschicht mit Synchronisation):** `RE4_GX_FLARES=1`, alle 10 Folgen GL gegen Vulkan:
+  0 Meldungen, kein Bild über der Grenze. Die Reflexe ändern unter beiden APIs dieselben Bilder gleich stark
+  (psx3: 36 Bilder bis 19 800 Pixel, p11d: 46). GL bytegleich, NDK beide ABIs. **Nicht geprüft:** Gerät.
+- **E5c Autofokus unter Vulkan (08.11.2026, am PC):** Die Shader des Autofokus wurden unverändert nach
+  `gx_fixed_shaders.h` verschoben (`kDofQuadVs`, `kDofHead`, `kDofDistance`, die Rümpfe `kDofFocusFs`, `kDofBlurFs`,
+  `kDofHalfFs`, `kDofMixFs`; GL setzt sie wie vorher zusammen). `Autofocus` macht wie in GL:
+  - den Fokus aus der Tiefe messen (3 × 1, dem Bild davor folgend);
+  - dann die Unschärfe in halber Auflösung, eingemischt nach der eigenen Entfernung jedes Pixels (Standard,
+    `halfDof`), oder in voller Auflösung zurück ins EFB (nur Farbe).
+  Ohne MSAA liest das Mischen das Tiefenbild, das der EFB-Durchgang als Anhang hält; es läuft deshalb in einem
+  Durchgang nur mit der EFB-Farbe (`efbColorPass`). Neue Hilfen: `BindFixedNamed` (Texturen nach Namen),
+  `MakeFixed` mit Überblenden nach Alpha. `gx_chunk_render`: `RE4_GX_DOF_FULL=1` (volle Auflösung).
+- **E5d Minikarte unter Vulkan (08.11.2026, am PC):**
+  - `GxRenderer::SetOverlay` (`GxOverlay`): Ecken, Teile (Dreiecke, Linien) und das Quadrat.
+  - `core_mode.cpp`: `minimapDraw` ist aufgeteilt in `minimapBuild` (Ecken und Platz) und das Zeichnen mit GL; der
+    GLES-Weg ist sonst unverändert.
+  - Unter Vulkan gibt die App die Karte vor jedem `Present` an den Renderer (leer ohne Karte). Er zeichnet sie im
+    Durchgang des Bildschirms über das Bild (gedreht wie das Bild) und auch ins Bildschirmfoto (`ReadPresented`),
+    wie GL.
+  - Fehler beim Bau gefunden: Das Bildschirmfoto band zuerst die Pipeline des Bildschirms (leer).
+  - `gx_gl_check`: `TestVkOverlay` (Platz, oben/unten, verschwindet ohne Karte).
+  **Geprüft (WSL, lavapipe):**
+  - Autofokus GL gegen Vulkan in allen 10 Folgen: normal, „Stark“ mit Reflexen, volle Auflösung, 4× MSAA, 4× MSAA
+    mit voller Auflösung. Je 0 Meldungen, kein Bild über der Grenze.
+  - Der Autofokus wirkt unter Vulkan in denselben Folgen (fog, laser, lf, s204). Der Abstand zu GL wurde damit
+    kleiner (s204 höchstens 5 statt 36 Stufen).
+  - `gx_gl_check` 0 Fehler mit allen fünf Vulkan-Prüfungen, Prüfschicht mit Synchronisation.
+  **Nicht geprüft:** Gerät; die Minikarte auf dem Bildschirm (die Swapchain gibt es am PC nicht, nur das
+  Bildschirmfoto).
+  Test-APK `E:\Development\Android\builds\vulkan\CubeEvil4-0.99.2-vulkan3.apk` (22,9 MB; E6, E4, E5; ersetzt die
+  ungetesteten `-vulkan1` und `-vulkan2`).
+- **E7 Menüschalter und Absturz-Wächter (08.11.2026, am PC):**
+  - **Menü:** Unter Display → GRAPHICS steht ganz oben „Renderer: OpenGL ES / Vulkan (experimental)“ mit
+    Hilfetext. Eine Änderung fragt wie der Sprachwechsel nach dem Neustart; „Cancel“ behält die alte Wahl.
+  - **Neustart:** Die App startet dann direkt wieder ins Spiel, nicht in den Startbildschirm
+    (`LauncherRestartActivity.BACK_TO_GAME`). Der Renderer und seine Fläche werden beim Start gewählt.
+  - **Ohne Vulkan** (unter Android 10 oder ohne Vulkan 1.1) ist der Vulkan-Knopf aus; der Hilfetext sagt warum.
+  - **Gespeicherte Wahl:** Einstellung `renderer` („gles“, Standard, oder „vulkan“) in `core_graphics`.
+  - **Absturz-Wächter:**
+    - Vor dem Start mit Vulkan setzt die App `vulkanStarting` (sofort auf die Platte).
+    - Hat Vulkan 120 Bilder gezeichnet, wird der Merker gelöscht.
+    - Steht er beim nächsten Start noch, startet die App mit OpenGL ES, stellt die Wahl zurück und meldet es
+      („The game ended while it started with Vulkan …“).
+  - **Rückfall im Lauf** („Vulkan could not start …“): Die Wahl geht ebenfalls auf OpenGL ES zurück.
+  - **Test-Schalter:** `RE4_GX_API=vulkan` versucht Vulkan immer (ohne Wächter), `RE4_GX_API=gles` erzwingt GLES
+    (Vergleichsläufe).
+  - **Texte:** 8 neue in allen 11 Sprachen (`strings_ingame.xml`); die Meldungen aus E6 kommen jetzt von dort.
+  - **Sperrliste** schlechter Treiber: noch leer; sie wächst mit den Berichten.
+  **Geprüft (PC):** `tools/check_translations.py` alle 11 Sprachen in Ordnung. **Nicht geprüft:** Gerät.
+- **Erster Gerätetest (Retroid, Adreno 650, Android 13; 08.11.2026, APKs vulkan1/vulkan2):** Rückfall auf GLES
+  richtig (Meldung, danach stabil 60/s). Unter Vulkan aber 30–45 statt meist 60 Bilder/s.
+  - **Ursache:** Die Zeile „Vulkan screen:“ kam 1010-mal in 22 s, die Swapchain wurde also jedes Bild neu gebaut.
+  - **Warum:** Das Display des Retroid ist hochkant gebaut und um 90° gedreht („the display's turn 2“). Die
+    Swapchain war ungedreht angelegt, damit der Compositor dreht. Android antwortet dann auf jedes Bild mit
+    „suboptimal“, und jede Antwort baute die Swapchain neu, jedes Mal mit `vkDeviceWaitIdle`.
+  - **Behoben in `gx_vk.cpp`:**
+    - Die App dreht das Bild jetzt selbst wie das Display („pre-rotation“, Standard; `RE4_VK_PRETRANSFORM=0` lässt
+      wieder den Compositor drehen).
+    - Auf „suboptimal“ wird die Oberfläche nur angesehen; neu gebaut wird nur, wenn sich ihre Drehung oder Größe
+      änderte. Nach 8 Antworten ohne Änderung kommt nur noch alle 120 Bilder ein Blick.
+    - Die Zeile „Vulkan screen:“ erscheint nur, wenn sich etwas ändert; die Swapchains werden gezählt.
+  - **Aussetzer an den Szenenwechseln der Polizeifahrt** (auch unter GLES, Lauf 2: bis 560 ms, die Programme 40 →
+    289): Vermutlich laden die GL-Programme ihr Binärformat erst beim ersten Zeichnen; nicht von der Aufteilung E1
+    (GL bleibt bytegleich, auch die Arbeitszähler). Getrennt in der 0.99.x-Linie zu prüfen.
+- **Messzeile unter Vulkan (08.11.2026):** Alle 300 Bildstücke schreibt die App nach „GX render thread split“ eine
+  Zeile „Vulkan per picture:“ (`GxRenderer::TimingLine`). Sie enthält:
+  - je gezeigtem Bild die Wartezeit auf das Swapchain-Bild (acquire), auf die GPU (Fences), Abschicken und
+    Anzeigen;
+  - die neu übersetzten Shader mit Dauer und die aus dem SPIR-V-Speicher;
+  - die neu gebauten Pipelines mit Dauer und der längsten;
+  - die gebauten Swapchains und den Bildspeicher.
+  CPU-Zeit und Laufzeit je Bildstück stehen wie bei GLES in „GX render thread:“, die Bildrate in „GX: … shown“.
+- **E8 Speicher auf der Platte und Vorab-Bau (08.11.2026, am PC):** im Ordner `RE4_GX_PROGRAM_CACHE` der App
+  (`gx-programs`, wie GL):
+  - **`vk-spirv.bin`:** das SPIR-V jedes Shaders, den das Gerät übersetzt hat. Schlüssel ist der Hash von Compiler,
+    Stufe und Text. Im Speicher liegt nur das Verzeichnis, höchstens 160 MB (ein GX-Shader ≈ 15 KB). Ein beim
+    Beenden abgeschnittener Eintrag wird abgeschnitten.
+  - **`vk-pipelines.bin`:** der Pipeline-Cache des Treibers. Er wird beim Start dazugemischt (ein fremder Treiber
+    ignoriert ihn) und gespeichert alle 64 neuen Pipelines, frühestens alle 20 s, und am Ende.
+  - **`room-XXX.vkpipes`:** die Pipelines je Raum, neben GLs `room-XXX.keys`. `Prewarm` baut beim Betreten eines
+    Raums erst seine Programme, dann seine Pipelines, ein paar Millisekunden je Bild wie GL.
+  - **Unter Vulkan** startet die App den GL-Thread nicht, der GL-Programme vorab linkt.
+  - **SPIR-V** ohne Debug-Befehle (`StripDebug`; spart nur 7 %).
+  - **`gx_chunk_render`:** `RE4_GX_ROOM`, `RE4_GX_PREWARM=1`, die Messzeile am Ende.
+  **Geprüft (WSL, lavapipe):** s204 dreimal mit demselben Speicher:
+  - Lauf 1 übersetzt 61 Shader, Läufe 2 und 3 übersetzen keinen und bauen je Renderer bis 39 Programme und 42
+    Pipelines vorab.
+  - 8,2 s gegen 4,8 s Laufzeit; Bilder in allen Läufen identisch; 0 Meldungen.
+  Gesamtprüfung nach E8: GL bytegleich (4 371 Bilder), Vulkan normal und 4× MSAA in allen 10 Folgen ohne Meldung
+  und ohne Bild über der Grenze, `gx_gl_check` 0 Fehler, NDK beide ABIs.
+  **Nicht geprüft:** Gerät; lavapipe hat keinen echten Pipeline-Cache (32 Bytes), der Nutzen dort zeigt sich erst
+  auf Adreno und Mali.
+- **E9 Abschluss am PC (08.11.2026):**
+  - **Test-APK** `E:\Development\Android\builds\vulkan\CubeEvil4-0.99.2-vulkan5.apk`:
+    - versionCode 105, 22,9 MB, beide ABIs, Debug-Schlüssel wie die installierte App;
+    - per `-Pre4.versionName=0.99.2-vulkan5 -Pre4.versionCode=105`.
+  - **Kontroll-APK** `CubeEvil4-0.99.2-vulkan0.apk` (Wunsch des Projektinhabers):
+    - nur GLES, Stand E2 (`fa2a74fe`), versionCode 105, 21,3 MB;
+    - Vulkan samt glslang kostet damit ≈ 1,6 MB APK.
+  - **Update-Prüfung:** „0.99.2-vulkanN“ gilt als dieselbe Version wie die neueste GitHub-Version „0.99.2-rc“
+    (`AppUpdateTest`). Kommt 0.99.3-rc auf GitHub, zeigen diese APKs den Update-Hinweis.
+  - **Geprüft (PC):** Java-Tests 59/59 (1 übersprungen: Menü-Bildschirmfotos), App-Bau beider ABIs.
+  - **Offen bis „fertig“:**
+    - Gerätetest (Anleitung im Notizordner der Hauptsitzung: Geschwindigkeit ohne Drehen mit zwei Vulkan-Läufen und
+      einem GLES-Lauf, Drehen und Pause, Rückfall, Menü);
+    - der Nutzen auf Mali-Geräten (Berichte der Tester);
+    - die Freigabe des Projektinhabers für `master`.
+  - **Bekannte Restunterschiede zu GLES:** Rauschen der Treiber, die Kantenregel und 1-Pixel-Linien ohne MSAA (die
+    Linienregel von Vulkan).
+- **Zweiter Gerätetest (vulkan5; Retroid, Adreno 650, Vulkan 1.1.128, Treiber 0.746.0; 08.11.2026):** die Läufe ohne
+  Drehen, ausgewertet von der Hauptsitzung (Daten `E:\Development\Android\reports\vulkan5-devtest-20261108`):
+  - **Swapchain:** einmal gebaut („1080x1920 … pre-rotated … swapchain 1“), danach nie wieder; das Bild steht
+    richtig. Der Fehler des ersten Tests ist am Gerät behoben.
+  - **1a, Vulkan kalt (leere Speicher):** im Mittel 58,4 Bilder/s, mindestens 48,7, 23 Spitzen über 100 ms (bis
+    628 ms) beim ersten Auftreten neuer Szenen.
+    - Je neuem Shader ≈ 3 ms glslang (257 in 780 ms).
+    - Je neuer Pipeline im Mittel ≈ 13 ms Treiber, bis 34 ms; bis 84 Pipelines in 10 s.
+  - **1b, Vulkan warm** (359 Shader im SPIR-V-Speicher, 4,4 MB Treiber-Cache): im Mittel 60,0 Bilder/s, mindestens
+    58,9, eine Spitze von 102 ms, auch in der Polizeifahrt ruhig.
+    - Kein Shader übersetzt.
+    - Der Treiber baute 460 Pipelines aus seinem Cache in zusammen 87 ms (0,2 ms je Pipeline statt ≈ 13 ms).
+    - Der ruhigste der drei Läufe.
+  - **1c, GLES:** im Mittel 59,9 Bilder/s, eine Spitze von 266 ms.
+  - **Prozessorzeit des Zeichen-Threads je Bildstück:** Vulkan warm 4,13 ms (höchstens 7,8), GLES 4,52 ms (8,4),
+    Vulkan kalt 4,72 ms. Auf dem Retroid ≈ 9 % weniger als GLES; der große Nutzen wird auf Mali erwartet.
+  - **acquire + present ≈ 15 ms je Bild bei 0 ms Warten auf die GPU:** Das ist das Warten auf die Bildwiederholung
+    (FIFO, wie `eglSwapBuffers` unter GLES); der Thread schläft dabei, es ist keine Rechenzeit.
+  - **Absturz-Wächter** in beiden Vulkan-Läufen nach den ersten Bildern gelöscht.
+  - **Noch aus:** Lauf 2 (Drehen, Home), 3 (Rückfall), 4 (Menü).
+- **Spitzen beim ersten Auftreten einer Szene (Vulkan kalt): bekanntes Verhalten, bewusst so gelassen
+  (08.11.2026).** Wie unter GLES ohne fertige Programme ruckelt das erste Auftreten einer Szene auf einem Gerät; ab
+  dem zweiten Mal ist es flüssig (SPIR-V-Speicher, Treiber-Cache, Pipelines je Raum vorab).
+  - **Geprüft und verworfen:** Pipelines auf einem Hilfs-Thread bauen und die Zeichnung so lange weglassen oder mit
+    einem Platzhalter zeichnen, wie Dolphins „asynchrone Shader“.
+    - Unsicher für dieses Spiel: Eine weggelassene Zeichnung fehlt nicht nur einen Augenblick. Sie fehlt auch in
+      EFB-Kopien, die das Spiel nur einmal macht (beim Betreten eines Raums: Wasser, Spiegel, Texturen aus dem Bild).
+    - Sie fehlt auch in der Tiefenkarte (GXPeekZ, Fackellicht) und in Effekten, die das Bild lesen; diese Fehler
+      blieben bis zum nächsten Raum.
+    - Ein Platzhalter, der alles richtig zeichnet (Dolphins Über-Shader), wäre ein Projekt für sich.
+  - **Ein Vorab-Bau aus einer mitgelieferten Liste** hilft beim ersten Lauf kaum: Die Liste der App kennt nur
+    Shader, nicht die Zustände der Pipelines. Alle SPIR-V der Liste wären ≈ 270 MB, und der Treiber bräuchte für
+    jede Pipeline trotzdem seine ≈ 13 ms.
+  - **Später denkbar:** `VK_EXT_graphics_pipeline_library`, das das Zusammenbauen der Pipelines billig macht, wo
+    der Treiber es kann (der Retroid-Treiber 0.746 kann es nach heutigem Stand nicht).
 
 ## Vulkan zusätzlich zu GLES: Studie (31.10.2026, lokal, Branch `vulkan`)
 
@@ -13159,8 +13781,10 @@ die GameCube ließ sie überlaufen (schon vorher so, selten).
 | 0216 `r224.cpp` | Lava-Halle der zwei El Gigantes: mit EU-, JP- und KR-Discs Bereich 10 (Meldung 1 „Damn! It's locked …“ vor dem Ausgangstor) aus beim Betreten, an, wenn das Tor hinter den Riesen zufällt (`door_close`), aus, wenn es nach dem Kampf aufgeht (`door_open`), wie deren Code (`st2_3.rel`); Debug- und US-Daten haben den Bereich nicht. Port-Patch für Verkaufsdaten, Nutzerbericht 07.11.2026 |
 | 0217 `pl_npc.cpp`, `r208.cpp` | Ashleys Rock-Reaktion („pervert“) wie die Verkaufsfassungen (US/EU/JP `main.dol`, `st2_0.rel`): in Leons Routinen 0/0..6 (stehen, gehen, laufen, drehen, zielen) muss die Kamera (`pG->Camera`) mindestens π/7 (25,7°) nach oben schauen, sonst zählt die Lage allein; 240 Bilder Sperre nach `r208_CarryOnShoulder` (`re4_ashley_pants_wait`). Abweichung vom Debug-Code, Entscheidung des Projektinhabers 07.11.2026 |
 | 0218 `sce_at.cpp` | Cheat „Random items“: `sceAtSetItem` ruft `re4_item_random` (`runtime/cheats.cpp`), das beim ersten Aufruf eines Raums seine frei liegenden Gegenstände des Topfs (Munition, Granaten, Heilmittel, Peseten, Schätze) aus Seed, Raum und Datensatz neu verteilt, nur gegen Gegenstände mit Modell im Raum, nur in der Story. Wunsch des Projektinhabers 07.11.2026, Issue #161 |
-| 0219 `pl_class.cpp`, `cam_qfps.cpp` | „Free movement“ und „Move while aiming“ (Mod von DevJunior im Stil des Remakes, App-Menü Controls, beide aus): `cPlayer::keyConfig` ruft zuerst `re4_player_input` (`runtime/free_move.cpp`). Freie Bewegung: In den Gehroutinen (r_no_1 0..4) dreht der Hauptstick Leon zur Richtung relativ zur Kamera, das Spiel bekommt nur „vorwärts“ (Key-Bit 0; Gehen/Laufen/Bewegungen bleiben die des Spiels), der C-Stick (X) dreht die Kamera um ihn (`CameraQuasiFPS::calcBaseMatrix` → `re4_free_cam_matrix`), Waffe ziehen dreht Leon zur Blickrichtung der Kamera; außerhalb kehrt die Kamera weich hinter ihn zurück, beim Zielen exakt; Steuerkreuz bleibt Tank-Steuerung. Bewegen beim Zielen: Bei bereiter Waffe/Messer (r_no_1 6/0xB, `isKamae`) verschiebt der C-Stick Leon (26 Einheiten/Bild, Füße gleiten, Kollision des Spiels danach); mit „Alternate Controls“ schickt die App den linken Stick als C-Stick (`CoreInput`). Bits 4/5 der Zieleinstellungen (`re4_aim_set`). Nachtrag 08.11.2026 (Wunsch von DevJunior): Zielgehen schneller (38 statt 26 Einheiten/Bild); `cPlayer::move` ruft nach den Routinen `re4_player_after_routine`, das Leons Gehbewegung (`m_MotTbl[2]`/`[0x61]`, rückwärts der Rückschritt `[8]`/`[0x63]`) in einer eigenen Arbeit (`gWalk`, eigene Key-Historien, `MotionSetCore` mit 0x20000000|0x10000000) nur auf die Beine legt (Teile unter den IK-Wurzeln dieser Bewegung, unter der Hüfte), weich ein- und ausgeblendet; R3 (`CoreBridge.recenterCamera`, Bit 6 der Zieleinstellungen wechselt je Druck) dreht die freie Kamera zurück hinter Leon. Test: `runtime-test freemove` (`game_probe.cpp re4probe_free_move`) |
-| — `runtime/quick_slots.cpp` (Hook von 0219) | „D-pad quick slots“ (Mod von DevJunior im Stil des Remakes, App-Menü Controls, aus; Bit 7 der Zieleinstellungen): im Feld (Geh-, Waffen- und Messerroutinen, kein Untermenü/Ereignis/Zielfernrohr/Fernglas/Boot/Hocken, nicht Ashley) rüstet ein Druck aufs Steuerkreuz eine Waffe nach Art aus (oben Pistolen/Magnums, rechts Schrotflinten/TMP/Chicago/Minenwerfer/Raketenwerfer, unten Gewehre/Bogen, links Granaten), erneut gedrückt die nächste dieser Art im Koffer. Wechsel wie `SubScreenExit` (`ItemMgr.arm`, `SndBlkStop(2)`, `weaponRelease/Load/Init`) in Task-Platz 1 mit angehaltenem Haupttask (`TaskSuspend(0)`), weil `ReadWepData` schläft. Das Steuerkreuz wird dann aus `Key` (Stick-Bits bleiben) und `Joy[0].on` genommen; Drücke über eigene Flankenerkennung. Antippen rüstet beim Loslassen aus; eine Richtung 15 Bilder (0,5 s) gehalten steckt die Waffe weg (`ItemMgr.arm(NULL)`, bloße Hände: Gegenstand 0x800, Waffe 0, `wep_data_leon[0]`; derselbe Zustand wie nach dem Verkauf der Waffe in der Hand), wunschgemäß „ohne Waffe gehen wie im Remake“ (DevJunior, 08.11.2026). Test: `runtime-test quickslots` (Anfragen im Trockenlauf, `re4_quick_slots_dry`) |
+| 0219 `shadow.cpp`, `foot_shadow.cpp` | Potato-Modus „Schatten & Licht“ aus: `ShadowTrans` kehrt nach dem Löschen der Schattenverwalter und der Flags `STA_SHADOW_EQCOL`/`STA_USE_SHADOW_LIGHT` zurück (keine Schattentexturen, kein zweites Zeichnen der Empfänger, keine projizierten Lichtbilder auf Figuren), `DrawFootShadow` zeichnet nichts; `re4_potato_no_shadows` (`runtime/potato.cpp`), nicht in Ereignissen. Wunsch eines Nutzers über den Projektinhaber, 08.11.2026 |
+| 0220 `r100.cpp` | Port-Fehler (Sofortwechsel der Spielfigur, `cheats.cpp switchNow`: Raum neu durch eine Tür in sich selbst, und damit auch der Rücksetzpunkt für „Retry“): `R100Init` liest die Startszene s40 (2,2 MB ARAM) nur noch, wenn `r100_StartEvent` läuft und sie freigibt (Raum-Flag 13 frei), und s03/s20 wieder, wenn Bereich 6 schon passiert ist (Flag 0; s03 bis zur Haus-Szene, Flag 3). Vorher fehlten die Haus-Szene („ARAM over: evd/r100s03.evd“) und nach einem Wechsel hinter Bereich 6 auch die Szene nach dem Ganado; EU-/US-`st1_0.rel` lesen genauso vor. In jedem Zustand, den das Spiel selbst erreicht, unverändert. Bericht eines Nutzers 07.11.2026 (Xiaomi, EU-Discs, 0.99.2) |
+| 0900 `pl_class.cpp`, `player.cpp`, `cam_qfps.cpp` | „Free movement“ und „Move while aiming“ (Mod von DevJunior im Stil des Remakes, App-Menü Controls, beide aus): `cPlayer::keyConfig` ruft zuerst `re4_player_input` (`runtime/free_move.cpp`). Freie Bewegung: In den Gehroutinen (r_no_1 0..4) dreht der Hauptstick Leon zur Richtung relativ zur Kamera, das Spiel bekommt nur „vorwärts“ (Key-Bit 0; Gehen/Laufen/Bewegungen bleiben die des Spiels), der C-Stick (X) dreht die Kamera um ihn (`CameraQuasiFPS::calcBaseMatrix` → `re4_free_cam_matrix`), Waffe ziehen dreht Leon zur Blickrichtung der Kamera; außerhalb kehrt die Kamera weich hinter ihn zurück, beim Zielen exakt; Steuerkreuz bleibt Tank-Steuerung. Bewegen beim Zielen: Bei bereiter Waffe/Messer (r_no_1 6/0xB, `isKamae`) verschiebt der C-Stick Leon (26 Einheiten/Bild, Füße gleiten, Kollision des Spiels danach); mit „Alternate Controls“ schickt die App den linken Stick als C-Stick (`CoreInput`). Bits 4/5 der Zieleinstellungen (`re4_aim_set`). Nachtrag 08.11.2026 (Wunsch von DevJunior): Zielgehen schneller (38 statt 26 Einheiten/Bild); `cPlayer::move` ruft nach den Routinen `re4_player_after_routine`, das Leons Gehbewegung (`m_MotTbl[2]`/`[0x61]`, rückwärts der Rückschritt `[8]`/`[0x63]`) in einer eigenen Arbeit (`gWalk`, eigene Key-Historien, `MotionSetCore` mit 0x20000000|0x10000000) nur auf die Beine legt (Teile unter den IK-Wurzeln dieser Bewegung, unter der Hüfte), weich ein- und ausgeblendet; R3 (`CoreBridge.recenterCamera`, Bit 6 der Zieleinstellungen wechselt je Druck) dreht die freie Kamera zurück hinter Leon. Nachtrag 08.11.2026 (Gerätetest DevJunior: Beine gestreckt): Die Füße der Gehbewegung sind IK-Ziele, keine Knochenversätze; jetzt wird die Gehpose wie in `MotionMove` gebildet (`MotionMoveCore`, `partsMatCalc`, `IKInit`, `InverseKinematics`) auf einer Kopie aller Teile, übernommen werden nur die Drehungen der Beine (Oberschenkel gegen das Modell, nicht gegen die gedrehte Zielhüfte), per Quaternion gemischt (höchstens 0,85), Knochenversätze bleiben die der Zielpose. Patch nach dem Zusammenführen mit 0.99.4-rc von 0219 auf 0900 umbenannt (das Original nutzt 0219/0220). Test: `runtime-test freemove` (`game_probe.cpp re4probe_free_move`) |
+| — `runtime/quick_slots.cpp` (Hook von 0900) | „D-pad quick slots“ (Mod von DevJunior im Stil des Remakes, App-Menü Controls, aus; Bit 7 der Zieleinstellungen): im Feld (Geh-, Waffen- und Messerroutinen, kein Untermenü/Ereignis/Zielfernrohr/Fernglas/Boot/Hocken, nicht Ashley) rüstet ein Druck aufs Steuerkreuz eine Waffe nach Art aus (oben Pistolen/Magnums, rechts Schrotflinten/TMP/Chicago/Minenwerfer/Raketenwerfer, unten Gewehre/Bogen, links Granaten), erneut gedrückt die nächste dieser Art im Koffer. Wechsel wie `SubScreenExit` (`ItemMgr.arm`, `SndBlkStop(2)`, `weaponRelease/Load/Init`) in Task-Platz 1 mit angehaltenem Haupttask (`TaskSuspend(0)`), weil `ReadWepData` schläft. Das Steuerkreuz wird dann aus `Key` (Stick-Bits bleiben) und `Joy[0].on` genommen; Drücke über eigene Flankenerkennung. Antippen rüstet beim Loslassen aus; eine Richtung 15 Bilder (0,5 s) gehalten steckt die Waffe weg (`ItemMgr.arm(NULL)`, bloße Hände: Gegenstand 0x800, Waffe 0, `wep_data_leon[0]`; derselbe Zustand wie nach dem Verkauf der Waffe in der Hand), wunschgemäß „ohne Waffe gehen wie im Remake“ (DevJunior, 08.11.2026). Test: `runtime-test quickslots` (Anfragen im Trockenlauf, `re4_quick_slots_dry`) |
 | 0174 `pl_wep.cpp` | Auto-Zielen: Startwinkel von der Waffenhand zum Zielpunkt im Maß von `PlWepAutoTrack` statt von den Füßen (Laser über dem Gegner); dazu `gyro.cpp`: Handzittern beendet die Zielhilfe nicht. Bericht des Projektinhabers 01.11.2026. Port-Patch |
 
 Neuen Patch erzeugen: Datei aus `whole_prepare.rewrite()` kopieren, ändern,

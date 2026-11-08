@@ -223,7 +223,7 @@ public final class CoreInput {
 
   public boolean alternate() { return alternate; }
 
-  /** "Move while aiming" (patch 0219): with the alternate controls the left stick goes to the game as the C stick
+  /** "Move while aiming" (patch 0900): with the alternate controls the left stick goes to the game as the C stick
    *  while L1 or L2 holds a weapon ready (the core's runtime/free_move.cpp walks Leon with it), the right one aims. */
   public void setAimMove(boolean on) { aimMove = on; }
 
@@ -598,7 +598,7 @@ public final class CoreInput {
       buttons |= (touch ? d.buttons : d.buttons & ~GC_B) | d.hats;
       float mainX = d.lx, mainY = d.ly, cX = d.rx, cY = d.ry;
       if (aiming && !touch) {
-        // "Move while aiming" (patch 0219): the left stick as the C stick, which the game leaves unused then
+        // "Move while aiming" (patch 0900): the left stick as the C stick, which the game leaves unused then
         cX = aimMove ? d.lx : 0;
         cY = aimMove ? d.ly : 0;
         mainX = d.rx;

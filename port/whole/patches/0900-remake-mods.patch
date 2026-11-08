@@ -1,3 +1,4 @@
+# Patch 0900 (numbered after the original's patches so that it applies last; was 0219 until the 0.99.4-rc merge).
 # "Free movement" and "Move while aiming" (DevJunior's mod in the spirit of the 2023 remake; the app menu's
 # Controls page, both off by default): runtime/free_move.cpp. cPlayer::keyConfig calls re4_player_input first,
 # before the walk routines read the keys: with "Free movement" the main stick turns Leon toward where it points,
@@ -13,7 +14,7 @@
      matUpdate();
  }
  
-+extern "C" void re4_player_after_routine(cPlayer* pl); /* port: runtime/free_move.cpp (patch 0219) */
++extern "C" void re4_player_after_routine(cPlayer* pl); /* port: runtime/free_move.cpp (patch 0900) */
 +
  // Per-frame update.
  void cPlayer::move()
@@ -22,7 +23,7 @@
              }
          }
      }
-+    re4_player_after_routine(this); /* port (patch 0219): "Move while aiming" walks the legs */
++    re4_player_after_routine(this); /* port (patch 0900): "Move while aiming" walks the legs */
      if (r_no_0 == 0 && r_no_1 == 6 && r_no_2 == 0) {
          pList->ang.y *= 0.5f;
      }
@@ -32,12 +33,12 @@
      return 0;
  }
  
-+extern "C" void re4_player_input(cPlayer* pl); /* port: runtime/free_move.cpp (patch 0219) */
++extern "C" void re4_player_input(cPlayer* pl); /* port: runtime/free_move.cpp (patch 0900) */
 +
  // Applies the controller layout (pSys->pad_type); both layouts use keyConfigTypeA.
  void cPlayer::keyConfig()
  {
-+    re4_player_input(this); /* port (patch 0219): "Free movement" and "Move while aiming" */
++    re4_player_input(this); /* port (patch 0900): "Free movement" and "Move while aiming" */
      switch (pSys->pad_type) {
      case 0:
          keyConfigTypeA();
@@ -47,7 +48,7 @@
      m_p_floor_norm = p_norm;
  }
  
-+extern "C" void re4_free_cam_matrix(Mtx mat); /* port: runtime/free_move.cpp (patch 0219) */
++extern "C" void re4_free_cam_matrix(Mtx mat); /* port: runtime/free_move.cpp (patch 0900) */
 +
  // The player-space frame the shoulder offsets are applied in: the player's matrix (or the
  // stored one after the search delay), one-shot translation / look-direction overrides, the up
@@ -56,7 +57,7 @@
      }
      if (m_state & 1) {
          PSMTXCopy(m_pl_mat, mat);
-+        re4_free_cam_matrix(mat); /* port (patch 0219): "Free movement" turns the camera round Leon */
++        re4_free_cam_matrix(mat); /* port (patch 0900): "Free movement" turns the camera round Leon */
      }
      if (m_pl_ofs.x != 0.0f || m_pl_ofs.y != 0.0f || m_pl_ofs.z != 0.0f) {
          PSMTXMultVec(mat, &m_pl_ofs, &v0);

@@ -2027,7 +2027,7 @@ static void testKnifeSwipe()
     report("knifeswipe", ok);
 }
 
-// "Free movement" and "Move while aiming" (runtime/free_move.cpp, patch 0219; game_probe.cpp re4probe_free_move):
+// "Free movement" and "Move while aiming" (runtime/free_move.cpp, patch 0900; game_probe.cpp re4probe_free_move):
 // the stick seen from the camera, the camera by the C stick, the move while aiming, both off as the game
 static void testFreeMove()
 {

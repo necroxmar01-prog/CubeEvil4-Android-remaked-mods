@@ -43,7 +43,12 @@
     <string name="ingame_potato">土豆模式</string>
     <string name="ingame_potato_weather">天气效果</string>
     <string name="ingame_potato_special">特殊效果</string>
-    <string name="ingame_potato_help">天气效果：雾气、雨、水花。特殊效果：蒸汽、热浪扭曲、水面。关闭可减轻性能较弱设备的图形负担；枪口火光、血迹、爆炸、火焰、命中效果和提示保留，过场动画中的所有效果也保留。</string>
+    <string name="ingame_potato_particles">粒子效果</string>
+    <string name="ingame_particles_normal">正常</string>
+    <string name="ingame_particles_less">较少</string>
+    <string name="ingame_particles_none">无</string>
+    <string name="ingame_potato_shadows">阴影与光效</string>
+    <string name="ingame_potato_help">天气效果：雾气、雨、水花。特殊效果：蒸汽、热浪扭曲、水面。粒子效果：血、灰尘、烟雾、水花、火星和火焰；“较少”只绘制一半，“无”除火焰和爆炸外全部去掉，火焰和爆炸作为警示保留一半。阴影与光效：关闭后去掉阴影（过场动画中也一样）、光晕和光束；房间的照明保持不变。每项设置都能减轻性能较弱设备的图形负担；命中位置、提示、激光和过场动画中的所有效果保留。</string>
     <string name="ingame_resolution_line">分辨率：%1$d × %2$d 像素（等级 %3$s）· 屏幕 %4$d × %5$d · 关闭菜单后生效。等级越高，对性能要求越高。</string>
     <string name="ingame_resolution_line_auto">分辨率：%1$d × %2$d 像素（等级 %3$s，动态）· 屏幕 %4$d × %5$d · 关闭菜单后生效。动态模式会在 GPU 跟不上时降低一级。</string>
 
@@ -258,7 +263,9 @@
     <string name="ingame_cheat_character">游戏角色</string>
     <string name="ingame_cheat_costume">特殊服装</string>
     <string name="ingame_cheat_costume_note">（仅里昂/阿什莉）</string>
-    <string name="ingame_cheat_character_help">该角色立即在剧情中取代里昂：房间会在你所在的位置重新载入（过场动画期间则从下一个房间开始）。里昂的手提箱、生命值和金钱保持不变；角色没有自己模型的武器显示为里昂的武器。阿什莉的部分仍由阿什莉进行，过场动画和无线电通话仍显示里昂。你的存档始终保存为里昂，因此读取时使用此处所选的角色。特殊服装：里昂和阿什莉（以及代替里昂的 Ada）穿上各自的特殊服装，同样立即生效。</string>
+    <string name="ingame_cheat_character_help">该角色立即在剧情中取代里昂：房间会在你所在的位置重新载入（过场动画期间则从下一个房间开始）。里昂的手提箱、生命值和金钱保持不变；角色没有自己模型的武器显示为里昂的武器。阿什莉的部分仍由阿什莉进行，过场动画和无线电通话仍显示里昂。你的存档始终保存为里昂，因此读取时使用此处所选的角色。里昂以外的角色并非为主线游戏设计，因此选择时会先显示警告：“我已了解”切换角色，“返回”保留当前角色。特殊服装：里昂和阿什莉（以及代替里昂的 Ada）穿上各自的特殊服装，同样立即生效。</string>
+    <string name="ingame_cheat_character_warning">注意：此角色并非为主线游戏设计，可能并且一定会出现错误，这些错误无法避免！</string>
+    <string name="ingame_understood">我已了解</string>
     <string name="ingame_later">稍后</string>
     <string name="ingame_controller_config">按键映射</string>
     <string name="ingame_controller_config_help">按键映射：把游戏的每个动作放到手柄或键盘的按键上。</string>
@@ -329,4 +336,17 @@
     <string name="ingame_benchmark_unreachable">无法到达性能测试的地点。你已回到原来的位置。</string>
     <string name="ingame_benchmark_discs">性能测试的地点与这些游戏光盘不匹配。没有任何更改。</string>
     <string name="ingame_benchmark_low">在 %1$d FPS 下，这台设备上没有任何等级完全稳定；该数值是最后测试的等级。</string>
+    <!-- the renderer (port/docs/vulkan-bauplan.md E7) -->
+    <string name="ingame_renderer">渲染器</string>
+    <string name="ingame_renderer_gles">OpenGL ES</string>
+    <string name="ingame_renderer_vulkan">Vulkan（实验性）</string>
+    <string name="ingame_renderer_help">在部分设备上 Vulkan 可能更快，尤其是 Mali 显卡。如果无法启动，游戏会自动改回 OpenGL ES。更改后游戏会重新启动。</string>
+    <string name="ingame_renderer_restart_text">新的渲染器将在游戏重新启动后使用。上次存档之后的进度将会丢失。</string>
+    <string name="ingame_renderer_unavailable">Vulkan 需要 Android 10 和支持 Vulkan 1.1 的显卡；此设备使用 OpenGL ES 绘制。</string>
+    <string name="ingame_vulkan_failed">Vulkan 无法在此设备上启动。游戏使用 OpenGL ES 绘制。</string>
+    <string name="ingame_vulkan_crashed">游戏在使用 Vulkan 启动时结束。现在将使用 OpenGL ES 启动；可在菜单（显示）中重新选择 Vulkan。</string>
+    <string name="ingame_shader_cache">着色器缓存</string>
+    <string name="ingame_shader_cache_help">游戏会保留已构建的着色器，这样同一场景不会再次卡顿。只有在更新后出现图形错误时才需要清除：游戏会重新构建着色器，最初的几个场景可能会卡顿。</string>
+    <string name="ingame_shader_clear">清除着色器缓存</string>
+    <string name="ingame_shader_clear_text">游戏将重新启动并删除已构建的着色器。游戏过程中会重新构建，因此最初的几个场景可能会卡顿。上次存档之后的进度将会丢失。</string>
 </resources>

@@ -80,6 +80,10 @@ jobs:
           mkdir -p ~/.android
           cp "$GITHUB_WORKSPACE/.github/ci/debug.keystore" ~/.android/debug.keystore
           sed -i 's|>CubeEvil4<|>CubeEvil4 Mods<|' app/src/core/res/values/flags.xml
+          # no update button: it offers the original's releases (another app id), which this app cannot install
+          # (INSTALL_FAILED_INVALID_APK); new builds of the mods come from the release "mods-latest"
+          sed -i 's|<bool name="app_update">true</bool>|<bool name="app_update">false</bool>|' app/src/main/res/values/flags.xml
+          grep -q '<bool name="app_update">false</bool>' app/src/main/res/values/flags.xml
           # Gradle's own download (services.gradle.org -> github.com) times out at times (HTTP 504): fetch the
           # zip with retries, from a mirror if needed, check it against the wrapper's SHA-256, use it from disk
           props=gradle/wrapper/gradle-wrapper.properties
