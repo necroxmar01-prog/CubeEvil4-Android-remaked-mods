@@ -1195,6 +1195,7 @@ int re4probe_letterbox(void);
 int re4probe_picture_still(void);
 int re4probe_knife_swipe(void);
 int re4probe_free_move(void);
+int re4probe_quick_slots(void);
 int re4probe_qte_touch(void);
 int re4probe_qte_auto(void);
 int re4probe_cheat_extras(void);
@@ -2037,6 +2038,17 @@ static void testFreeMove()
     report("freemove", bad == 0);
 }
 
+// "D-pad quick slots" (runtime/quick_slots.cpp; game_probe.cpp re4probe_quick_slots): the weapon a press picks,
+// the D-pad's bits out of the keys in the field
+static void testQuickSlots()
+{
+    const int bad = re4probe_quick_slots();
+    if (bad) {
+        re4_log("  quickslots: failed checks 0x%x", bad);
+    }
+    report("quickslots", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2417,6 +2429,7 @@ int re4_runtime_tests()
     testLetterbox();
     testKnifeSwipe();
     testFreeMove();
+    testQuickSlots();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

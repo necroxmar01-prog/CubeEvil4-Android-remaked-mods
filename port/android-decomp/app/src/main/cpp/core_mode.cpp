@@ -697,8 +697,8 @@ int potatoSent = -1;  // what the core was told last (-1: nothing yet; the GPU b
 // project owner, 30.10.2026): bit 0 inverted, bits 8.. the speed in percent (the core's runtime/aim_options.cpp).
 std::atomic<int> optAim{100 << 8};
 std::atomic<int> optFarCamera{0};  // the menu's "Far camera" (CoreBridge.setFarCamera), bit 3 of the aim bits
-// the menu's "Free movement" (bit 4) and "Move while aiming" (bit 5) of the aim bits (CoreBridge.setMovement, patch 0219,
-// the core's runtime/free_move.cpp)
+// the menu's "Free movement" (bit 0 here, bit 4 of the aim bits), "Move while aiming" (bit 1, bit 5) and "D-pad quick
+// slots" (bit 2, bit 7) (CoreBridge.setMovement, patch 0219; the core's runtime/free_move.cpp, quick_slots.cpp)
 std::atomic<int> optMovement{0};
 // R3 presses (CoreBridge.recenterCamera): each one toggles bit 6 of the aim bits, the core turns the free camera back
 // behind Leon (patch 0219)
@@ -2036,7 +2036,8 @@ bool drawGx() {
       potatoSent = potato;
     }
     const int aim = optAim.load() | (optFarCamera.load() ? 8 : 0)  // bit 3 "Far camera" (patch 0171)
-                    | optMovement.load() << 4                         // bits 4, 5 "Free movement", "Move while aiming"
+                    | (optMovement.load() & 3) << 4                   // bits 4, 5 "Free movement", "Move while aiming"
+                    | (optMovement.load() & 4) << 5                   // bit 7 "D-pad quick slots"
                     | (optRecenter.load() & 1) << 6                   // bit 6 toggled by R3 (the camera behind Leon)
                     | (optFov.load() + 32) << 24;                     // bits 24.. "Field of view" (patch 0205)
     if (api.setAim && aim != aimSent) {
@@ -2882,10 +2883,11 @@ extern "C" JNIEXPORT jint JNICALL Java_com_ast_re4decomp_CoreBridge_aimFromGame(
 
 // "Free movement" and "Move while aiming" (the menu, Controls; patch 0219), sent with the aim settings (bits 4, 5).
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMovement(JNIEnv *, jclass, jboolean freeMove,
-                                                                              jboolean aimMove) {
-  const int want = (freeMove == JNI_TRUE ? 1 : 0) | (aimMove == JNI_TRUE ? 2 : 0);
+                                                                              jboolean aimMove, jboolean quickSlots) {
+  const int want = (freeMove == JNI_TRUE ? 1 : 0) | (aimMove == JNI_TRUE ? 2 : 0) | (quickSlots == JNI_TRUE ? 4 : 0);
   if (optMovement.exchange(want) != want)
-    LOG("movement: free movement %s, move while aiming %s", want & 1 ? "on" : "off", want & 2 ? "on" : "off");
+    LOG("movement: free movement %s, move while aiming %s, D-pad quick slots %s", want & 1 ? "on" : "off",
+        want & 2 ? "on" : "off", want & 4 ? "on" : "off");
 }
 
 // R3 (the right stick pressed): the free camera back behind Leon (patch 0219), a toggle of bit 6 of the aim bits.

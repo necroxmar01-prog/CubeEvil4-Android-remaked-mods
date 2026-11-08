@@ -68,6 +68,8 @@
     <string name="ingame_aim_move">Moverse al apuntar</string>
     <string name="ingame_free_move_help">Movimiento libre: Leon camina hacia donde empujas el stick, visto desde la cámara, y el stick derecho gira la cámara a su alrededor. Al preparar un arma se gira hacia donde mira la cámara. La cruceta mantiene los controles clásicos. Pulsa el stick derecho para volver a poner la cámara detrás de él.</string>
     <string name="ingame_aim_move_help">Moverse al apuntar: con un arma o el cuchillo preparados, el stick derecho mueve a Leon en cualquier dirección (con los controles alternativos, el izquierdo, mientras el derecho apunta). Mientras tanto, sus piernas reproducen la animación de caminar.</string>
+    <string name="ingame_quick_slots">Accesos rápidos en la cruceta</string>
+    <string name="ingame_quick_slots_help">Accesos rápidos en la cruceta: durante el juego la cruceta equipa un arma al instante, como en el remake: arriba pistolas y magnums, derecha escopetas, TMP y lanzadores, abajo rifles, izquierda granadas. Pulsa otra vez la misma dirección para pasar a la siguiente de ese tipo que lleves. La cruceta deja de mover a Leon.</string>
     <string name="ingame_touch_aim">Apuntar táctil</string>
     <string name="ingame_aim_move_stick">Stick de movimiento</string>
     <string name="ingame_aim_touch_area">Zona táctil</string>

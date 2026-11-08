@@ -171,8 +171,9 @@ public final class CoreBridge {
   public static native void setFarCamera(boolean on);
   /** "Free movement" (the stick moves Leon where it points, seen from a camera the right stick turns round him) and
    *  "Move while aiming" (the C stick walks him while a weapon is ready); patch 0219, runtime/free_move.cpp, sent with
-   *  the aim settings (bits 4 and 5). */
-  public static native void setMovement(boolean freeMove, boolean aimMove);
+   *  the aim settings (bits 4 and 5); "D-pad quick slots" (the D-pad equips weapons by their kind, runtime/quick_slots.cpp,
+   *  bit 7). */
+  public static native void setMovement(boolean freeMove, boolean aimMove, boolean quickSlots);
   /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0219). */
   public static native void recenterCamera();
   /** "Field of view" (PLAYER VIEW): the shoulder camera's vertical field of view changed by `degrees`

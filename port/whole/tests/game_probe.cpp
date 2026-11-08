@@ -1670,6 +1670,109 @@ extern "C" int re4probe_free_move(void)
     return bad;
 }
 
+// "D-pad quick slots" (runtime/quick_slots.cpp): the weapon a press picks from a stand-in case (the next of its
+// kind after the one held, round; none of the kind or only the held one: nothing; an empty grenade slot skipped),
+// and the D-pad's bits out of Key and Joy[0] in the field while the stick's stay. 0: all right, else the failed
+// checks' bits.
+extern "C" cItem* re4_quick_slot_pick(int slot);
+extern "C" int re4probe_quick_slots(void)
+{
+    if (!pSys) {
+        return 0x8000;
+    }
+    cPlayer* keepPl = pPL;
+    const u8 keepType = pG->pl_type;
+    const KEY keepKey = Key;
+    const JOY keepJoy = Joy[0];
+    cItem* keepItems = ItemMgr.m_pItem;
+    const s32 keepNum = ItemMgr.m_array_num;
+    cItem* keepHeld = ItemMgr.weapon();
+    const u8 lv[4] = {pG->weapon_lv_power, pG->weapon_lv_speed, pG->weapon_lv_reload, pG->weapon_lv_blt};
+    const int keepSub = StaFlagChk(pG, STA_SUB_SCRN) != 0, keepEvent = StaFlagChk(pG, STA_EVENT) != 0;
+    StaFlagOff(pG, STA_SUB_SCRN);
+    StaFlagOff(pG, STA_EVENT);
+    int bad = 0;
+
+    static cItem items[6];
+    const u16 ids[6] = {0x23, 0x25, 0x2C, 0x2E, 0x01, 0x02};
+    const u16 nums[6] = {1, 1, 1, 1, 2, 0};
+    memset(items, 0, sizeof items);
+    ItemMgr.m_pItem = items;
+    ItemMgr.m_array_num = 6;
+    // the inventory type the manager shows (private): the one its search finds
+    for (int t = 0; t < 256; t++) {
+        for (int i = 0; i < 6; i++) {
+            items[i].id = ids[i];
+            items[i].num = nums[i];
+            items[i].flags = 1;
+            items[i].type = (u8) t;
+        }
+        if (ItemMgr.search(0x23) == &items[0]) {
+            break;
+        }
+    }
+    bad |= ItemMgr.search(0x23) != &items[0] ? 0x4000 : 0;
+    ItemMgr.arm(&items[0]);  // the handgun
+    bad |= re4_quick_slot_pick(0) != &items[1] ? 1 : 0;  // up: the Red9 next
+    ItemMgr.arm(&items[1]);
+    bad |= re4_quick_slot_pick(0) != &items[0] ? 2 : 0;  // and round to the handgun
+    bad |= re4_quick_slot_pick(1) != &items[2] ? 4 : 0;  // right: the shotgun
+    bad |= re4_quick_slot_pick(2) != &items[3] ? 8 : 0;  // down: the rifle
+    bad |= re4_quick_slot_pick(3) != &items[4] ? 0x10 : 0;  // left: the hand grenade (the empty incendiary skipped)
+    ItemMgr.arm(&items[4]);
+    bad |= re4_quick_slot_pick(3) != 0 ? 0x20 : 0;  // only the held one of its kind: nothing
+    items[3].flags = 0;
+    bad |= re4_quick_slot_pick(2) != 0 ? 0x40 : 0;  // none of the kind: nothing
+
+    // the field, an empty case (no change task), the switch on: the D-pad's bits out, the stick's stay
+    ItemMgr.m_array_num = 0;
+    cPlayer* pl = (cPlayer*) (unsigned long) 0x82E40000ul;
+    memset((void*) pl, 0, sizeof(cPlayer));
+    pPL = pl;
+    pG->pl_type = 0;
+    re4_aim_set(100 << 8 | 0x80);
+    memset(&Key, 0, sizeof(Key));
+    Joy[0].on = JOY_UP;
+    Key.on = 1 | 0x100;
+    Key.trg = 1;
+    re4_player_input(pl);
+    bad |= Key.on != 0x100 || (Key.trg & 0xF) != 0 || (Joy[0].on & 0xF) != 0 ? 0x80 : 0;
+    Joy[0].on = JOY_SUP;  // the stick up: forward stays
+    Key.on = 1;
+    re4_player_input(pl);
+    bad |= Key.on != 1 ? 0x100 : 0;
+    // Ashley (no weapons): the D-pad as the game
+    pG->pl_type = 1;
+    Joy[0].on = JOY_UP;
+    Key.on = 1;
+    re4_player_input(pl);
+    bad |= Key.on != 1 || (Joy[0].on & 0xF) != JOY_UP ? 0x200 : 0;
+    // off: as the game
+    pG->pl_type = 0;
+    re4_aim_set(100 << 8);
+    re4_player_input(pl);
+    bad |= Key.on != 1 || (Joy[0].on & 0xF) != JOY_UP ? 0x400 : 0;
+
+    ItemMgr.m_pItem = keepItems;
+    ItemMgr.m_array_num = keepNum;
+    ItemMgr.arm(keepHeld);
+    pG->weapon_lv_power = lv[0];
+    pG->weapon_lv_speed = lv[1];
+    pG->weapon_lv_reload = lv[2];
+    pG->weapon_lv_blt = lv[3];
+    Key = keepKey;
+    Joy[0] = keepJoy;
+    pPL = keepPl;
+    pG->pl_type = keepType;
+    if (keepSub) {
+        StaFlagOn(pG, STA_SUB_SCRN);
+    }
+    if (keepEvent) {
+        StaFlagOn(pG, STA_EVENT);
+    }
+    return bad;
+}
+
 extern "C" int re4probe_knife_swipe(void)
 {
     const u16 kL = 0x0040, kLA = 0x0140;

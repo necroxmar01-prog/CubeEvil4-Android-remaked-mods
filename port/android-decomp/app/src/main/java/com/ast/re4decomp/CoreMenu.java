@@ -97,8 +97,9 @@ final class CoreMenu extends Dialog {
     void autoAimChanged(boolean on);
     /** "Always run": Leon runs without the run key, which walks instead (CoreBridge.setAim). */
     void alwaysRunChanged(boolean on);
-    /** "Free movement" and "Move while aiming" (patch 0219; CoreBridge.setMovement, CoreInput.setAimMove). */
-    void movementChanged(boolean freeMove, boolean aimMove);
+    /** "Free movement", "Move while aiming" and "D-pad quick slots" (patch 0219; CoreBridge.setMovement,
+     *  CoreInput.setAimMove). */
+    void movementChanged(boolean freeMove, boolean aimMove, boolean quickSlots);
     /** The European discs are imported: the home page offers "Game language". */
     boolean gameLanguages();
     /** The debug build's discs are imported: SELECT held opens the game's debug menu (the button mapping says so). */
@@ -780,9 +781,16 @@ final class CoreMenu extends Dialog {
     // "Free movement" and "Move while aiming" (patch 0219, runtime/free_move.cpp): the remake's way to move
     MenuLayout.Buttons fourth = buttonsRow(body);
     toggle(fourth, R.string.ingame_free_move, input.getBoolean(CoreActivity.FREE_MOVE, false),
-        on -> host.movementChanged(on, input.getBoolean(CoreActivity.AIM_MOVE, false)));
+        on -> host.movementChanged(on, input.getBoolean(CoreActivity.AIM_MOVE, false),
+            input.getBoolean(CoreActivity.QUICK_SLOTS, false)));
     toggle(fourth, R.string.ingame_aim_move, input.getBoolean(CoreActivity.AIM_MOVE, false),
-        on -> host.movementChanged(input.getBoolean(CoreActivity.FREE_MOVE, false), on));
+        on -> host.movementChanged(input.getBoolean(CoreActivity.FREE_MOVE, false), on,
+            input.getBoolean(CoreActivity.QUICK_SLOTS, false)));
+    // "D-pad quick slots" (runtime/quick_slots.cpp): the D-pad equips weapons by their kind, as in the remake
+    MenuLayout.Buttons fifth = buttonsRow(body);
+    toggle(fifth, R.string.ingame_quick_slots, input.getBoolean(CoreActivity.QUICK_SLOTS, false),
+        on -> host.movementChanged(input.getBoolean(CoreActivity.FREE_MOVE, false),
+            input.getBoolean(CoreActivity.AIM_MOVE, false), on));
     // aiming the knife and the guns by touch or a controller (wish of the project owner, 30.10.2026): the game's
     // own "reverse" option and the stick's speed while aiming, right under the latches
     switchWithSlider(R.string.ingame_aim_invert_v, input.getBoolean(CoreActivity.AIM_INVERT_V, false),
@@ -791,6 +799,7 @@ final class CoreMenu extends Dialog {
         CoreActivity.clampAimSpeed(input.getFloat(CoreActivity.AIM_SPEED, 1f)), value -> host.aimSpeedChanged(value));
     help(R.string.ingame_alternate_help); help(R.string.ingame_latch_help); help(R.string.ingame_auto_aim_help);
     help(R.string.ingame_always_run_help); help(R.string.ingame_free_move_help); help(R.string.ingame_aim_move_help);
+    help(R.string.ingame_quick_slots_help);
     help(R.string.ingame_aim_help); help(R.string.ingame_knife_swipe_help);
     // touch aiming (wish of the project owner, 28.10.2026): what aims while L or R is held; since 05.11.2026 a section
     // of its own, a third of the row each

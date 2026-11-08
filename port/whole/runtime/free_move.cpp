@@ -43,6 +43,7 @@
 extern cPlayer* pPL;
 extern "C" int re4_free_move_on(void);  // runtime/aim_options.cpp
 extern "C" int re4_aim_move_on(void);
+extern "C" void re4_quick_slots_input(cPlayer* pl);  // runtime/quick_slots.cpp
 
 namespace {
 
@@ -366,6 +367,7 @@ void re4_player_input(cPlayer* pl)
     if (!pl) {
         return;
     }
+    re4_quick_slots_input(pl);  // first: the D-pad's bits out of the keys when it equips weapons
     if (re4_free_move_on()) {
         freeMove(pl);
     } else {
