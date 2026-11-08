@@ -42,6 +42,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Gradle itself and the app's dependencies, cached between runs
+      - uses: gradle/actions/setup-gradle@v4
+
       - name: Build tools, NDK and CMake
         run: |
           sudo apt-get update -q
@@ -77,7 +80,12 @@ jobs:
           mkdir -p ~/.android
           cp "$GITHUB_WORKSPACE/.github/ci/debug.keystore" ~/.android/debug.keystore
           sed -i 's|>CubeEvil4<|>CubeEvil4 Mods<|' app/src/core/res/values/flags.xml
-          bash ./gradlew --no-daemon assembleCoreDebug -Pre4.modsBuild
+          # three tries: the download of Gradle sometimes times out (HTTP 504)
+          for try in 1 2 3; do
+            bash ./gradlew --no-daemon assembleCoreDebug -Pre4.modsBuild && break
+            [ "$try" = 3 ] && exit 1
+            echo "Gradle failed (try $try), again in 30 s"; sleep 30
+          done
           short=$(git rev-parse --short HEAD)
           mkdir -p "$GITHUB_WORKSPACE/out"
           cp app/build/outputs/apk/core/debug/*.apk "$GITHUB_WORKSPACE/out/CubeEvil4-Mods-$short.apk"
