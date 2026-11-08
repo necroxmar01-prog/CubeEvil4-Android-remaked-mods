@@ -700,6 +700,9 @@ std::atomic<int> optFarCamera{0};  // the menu's "Far camera" (CoreBridge.setFar
 // the menu's "Free movement" (bit 4) and "Move while aiming" (bit 5) of the aim bits (CoreBridge.setMovement, patch 0219,
 // the core's runtime/free_move.cpp)
 std::atomic<int> optMovement{0};
+// R3 presses (CoreBridge.recenterCamera): each one toggles bit 6 of the aim bits, the core turns the free camera back
+// behind Leon (patch 0219)
+std::atomic<int> optRecenter{0};
 // the menu's "Field of view" (CoreBridge.setFov, -15 .. +15 degrees, patch 0205): bits 24..29 of the aim bits as
 // degrees + 32 (0: as the game; the core's runtime/aim_options.cpp)
 std::atomic<int> optFov{0};
@@ -2034,6 +2037,7 @@ bool drawGx() {
     }
     const int aim = optAim.load() | (optFarCamera.load() ? 8 : 0)  // bit 3 "Far camera" (patch 0171)
                     | optMovement.load() << 4                         // bits 4, 5 "Free movement", "Move while aiming"
+                    | (optRecenter.load() & 1) << 6                   // bit 6 toggled by R3 (the camera behind Leon)
                     | (optFov.load() + 32) << 24;                     // bits 24.. "Field of view" (patch 0205)
     if (api.setAim && aim != aimSent) {
       api.setAim(aim);
@@ -2882,6 +2886,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMovement(
   const int want = (freeMove == JNI_TRUE ? 1 : 0) | (aimMove == JNI_TRUE ? 2 : 0);
   if (optMovement.exchange(want) != want)
     LOG("movement: free movement %s, move while aiming %s", want & 1 ? "on" : "off", want & 2 ? "on" : "off");
+}
+
+// R3 (the right stick pressed): the free camera back behind Leon (patch 0219), a toggle of bit 6 of the aim bits.
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_recenterCamera(JNIEnv *, jclass) {
+  optRecenter.fetch_add(1);
 }
 
 // "Far camera" (the menu, Controls): the shoulder camera further back while walking and standing (patch 0171),

@@ -1530,6 +1530,8 @@ extern "C" void re4_core_slash(float tilt);
 extern "C" void re4_aim_set(int bits);
 extern "C" void re4_player_input(cPlayer* pl);
 extern "C" void re4_free_cam_matrix(Mtx mat);
+extern "C" void re4_player_after_routine(cPlayer* pl);
+extern "C" void re4_camera_recenter(void);
 extern "C" int re4probe_free_move(void)
 {
     if (!pSys) {
@@ -1612,6 +1614,15 @@ extern "C" int re4probe_free_move(void)
     Key.on = 8;
     re4_player_input(pl);
     bad |= Key.on != 8 ? 0x40 : 0;
+    // R3: the camera turns back behind him (his back faces -pi here) within a few frames, not at once
+    Key.on = 0;
+    re4_camera_recenter();
+    re4_player_input(pl);
+    const f32 firstStep = camYaw();
+    for (int i = 0; i < 30; i++) {
+        re4_player_input(pl);
+    }
+    bad |= fabsf(firstStep - (-0.085f)) < 0.05f || fabsf(fabsf(camYaw()) - 2.0f * kHalfPi) > 0.002f ? 0x1000 : 0;
 
     // aiming (the weapon routine, ready): the camera exactly behind him, the game's again
     pl->ang.y = 0.5f;
@@ -1625,11 +1636,14 @@ extern "C" int re4probe_free_move(void)
     pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
     Key.substickY = 59;
     re4_player_input(pl);
-    bad |= !near(pl->pos.x, sinf(0.5f) * 26.0f) || !near(pl->pos.z, cosf(0.5f) * 26.0f) || Key.substickY != 0 ? 0x100 : 0;
+    bad |= !near(pl->pos.x, sinf(0.5f) * 38.0f) || !near(pl->pos.z, cosf(0.5f) * 38.0f) || Key.substickY != 0 ? 0x100 : 0;
     pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;
     Key.substickX = 59;
     re4_player_input(pl);
-    bad |= !near(pl->pos.x, -cosf(0.5f) * 26.0f) || !near(pl->pos.z, sinf(0.5f) * 26.0f) || Key.substickX != 0 ? 0x200 : 0;
+    bad |= !near(pl->pos.x, -cosf(0.5f) * 38.0f) || !near(pl->pos.z, sinf(0.5f) * 38.0f) || Key.substickX != 0 ? 0x200 : 0;
+    // the legs: a player without motions (this stand-in) is left alone
+    re4_player_after_routine(pl);
+    bad |= !near(pl->pos.x, -cosf(0.5f) * 38.0f) ? 0x2000 : 0;
     // not ready (the routine's first step): no move
     pl->r_no_2 = 0;
     pl->pos.x = pl->pos.y = pl->pos.z = 0.0f;

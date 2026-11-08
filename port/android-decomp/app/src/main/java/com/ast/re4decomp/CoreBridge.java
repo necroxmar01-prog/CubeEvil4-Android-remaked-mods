@@ -173,6 +173,8 @@ public final class CoreBridge {
    *  "Move while aiming" (the C stick walks him while a weapon is ready); patch 0219, runtime/free_move.cpp, sent with
    *  the aim settings (bits 4 and 5). */
   public static native void setMovement(boolean freeMove, boolean aimMove);
+  /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0219). */
+  public static native void recenterCamera();
   /** "Field of view" (PLAYER VIEW): the shoulder camera's vertical field of view changed by `degrees`
    *  (-15 .. +15; 0 as the game; patch 0205), sent with the aim settings. */
   public static native void setFov(int degrees);

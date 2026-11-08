@@ -2,9 +2,30 @@
 # Controls page, both off by default): runtime/free_move.cpp. cPlayer::keyConfig calls re4_player_input first,
 # before the walk routines read the keys: with "Free movement" the main stick turns Leon toward where it points,
 # seen from the camera, and the game gets only "forward" (its walk and run do the rest); the C stick turns the
-# camera round him. With "Move while aiming" the C stick walks him while a weapon or the knife is ready.
-# CameraQuasiFPS::calcBaseMatrix asks re4_free_cam_matrix to turn the camera's base frame to the free camera's yaw
-# (only in the walk routines, and on the way back behind him after them). Both off: nothing changes.
+# camera round him, R3 brings it back behind him. With "Move while aiming" the C stick walks him while a weapon or
+# the knife is ready; cPlayer::move calls re4_player_after_routine after the routines, which puts his walk motion
+# on his legs meanwhile. CameraQuasiFPS::calcBaseMatrix asks re4_free_cam_matrix to turn the camera's base frame
+# to the free camera's yaw (only in the walk routines, and on the way back behind him after them). Both off:
+# nothing changes.
+--- a/src/game/player.cpp
++++ b/src/game/player.cpp
+@@ -290,6 +290,8 @@
+     matUpdate();
+ }
+ 
++extern "C" void re4_player_after_routine(cPlayer* pl); /* port: runtime/free_move.cpp (patch 0219) */
++
+ // Per-frame update.
+ void cPlayer::move()
+ {
+@@ -352,6 +354,7 @@
+             }
+         }
+     }
++    re4_player_after_routine(this); /* port (patch 0219): "Move while aiming" walks the legs */
+     if (r_no_0 == 0 && r_no_1 == 6 && r_no_2 == 0) {
+         pList->ang.y *= 0.5f;
+     }
 --- a/src/game/pl_class.cpp
 +++ b/src/game/pl_class.cpp
 @@ -955,9 +955,12 @@

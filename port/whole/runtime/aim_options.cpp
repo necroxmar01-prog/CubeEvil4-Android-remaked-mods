@@ -36,6 +36,7 @@ std::atomic<bool> gFar(false);      // the app's "Far camera" (patch 0171)
 std::atomic<int> gFov(0);           // the app's "Field of view" in degrees, -15 .. 15 (patch 0205)
 std::atomic<bool> gFreeMove(false); // the app's "Free movement" (patch 0219, runtime/free_move.cpp)
 std::atomic<bool> gAimMove(false);  // the app's "Move while aiming" (patch 0219, runtime/free_move.cpp)
+std::atomic<int> gRecenterBit(-1);  // bit 6 as last sent (-1: nothing yet); each change is one press of R3
 
 // The field of view from the aim bits: bits 24..29 hold degrees + 32 (0: an app without it, as the game).
 int fovOf(int bits)
@@ -123,10 +124,17 @@ struct StartSetting {
 extern "C" {
 
 // The app (core_api.cpp re4_core_set_aim): bit 0 "Invert vertical", bit 1 "Auto aim", bit 2 "Always run",
-// bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0219), bits 8..19 the aim speed in
-// percent, bits 24..29 "Field of view" (degrees + 32; 0.98.4). Any thread.
+// bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0219), bit 6 toggled by each press of
+// R3 (the camera back behind Leon, patch 0219), bits 8..19 the aim speed in percent, bits 24..29 "Field of view"
+// (degrees + 32; 0.98.4). Any thread.
+extern "C" void re4_camera_recenter(void);  // runtime/free_move.cpp
 void re4_aim_set(int bits)
 {
+    const int recenter = (bits >> 6) & 1;
+    const int before = gRecenterBit.exchange(recenter);
+    if (before >= 0 && before != recenter) {
+        re4_camera_recenter();
+    }
     int speed = (bits >> 8) & 0xFFF;
     if (speed < 50) speed = 50;
     if (speed > 300) speed = 300;

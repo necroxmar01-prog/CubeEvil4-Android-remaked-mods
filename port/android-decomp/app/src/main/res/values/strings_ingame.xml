@@ -76,8 +76,8 @@
     <string name="ingame_far_camera_help">Keeps the shoulder camera a little further behind Leon while walking and standing. Aiming and tight spots bring it close as before; it moves smoothly in between.</string>
     <string name="ingame_free_move">Free movement</string>
     <string name="ingame_aim_move">Move while aiming</string>
-    <string name="ingame_free_move_help">Free movement: Leon walks where you push the stick, seen from the camera, and the right stick turns the camera around him. Readying a weapon turns him to where the camera looks. The D-pad keeps the classic controls.</string>
-    <string name="ingame_aim_move_help">Move while aiming: while a weapon or the knife is ready, the right stick walks Leon in any direction (with Alternate Controls the left stick, while the right one aims). His feet slide: the game has no strafing steps.</string>
+    <string name="ingame_free_move_help">Free movement: Leon walks where you push the stick, seen from the camera, and the right stick turns the camera around him. Readying a weapon turns him to where the camera looks. The D-pad keeps the classic controls. Press the right stick to bring the camera back behind him.</string>
+    <string name="ingame_aim_move_help">Move while aiming: while a weapon or the knife is ready, the right stick walks Leon in any direction (with Alternate Controls the left stick, while the right one aims). His legs play his walking steps meanwhile.</string>
     <string name="ingame_touch_aim">Touch Aiming</string>
     <string name="ingame_aim_move_stick">Move Stick</string>
     <string name="ingame_aim_touch_area">Touch Area</string>

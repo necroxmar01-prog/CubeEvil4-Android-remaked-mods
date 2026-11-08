@@ -66,8 +66,8 @@
     <string name="ingame_far_camera_help">Hält die Schulterkamera beim Laufen und Stehen etwas weiter hinter Leon. Beim Zielen und an engen Stellen kommt sie wie bisher nah heran; dazwischen gleitet sie weich.</string>
     <string name="ingame_free_move">Freie Bewegung</string>
     <string name="ingame_aim_move">Beim Zielen bewegen</string>
-    <string name="ingame_free_move_help">Freie Bewegung: Leon geht dorthin, wohin du den Stick drückst, von der Kamera aus gesehen, und der rechte Stick dreht die Kamera um ihn. Ziehst du eine Waffe, dreht er sich dorthin, wohin die Kamera schaut. Das Steuerkreuz behält die klassische Steuerung.</string>
-    <string name="ingame_aim_move_help">Beim Zielen bewegen: Mit gezogener Waffe oder gezücktem Messer bewegt der rechte Stick Leon in jede Richtung (mit der alternativen Steuerung der linke, während der rechte zielt). Seine Füße gleiten: Das Spiel hat keine Seitschritte.</string>
+    <string name="ingame_free_move_help">Freie Bewegung: Leon geht dorthin, wohin du den Stick drückst, von der Kamera aus gesehen, und der rechte Stick dreht die Kamera um ihn. Ziehst du eine Waffe, dreht er sich dorthin, wohin die Kamera schaut. Das Steuerkreuz behält die klassische Steuerung. Drück den rechten Stick, um die Kamera wieder hinter ihn zu bringen.</string>
+    <string name="ingame_aim_move_help">Beim Zielen bewegen: Mit gezogener Waffe oder gezücktem Messer bewegt der rechte Stick Leon in jede Richtung (mit der alternativen Steuerung der linke, während der rechte zielt). Seine Beine spielen dabei die Gehbewegung ab.</string>
     <string name="ingame_touch_aim">Touch-Zielen</string>
     <string name="ingame_aim_move_stick">Bewegungsstick</string>
     <string name="ingame_aim_touch_area">Touchfläche</string>

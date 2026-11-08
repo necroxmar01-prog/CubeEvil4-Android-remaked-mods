@@ -68,8 +68,8 @@
     <string name="ingame_far_camera_help">Garde la caméra d\'épaule un peu plus loin derrière Leon en marchant et à l\'arrêt. En visant et dans les endroits étroits, elle se rapproche comme avant ; entre les deux, elle glisse en douceur.</string>
     <string name="ingame_free_move">Déplacement libre</string>
     <string name="ingame_aim_move">Bouger en visant</string>
-    <string name="ingame_free_move_help">Déplacement libre : Leon marche là où vous poussez le stick, vu depuis la caméra, et le stick droit fait tourner la caméra autour de lui. En dégainant une arme, il se tourne vers où regarde la caméra. La croix directionnelle garde les commandes classiques.</string>
-    <string name="ingame_aim_move_help">Bouger en visant : arme ou couteau en main, le stick droit déplace Leon dans toutes les directions (avec les commandes alternatives, le stick gauche, pendant que le droit vise). Ses pieds glissent : le jeu n\'a pas de pas latéraux.</string>
+    <string name="ingame_free_move_help">Déplacement libre : Leon marche là où vous poussez le stick, vu depuis la caméra, et le stick droit fait tourner la caméra autour de lui. En dégainant une arme, il se tourne vers où regarde la caméra. La croix directionnelle garde les commandes classiques. Appuyez sur le stick droit pour replacer la caméra derrière lui.</string>
+    <string name="ingame_aim_move_help">Bouger en visant : arme ou couteau en main, le stick droit déplace Leon dans toutes les directions (avec les commandes alternatives, le stick gauche, pendant que le droit vise). Ses jambes jouent alors son animation de marche.</string>
     <string name="ingame_touch_aim">Visée tactile</string>
     <string name="ingame_aim_move_stick">Stick de déplacement</string>
     <string name="ingame_aim_touch_area">Zone tactile</string>

@@ -66,8 +66,8 @@
     <string name="ingame_far_camera_help">Tiene la telecamera sulla spalla un po\' più lontana dietro Leon mentre cammina e sta fermo. Mirando e nei punti stretti si avvicina come prima; nel mezzo si muove in modo fluido.</string>
     <string name="ingame_free_move">Movimento libero</string>
     <string name="ingame_aim_move">Muoversi mirando</string>
-    <string name="ingame_free_move_help">Movimento libero: Leon cammina dove spingi lo stick, visto dalla telecamera, e lo stick destro ruota la telecamera intorno a lui. Impugnando un\'arma si gira dove guarda la telecamera. La croce direzionale mantiene i controlli classici.</string>
-    <string name="ingame_aim_move_help">Muoversi mirando: con un\'arma o il coltello pronti, lo stick destro muove Leon in ogni direzione (con i controlli alternativi quello sinistro, mentre il destro mira). I suoi piedi scivolano: il gioco non ha passi laterali.</string>
+    <string name="ingame_free_move_help">Movimento libero: Leon cammina dove spingi lo stick, visto dalla telecamera, e lo stick destro ruota la telecamera intorno a lui. Impugnando un\'arma si gira dove guarda la telecamera. La croce direzionale mantiene i controlli classici. Premi lo stick destro per riportare la telecamera dietro di lui.</string>
+    <string name="ingame_aim_move_help">Muoversi mirando: con un\'arma o il coltello pronti, lo stick destro muove Leon in ogni direzione (con i controlli alternativi quello sinistro, mentre il destro mira). Intanto le sue gambe riproducono l\'animazione della camminata.</string>
     <string name="ingame_touch_aim">Mira touch</string>
     <string name="ingame_aim_move_stick">Stick di movimento</string>
     <string name="ingame_aim_touch_area">Area touch</string>

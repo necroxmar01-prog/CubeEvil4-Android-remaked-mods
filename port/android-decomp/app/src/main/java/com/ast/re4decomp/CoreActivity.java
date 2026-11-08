@@ -1576,8 +1576,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         return true;
       case CoreInput.APP_GX_DUMP:
         // R3 (right stick pressed): the graphics data of the next pictures for the
-        // diagnosis in the cloud (files/gx-dumps, test-core-app.ps1 / pull-gx-dumps.ps1 fetch them)
-        if (first) capture();
+        // diagnosis in the cloud (files/gx-dumps, test-core-app.ps1 / pull-gx-dumps.ps1 fetch them);
+        // with "Free movement" also the camera back behind Leon (patch 0219)
+        if (first) {
+          CoreBridge.recenterCamera();
+          capture();
+        }
         return true;
       default:
         break;

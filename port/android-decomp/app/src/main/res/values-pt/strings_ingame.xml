@@ -67,8 +67,8 @@
     <string name="ingame_far_camera_help">Mantém a câmara de ombro um pouco mais atrás de Leon ao andar e parado. Ao apontar e em sítios apertados aproxima-se como antes; entre os dois move-se suavemente.</string>
     <string name="ingame_free_move">Movimento livre</string>
     <string name="ingame_aim_move">Mover-se ao mirar</string>
-    <string name="ingame_free_move_help">Movimento livre: Leon anda para onde você empurra o analógico, visto da câmera, e o analógico direito gira a câmera ao redor dele. Ao preparar uma arma, ele se vira para onde a câmera olha. O direcional mantém os controles clássicos.</string>
-    <string name="ingame_aim_move_help">Mover-se ao mirar: com uma arma ou a faca preparadas, o analógico direito move Leon em qualquer direção (com os controles alternativos, o esquerdo, enquanto o direito mira). Os pés dele deslizam: o jogo não tem passos laterais.</string>
+    <string name="ingame_free_move_help">Movimento livre: Leon anda para onde você empurra o analógico, visto da câmera, e o analógico direito gira a câmera ao redor dele. Ao preparar uma arma, ele se vira para onde a câmera olha. O direcional mantém os controles clássicos. Pressione o analógico direito para voltar a câmera para trás dele.</string>
+    <string name="ingame_aim_move_help">Mover-se ao mirar: com uma arma ou a faca preparadas, o analógico direito move Leon em qualquer direção (com os controles alternativos, o esquerdo, enquanto o direito mira). Enquanto isso, as pernas dele reproduzem a animação de andar.</string>
     <string name="ingame_touch_aim">Mira por toque</string>
     <string name="ingame_aim_move_stick">Analógico de movimento</string>
     <string name="ingame_aim_touch_area">Área de toque</string>
