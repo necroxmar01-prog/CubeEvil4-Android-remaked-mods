@@ -389,5 +389,6 @@
     <string name="ingame_outfit_story">As the story</string>
     <string name="ingame_outfit_first">First outfit</string>
     <string name="ingame_outfit_second">Second outfit</string>
-    <string name="ingame_outfit_help">The outfit the story gives Leon, or always his first (with the jacket) or second (without it); it changes at once and the room starts again where he stands.</string>
+    <string name="ingame_back_weapon">Weapon on the back</string>
+    <string name="ingame_outfit_help">The outfit the story gives Leon, or always his first (with the jacket) or second (without it); it changes at once and the room starts again where he stands. Weapon on the back: the last long weapon he held (shotgun, rifle, machine gun, rocket launcher) hangs on his back while it is in the case and not in his hands.</string>
 </resources>

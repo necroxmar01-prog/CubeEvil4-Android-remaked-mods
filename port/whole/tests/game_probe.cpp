@@ -2478,10 +2478,12 @@ extern "C" int re4probe_potato(void)
     return bad;
 }
 
-// Leon's outfit (runtime/wardrobe.cpp, patch 0902): the costume the app's choice gives after the story's rule (only
-// Leon, only outside the special costume), the choice through the aim bits
+// Leon's outfit and the weapon on his back (runtime/wardrobe.cpp, patch 0902): the costume the app's choice gives
+// after the story's rule (only Leon, only outside the special costume), the choice through the aim bits, and where a
+// weapon of given bounds hangs (barrel up over the right shoulder, the turned centre on the back, behind it)
 extern "C" int re4_leon_outfit(int costume);
-extern "C" void re4_wardrobe_set(int outfit);
+extern "C" void re4_wardrobe_set(int outfit, int back);
+extern "C" void re4_back_place(const float c[3], float front, int barrelX, float back, float pos[3], float ang[3]);
 extern "C" int re4probe_wardrobe(void)
 {
     if (!pG) {
@@ -2491,9 +2493,9 @@ extern "C" int re4probe_wardrobe(void)
     pG->pl_type = 0;
     pG->game_costume = 0;
     int bad = 0;
-    re4_wardrobe_set(0);
+    re4_wardrobe_set(0, 0);
     bad |= re4_leon_outfit(1) != 1 || re4_leon_outfit(2) != 2 ? 1 : 0;  // the story's rule
-    re4_wardrobe_set(1);
+    re4_wardrobe_set(1, 0);
     bad |= re4_leon_outfit(1) != 0 || re4_leon_outfit(2) != 0 ? 2 : 0;  // always the jacket
     re4_aim_set(100 << 8 | 2 << 22);
     bad |= re4_leon_outfit(0) != 1 ? 4 : 0;                             // the aim bits: the second outfit
@@ -2503,6 +2505,21 @@ extern "C" int re4probe_wardrobe(void)
     pG->pl_type = 2;
     bad |= re4_leon_outfit(0) != 0 ? 0x10 : 0;                          // another character keeps his
     pG->pl_type = 0;
+    const float c[3] = {-236.0f, -30.0f, 83.0f}, sz[3] = {494.0f, 70.0f, 125.0f};
+    for (int barrel = -1; barrel <= 1; barrel += 2) {
+        float pos[3], ang[3];
+        const float cc[3] = {c[0] * -barrel, c[1], c[2]};
+        re4_back_place(cc, cc[2] + sz[2], barrel, -150.0f, pos, ang);
+        const float ca = cosf(ang[2]), sa = sinf(ang[2]);
+        bad |= fabsf(ang[0] - 1.5707963f) > 1e-4f || ang[1] != 0.0f ? 0x100 : 0;  // the profile laid flat first
+        const float qx = cc[0], qy = -cc[2];                                    // Rx(90): (x, -z, y)
+        const float cx = qx * ca - qy * sa + pos[0], cy = qx * sa + qy * ca + pos[1];
+        bad |= fabsf(cx) > 0.5f || fabsf(cy - 10.0f) > 0.5f ? 0x20 : 0;      // the centre at the shoulder blades
+        bad |= fabsf(pos[2] + cc[2] + sz[2] + 150.0f) > 0.5f ? 0x40 : 0;    // its front on the back's surface
+        // the upper end's axis turned: up over the right (-x), 45 degrees over the floor
+        const float bx = barrel * ca, by = barrel * sa;
+        bad |= !(bx < -0.68f && bx > -0.73f && by > 0.68f && by < 0.73f) ? 0x80 : 0;
+    }
     re4_aim_set(100 << 8);
     pG->pl_type = keepType;
     pG->game_costume = keepCostume;

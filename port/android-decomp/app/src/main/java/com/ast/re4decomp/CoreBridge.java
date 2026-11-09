@@ -190,9 +190,9 @@ public final class CoreBridge {
    *  the aim settings (bits 4 and 5); "D-pad quick slots" (the D-pad equips weapons by their kind, runtime/quick_slots.cpp,
    *  bit 7); "Knife parry" (the knife key at the right moment turns a blow aside, runtime/parry.cpp, bit 21). */
   public static native void setMovement(boolean freeMove, boolean aimMove, boolean quickSlots, boolean parry);
-  /** "Leon's outfit" (0 the story's, 1 the first, 2 the second; patch 0902), runtime/wardrobe.cpp, sent with the aim
-   *  settings (bits 22..23). */
-  public static native void setWardrobe(int outfit);
+  /** "Leon's outfit" (0 the story's, 1 the first, 2 the second; patch 0902) and "Weapon on the back" (the last long
+   *  weapon he held hangs on his back), runtime/wardrobe.cpp, sent with the aim settings (bits 22..23 and 30). */
+  public static native void setWardrobe(int outfit, boolean backWeapon);
   /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0900). */
   public static native void recenterCamera();
   /** The touch RLOAD button: with "Move while aiming" Leon reloads without aiming, walking or running on (patch 0900). */

@@ -101,8 +101,8 @@ final class CoreMenu extends Dialog {
     /** "Free movement", "Move while aiming", "D-pad quick slots" and "Knife parry" (patch 0900;
      *  CoreBridge.setMovement, CoreInput.setAimMove). */
     void movementChanged(boolean freeMove, boolean aimMove, boolean quickSlots, boolean parry);
-    /** "Leon's outfit" (0 the story's, 1 the first, 2 the second; CoreBridge.setWardrobe). */
-    void wardrobeChanged(int outfit);
+    /** "Leon's outfit" (0 the story's, 1 the first, 2 the second) and "Weapon on the back" (CoreBridge.setWardrobe). */
+    void wardrobeChanged(int outfit, boolean backWeapon);
     /** The European discs are imported: the home page offers "Game language". */
     boolean gameLanguages();
     /** The debug build's discs are imported: SELECT held opens the game's debug menu (the button mapping says so). */
@@ -1519,15 +1519,17 @@ final class CoreMenu extends Dialog {
     help(R.string.ingame_cheat_character_help);
     wardrobe();
   }
-  /** "Leon's outfit" (wish of DevJunior, 09.11.2026; runtime/wardrobe.cpp): the outfit the story gives him or always
-   *  the first or the second, at once (the room starts again where he stands). "Weapon on the back" was removed
-   *  again on his wish (09.11.2026). */
+  /** "Leon's outfit" and "Weapon on the back" (wishes of DevJunior, 09.11.2026; runtime/wardrobe.cpp): the outfit
+   *  the story gives him or always the first or the second, at once (the room starts again where he stands); the
+   *  last long weapon he held on his back while it is in the case and not in his hands. */
   private void wardrobe() {
     heading(R.string.ingame_outfit);
     final String[] labels = {s(R.string.ingame_outfit_story), s(R.string.ingame_outfit_first),
         s(R.string.ingame_outfit_second)};
     rowChoices(labels, new int[] {0, 1, 2}, input.getInt(CoreActivity.LEON_OUTFIT, 0), 3,
-        value -> host.wardrobeChanged(value));
+        value -> host.wardrobeChanged(value, input.getBoolean(CoreActivity.BACK_WEAPON, false)));
+    toggle(buttonsRow(body), R.string.ingame_back_weapon, input.getBoolean(CoreActivity.BACK_WEAPON, false),
+        on -> host.wardrobeChanged(input.getInt(CoreActivity.LEON_OUTFIT, 0), on));
     help(R.string.ingame_outfit_help);
   }
   /** Before Ada, HUNK, Krauser or Wesker take Leon's place (wish of the project owner, 08.11.2026): a reddish

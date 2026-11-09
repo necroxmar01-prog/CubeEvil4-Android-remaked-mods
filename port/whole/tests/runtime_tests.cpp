@@ -2161,7 +2161,7 @@ static void testParry()
     report("parry", bad == 0);
 }
 
-// Leon's outfit (runtime/wardrobe.cpp, patch 0902; game_probe.cpp re4probe_wardrobe)
+// Leon's outfit and the weapon on his back (runtime/wardrobe.cpp, patch 0902; game_probe.cpp re4probe_wardrobe)
 static void testWardrobe()
 {
     const int bad = re4probe_wardrobe();

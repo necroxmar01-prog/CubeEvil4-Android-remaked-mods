@@ -380,5 +380,6 @@
     <string name="ingame_outfit_story">Selon l\'histoire</string>
     <string name="ingame_outfit_first">Première tenue</string>
     <string name="ingame_outfit_second">Deuxième tenue</string>
-    <string name="ingame_outfit_help">La tenue que l\'histoire donne à Leon, ou toujours la première (avec la veste) ou la deuxième (sans)\u00A0; elle change aussitôt et la salle recommence là où il se trouve.</string>
+    <string name="ingame_back_weapon">Arme dans le dos</string>
+    <string name="ingame_outfit_help">La tenue que l\'histoire donne à Leon, ou toujours la première (avec la veste) ou la deuxième (sans)\u00A0; elle change aussitôt et la salle recommence là où il se trouve. Arme dans le dos\u00A0: la dernière arme longue qu\'il a tenue (fusil à pompe, fusil, mitraillette, lance-roquettes) pend dans son dos tant qu\'elle est dans la mallette et pas dans ses mains.</string>
 </resources>

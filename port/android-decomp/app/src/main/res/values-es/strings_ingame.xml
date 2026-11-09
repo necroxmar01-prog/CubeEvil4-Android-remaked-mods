@@ -378,5 +378,6 @@
     <string name="ingame_outfit_story">Según la historia</string>
     <string name="ingame_outfit_first">Primer traje</string>
     <string name="ingame_outfit_second">Segundo traje</string>
-    <string name="ingame_outfit_help">El traje que la historia le da a Leon, o siempre el primero (con chaqueta) o el segundo (sin ella); cambia al momento y la sala vuelve a empezar donde está.</string>
+    <string name="ingame_back_weapon">Arma en la espalda</string>
+    <string name="ingame_outfit_help">El traje que la historia le da a Leon, o siempre el primero (con chaqueta) o el segundo (sin ella); cambia al momento y la sala vuelve a empezar donde está. Arma en la espalda: la última arma larga que llevó (escopeta, rifle, metralleta, lanzacohetes) cuelga de su espalda mientras esté en el maletín y no en sus manos.</string>
 </resources>
