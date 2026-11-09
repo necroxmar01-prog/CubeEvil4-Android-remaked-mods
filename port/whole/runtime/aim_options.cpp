@@ -130,11 +130,14 @@ extern "C" {
 // The app (core_api.cpp re4_core_set_aim): bit 0 "Invert vertical", bit 1 "Auto aim", bit 2 "Always run",
 // bit 3 "Far camera", bit 4 "Free movement", bit 5 "Move while aiming" (patch 0900), bit 6 toggled by each press of
 // R3 (the camera back behind Leon, patch 0900), bit 7 "D-pad quick slots" (runtime/quick_slots.cpp), bit 20 toggled by each press of the touch RLOAD button (reload without aiming, runtime/free_move.cpp), bit 21 "Knife parry" (runtime/parry.cpp), bits 8..19 the aim speed in percent, bits 24..29 "Field of view"
-// (degrees + 32; 0.98.4). Any thread.
+// (degrees + 32; 0.98.4), bits 22..23 "Leon's outfit" and bit 30 "Weapon on the back" (runtime/wardrobe.cpp). Any thread.
 extern "C" void re4_camera_recenter(void);  // runtime/free_move.cpp
 extern "C" void re4_reload_request(void);   // runtime/free_move.cpp
+extern "C" void re4_wardrobe_set(int outfit, int back);  // runtime/wardrobe.cpp
 void re4_aim_set(int bits)
 {
+    // bits 22..23 "Leon's outfit" (0 the story's, 1 the first, 2 the second), bit 30 "Weapon on the back"
+    re4_wardrobe_set((bits >> 22) & 3, (bits >> 30) & 1);
     const int recenter = (bits >> 6) & 1;
     const int before = gRecenterBit.exchange(recenter);
     if (before >= 0 && before != recenter) {

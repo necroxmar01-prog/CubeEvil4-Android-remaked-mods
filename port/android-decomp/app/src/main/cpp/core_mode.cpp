@@ -727,6 +727,9 @@ std::atomic<int> optFarCamera{0};  // the menu's "Far camera" (CoreBridge.setFar
 // the menu's "Free movement" (bit 0 here, bit 4 of the aim bits), "Move while aiming" (bit 1, bit 5) and "D-pad quick
 // slots" (bit 2, bit 7) (CoreBridge.setMovement, patch 0900; the core's runtime/free_move.cpp, quick_slots.cpp)
 std::atomic<int> optMovement{0};
+// the menu's "Leon's outfit" (bits 0..1 here: 0 the story's, 1 the first, 2 the second; bits 22..23 of the aim bits)
+// and "Weapon on the back" (bit 2 here, bit 30) (CoreBridge.setWardrobe, patch 0902; the core's runtime/wardrobe.cpp)
+std::atomic<int> optWardrobe{0};
 // R3 presses (CoreBridge.recenterCamera): each one toggles bit 6 of the aim bits, the core turns the free camera back
 // behind Leon (patch 0900)
 std::atomic<int> optRecenter{0};
@@ -2144,6 +2147,8 @@ bool drawGx() {
                     | (optReload.load() & 1) << 20                    // bit 20 toggled by the touch RLOAD
                     | (optMovement.load() & 8) << 18                  // bit 21 "Knife parry"
                     | (optRecenter.load() & 1) << 6                   // bit 6 toggled by R3 (the camera behind Leon)
+                    | (optWardrobe.load() & 3) << 22                  // bits 22, 23 "Leon's outfit" (patch 0902)
+                    | (optWardrobe.load() & 4) << 28                  // bit 30 "Weapon on the back"
                     | (optFov.load() + 32) << 24;                     // bits 24.. "Field of view" (patch 0205)
     if (api.setAim && aim != aimSent) {
       api.setAim(aim);
@@ -3047,6 +3052,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMovement(
   if (optMovement.exchange(want) != want)
     LOG("movement: free movement %s, move while aiming %s, D-pad quick slots %s, knife parry %s", want & 1 ? "on" : "off",
         want & 2 ? "on" : "off", want & 4 ? "on" : "off", want & 8 ? "on" : "off");
+}
+
+// "Leon's outfit" and "Weapon on the back" (the menu, Cheats; patch 0902), sent with the aim settings (bits 22, 23, 30).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setWardrobe(JNIEnv *, jclass, jint outfit,
+                                                                              jboolean backWeapon) {
+  const int want = (outfit < 0 || outfit > 2 ? 0 : outfit) | (backWeapon == JNI_TRUE ? 4 : 0);
+  if (optWardrobe.exchange(want) != want)
+    LOG("wardrobe: Leon's outfit %d, weapon on the back %s", want & 3, want & 4 ? "on" : "off");
 }
 
 // R3 (the right stick pressed): the free camera back behind Leon (patch 0900), a toggle of bit 6 of the aim bits.

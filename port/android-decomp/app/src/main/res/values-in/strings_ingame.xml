@@ -365,4 +365,10 @@
     <plurals name="ingame_mod_added">
         <item quantity="other">Mod “%1$s” ditambahkan (%2$d file). Berlaku setelah dimulai ulang; progres sejak penyimpanan terakhir akan hilang.</item>
     </plurals>
+    <string name="ingame_outfit">Pakaian Leon</string>
+    <string name="ingame_outfit_story">Sesuai cerita</string>
+    <string name="ingame_outfit_first">Pakaian pertama</string>
+    <string name="ingame_outfit_second">Pakaian kedua</string>
+    <string name="ingame_back_weapon">Senjata di punggung</string>
+    <string name="ingame_outfit_help">Pakaian yang diberikan cerita kepada Leon, atau selalu yang pertama (dengan jaket) atau kedua (tanpa jaket); berganti seketika dan ruangan dimulai ulang di tempat ia berdiri. Senjata di punggung: senjata panjang terakhir yang ia pegang (shotgun, senapan, senapan mesin, peluncur roket) tergantung di punggungnya selama ada di koper dan tidak di tangannya.</string>
 </resources>

@@ -138,6 +138,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // the menu's "Free movement" and "Move while aiming" (patch 0900, runtime/free_move.cpp; both off)
   static final String FREE_MOVE = "freeMovement", AIM_MOVE = "moveWhileAiming", QUICK_SLOTS = "dpadQuickSlots",
       PARRY = "knifeParry";
+  // "Leon's outfit" (0 the story's, 1 the first, 2 the second) and "Weapon on the back" (wishes of DevJunior,
+  // 09.11.2026; runtime/wardrobe.cpp)
+  static final String LEON_OUTFIT = "leonOutfit", BACK_WEAPON = "backWeapon";
   static final float AIM_SPEED_MIN = 0.5f, AIM_SPEED_MAX = 3f, AIM_SPEED_STEP = 0.25f;
   // the menu's "Field of view" (PLAYER VIEW; wish of the project owner, 05.11.2026): degrees added to the shoulder
   // camera's vertical field of view, -FOV_RANGE .. FOV_RANGE, 0 as the game (CoreBridge.setFov, patch 0205)
@@ -414,6 +417,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
           getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(QUICK_SLOTS, false),
           getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(PARRY, false));
       CoreBridge.setFov(fovOffset(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE)));
+      CoreBridge.setWardrobe(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getInt(LEON_OUTFIT, 0),
+          getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(BACK_WEAPON, false));
       CoreBridge.setVertexRing(g.getBoolean("vertexRing", false));
       // "Dynamic" up to the benchmark's levels on this device, when it ran
       CoreBridge.setDynamicCaps(g.getInt(CoreMenu.DYN_CAP_30, 0), g.getInt(CoreMenu.DYN_CAP_60, 0));
@@ -927,6 +932,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
           .putBoolean(AIM_MOVE, aimMove).putBoolean(QUICK_SLOTS, quickSlots).putBoolean(PARRY, parry).apply();
       input.setAimMove(aimMove);
       CoreBridge.setMovement(freeMove, aimMove, quickSlots, parry);
+    }
+
+    @Override public void wardrobeChanged(int outfit, boolean backWeapon) {
+      getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).edit().putInt(LEON_OUTFIT, outfit)
+          .putBoolean(BACK_WEAPON, backWeapon).apply();
+      CoreBridge.setWardrobe(outfit, backWeapon);
     }
 
     @Override public void alwaysRunChanged(boolean on) {

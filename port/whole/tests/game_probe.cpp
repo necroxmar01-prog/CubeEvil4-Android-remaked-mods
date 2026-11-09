@@ -2477,3 +2477,44 @@ extern "C" int re4probe_potato(void)
     re4_potato_set(keepMask < 0 ? 0 : keepMask);
     return bad;
 }
+
+// Leon's outfit and the weapon on his back (runtime/wardrobe.cpp, patch 0902): the costume the app's choice gives
+// after the story's rule (only Leon, only outside the special costume), the choice through the aim bits, and where a
+// weapon of given bounds hangs (barrel up over the right shoulder, the turned centre on the back, behind it)
+extern "C" int re4_leon_outfit(int costume);
+extern "C" void re4_wardrobe_set(int outfit, int back);
+extern "C" void re4_back_place(const float c[3], const float s[3], float pos[3], float ang[3]);
+extern "C" int re4probe_wardrobe(void)
+{
+    if (!pG) {
+        return 0x8000;
+    }
+    const u8 keepType = pG->pl_type, keepCostume = pG->game_costume;
+    pG->pl_type = 0;
+    pG->game_costume = 0;
+    int bad = 0;
+    re4_wardrobe_set(0, 0);
+    bad |= re4_leon_outfit(1) != 1 || re4_leon_outfit(2) != 2 ? 1 : 0;  // the story's rule
+    re4_wardrobe_set(1, 0);
+    bad |= re4_leon_outfit(1) != 0 || re4_leon_outfit(2) != 0 ? 2 : 0;  // always the jacket
+    re4_aim_set(100 << 8 | 2 << 22);
+    bad |= re4_leon_outfit(0) != 1 ? 4 : 0;                             // the aim bits: the second outfit
+    pG->game_costume = 1;
+    bad |= re4_leon_outfit(3) != 3 ? 8 : 0;                             // the special costume stays
+    pG->game_costume = 0;
+    pG->pl_type = 2;
+    bad |= re4_leon_outfit(0) != 0 ? 0x10 : 0;                          // another character keeps his
+    pG->pl_type = 0;
+    const float c[3] = {236.0f, -30.0f, 83.0f}, sz[3] = {494.0f, 70.0f, 125.0f};
+    float pos[3], ang[3];
+    re4_back_place(c, sz, pos, ang);
+    const float ca = cosf(ang[2]), sa = sinf(ang[2]);
+    const float cx = c[0] * ca - c[1] * sa + pos[0], cy = c[0] * sa + c[1] * ca + pos[1];
+    bad |= fabsf(cx) > 0.5f || fabsf(cy - 30.0f) > 0.5f ? 0x20 : 0;      // the centre on the back
+    bad |= fabsf(pos[2] + c[2] + sz[2] + 140.0f) > 0.5f ? 0x40 : 0;      // its front just behind the back
+    bad |= !(ca < -0.2f && sa > 0.9f) ? 0x80 : 0;                        // the barrel up over the right (-x)
+    re4_aim_set(100 << 8);
+    pG->pl_type = keepType;
+    pG->game_costume = keepCostume;
+    return bad;
+}

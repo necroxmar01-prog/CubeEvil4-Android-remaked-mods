@@ -375,4 +375,10 @@
         <item quantity="many">Mod “%1$s” adicionado (%2$d arquivos). Vale após reiniciar; o progresso desde o último salvamento é perdido.</item>
         <item quantity="other">Mod “%1$s” adicionado (%2$d arquivos). Vale após reiniciar; o progresso desde o último salvamento é perdido.</item>
     </plurals>
+    <string name="ingame_outfit">Roupa do Leon</string>
+    <string name="ingame_outfit_story">Conforme a história</string>
+    <string name="ingame_outfit_first">Primeira roupa</string>
+    <string name="ingame_outfit_second">Segunda roupa</string>
+    <string name="ingame_back_weapon">Arma nas costas</string>
+    <string name="ingame_outfit_help">A roupa que a história dá ao Leon, ou sempre a primeira (com a jaqueta) ou a segunda (sem ela); muda na hora e a sala recomeça onde ele está. Arma nas costas: a última arma longa que ele empunhou (espingarda, rifle, metralhadora, lança-foguetes) fica pendurada nas costas enquanto estiver na maleta e não nas mãos.</string>
 </resources>

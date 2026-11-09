@@ -370,4 +370,10 @@
         <item quantity="one">Mod „%1$s“ hinzugefügt (%2$d Datei). Er gilt nach einem Neustart; Fortschritt seit dem letzten Speichern geht verloren.</item>
         <item quantity="other">Mod „%1$s“ hinzugefügt (%2$d Dateien). Er gilt nach einem Neustart; Fortschritt seit dem letzten Speichern geht verloren.</item>
     </plurals>
+    <string name="ingame_outfit">Leons Kleidung</string>
+    <string name="ingame_outfit_story">Wie die Geschichte</string>
+    <string name="ingame_outfit_first">Erste Kleidung</string>
+    <string name="ingame_outfit_second">Zweite Kleidung</string>
+    <string name="ingame_back_weapon">Waffe auf dem Rücken</string>
+    <string name="ingame_outfit_help">Die Kleidung, die die Geschichte Leon gibt, oder immer seine erste (mit Jacke) oder zweite (ohne); sie wechselt sofort, der Raum beginnt neu, wo er steht. Waffe auf dem Rücken: die letzte lange Waffe, die er hielt (Schrotflinte, Gewehr, Maschinenpistole, Raketenwerfer), hängt auf seinem Rücken, solange sie im Koffer und nicht in seinen Händen ist.</string>
 </resources>

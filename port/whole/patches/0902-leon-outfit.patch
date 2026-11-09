@@ -1,0 +1,25 @@
+# Patch 0902 (wish of DevJunior, 09.11.2026: choose Leon's first or second outfit; the remake mods). Not a bug of
+# the prototype: a port feature of the app menu.
+# pl_sub.cpp PlSetCostume: Leon's costume after the story's rule (the jacket until the r106 event, then the second
+# outfit, the armour with its item) goes through re4_leon_outfit (runtime/wardrobe.cpp): the app's choice "Leon's
+# outfit" (first, second) wins in the story with Leon outside the special costume; "the story's" keeps the rule.
+# The events follow pl_costume as before (event.cpp ExePacket_SetParts: the second outfit's parts).
+--- a/src/game/pl_sub.cpp
++++ b/src/game/pl_sub.cpp
+@@ -67,6 +67,7 @@
+ extern "C" int re4_story_char_leon_costume(void);
+ extern "C" int re4_story_char_costume(void);
+ 
++extern "C" int re4_leon_outfit(int costume); /* port: runtime/wardrobe.cpp */
+ int PlSetCostume()
+ {
+     if (FlagChkSignW(pG->System_flg, SYS_OMAKE_ADA_GAME) || FlagChkSignW(pG->System_flg, SYS_OMAKE_ETC_GAME)) {
+@@ -89,6 +90,8 @@
+     } else {
+         pG->pl_costume = pG->game_costume;
+     }
++    /* port (patch 0902): Leon's outfit of the app menu (runtime/wardrobe.cpp; the story's rule unless chosen) */
++    pG->pl_costume = (u8) re4_leon_outfit(pG->pl_costume);
+     pG->pl_flag |= 1;
+     return pG->pl_costume;
+ }

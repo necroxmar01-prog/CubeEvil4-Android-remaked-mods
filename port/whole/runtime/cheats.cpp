@@ -1108,8 +1108,12 @@ void re4_cheats_install(void)
 // is off; Ashley's part (1) stays hers. A new type reads its player data (pl_flag), drops the weapon
 // module (each character has its own files) and takes its costume (PlSetCostume, patch 0195: Leon's
 // rule for the stand-ins but Ada).
+extern "C" void re4_wardrobe_room(void);  // runtime/wardrobe.cpp
+
 void re4_story_char_room(void)
 {
+    // Leon's outfit of the app and the weapon on his back (runtime/wardrobe.cpp)
+    re4_wardrobe_room();
     if (!storyGame()) {
         gSwitched = 0;
         re4_story_ganado = 0;

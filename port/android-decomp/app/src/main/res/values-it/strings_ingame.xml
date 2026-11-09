@@ -374,4 +374,10 @@
         <item quantity="many">Mod «%1$s» aggiunta (%2$d file). Vale dopo un riavvio; i progressi dall\'ultimo salvataggio vanno persi.</item>
         <item quantity="other">Mod «%1$s» aggiunta (%2$d file). Vale dopo un riavvio; i progressi dall\'ultimo salvataggio vanno persi.</item>
     </plurals>
+    <string name="ingame_outfit">Abito di Leon</string>
+    <string name="ingame_outfit_story">Come la storia</string>
+    <string name="ingame_outfit_first">Primo abito</string>
+    <string name="ingame_outfit_second">Secondo abito</string>
+    <string name="ingame_back_weapon">Arma sulla schiena</string>
+    <string name="ingame_outfit_help">L\'abito che la storia dà a Leon, oppure sempre il primo (con la giacca) o il secondo (senza); cambia subito e la stanza ricomincia dove si trova. Arma sulla schiena: l\'ultima arma lunga che ha impugnato (fucile a pompa, fucile, mitra, lanciarazzi) pende sulla sua schiena finché è nella valigetta e non nelle sue mani.</string>
 </resources>
