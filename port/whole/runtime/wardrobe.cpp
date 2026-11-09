@@ -264,10 +264,44 @@ bool objOurs()
     return (void*) gObj->pModelInfo->model_addr == gObjModel;
 }
 
+// A body is never destroyed while it is shown: the frame hook runs after the objects moved, a shown body is already
+// in this frame's drawing list, and the renderer then reads a destroyed one (the crashes of 09.11.2026 in
+// LightSetModel from ExecOt: after a new placement, and in a cutscene when the weapon went from Leon to the
+// event's Leon). It is hidden at once and destroyed a few frames later, when no drawing list holds it any more.
+cObj* gOld = 0;        // a hidden body waiting to be destroyed
+void* gOldModel = 0;
+int gOldWait = 0;
+
+void retireOld()
+{
+    if (!gOld) {
+        return;
+    }
+    const bool ours = gOld->isAlive() && gOld->id == cObjMgr::ID_EVENT && gOld->pModelInfo &&
+                      (void*) gOld->pModelInfo->model_addr == gOldModel;
+    if (!ours) {
+        gOld = 0;  // the room or an event took it away already
+        return;
+    }
+    gOld->setTrans(0);
+    if (--gOldWait <= 0) {
+        ObjMgr.destroy(gOld);
+        gOld = 0;
+    }
+}
+
 void dropObj(const char* why)
 {
     if (objOurs()) {
-        ObjMgr.destroy(gObj);
+        if (gOld && gOld != gObj) {
+            gOldWait = 0;
+            retireOld();  // the one before it has been hidden long enough by now (gWait keeps them apart)
+        }
+        gObj->setTrans(0);
+        OyaSetObj18(gObj, 0, 0);
+        gOld = gObj;
+        gOldModel = gObjModel;
+        gOldWait = 3;
         re4_log("wardrobe: the weapon on the back removed (%s)", why);
     }
     gObj = 0;
@@ -420,7 +454,7 @@ void showBack(cModel* carrier)
             // makes it with createBack, the list runs front to back) and follows him in the same frame; the old
             // one moved before him and trailed a frame behind ("it moves in the cutscene until it reaches Leon")
             dropObj("onto the event's Leon");
-            gWait = 3;
+            gWait = 5;
             return;
         }
         if (carrier != gCarrier || gAdjustSeen.load() != adjustWord) {
@@ -431,7 +465,7 @@ void showBack(cModel* carrier)
     }
     if (objOurs()) {
         dropObj("another weapon");
-        gWait = 3;  // the old body is gone first, the new one comes a few frames later
+        gWait = 5;  // the old body is gone first, the new one comes a few frames later
         return;
     }
     if (gWait > 0) {
@@ -532,6 +566,7 @@ void logEventShots(cModel* carrier, int no)
 
 void backFrame()
 {
+    retireOld();
     if (re4_player_modded()) {
         describeEventLeon();
     }
