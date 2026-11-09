@@ -150,7 +150,12 @@ cModel* backCarrier(const Adjust& a)
             return 0;
         }
         cObj* ev = eventLeon();
-        return ev && (ev->be_flag & 2) ? (cModel*) ev : 0;
+        if (ev && (ev->be_flag & 2)) {
+            return (cModel*) ev;
+        }
+        // some cutscenes move the player himself (report of DevJunior, 09.11.2026: Leon outside the window in
+        // r100, no event body "pl0000" then)
+        return (pPL->be_flag & 2) ? (cModel*) pPL : 0;
     }
     return (cModel*) pPL;
 }
@@ -410,6 +415,14 @@ void showBack(cModel* carrier)
     if (objOurs() && gObjNo == gLastNo && gObjType == gLastType) {
         // the same weapon: put anew on another carrier or with another placement, never destroyed for it (device
         // test 09.11.2026: destroying and making a body in the same frame crashed in LightSetModel)
+        if (carrier != gCarrier && carrier != (cModel*) pPL) {
+            // onto the event's Leon: a body made after him, so it moves after him in the object list (SetObj18
+            // makes it with createBack, the list runs front to back) and follows him in the same frame; the old
+            // one moved before him and trailed a frame behind ("it moves in the cutscene until it reaches Leon")
+            dropObj("onto the event's Leon");
+            gWait = 3;
+            return;
+        }
         if (carrier != gCarrier || gAdjustSeen.load() != adjustWord) {
             placeOn(gObj, carrier, adjustWord, true);
         }
@@ -502,13 +515,15 @@ void logEventShots(cModel* carrier, int no)
         return;
     }
     cObj* ev = eventLeon();
-    const int why = carrier ? 0 : !adjustOf(gAdjust.load(std::memory_order_relaxed)).events ? 1 : !ev ? 2
+    const int why = carrier ? (carrier == (cModel*) pPL ? 7 : 0)
+                  : !adjustOf(gAdjust.load(std::memory_order_relaxed)).events ? 1 : !ev ? 2
                   : !(ev->be_flag & 2) ? 3 : gLastNo < 0 ? 4 : no == gLastNo ? 5 : 6;
     if (why == last || lines >= 40) {
         return;
     }
-    static const char* const text[] = {"shown", "off in cutscenes", "no event Leon", "the event's Leon hidden",
-                                       "no long weapon held yet", "the weapon in his hands", "not in the case"};
+    static const char* const text[] = {"shown", "off in cutscenes", "no event Leon and Leon hidden",
+                                       "the event's Leon hidden", "no long weapon held yet",
+                                       "the weapon in his hands", "not in the case", "shown on Leon himself"};
     re4_log("wardrobe: cutscene frame %u (event Leon %d): the weapon on the back %s (weapon_no 0x%x)",
             (unsigned) pG->Frame_cnt, ev ? 0 : -1, text[why], no);
     last = why;
