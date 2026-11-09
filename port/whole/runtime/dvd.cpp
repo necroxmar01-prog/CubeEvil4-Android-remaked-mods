@@ -866,8 +866,26 @@ void* re4_core_data_place(const char* name, unsigned fixedMax)
 // (Leon) up to the weapon data. A skin converted from the PC release (port/tools/uhd_skin_convert.py)
 // is several times larger: it goes to the free end of the development half of MEM1
 // (RE4_MEM1_PLAYER_ALT_ADDR); 0 keeps the fixed place, as for every file of the discs.
+// The player's file came from a mod (re4_player_data_place, before each read of it): patch 0901 lets
+// cutscenes draw Leon's body with his archive's textures then.
+static int gPlayerModded;
+
+int re4_player_modded(void)
+{
+    return gPlayerModded;
+}
+
 void* re4_player_data_place(const char* name, unsigned fixedMax)
 {
+    {
+        Disc* d = current();
+        s32 entry = d ? lookup(*d, name) : -1;
+        const int modded = entry > 0 && d->mod && d->mod[entry] ? 1 : 0;
+        if (modded != gPlayerModded) {
+            re4_log("DVD: %s: the player's file is %s", name, modded ? "a mod's" : "the disc's");
+        }
+        gPlayerModded = modded;
+    }
     u32 size = bodySize(name);
     if (size <= fixedMax) {
         return 0;

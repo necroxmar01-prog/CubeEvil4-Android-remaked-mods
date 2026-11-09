@@ -546,9 +546,9 @@ def tpl_found(blob, packs):
 GX_SIZE = {0x0: 4, 0x1: 8, 0x2: 8, 0x3: 16, 0x4: 16, 0x5: 16, 0x6: 32, 0xE: 4}  # bits per pixel
 
 
-def gc_triangles(blob, tex_index):
+def gc_triangles(blob, tex_index, by_part=False):
     """The disc model's triangles whose parts use texture `tex_index`: positions, normals and texture
-    coordinates per corner (float arrays n x 3 x 3 / n x 3 x 3 / n x 3 x 2)."""
+    coordinates per corner (float arrays n x 3 x 3 / n x 3 x 3 / n x 3 x 2); by_part: a list of those per part."""
     import numpy as np
     u = lambda o: struct.unpack_from(">I", blob, o)[0]
     flags, shift = u(0x20), blob[0x28]
@@ -561,9 +561,14 @@ def gc_triangles(blob, tex_index):
     else:
         N = np.frombuffer(blob, ">i2", nn * 4, u(0x34)).reshape(-1, 4)[:, :3] / 16384.0
     tex = u(0x10)
+    sc = 256.0 if clr else 32768.0
+    parts = []
     pos, nrm, uvs = [], [], []
     p = u(0x1C)
     for _ in range(struct.unpack_from(">H", blob, 0x1A)[0]):
+        if pos:
+            parts.append((np.array(pos, float), np.array(nrm, float), np.array(uvs, float) / sc))
+            pos, nrm, uvs = [], [], []
         size, mat = u(p + 0x18), blob[p + 0xC]
         s, e = p + 0x20, p + 0x20 + size
         while s < e and blob[s] != 0:
@@ -588,8 +593,13 @@ def gc_triangles(blob, tex_index):
                 nrm.append([N[v[1]] for v in t])
                 uvs.append([struct.unpack_from(">hh" if clr else ">HH", blob, tex + v[-1] * 4) for v in t])
         p = e
-    sc = 256.0 if clr else 32768.0
-    return np.array(pos, float), np.array(nrm, float), np.array(uvs, float) / sc
+    if pos:
+        parts.append((np.array(pos, float), np.array(nrm, float), np.array(uvs, float) / sc))
+    if by_part:
+        return parts
+    if not parts:
+        return np.zeros((0, 3, 3)), np.zeros((0, 3, 3)), np.zeros((0, 3, 2))
+    return tuple(np.concatenate([t[k] for t in parts]) for k in range(3))
 
 
 def pc_triangles(m, tex_index):
@@ -631,10 +641,26 @@ def bake_texture(pc_model, pc_tex, gc_models, gc_tex, gc_image, size=512):
         return None
     from PIL import Image
     tp, tn, tt = pc_triangles(pc_model, pc_tex)
-    parts = [gc_triangles(g, gc_tex) for g in gc_models]
-    parts = [t for t in parts if len(t[0])]
+    parts = [t for g in gc_models for t in gc_triangles(g, gc_tex, True) if len(t[0])]
     if not len(tp) or not parts:
         return None
+    # the disc's parts in the same place: by the overlap of their boxes with the PC parts' (the eyes take the
+    # disc's eyeballs, not the eyelids in front of them; the face the head and the face)
+    def box(p):
+        q = p.reshape(-1, 3)
+        return q.min(0), q.max(0)
+
+    def iou(a, b):
+        lo, hi = np.maximum(a[0], b[0]), np.minimum(a[1], b[1])
+        inter = np.prod(np.clip(hi - lo, 0, None))
+        va, vb = np.prod(a[1] - a[0] + 1e-3), np.prod(b[1] - b[0] + 1e-3)
+        return inter / (va + vb - inter)
+
+    tb = box(tp)
+    scores = [iou(tb, box(t[0])) for t in parts]
+    best = max(scores)
+    if best > 0:
+        parts = [t for t, sc in zip(parts, scores) if sc >= 0.25 * best]
     sp, sn, st = (np.concatenate([t[k] for t in parts]) for k in range(3))
     # the disc's surface as points: each triangle sampled on a barycentric grid
     g = 12

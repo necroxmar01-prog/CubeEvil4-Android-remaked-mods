@@ -7,6 +7,8 @@
 # trans.cpp GetPrimBuff: the room's primitive buffer (cons CONS_R_NPRIM) holds the skinned vertices of the
 # disc's models; what no longer fits comes from its overflow (runtime/mem1.cpp re4_prim_extra), one half per
 # frame buffer like the game's own, emptied in SetPrimBuffPtr.
+# event.cpp ExePacket_SetOm: Leon's body in a cutscene (his archive's model) keeps his archive's textures
+# when the player file is a mod (re4_player_modded): the event's own texture set is laid out for the disc's model.
 --- a/src/game/read.cpp
 +++ b/src/game/read.cpp
 @@ -594,6 +594,8 @@
@@ -89,3 +91,27 @@
          pLog->err(0, 0, "GetPrimBuff() : OVERFLOW");
          return 0;
      }
+--- a/src/game/event.cpp
++++ b/src/game/event.cpp
+@@ -835,6 +835,8 @@
+ // Packet 3 (SetOm): creates an event body as an obj18 from the bin/tpl named in the packet; the model
+ // name prefix (pl00, em10, evm.., scr, wep, ...) selects the obj18 type and foot shadow table;
+ // "pl0000" becomes the event player body (PPl). Registered as model type 2.
++extern "C" int re4_player_modded(void); /* port: runtime/dvd.cpp */
++
+ int Event::ExePacket_SetOm(Event* pEvt)
+ {
+     EvtPacket* pac = pEvt->pPacket;
+@@ -854,6 +856,12 @@
+         pLog->err(0, 0, "Event::ExePacket_SetOm : dat failed");
+         return 1;
+     }
++    /* port (patch 0901, mods): Leon's body in a cutscene is his archive's model (pl000a.bin) with the
++       textures the event names, laid out for the disc's model; a skin's model draws with its own
++       (pl000a.tpl), as on the PC, where the mod's packs replace those textures (DevJunior, 08.11.2026) */
++    if (re4_player_modded() && pG->pPlayer != 0 && bin == PL_ARC_PTR(pG->pPlayer, 4)) {
++        tpl = PL_ARC_PTR(pG->pPlayer, 5);
++    }
+     {
+         OmTbl tbl[] = {
+             {"pl00", 4, OBJ18_TYPE_LEON}, {"pl01", 4, OBJ18_TYPE_ASHLEY}, {"evm90", 5, OBJ18_TYPE_ASHLEY},

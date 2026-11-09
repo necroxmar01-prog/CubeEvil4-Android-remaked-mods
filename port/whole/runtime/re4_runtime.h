@@ -170,6 +170,8 @@ void* re4_option_data_place(const char* name, unsigned fixedMax);
 #define RE4_MEM1_PLAYER_ALT_ADDR 0x82600000u
 #define RE4_MEM1_PLAYER_ALT_MAX 0x00600000u
 void* re4_player_data_place(const char* name, unsigned fixedMax);
+/* 1 while the player's file is a mod's (patch 0901: cutscenes keep its textures). */
+int re4_player_modded(void);
 /* The primitive buffer's overflow (patch 0901, trans.cpp GetPrimBuff): the room's buffer (cons
  * CONS_R_NPRIM) is sized for the disc's models; a converted skin skins tens of thousands of vertices
  * into it each frame. What no longer fits comes from here, one half per frame buffer (DblBufIdx) as
