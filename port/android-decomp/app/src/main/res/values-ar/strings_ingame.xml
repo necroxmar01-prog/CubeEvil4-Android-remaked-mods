@@ -395,6 +395,5 @@
     <string name="ingame_outfit_story">حسب القصة</string>
     <string name="ingame_outfit_first">الملابس الأولى</string>
     <string name="ingame_outfit_second">الملابس الثانية</string>
-    <string name="ingame_back_weapon">سلاح على الظهر</string>
-    <string name="ingame_outfit_help">الملابس التي تعطيها القصة لليون، أو دائمًا الأولى (مع السترة) أو الثانية (بدونها)؛ تتغير فورًا وتبدأ الغرفة من جديد حيث يقف. سلاح على الظهر: آخر سلاح طويل حمله (بندقية صيد، بندقية، رشاش، قاذفة صواريخ) يتدلى على ظهره ما دام في الحقيبة وليس في يديه.</string>
+    <string name="ingame_outfit_help">الملابس التي تعطيها القصة لليون، أو دائمًا الأولى (مع السترة) أو الثانية (بدونها)؛ تتغير فورًا وتبدأ الغرفة من جديد حيث يقف.</string>
 </resources>

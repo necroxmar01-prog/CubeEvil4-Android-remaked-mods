@@ -371,6 +371,5 @@
     <string name="ingame_outfit_story">按剧情</string>
     <string name="ingame_outfit_first">第一套服装</string>
     <string name="ingame_outfit_second">第二套服装</string>
-    <string name="ingame_back_weapon">背后的武器</string>
-    <string name="ingame_outfit_help">剧情给里昂的服装，或始终穿第一套（带夹克）或第二套（不带）；立即更换，房间在他所在位置重新开始。背后的武器：他最后拿过的长武器（霰弹枪、步枪、冲锋枪、火箭筒）在手提箱里而不在手上时挂在他背后。</string>
+    <string name="ingame_outfit_help">剧情给里昂的服装，或始终穿第一套（带夹克）或第二套（不带）；立即更换，房间在他所在位置重新开始。</string>
 </resources>
