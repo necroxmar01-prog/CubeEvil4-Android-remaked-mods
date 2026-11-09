@@ -9,10 +9,11 @@ in the archive). Wish of DevJunior, 08.11.2026; analysis: the project note on sk
 GC_ARCHIVE  the disc's own file (em/pl00.drs of the debug discs, em/pl00.das of the releases):
             it gives the frame (part table, the sound bank of part 4) and every entry the PC file
             has no use for here (motions FCV/SEQ, effects EFF: the skeleton is the same).
-PC_ARCHIVE  the mod's em/plXX.udas (uncompressed; .lfs is not read yet).
+PC_ARCHIVE  the mod's em/plXX.udas, or .udas.lfs (unpacked with port/tools/re4lfs.py).
 OUT         the new file; copy it to game/mods/<name>/em/ with the disc's file name.
---packs     the mod's BIO4/imagePackHD folder: the textures, scaled down; without it (or for a
-            pack that is missing) a grey stand-in.
+--packs     the mod's BIO4/imagePackHD folder: the textures, scaled down (.pack.lfs: unpack them
+            with port/tools/re4lfs.py first); a palette none of whose textures are there (the PC
+            game's own) stays the disc's; single missing textures become grey stand-ins.
 
 What changes per model (BIN, game/model.cpp cModelData, include/model.h):
 - vertices: float x/y/z -> s16 with the model's shift; normals float -> s8 (palette up to 255
@@ -530,6 +531,18 @@ def enc_ia8(px, w, h):
 ENCODERS = {0xE: (0xE, enc_cmpr), 0x0: (0x1, enc_i8), 0x1: (0x1, enc_i8), 0x3: (0x3, enc_ia8)}
 
 
+def tpl_found(blob, packs):
+    """How many of a PC palette's textures the packs at hand hold."""
+    n = struct.unpack_from("<I", blob, 4)[0]
+    found = 0
+    for i in range(n):
+        ho = struct.unpack_from("<I", blob, 12 + i * 8)[0]
+        data = struct.unpack_from("<I", blob, ho + 8)[0]
+        if data + 8 <= len(blob) and packs and packs.find(struct.unpack_from("<I", blob, data)[0]):
+            found += 1
+    return found
+
+
 def convert_tpl(blob, packs, size, stats):
     """A PC texture palette (references to imagePackHD) -> a GameCube TPL with the images,
     scaled to at most `size` pixels a side (grey 8x8 stand-ins for missing ones)."""
@@ -600,8 +613,9 @@ def main(argv=None):
 
     gc = Archive(open(a.gc, "rb").read(), ">")
     pcdata = open(a.pc, "rb").read()
-    if pcdata[:4] == b"XLDR":
-        sys.exit("%s is compressed (.lfs): unpack it first" % a.pc)
+    if pcdata[:4] == b"RDLX":  # .lfs: the PC's compression
+        import re4lfs
+        pcdata = re4lfs.unpack(pcdata)
     pc = Archive(pcdata, "<")
     if len(gc.offsets) != len(pc.offsets):
         sys.exit("the archives differ: %d entries on the disc, %d in the PC file" % (len(gc.offsets), len(pc.offsets)))
@@ -628,6 +642,10 @@ def main(argv=None):
                 pe, ne, te, wb = verify_model(blob, model)
                 print("          read back: position error %.3f, normal %.1f degrees, texture %.4f, %d vertices "
                       "with another main bone" % (pe, ne, te, wb))
+        elif kind_pc == "TPL" and tpl_found(blob_pc, packs) == 0 and gc.entry(i):
+            # textures of the PC game itself (its BIO4/imagePackHD, not the mod's): the disc's own
+            blob = gc.entry(i)
+            print("entry %3d TPL: none of its textures in the mod's packs, the disc's" % i)
         elif kind_pc == "TPL":
             blob = convert_tpl(blob_pc, packs, a.tex, stats)
             print("entry %3d TPL: %d textures, %d bytes" % (i, len(stats), len(blob)))
