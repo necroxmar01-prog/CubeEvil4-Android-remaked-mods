@@ -90,6 +90,20 @@ def colorize(img, rgb):
     return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 
+def recolor(img, rgb):
+    """colorize for the dark texels only: bright details (buckles, zippers, patches) fade back to their own colour
+    from brightness 30 to 90, so they do not glare."""
+    import numpy as np
+    from PIL import Image
+    a = np.asarray(img.convert("RGBA"), dtype=np.float32)
+    c = np.asarray(colorize(img, rgb), dtype=np.float32)
+    lum = a[..., 0] * 0.3 + a[..., 1] * 0.59 + a[..., 2] * 0.11
+    k = np.clip((90 - lum) / 60, 0, 1)[..., None]
+    out = a.copy()
+    out[..., :3] = c[..., :3] * k + a[..., :3] * (1 - k)
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+
+
 def encode_image(img, hdr):
     """img as CMPR with a header of its size (the rest of hdr kept)."""
     w, h = img.size
@@ -100,13 +114,15 @@ def encode_image(img, hdr):
     return bytes(hdr), U.enc_cmpr(px, w, h)
 
 
-def inflate(blob, dist):
+def inflate(blob, dist, physique="even"):
     """Pushes the positions of a GameCube model of Leon (bind pose, T-pose: y up, arms along x) away from the body's
     axes: the torso from the spine (x 0, z -12; y 950..1560, fading to 0 at 850 and 1620), the arms from their axis
     (y 1517, z -39; |x| 200..620, fading out to the hands), the legs from theirs (x +-95, z 0; y 300..950, fading out
     to the shoes at 220 and into the torso up to 1050; wish of DevJunior, 09.11.2026: the legs too, in proportion).
     Away from an axis, not along normals: layers (shirt, vest, straps) move alike and thin double-sided straps do not
-    turn. Returns how many positions moved."""
+    turn. physique "athletic" (references of DevJunior, 09.11.2026: RE4 Remake Leon, broad shoulders, slim waist):
+    DIST in full at the chest and shoulders, a third at the waist; the deltoids 1.15x, the upper arms in full, the
+    forearms 0.7x; the thighs 0.75x, the calves 0.55x. Returns how many positions moved."""
     import numpy as np
     u = lambda o: struct.unpack_from(">I", blob, o)[0]
     shift = blob[0x28]
@@ -133,7 +149,16 @@ def inflate(blob, dist):
         n = np.linalg.norm(d)
         if n < 1e-6:
             continue
-        q = np.array([x, y, z]) + d / n * dist * max(wt, wa, wl)
+        scale = 1.0
+        if physique == "athletic":
+            st = 0.35 + 0.65 * float(np.clip((y - 1100) / 280, 0, 1))  # waist a third, chest in full
+            sa = (1.15 if ax < 330 else 1.0) * (1.0 - 0.3 * float(np.clip((ax - 400) / 120, 0, 1)))  # deltoid, forearm
+            sl = 0.55 + 0.2 * float(np.clip((y - 500) / 200, 0, 1))  # calves, thighs
+            w = wt + wa + wl
+            scale = (st * wt + sa * wa + sl * wl) / w
+        elif physique != "even":
+            raise ValueError("physique: even or athletic")
+        q = np.array([x, y, z]) + d / n * dist * scale * max(wt, wa, wl)
         qi = [max(-32768, min(32767, int(round(c * (1 << shift))))) for c in q]
         struct.pack_into(">3h", blob, vo + i * 8, *qi)
         moved += 1
@@ -181,6 +206,12 @@ def main(argv=None):
     ap.add_argument("--inflate", action="append", default=[], metavar="ENTRY:DIST",
                     help="push a target model's torso, arms and legs out along their normals by DIST (bulkier; after the "
                          "graft, so a grafted model too)")
+    ap.add_argument("--physique", choices=("even", "athletic"), default="even",
+                    help="--inflate everywhere alike, or athletic: broad chest and shoulders, slim waist, less on the "
+                         "forearms and legs")
+    ap.add_argument("--recolor", action="append", default=[], metavar="TPL:SLOTS=R,G,B",
+                    help="colour textures SLOTS of the target's palette TPL by their brightness in this mean colour "
+                         "(e.g. 1:2,13,16=40,43,52: a shirt and its matching parts)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
     ap.add_argument("--alpha-ref", type=int, help="alpha compare reference of the model's alpha-textured parts "
                     "(trans.cpp alphaSetup: alpha > ref is drawn; 0 on the disc, higher: no faint texels at the edges)")
@@ -259,9 +290,19 @@ def main(argv=None):
     for spec in a.inflate:
         e, dist = spec.split(":")
         blob = bytearray(entries[int(e)])
-        n = inflate(blob, float(dist))
+        n = inflate(blob, float(dist), a.physique)
         entries[int(e)] = bytes(blob)
         print("entry %s: %d positions pushed out by up to %s" % (e, n, dist))
+    for spec in a.recolor:
+        where, rgb = spec.split("=")
+        t, slots = where.split(":")
+        imgs_t = tpl_images(entries[int(t)])
+        for k in (int(x) for x in slots.split(",")):
+            hdr, data = imgs_t[k]
+            img = U.decode_gx(*struct.unpack_from(">HHI", hdr), data)
+            imgs_t[k] = encode_image(recolor(img, [float(v) for v in rgb.split(",")]), hdr)
+        entries[int(t)] = build_tpl(imgs_t)
+        print("palette %s: textures %s recoloured to %s" % (t, slots, rgb))
     data = U.build_archive(tgt, U.build_body(entries, tgt.types))
     open(a.out, "wb").write(data)
     if graft:
