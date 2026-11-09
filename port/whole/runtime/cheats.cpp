@@ -84,6 +84,7 @@ extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_formats_part_loaded(const char* name, int nest, int index, const void* part, unsigned addr);
 extern "C" void re4_add_frame_hook(void (*hook)(unsigned));  // runtime/pad.cpp
 extern "C" void re4_qte_auto(int on);                          // runtime/qte_touch.cpp
+extern "C" void* re4_player_data_place(const char* name, unsigned fixedMax);  // runtime/dvd.cpp
 
 int re4CheatPerform(int what);
 int PlSetCostume();  // pl_sub.cpp
@@ -433,6 +434,13 @@ void loadLeon(int costume)
         return;
     }
     gLeonCostume = -1;
+    // a skin from the mods (patch 0901) is larger than this place: the read would run over Krauser's
+    // weapon buffer and the stand-ins' sets behind it
+    if (re4_player_data_place(names[costume], kLeonArcMax)) {
+        re4_log("cheat: %s (a mod) is larger than its place (%u): the events show no Leon", names[costume],
+                (unsigned) kLeonArcMax);
+        return;
+    }
     DVD_READINFO info;
     int ret;
     int req = DvdReadN(names[costume], (void*) (unsigned long) kLeonArcAddr, 0, 0, 0, 0x8100, __FILE__, __LINE__);

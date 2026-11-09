@@ -413,9 +413,10 @@ static void testDvdMods()
     }
     std::string base = root;
     std::vector<FstEntry> fst0 = {
-        {true, "em", 0, 4},
+        {true, "em", 0, 5},
         {false, "pl08.das", 0x1000, 4},
         {false, "pl09.das", 0x2000, 4},
+        {false, "pl10.drs", 0x4000, 0x440},
         {false, "etc.dat", 0x3000, 3},
     };
     std::vector<unsigned char> f0 = buildFst(fst0);
@@ -433,6 +434,11 @@ static void testDvdMods()
     CHECK(writeFile(base + "/mods/b/files/em/pl09.das", "B-09!", 5));  // pack b after a: b wins
     CHECK(writeFile(base + "/mods/a/notes.txt", "x", 1));              // not on the disc
     CHECK(writeFile(base + "/mods/.hidden/etc.dat", "NO", 2));         // hidden: not a pack
+    // a player archive: the disc's with a body of 0x1000 bytes, the mod's of 0x200000 (patch 0901)
+    std::vector<unsigned char> small(0x440), large(0x440);
+    small[0x26] = 0x10;  // part 0 (type 0): 0x1000 bytes
+    large[0x25] = 0x20;  // 0x200000 bytes
+    CHECK(writeFile(base + "/disc1/files/em/pl10.drs", small.data(), small.size()));
 
     char saved[1024];
     snprintf(saved, sizeof(saved), "%s", re4_data_dir());
@@ -450,7 +456,26 @@ static void testDvdMods()
     CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "ETC", 3) == 0);
     // the FST in MEM1 carries the new size too
     const unsigned char* fst = (const unsigned char*) DVDGetFSTLocation();
-    CHECK(fst[2 * 12 + 11] == sizeof(skin) - 1 && fst[3 * 12 + 11] == 5 && fst[4 * 12 + 11] == 3);
+    CHECK(fst[2 * 12 + 11] == sizeof(skin) - 1 && fst[3 * 12 + 11] == 5 && fst[5 * 12 + 11] == 3);
+    // the player's place (patch 0901): the disc's archive keeps the fixed one
+    CHECK(re4_player_data_place("em/pl10.drs", 0x118000) == 0);
+    CHECK(re4_player_data_place("em/missing.drs", 0x118000) == 0);
+
+    // a larger mod: the place behind the cheats' (and the primitive buffer's overflow, per half)
+    CHECK(makeDirs(base + "/mods/c/em") && writeFile(base + "/mods/c/em/pl10.drs", large.data(), large.size()));
+    re4_set_data_dir(root);
+    CHECK(re4_player_data_place("em/pl10.drs", 0x118000) == (void*) (unsigned long) RE4_MEM1_PLAYER_ALT_ADDR);
+    re4_prim_extra_reset(0);
+    re4_prim_extra_reset(1);
+    CHECK(re4_prim_extra(1, 0x21) == (void*) (unsigned long) (RE4_MEM1_PRIM_EXTRA_ADDR + RE4_MEM1_PRIM_EXTRA_HALF));
+    CHECK(re4_prim_extra(1, 0x20) ==
+          (void*) (unsigned long) (RE4_MEM1_PRIM_EXTRA_ADDR + RE4_MEM1_PRIM_EXTRA_HALF + 0x40));
+    CHECK(re4_prim_extra(0, RE4_MEM1_PRIM_EXTRA_HALF + 1) == 0);
+    CHECK(re4_prim_extra(0, 0x20) == (void*) (unsigned long) RE4_MEM1_PRIM_EXTRA_ADDR);
+    re4_prim_extra_reset(1);
+    CHECK(re4_prim_extra(1, 0x20) == (void*) (unsigned long) (RE4_MEM1_PRIM_EXTRA_ADDR + RE4_MEM1_PRIM_EXTRA_HALF));
+    re4_prim_extra_reset(0);
+    re4_prim_extra_reset(1);
 
     // without mods/ the disc's own files again
     CHECK(system(("rm -rf '" + base + "/mods'").c_str()) == 0);

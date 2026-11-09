@@ -1,0 +1,91 @@
+# Patch 0901 (mods; wish of DevJunior, 08.11.2026: character skins converted from the PC release with
+# port/tools/uhd_skin_convert.py). Not a bug of the prototype: room for data the discs never had.
+# read.cpp ReadPlayerData: the player's archive goes to the fixed 0x807EC000 with room for 0x118000 bytes
+# (Leon; 0x188000 the others) up to the weapon data; a converted Leon is several times larger.
+# re4_player_data_place (runtime/dvd.cpp) names a place at the free end of the development half of MEM1
+# (RE4_MEM1_PLAYER_ALT_ADDR) for a larger body, 0 keeps the fixed one (every file of the discs).
+# trans.cpp GetPrimBuff: the room's primitive buffer (cons CONS_R_NPRIM) holds the skinned vertices of the
+# disc's models; what no longer fits comes from its overflow (runtime/mem1.cpp re4_prim_extra), one half per
+# frame buffer like the game's own, emptied in SetPrimBuffPtr.
+--- a/src/game/read.cpp
++++ b/src/game/read.cpp
+@@ -594,6 +594,8 @@
+ // Reloads the player archive (pG->pPlayer at PL_DATA_ADDR) when pl_flag bit0 asks for it: the file
+ // by character `type` and `costume` (Leon: 6 / 0x5A / 0x5B / 0x79; Ashley 0x22 / 0xBE; Ada 0xA8 /
+ // 0xB4 + DLL; HUNK / Krauser / Wesker with their DLLs), links the character REL when there is one.
++extern "C" void* re4_player_data_place(const char* name, unsigned fixed_max); /* port: runtime/dvd.cpp */
++
+ void ReadPlayerData(int type, int costume)
+ {
+     DVD_READINFO info;
+@@ -669,8 +671,18 @@
+     }
+     name = (char*) FileTbl[file].name;
+     SET_DRS_NAME(name);
++    /* port (patch 0901, mods): a skin converted from the PC release is several times larger than this
++       fixed place (it ran over the weapon data); re4_player_data_place names another one, 0 keeps it */
++    {
++        void* place = re4_player_data_place(FileTbl[file].name, type == 0 ? 0x118000 : 0x188000);
++
++        if (place != 0) {
++            pG->pPlayer = (PlArc*) place;
++            data = (u8*) place;
++        }
++    }
+ #line 1124 "D:/Bio4/Prog/read.cpp"
+-    req = DVD_READ_N(FileTbl[file].name, (void*) PL_DATA_ADDR, 0, 0, 0, 0x8100);
++    req = DVD_READ_N(FileTbl[file].name, (void*) data, 0, 0, 0, 0x8100);
+     while ((ret = Dvd.ReadCheck(req, &info)) != 1) {
+         if (ret < 0) {
+             pLog->err(0, 0, "ReadPlayerData(): error! %s", FileTbl[file].name);
+@@ -685,7 +697,7 @@
+     } else {
+         max = 0x188000;
+     }
+-    if (total >= max) {
++    if (data == (u8*) PL_DATA_ADDR && total >= max) {
+         pLog->err(0, 0, "ERROR: PLAYER_DATA IS TOO LARGE");
+     }
+     size = total;
+@@ -694,7 +706,7 @@
+     pModule = NULL;
+     if (dll != 0) {
+         ReleasePlData();
+-        pArc = (void*) PL_DATA_ADDR;
++        pArc = (void*) data;
+         pModule = (OSModuleHeader*) (*(u32*) (data + 4) + (u32) data);
+         dataSize = (u32) pModule - (u32) data;
+         bssSize = size - dataSize;
+--- a/src/game/trans.cpp
++++ b/src/game/trans.cpp
+@@ -2420,6 +2420,9 @@
+ 
+ // Frame start: flips the double-buffered primitive / vertex buffer (vtx_buf_no) and resets the
+ // allocation pointer.
++extern "C" void* re4_prim_extra(int half, unsigned size); /* port: runtime/mem1.cpp */
++extern "C" void re4_prim_extra_reset(int half);
++
+ void SetPrimBuffPtr()
+ {
+     GxWork* gx = GXWORK();
+@@ -2429,6 +2432,7 @@
+     }
+     pG->DblBufIdx = pG->DblBufIdx ^ 1;
+     gx->prim = (u8*) pG->prim_cnt + pG->nPrim * pG->DblBufIdx;
++    re4_prim_extra_reset(pG->DblBufIdx); /* port (patch 0901): its overflow's half starts empty too */
+ }
+ 
+ // Allocates `size` bytes (32-byte aligned) from this frame's primitive buffer; 0 when exhausted.
+@@ -2449,6 +2453,12 @@
+     p = gx->prim;
+     next = p + size;
+     if (limit < next) {
++        /* port (patch 0901, mods): a skin converted from the PC release skins tens of thousands of
++           vertices; what the room's buffer cannot hold comes from its overflow (runtime/mem1.cpp) */
++        p = (u8*) re4_prim_extra(pG->DblBufIdx, size);
++        if (p != 0) {
++            return p;
++        }
+         pLog->err(0, 0, "GetPrimBuff() : OVERFLOW");
+         return 0;
+     }

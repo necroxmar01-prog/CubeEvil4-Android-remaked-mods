@@ -16,8 +16,11 @@ void re4_log(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
  * main.cpp). The game keeps the skinning matrix palette (trans.cpp) and the
  * cloth collision list (pendulum.cpp) there. The address is in use on the
  * port's hosts (32-bit Android maps libraries there), so the cache is a
- * buffer of the platform library (runtime/mem1.cpp). */
-#define RE4_LOCKED_CACHE_SIZE 0x4000
+ * buffer of the platform library (runtime/mem1.cpp). Mods (08.11.2026): room
+ * for 2048 skinning matrices of 0x30 bytes instead of the GameCube's 341, for
+ * skins converted from the PC release (port/tools/uhd_skin_convert.py); the
+ * disc's models use the first 16 KB as before. */
+#define RE4_LOCKED_CACHE_SIZE 0x18000
 extern unsigned char re4_locked_cache[RE4_LOCKED_CACHE_SIZE];
 #ifdef __cplusplus
 }

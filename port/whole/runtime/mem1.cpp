@@ -96,3 +96,35 @@ extern "C" int re4_in_mem1(const void* p)
     unsigned long a = (unsigned long) p;
     return a >= RE4_MEM1_BASE && a < (unsigned long) RE4_MEM1_BASE + RE4_MEM1_SIZE;
 }
+
+// The primitive buffer's overflow (re4_runtime.h, patch 0901): a bump allocator per frame buffer half.
+static unsigned gPrimExtraUsed[2];
+static unsigned gPrimExtraPeak;
+
+extern "C" void* re4_prim_extra(int half, unsigned size)
+{
+    half &= 1;
+    size = (size + 0x1F) & ~0x1Fu;
+    if (size > RE4_MEM1_PRIM_EXTRA_HALF - gPrimExtraUsed[half]) {
+        static int told;
+        if (told++ < 4) {
+            re4_log("MEM1: primitive buffer overflow full too (%u of %u bytes used, %u asked)", gPrimExtraUsed[half],
+                    RE4_MEM1_PRIM_EXTRA_HALF, size);
+        }
+        return 0;
+    }
+    void* p = (void*) (unsigned long) (RE4_MEM1_PRIM_EXTRA_ADDR + half * RE4_MEM1_PRIM_EXTRA_HALF + gPrimExtraUsed[half]);
+    gPrimExtraUsed[half] += size;
+    if (gPrimExtraUsed[half] > gPrimExtraPeak) {
+        if (gPrimExtraPeak == 0) {
+            re4_log("MEM1: the room's primitive buffer is full: more from its overflow at 0x%08x", RE4_MEM1_PRIM_EXTRA_ADDR);
+        }
+        gPrimExtraPeak = gPrimExtraUsed[half];
+    }
+    return p;
+}
+
+extern "C" void re4_prim_extra_reset(int half)
+{
+    gPrimExtraUsed[half & 1] = 0;
+}

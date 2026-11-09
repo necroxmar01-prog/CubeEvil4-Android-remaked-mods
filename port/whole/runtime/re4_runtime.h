@@ -163,6 +163,21 @@ void* re4_core_data_place(const char* name, unsigned fixedMax);
 #define RE4_MEM1_OPTION_ALT_ADDR 0x81F00000u
 #define RE4_MEM1_OPTION_ALT_MAX 0x00100000u
 void* re4_option_data_place(const char* name, unsigned fixedMax);
+/* Mods (wish of DevJunior, 08.11.2026: skins converted from the PC release, port/tools/uhd_skin_convert.py):
+ * a player archive larger than the game's fixed place (read.cpp ReadPlayerData, 0x118000 bytes for
+ * Leon, patch 0901) is read here, behind what the cheats use (cheats.cpp, up to 0x824E0000); 0 keeps
+ * the fixed place. */
+#define RE4_MEM1_PLAYER_ALT_ADDR 0x82600000u
+#define RE4_MEM1_PLAYER_ALT_MAX 0x00600000u
+void* re4_player_data_place(const char* name, unsigned fixedMax);
+/* The primitive buffer's overflow (patch 0901, trans.cpp GetPrimBuff): the room's buffer (cons
+ * CONS_R_NPRIM) is sized for the disc's models; a converted skin skins tens of thousands of vertices
+ * into it each frame. What no longer fits comes from here, one half per frame buffer (DblBufIdx) as
+ * the game's own; 0 when this is full too. Reset when the game starts a frame buffer half. */
+#define RE4_MEM1_PRIM_EXTRA_ADDR 0x82C00000u
+#define RE4_MEM1_PRIM_EXTRA_HALF 0x00200000u
+void* re4_prim_extra(int half, unsigned size);
+void re4_prim_extra_reset(int half);
 /* The start's reads without the frame pace (patch 0085): 1 while the next
    step of a read may follow at once, the end at the first title.dat. */
 int re4_dvd_boot_fast(void);

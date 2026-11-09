@@ -800,14 +800,9 @@ int re4_disc_retail(void)
     return release == RE4_DISC_RETAIL_EU || release == RE4_DISC_RETAIL_US || release == RE4_DISC_RETAIL_JP;
 }
 
-// The place of the core archive (patch 0117, read.cpp CoreDataRead): the debug build reads
-// etc/core.das to the fixed 0x80578000 with room for CORE_DATA_MAX (0x234000) bytes, up to the
-// option data at 0x807AC000. The European release's core is 0x23AC40 bytes: there it overran
-// the option data ("CORE_DATA IS TOO LARGE", 26.10.2026). A larger core goes to a range of the
-// development half of MEM1 nothing else uses (RE4_MEM1_CORE_ALT_ADDR); 0 keeps the fixed place,
-// so the debug build's core stays where it was. The size is the body's (part 0 of the part
-// table, unpacked size of a yz2 body), what the game's read writes to memory.
-void* re4_core_data_place(const char* name, unsigned fixedMax)
+// The size of a file's body (part 0 of its part table, or the unpacked size of a yz2 body): what a
+// read of the file writes to memory. 0: none to tell (no such file, no part table with the body first).
+static u32 bodySize(const char* name)
 {
     Disc* d = current();
     s32 entry = d ? lookup(*d, name) : -1;
@@ -834,6 +829,19 @@ void* re4_core_data_place(const char* name, unsigned fixedMax)
         sscanf(text, "%lx\t%lx", &packed, &unpacked) == 2 && unpacked > 0) {
         size = (u32) unpacked;  // a yz2 body: its header names the unpacked size
     }
+    return size;
+}
+
+// The place of the core archive (patch 0117, read.cpp CoreDataRead): the debug build reads
+// etc/core.das to the fixed 0x80578000 with room for CORE_DATA_MAX (0x234000) bytes, up to the
+// option data at 0x807AC000. The European release's core is 0x23AC40 bytes: there it overran
+// the option data ("CORE_DATA IS TOO LARGE", 26.10.2026). A larger core goes to a range of the
+// development half of MEM1 nothing else uses (RE4_MEM1_CORE_ALT_ADDR); 0 keeps the fixed place,
+// so the debug build's core stays where it was. The size is the body's (part 0 of the part
+// table, unpacked size of a yz2 body), what the game's read writes to memory.
+void* re4_core_data_place(const char* name, unsigned fixedMax)
+{
+    u32 size = bodySize(name);
     if (size <= fixedMax) {
         return 0;
     }
@@ -843,8 +851,29 @@ void* re4_core_data_place(const char* name, unsigned fixedMax)
         return 0;
     }
     re4_log("DVD: %s: core of %u bytes (fixed place %u, %s), read to 0x%08x", name, size, fixedMax,
-            releaseName(d->release), RE4_MEM1_CORE_ALT_ADDR);
+            releaseName(current()->release), RE4_MEM1_CORE_ALT_ADDR);
     return (void*) (unsigned long) RE4_MEM1_CORE_ALT_ADDR;
+}
+
+// The place of a player archive (patch 0901, read.cpp ReadPlayerData; mods, wish of DevJunior,
+// 08.11.2026): the game reads the player's file to the fixed 0x807EC000 with room for 0x118000 bytes
+// (Leon) up to the weapon data. A skin converted from the PC release (port/tools/uhd_skin_convert.py)
+// is several times larger: it goes to the free end of the development half of MEM1
+// (RE4_MEM1_PLAYER_ALT_ADDR); 0 keeps the fixed place, as for every file of the discs.
+void* re4_player_data_place(const char* name, unsigned fixedMax)
+{
+    u32 size = bodySize(name);
+    if (size <= fixedMax) {
+        return 0;
+    }
+    if (size > RE4_MEM1_PLAYER_ALT_MAX) {
+        re4_log("DVD: %s: player data of %u bytes, larger than the %u bytes of either place: the fixed one, "
+                "it runs over the weapon data", name, size, RE4_MEM1_PLAYER_ALT_MAX);
+        return 0;
+    }
+    re4_log("DVD: %s: player data of %u bytes (fixed place %u), read to 0x%08x", name, size, fixedMax,
+            RE4_MEM1_PLAYER_ALT_ADDR);
+    return (void*) (unsigned long) RE4_MEM1_PLAYER_ALT_ADDR;
 }
 
 // The place of the option menu's data (patch 0121, read.cpp OptionDataRead): the debug build reads
