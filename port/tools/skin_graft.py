@@ -12,7 +12,7 @@ colour textures (material_tex) of the grafted model only: the hue set, saturatio
 --into puts it in another entry (Leon's pl000l, entry 12, drawn in costumes 1-3), --only-mats keeps some of its
 parts, --drop ENTRY:MATS empties parts of the target (a jacket); emptied parts hold GX NOPs, offsets unchanged.
 --colorize R,G,B tints by brightness in a mean colour, --source-image takes a grafted texture from the mod's own
-larger image (less blocky once tinted), --inflate ENTRY:DIST makes the torso and arms bulkier.
+larger image (less blocky once tinted), --inflate ENTRY:DIST makes the torso, arms and legs bulkier.
 """
 import argparse
 import colorsys
@@ -103,8 +103,10 @@ def encode_image(img, hdr):
 def inflate(blob, dist):
     """Pushes the positions of a GameCube model of Leon (bind pose, T-pose: y up, arms along x) away from the body's
     axes: the torso from the spine (x 0, z -12; y 950..1560, fading to 0 at 850 and 1620), the arms from their axis
-    (y 1517, z -39; |x| 200..620, fading out to the hands). Away from an axis, not along normals: layers (shirt, vest,
-    straps) move alike and thin double-sided straps do not turn. Returns how many positions moved."""
+    (y 1517, z -39; |x| 200..620, fading out to the hands), the legs from theirs (x +-95, z 0; y 300..950, fading out
+    to the shoes at 220 and into the torso up to 1050; wish of DevJunior, 09.11.2026: the legs too, in proportion).
+    Away from an axis, not along normals: layers (shirt, vest, straps) move alike and thin double-sided straps do not
+    turn. Returns how many positions moved."""
     import numpy as np
     u = lambda o: struct.unpack_from(">I", blob, o)[0]
     shift = blob[0x28]
@@ -116,17 +118,22 @@ def inflate(blob, dist):
         ax = abs(x)
         wt = float(np.clip((y - 850) / 100, 0, 1) * np.clip((1620 - y) / 60, 0, 1) * np.clip((300 - ax) / 80, 0, 1))
         wa = float(np.clip((ax - 200) / 60, 0, 1) * np.clip((680 - ax) / 60, 0, 1)) if 1380 < y < 1660 else 0.0
-        if wt <= 0 and wa <= 0:
+        wl = float(np.clip((y - 220) / 80, 0, 1) * np.clip((1050 - y) / 100, 0, 1)) if ax < 260 else 0.0
+        if wt <= 0 and wa <= 0 and wl <= 0:
             continue
         dt = np.array([x, 0.0, z + 12.0])
         da = np.array([0.0, y - 1517.0, z + 39.0])
+        dl = np.array([x - (95.0 if x >= 0 else -95.0), 0.0, z])
+        if dl[0] * x < 0:
+            dl[0] = 0.0  # the inner side of a leg not towards the other one (the knees nearly touch)
         dt /= np.linalg.norm(dt) or 1.0
         da /= np.linalg.norm(da) or 1.0
-        d = dt * wt + da * wa
+        dl /= np.linalg.norm(dl) or 1.0
+        d = dt * wt + da * wa + dl * wl
         n = np.linalg.norm(d)
         if n < 1e-6:
             continue
-        q = np.array([x, y, z]) + d / n * dist * max(wt, wa)
+        q = np.array([x, y, z]) + d / n * dist * max(wt, wa, wl)
         qi = [max(-32768, min(32767, int(round(c * (1 << shift))))) for c in q]
         struct.pack_into(">3h", blob, vo + i * 8, *qi)
         moved += 1
@@ -172,7 +179,7 @@ def main(argv=None):
     ap.add_argument("--source-image", action="append", default=[], metavar="MAT=PATH[@WxH]",
                     help="a grafted colour texture from this image (the mod's own, larger), at WxH (default its size)")
     ap.add_argument("--inflate", action="append", default=[], metavar="ENTRY:DIST",
-                    help="push a target model's torso and arms out along their normals by DIST (bulkier; after the "
+                    help="push a target model's torso, arms and legs out along their normals by DIST (bulkier; after the "
                          "graft, so a grafted model too)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
     ap.add_argument("--alpha-ref", type=int, help="alpha compare reference of the model's alpha-textured parts "
