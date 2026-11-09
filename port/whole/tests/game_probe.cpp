@@ -2483,7 +2483,9 @@ extern "C" int re4probe_potato(void)
 // weapon of given bounds hangs (barrel up over the right shoulder, the turned centre on the back, behind it)
 extern "C" int re4_leon_outfit(int costume);
 extern "C" void re4_wardrobe_set(int outfit, int back);
-extern "C" void re4_back_place(const float c[3], float front, int barrelX, float back, float pos[3], float ang[3]);
+extern "C" void re4_back_place(const float c[3], float front, int left, int over, float slant, float height,
+                               float dist, float back, float pos[3], float ang[3]);
+extern "C" int re4_back_turn(int left, int over);
 extern "C" int re4probe_wardrobe(void)
 {
     if (!pG) {
@@ -2505,21 +2507,28 @@ extern "C" int re4probe_wardrobe(void)
     pG->pl_type = 2;
     bad |= re4_leon_outfit(0) != 0 ? 0x10 : 0;                          // another character keeps his
     pG->pl_type = 0;
-    const float c[3] = {-236.0f, -30.0f, 83.0f}, sz[3] = {494.0f, 70.0f, 125.0f};
-    for (int barrel = -1; barrel <= 1; barrel += 2) {
+    const float cc[3] = {-236.0f, -30.0f, 83.0f};
+    for (int k = 0; k < 4; k++) {
+        const int left = k & 1, over = k >> 1;
+        const float slant = 30.0f + 15.0f * k, height = -20.0f + 15.0f * k, dist = 4.0f * k, front = 40.0f;
         float pos[3], ang[3];
-        const float cc[3] = {c[0] * -barrel, c[1], c[2]};
-        re4_back_place(cc, cc[2] + sz[2], barrel, -150.0f, pos, ang);
+        re4_back_place(cc, front, left, over, slant, height, dist, -150.0f, pos, ang);
+        const float s = (float) re4_back_turn(left, over);
+        bad |= fabsf(ang[0] - s * 1.5707963f) > 1e-4f || ang[1] != 0.0f ? 0x100 : 0;  // the profile laid flat first
         const float ca = cosf(ang[2]), sa = sinf(ang[2]);
-        bad |= fabsf(ang[0] - 1.5707963f) > 1e-4f || ang[1] != 0.0f ? 0x100 : 0;  // the profile laid flat first
-        const float qx = cc[0], qy = -cc[2];                                    // Rx(90): (x, -z, y)
+        const float qx = cc[0], qy = -s * cc[2];                                    // Rx(s 90): (x, -s z, s y)
         const float cx = qx * ca - qy * sa + pos[0], cy = qx * sa + qy * ca + pos[1];
-        bad |= fabsf(cx) > 0.5f || fabsf(cy - 10.0f) > 0.5f ? 0x20 : 0;      // the centre at the shoulder blades
-        bad |= fabsf(pos[2] + cc[2] + sz[2] + 150.0f) > 0.5f ? 0x40 : 0;    // its front on the back's surface
-        // the upper end's axis turned: up over the right (-x), 45 degrees over the floor
-        const float bx = barrel * ca, by = barrel * sa;
-        bad |= !(bx < -0.68f && bx > -0.73f && by > 0.68f && by < 0.73f) ? 0x80 : 0;
+        bad |= fabsf(cx) > 0.5f || fabsf(cy - 10.0f - height) > 0.5f ? 0x20 : 0;  // the centre at the shoulder blades
+        bad |= fabsf(pos[2] - (-150.0f - front - dist)) > 0.5f ? 0x40 : 0;        // its front on the back, + dist
+        // the stock's axis (+x) up over the right (-x) or the left shoulder at the slant
+        const float d = slant * 3.14159265f / 180.0f;
+        bad |= fabsf(ca - (left ? cosf(d) : -cosf(d))) > 1e-3f || fabsf(sa - sinf(d)) > 1e-3f ? 0x80 : 0;
+        // the grip (-z) below the barrel unless turned over: Rx gives (0, s, 0), Rz then (-s sin a, s cos a)
+        const float gy = s * ca;
+        const bool gripDown = gy < 0.0f;
+        bad |= gripDown == (over != 0) ? 0x200 : 0;
     }
+    re4_aim_set((int) (0x80000000u | 45u | 64u << 7 | 64u << 14));  // the second word: the placement, no change
     re4_aim_set(100 << 8);
     pG->pl_type = keepType;
     pG->game_costume = keepCostume;

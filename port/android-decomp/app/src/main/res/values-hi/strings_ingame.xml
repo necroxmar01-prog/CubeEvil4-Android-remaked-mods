@@ -375,5 +375,13 @@
     <string name="ingame_outfit_first">पहले कपड़े</string>
     <string name="ingame_outfit_second">दूसरे कपड़े</string>
     <string name="ingame_back_weapon">पीठ पर हथियार</string>
-    <string name="ingame_outfit_help">कहानी जो कपड़े लियोन को देती है, या हमेशा पहले (जैकेट के साथ) या दूसरे (बिना जैकेट); यह तुरंत बदलता है और कमरा वहीं से फिर शुरू होता है जहाँ वह खड़ा है। पीठ पर हथियार: उसका पकड़ा आखिरी लंबा हथियार (शॉटगन, राइफल, मशीनगन, रॉकेट लॉन्चर) उसकी पीठ पर लटकता है जब तक वह केस में है और उसके हाथों में नहीं।</string>
+    <string name="ingame_back_slant">झुकाव</string>
+    <string name="ingame_back_height">ऊँचाई</string>
+    <string name="ingame_back_distance">दूरी</string>
+    <string name="ingame_back_shoulder">कंधा</string>
+    <string name="ingame_back_right">दायाँ</string>
+    <string name="ingame_back_left">बायाँ</string>
+    <string name="ingame_back_over">उलटा</string>
+    <string name="ingame_back_events">कटसीन में</string>
+    <string name="ingame_outfit_help">कहानी जो कपड़े लियोन को देती है, या हमेशा पहले (जैकेट के साथ) या दूसरे (बिना जैकेट); यह तुरंत बदलता है और कमरा वहीं से फिर शुरू होता है जहाँ वह खड़ा है। पीठ पर हथियार: उसका पकड़ा आखिरी लंबा हथियार (शॉटगन, राइफल, मशीनगन, रॉकेट लॉन्चर) उसकी पीठ पर लटकता है जब तक वह केस में है और उसके हाथों में नहीं। झुकाव, ऊँचाई, पीठ से दूरी और कंधा अपनी पसंद से सेट करें; “कटसीन में” इसे दृश्यों में भी दिखाता है।</string>
 </resources>

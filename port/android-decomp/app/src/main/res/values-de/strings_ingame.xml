@@ -375,5 +375,13 @@
     <string name="ingame_outfit_first">Erste Kleidung</string>
     <string name="ingame_outfit_second">Zweite Kleidung</string>
     <string name="ingame_back_weapon">Waffe auf dem Rücken</string>
-    <string name="ingame_outfit_help">Die Kleidung, die die Geschichte Leon gibt, oder immer seine erste (mit Jacke) oder zweite (ohne); sie wechselt sofort, der Raum beginnt neu, wo er steht. Waffe auf dem Rücken: die letzte lange Waffe, die er hielt (Schrotflinte, Gewehr, Maschinenpistole, Raketenwerfer), hängt auf seinem Rücken, solange sie im Koffer und nicht in seinen Händen ist.</string>
+    <string name="ingame_back_slant">Neigung</string>
+    <string name="ingame_back_height">Höhe</string>
+    <string name="ingame_back_distance">Abstand</string>
+    <string name="ingame_back_shoulder">Schulter</string>
+    <string name="ingame_back_right">Rechts</string>
+    <string name="ingame_back_left">Links</string>
+    <string name="ingame_back_over">Umgedreht</string>
+    <string name="ingame_back_events">In Zwischensequenzen</string>
+    <string name="ingame_outfit_help">Die Kleidung, die die Geschichte Leon gibt, oder immer seine erste (mit Jacke) oder zweite (ohne); sie wechselt sofort, der Raum beginnt neu, wo er steht. Waffe auf dem Rücken: die letzte lange Waffe, die er hielt (Schrotflinte, Gewehr, Maschinenpistole, Raketenwerfer), hängt auf seinem Rücken, solange sie im Koffer und nicht in seinen Händen ist. Neigung, Höhe, Abstand zum Rücken und Schulter lassen sich einstellen; „In Zwischensequenzen“ zeigt sie auch dort.</string>
 </resources>

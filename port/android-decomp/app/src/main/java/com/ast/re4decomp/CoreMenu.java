@@ -1530,7 +1530,31 @@ final class CoreMenu extends Dialog {
         value -> host.wardrobeChanged(value, input.getBoolean(CoreActivity.BACK_WEAPON, false)));
     toggle(buttonsRow(body), R.string.ingame_back_weapon, input.getBoolean(CoreActivity.BACK_WEAPON, false),
         on -> host.wardrobeChanged(input.getInt(CoreActivity.LEON_OUTFIT, 0), on));
+    backPlacement();
     help(R.string.ingame_outfit_help);
+  }
+  /** The weapon on the back to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it
+   *  clashes with the arm"): its slant, height and distance from the back, the shoulder the stock goes over, turned
+   *  over (the grip up) and also in cutscenes; each change at once (the core puts it anew). */
+  private void backPlacement() {
+    final Runnable send = () -> CoreBridge.setBackPlacement(CoreActivity.backPlacement(input));
+    choices(R.string.ingame_back_slant, new String[] {"20°", "30°", "45°", "60°", "75°"},
+        new int[] {20, 30, 45, 60, 75}, input.getInt(CoreActivity.BACK_SLANT, 45), Integer.MAX_VALUE, 5,
+        v -> { input.edit().putInt(CoreActivity.BACK_SLANT, v).apply(); send.run(); });
+    choices(R.string.ingame_back_height, new String[] {"−100", "−50", "0", "+50", "+100"},
+        new int[] {-100, -50, 0, 50, 100}, input.getInt(CoreActivity.BACK_HEIGHT, 0), Integer.MAX_VALUE, 5,
+        v -> { input.edit().putInt(CoreActivity.BACK_HEIGHT, v).apply(); send.run(); });
+    choices(R.string.ingame_back_distance, new String[] {"−10", "0", "+10", "+20", "+40"},
+        new int[] {-10, 0, 10, 20, 40}, input.getInt(CoreActivity.BACK_DISTANCE, 0), Integer.MAX_VALUE, 5,
+        v -> { input.edit().putInt(CoreActivity.BACK_DISTANCE, v).apply(); send.run(); });
+    choices(R.string.ingame_back_shoulder, new String[] {s(R.string.ingame_back_right), s(R.string.ingame_back_left)},
+        new int[] {0, 1}, input.getBoolean(CoreActivity.BACK_LEFT, false) ? 1 : 0, Integer.MAX_VALUE, 2,
+        v -> { input.edit().putBoolean(CoreActivity.BACK_LEFT, v == 1).apply(); send.run(); });
+    MenuLayout.Buttons row = buttonsRow(body);
+    toggle(row, R.string.ingame_back_over, input.getBoolean(CoreActivity.BACK_OVER, false),
+        on -> { input.edit().putBoolean(CoreActivity.BACK_OVER, on).apply(); send.run(); });
+    toggle(row, R.string.ingame_back_events, input.getBoolean(CoreActivity.BACK_EVENTS, false),
+        on -> { input.edit().putBoolean(CoreActivity.BACK_EVENTS, on).apply(); send.run(); });
   }
   /** Before Ada, HUNK, Krauser or Wesker take Leon's place (wish of the project owner, 08.11.2026): a reddish
    *  warning that they are not made for the main game, the menu's other questions' dialog in red: the chosen

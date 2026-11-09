@@ -379,5 +379,13 @@
     <string name="ingame_outfit_first">Primo abito</string>
     <string name="ingame_outfit_second">Secondo abito</string>
     <string name="ingame_back_weapon">Arma sulla schiena</string>
-    <string name="ingame_outfit_help">L\'abito che la storia dà a Leon, oppure sempre il primo (con la giacca) o il secondo (senza); cambia subito e la stanza ricomincia dove si trova. Arma sulla schiena: l\'ultima arma lunga che ha impugnato (fucile a pompa, fucile, mitra, lanciarazzi) pende sulla sua schiena finché è nella valigetta e non nelle sue mani.</string>
+    <string name="ingame_back_slant">Inclinazione</string>
+    <string name="ingame_back_height">Altezza</string>
+    <string name="ingame_back_distance">Distanza</string>
+    <string name="ingame_back_shoulder">Spalla</string>
+    <string name="ingame_back_right">Destra</string>
+    <string name="ingame_back_left">Sinistra</string>
+    <string name="ingame_back_over">Capovolta</string>
+    <string name="ingame_back_events">Nei filmati</string>
+    <string name="ingame_outfit_help">L\'abito che la storia dà a Leon, oppure sempre il primo (con la giacca) o il secondo (senza); cambia subito e la stanza ricomincia dove si trova. Arma sulla schiena: l\'ultima arma lunga che ha impugnato (fucile a pompa, fucile, mitra, lanciarazzi) pende sulla sua schiena finché è nella valigetta e non nelle sue mani. Inclinazione, altezza, distanza dalla schiena e spalla si regolano a piacere; «Nei filmati» la mostra anche nelle scene.</string>
 </resources>

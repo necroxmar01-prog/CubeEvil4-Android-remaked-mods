@@ -730,6 +730,9 @@ std::atomic<int> optMovement{0};
 // the menu's "Leon's outfit" (bits 0..1 here: 0 the story's, 1 the first, 2 the second; bits 22..23 of the aim bits)
 // and "Weapon on the back" (bit 2 here, bit 30) (CoreBridge.setWardrobe, patch 0902; the core's runtime/wardrobe.cpp)
 std::atomic<int> optWardrobe{0};
+// the menu's placement of the weapon on the back (CoreBridge.setBackPlacement; the core's runtime/wardrobe.cpp
+// re4_back_adjust_set): sent as a second aim word with bit 31 set, 0 the defaults
+std::atomic<int> optBackPlace{0};
 // R3 presses (CoreBridge.recenterCamera): each one toggles bit 6 of the aim bits, the core turns the free camera back
 // behind Leon (patch 0900)
 std::atomic<int> optRecenter{0};
@@ -770,6 +773,7 @@ struct LevelBench {
 LevelBench levelBench;
 constexpr double kBenchLimit = 360.0;  // seconds for the whole benchmark at most (the way there and back included)
 int aimSent = -1;  // what the core was told last (-1: nothing yet)
+int backPlaceSent = -1;  // the weapon on the back's placement the core was told last (-1: nothing yet)
 // The menu's AUDIO page (CoreBridge.setSoundVolume, wish of the project owner, 30.10.2026): music | effects << 8 in
 // percent (the core's runtime/sound_volume.cpp).
 std::atomic<int> optSound{100 | 100 << 8};
@@ -2154,6 +2158,11 @@ bool drawGx() {
       api.setAim(aim);
       aimSent = aim;
     }
+    const int backPlace = optBackPlace.load();
+    if (api.setAim && backPlace != backPlaceSent) {
+      api.setAim(static_cast<int>(0x80000000u | static_cast<unsigned>(backPlace)));  // the second aim word
+      backPlaceSent = backPlace;
+    }
     const int sound = optSound.load();
     if (api.setSoundVolume && sound != soundSent) {
       api.setSoundVolume(sound);
@@ -2897,6 +2906,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_surfaceCreat
   fastSent = -1;
   potatoSent = -1;
   aimSent = -1;
+  backPlaceSent = -1;
   soundSent = -1;
   // a new GL context: the renderer's objects are gone; the core starts over
   // (full state, every texture again) once chunks are taken again
@@ -3060,6 +3070,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setWardrobe(
   const int want = (outfit < 0 || outfit > 2 ? 0 : outfit) | (backWeapon == JNI_TRUE ? 4 : 0);
   if (optWardrobe.exchange(want) != want)
     LOG("wardrobe: Leon's outfit %d, weapon on the back %s", want & 3, want & 4 ? "on" : "off");
+}
+
+// The weapon on the back's placement (the menu, Cheats; wish of DevJunior, 09.11.2026): bits 0..6 the slant in
+// degrees, 7..13 the height / 5 + 64, 14..20 the distance from the back / 2 + 64, 21 the left shoulder, 22 turned
+// over, 23 also in cutscenes (the core's runtime/wardrobe.cpp adjustOf).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setBackPlacement(JNIEnv *, jclass, jint word) {
+  const int want = word & 0x7FFFFFFF;
+  if (optBackPlace.exchange(want) != want) LOG("wardrobe: the weapon on the back's placement 0x%x", want);
 }
 
 // R3 (the right stick pressed): the free camera back behind Leon (patch 0900), a toggle of bit 6 of the aim bits.

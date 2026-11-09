@@ -193,6 +193,9 @@ public final class CoreBridge {
   /** "Leon's outfit" (0 the story's, 1 the first, 2 the second; patch 0902) and "Weapon on the back" (the last long
    *  weapon he held hangs on his back), runtime/wardrobe.cpp, sent with the aim settings (bits 22..23 and 30). */
   public static native void setWardrobe(int outfit, boolean backWeapon);
+  /** The weapon on the back's placement (CoreActivity.backPlacement: slant, height, distance, shoulder, turned over,
+   *  in cutscenes), runtime/wardrobe.cpp, sent as a second aim word. */
+  public static native void setBackPlacement(int word);
   /** R3 (the right stick pressed): with "Free movement" the camera turns back behind Leon (patch 0900). */
   public static native void recenterCamera();
   /** The touch RLOAD button: with "Move while aiming" Leon reloads without aiming, walking or running on (patch 0900). */

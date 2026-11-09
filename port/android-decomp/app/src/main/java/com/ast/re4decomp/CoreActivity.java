@@ -141,6 +141,17 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // "Leon's outfit" (0 the story's, 1 the first, 2 the second) and "Weapon on the back" (wishes of DevJunior,
   // 09.11.2026; runtime/wardrobe.cpp)
   static final String LEON_OUTFIT = "leonOutfit", BACK_WEAPON = "backWeapon";
+  // its placement (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes")
+  static final String BACK_SLANT = "backSlant", BACK_HEIGHT = "backHeight", BACK_DISTANCE = "backDistance",
+      BACK_LEFT = "backLeft", BACK_OVER = "backOver", BACK_EVENTS = "backEvents";
+  /** The placement word for CoreBridge.setBackPlacement (the core's runtime/wardrobe.cpp adjustOf). */
+  static int backPlacement(SharedPreferences p) {
+    final int slant = Math.max(10, Math.min(80, p.getInt(BACK_SLANT, 45)));
+    final int height = Math.max(0, Math.min(127, p.getInt(BACK_HEIGHT, 0) / 5 + 64));
+    final int distance = Math.max(0, Math.min(127, p.getInt(BACK_DISTANCE, 0) / 2 + 64));
+    return slant | height << 7 | distance << 14 | (p.getBoolean(BACK_LEFT, false) ? 1 << 21 : 0)
+        | (p.getBoolean(BACK_OVER, false) ? 1 << 22 : 0) | (p.getBoolean(BACK_EVENTS, false) ? 1 << 23 : 0);
+  }
   static final float AIM_SPEED_MIN = 0.5f, AIM_SPEED_MAX = 3f, AIM_SPEED_STEP = 0.25f;
   // the menu's "Field of view" (PLAYER VIEW; wish of the project owner, 05.11.2026): degrees added to the shoulder
   // camera's vertical field of view, -FOV_RANGE .. FOV_RANGE, 0 as the game (CoreBridge.setFov, patch 0205)
@@ -419,6 +430,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setFov(fovOffset(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE)));
       CoreBridge.setWardrobe(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getInt(LEON_OUTFIT, 0),
           getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(BACK_WEAPON, false));
+      CoreBridge.setBackPlacement(backPlacement(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE)));
       CoreBridge.setVertexRing(g.getBoolean("vertexRing", false));
       // "Dynamic" up to the benchmark's levels on this device, when it ran
       CoreBridge.setDynamicCaps(g.getInt(CoreMenu.DYN_CAP_30, 0), g.getInt(CoreMenu.DYN_CAP_60, 0));

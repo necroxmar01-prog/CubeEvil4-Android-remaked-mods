@@ -396,5 +396,13 @@
     <string name="ingame_outfit_first">الملابس الأولى</string>
     <string name="ingame_outfit_second">الملابس الثانية</string>
     <string name="ingame_back_weapon">سلاح على الظهر</string>
-    <string name="ingame_outfit_help">الملابس التي تعطيها القصة لليون، أو دائمًا الأولى (مع السترة) أو الثانية (بدونها)؛ تتغير فورًا وتبدأ الغرفة من جديد حيث يقف. سلاح على الظهر: آخر سلاح طويل حمله (بندقية صيد، بندقية، رشاش، قاذفة صواريخ) يتدلى على ظهره ما دام في الحقيبة وليس في يديه.</string>
+    <string name="ingame_back_slant">الميل</string>
+    <string name="ingame_back_height">الارتفاع</string>
+    <string name="ingame_back_distance">المسافة</string>
+    <string name="ingame_back_shoulder">الكتف</string>
+    <string name="ingame_back_right">الأيمن</string>
+    <string name="ingame_back_left">الأيسر</string>
+    <string name="ingame_back_over">مقلوب</string>
+    <string name="ingame_back_events">في المشاهد السينمائية</string>
+    <string name="ingame_outfit_help">الملابس التي تعطيها القصة لليون، أو دائمًا الأولى (مع السترة) أو الثانية (بدونها)؛ تتغير فورًا وتبدأ الغرفة من جديد حيث يقف. سلاح على الظهر: آخر سلاح طويل حمله (بندقية صيد، بندقية، رشاش، قاذفة صواريخ) يتدلى على ظهره ما دام في الحقيبة وليس في يديه. يمكن ضبط الميل والارتفاع والمسافة عن الظهر والكتف حسب الرغبة؛ «في المشاهد السينمائية» يُظهره في المشاهد أيضًا.</string>
 </resources>

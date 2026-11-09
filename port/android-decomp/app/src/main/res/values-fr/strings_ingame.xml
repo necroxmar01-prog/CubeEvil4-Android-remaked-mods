@@ -381,5 +381,13 @@
     <string name="ingame_outfit_first">Première tenue</string>
     <string name="ingame_outfit_second">Deuxième tenue</string>
     <string name="ingame_back_weapon">Arme dans le dos</string>
-    <string name="ingame_outfit_help">La tenue que l\'histoire donne à Leon, ou toujours la première (avec la veste) ou la deuxième (sans)\u00A0; elle change aussitôt et la salle recommence là où il se trouve. Arme dans le dos\u00A0: la dernière arme longue qu\'il a tenue (fusil à pompe, fusil, mitraillette, lance-roquettes) pend dans son dos tant qu\'elle est dans la mallette et pas dans ses mains.</string>
+    <string name="ingame_back_slant">Inclinaison</string>
+    <string name="ingame_back_height">Hauteur</string>
+    <string name="ingame_back_distance">Distance</string>
+    <string name="ingame_back_shoulder">Épaule</string>
+    <string name="ingame_back_right">Droite</string>
+    <string name="ingame_back_left">Gauche</string>
+    <string name="ingame_back_over">Retournée</string>
+    <string name="ingame_back_events">Dans les cinématiques</string>
+    <string name="ingame_outfit_help">La tenue que l\'histoire donne à Leon, ou toujours la première (avec la veste) ou la deuxième (sans)\u00A0; elle change aussitôt et la salle recommence là où il se trouve. Arme dans le dos\u00A0: la dernière arme longue qu\'il a tenue (fusil à pompe, fusil, mitraillette, lance-roquettes) pend dans son dos tant qu\'elle est dans la mallette et pas dans ses mains. Son inclinaison, sa hauteur, sa distance au dos et l\'épaule se règlent à votre goût ; « Dans les cinématiques » l\'affiche aussi pendant les scènes.</string>
 </resources>

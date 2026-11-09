@@ -383,5 +383,13 @@
     <string name="ingame_outfit_first">Первая одежда</string>
     <string name="ingame_outfit_second">Вторая одежда</string>
     <string name="ingame_back_weapon">Оружие за спиной</string>
-    <string name="ingame_outfit_help">Одежда, которую Леону даёт сюжет, или всегда первая (с курткой) или вторая (без неё); меняется сразу, комната начинается заново там, где он стоит. Оружие за спиной: последнее длинное оружие в его руках (дробовик, винтовка, пистолет-пулемёт, ракетомёт) висит у него за спиной, пока оно в кейсе, а не в руках.</string>
+    <string name="ingame_back_slant">Наклон</string>
+    <string name="ingame_back_height">Высота</string>
+    <string name="ingame_back_distance">Расстояние</string>
+    <string name="ingame_back_shoulder">Плечо</string>
+    <string name="ingame_back_right">Правое</string>
+    <string name="ingame_back_left">Левое</string>
+    <string name="ingame_back_over">Перевёрнуто</string>
+    <string name="ingame_back_events">В роликах</string>
+    <string name="ingame_outfit_help">Одежда, которую Леону даёт сюжет, или всегда первая (с курткой) или вторая (без неё); меняется сразу, комната начинается заново там, где он стоит. Оружие за спиной: последнее длинное оружие в его руках (дробовик, винтовка, пистолет-пулемёт, ракетомёт) висит у него за спиной, пока оно в кейсе, а не в руках. Наклон, высоту, расстояние от спины и плечо можно настроить; «В роликах» показывает его и в сценах.</string>
 </resources>

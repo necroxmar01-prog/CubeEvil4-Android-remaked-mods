@@ -390,5 +390,13 @@
     <string name="ingame_outfit_first">First outfit</string>
     <string name="ingame_outfit_second">Second outfit</string>
     <string name="ingame_back_weapon">Weapon on the back</string>
-    <string name="ingame_outfit_help">The outfit the story gives Leon, or always his first (with the jacket) or second (without it); it changes at once and the room starts again where he stands. Weapon on the back: the last long weapon he held (shotgun, rifle, machine gun, rocket launcher) hangs on his back while it is in the case and not in his hands.</string>
+    <string name="ingame_back_slant">Slant</string>
+    <string name="ingame_back_height">Height</string>
+    <string name="ingame_back_distance">Distance</string>
+    <string name="ingame_back_shoulder">Shoulder</string>
+    <string name="ingame_back_right">Right</string>
+    <string name="ingame_back_left">Left</string>
+    <string name="ingame_back_over">Turned over</string>
+    <string name="ingame_back_events">In cutscenes</string>
+    <string name="ingame_outfit_help">The outfit the story gives Leon, or always his first (with the jacket) or second (without it); it changes at once and the room starts again where he stands. Weapon on the back: the last long weapon he held (shotgun, rifle, machine gun, rocket launcher) hangs on his back while it is in the case and not in his hands. Its slant, height, distance from the back and shoulder can be set to taste; “In cutscenes” also shows it while Leon is in a scene.</string>
 </resources>

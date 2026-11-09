@@ -14,7 +14,11 @@
 //    MEM1, the rocket launcher's from Leon's archive (objRocket.cpp: entries 0x76 / 0x75). It is an event body
 //    (SetObj18, as the events show weapons) that follows his chest (parts 2, OyaSetObj18): the barrel up over the
 //    across the back as a sling holds it (stock up over the right shoulder, 45 degrees), flat on the back's surface as
-//    Leon's own model has it (a bulkier skin carries it as close). Hidden in events, sub screens and movies.
+//    Leon's own model has it (a bulkier skin carries it as close). Hidden in sub screens and movies; in events
+//    while Leon is drawn, if the app wants it.
+//  - Its placement to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it clashes
+//    with the arm"): the app's second aim word (bit 31 set, runtime/aim_options.cpp) holds the slant, the height,
+//    the distance from the back, the shoulder, turned over and "in cutscenes" (re4_back_adjust_set).
 #include "types.h"
 #include "global.h"
 #include "item.h"
@@ -48,6 +52,8 @@ const u32 kBackMax = 0x100000u;
 
 std::atomic<int> gOutfit(0);     // 0 the story's rule, 1 the first outfit, 2 the second
 std::atomic<bool> gBack(false);  // the weapon on the back
+std::atomic<int> gAdjust(0);     // its placement (re4_back_adjust_set; 0: the defaults)
+std::atomic<int> gAdjustSeen(0); // the placement the body on the back was put with
 std::atomic<bool> gHooked(false);
 
 int gTried = -1;          // the outfit a room restart was asked for (once per choice)
@@ -86,6 +92,42 @@ bool playerFree()
 }
 
 // ---- the weapon on the back ----------------------------------------------------------------------------------
+
+// The placement word (the app: CoreMenu, sent with bit 31 of the aim word): bits 0..6 the slant in degrees over the
+// floor (10..80), bits 7..13 the height (v - 64) * 5 over the default, bits 14..20 the distance from the back
+// (v - 64) * 2, bit 21 over the left shoulder, bit 22 turned over (the grip up), bit 23 also in cutscenes.
+struct Adjust {
+    float slant, height, dist;
+    bool left, over, events;
+};
+
+Adjust adjustOf(int w)
+{
+    Adjust a = {45.0f, 0.0f, 0.0f, false, false, false};
+    if (w == 0) {
+        return a;
+    }
+    const int slant = w & 0x7F;
+    a.slant = slant < 10 ? 10.0f : slant > 80 ? 80.0f : (float) slant;
+    a.height = (float) (((w >> 7) & 0x7F) - 64) * 5.0f;
+    a.dist = (float) (((w >> 14) & 0x7F) - 64) * 2.0f;
+    a.left = (w >> 21) & 1;
+    a.over = (w >> 22) & 1;
+    a.events = (w >> 23) & 1;
+    return a;
+}
+
+// Leon may carry it now: playing, no sub screen or movie; in an event only while he is drawn and the app wants it
+bool backShowable(const Adjust& a)
+{
+    if (!pG || !pPL || pG->Rno0 != 3 || StaFlagChk(pG, STA_SUB_SCRN) || StaFlagChk(pG, STA_MOVIE_ON)) {
+        return false;
+    }
+    if (StaFlagChk(pG, STA_EVENT)) {
+        return a.events && (pPL->be_flag & 2);
+    }
+    return true;
+}
 
 bool longWeapon(int no)
 {
@@ -206,53 +248,61 @@ void dropObj(const char* why)
 
 // The place on the back for a weapon model of these bounds (centre c; the model's own space; device tests
 // 09.11.2026, DevJunior's pictures of the remake and the weapons' files wep07/wep09 he sent): slung across the back,
-// the stock up over the right shoulder and the muzzle down to the left hip, 45 degrees from the floor, its side flat
-// on the back. The weapons' models (wepNN.drs, and the rocket launcher's in Leon's archive) lie as in his hand: the
-// barrel along x (the stock towards +x; barrelX only says which end goes up: +1 the +x end), the profile (stock drop,
-// grip, magazine, sight) along z, the width along y. A quarter turn about x first (ang x 90 degrees: z -> -y,
-// y -> z) lays the profile into the back's plane with the grip and the stock drop hanging down, so nothing stands
-// off the back (before, the stock's heel and the grips stood 20 cm out); then the turn about z sets the slant
-// (RotMatrix: Rz * Ry * Rx). pos puts the turned centre (c) on the spine at the height of the shoulder blades, in the
-// chest's space (parts 2, its joint about 1360 high and 13 behind the hips), the model's face towards the body
-// (`front`, re4_back_front, after the quarter turn) at `back` (the chest's z of the back's surface, measured on
-// Leon's own model: re4_back_surface), so a bulkier skin carries it as close. Exported for the runtime tests.
-extern "C" void re4_back_place(const float c[3], float front, int barrelX, float back, float pos[3], float ang[3])
+// the stock up over a shoulder and the muzzle down to the other hip, `slant` degrees from the floor, its side flat on
+// the back. The weapons' models (wepNN.drs, and the rocket launcher's in Leon's archive) lie as in his hand: the
+// barrel along x (the stock towards +x), the profile (stock drop, grip, magazine, sight) along z (the grip towards
+// -z), the width along y. A quarter turn about x first (ang x +-90 degrees, sign s: z -> -s y, y -> s z) lays the
+// profile into the back's plane, the grip hanging below the barrel (or above it, `over`); then the turn about z sets
+// the slant (RotMatrix: Rz * Ry * Rx): the stock up over the right shoulder (Leon's right is -x; `left` the other).
+// pos puts the turned centre (c) on the spine at the height of the shoulder blades + `height`, in the chest's space
+// (parts 2, its joint about 1360 high and 13 behind the hips), the model's face towards the body (`front`,
+// re4_back_front with the same s) at `back` (the chest's z of the back's surface, measured on Leon's own model:
+// re4_back_surface) and `dist` farther. Exported for the runtime tests.
+extern "C" int re4_back_turn(int left, int over)
 {
-    const float d = 45.0f * 3.14159265f / 180.0f;  // over the floor
-    // the turn that takes the upper end's axis (+x or -x) to (-cos d, sin d), up over the right shoulder
-    const float a = barrelX > 0 ? 3.14159265f - d : -d;
+    return (left ? -1 : 1) * (over ? -1 : 1);
+}
+
+extern "C" void re4_back_place(const float c[3], float front, int left, int over, float slant, float height,
+                               float dist, float back, float pos[3], float ang[3])
+{
+    const float d = slant * 3.14159265f / 180.0f;
+    // the turn that takes the stock's axis (+x) up over the shoulder: (-cos d, sin d) right, (cos d, sin d) left
+    const float a = left ? d : 3.14159265f - d;
     const float ca = cosf(a), sa = sinf(a);
-    const float tx = 0.0f, ty = 10.0f;  // shoulder-blade height (device test: -60 hung too low)
-    // the centre after the quarter turn about x: (x, -z, y)
-    const float qx = c[0], qy = -c[2];
+    const float s = (float) re4_back_turn(left, over);
+    const float tx = 0.0f, ty = 10.0f + height;  // shoulder-blade height (device test: -60 hung too low)
+    // the centre after the quarter turn about x: (x, -s z, s y)
+    const float qx = c[0], qy = -s * c[2];
     pos[0] = tx - (qx * ca - qy * sa);
     pos[1] = ty - (qx * sa + qy * ca);
-    pos[2] = back - front;
-    ang[0] = 3.14159265f / 2.0f;
+    pos[2] = back - front - dist;
+    ang[0] = s * 3.14159265f / 2.0f;
     ang[1] = 0.0f;
     ang[2] = a;
 }
 
-// A weapon model's face towards the back after the quarter turn about x (its y becomes z): 85 % of its points lie
-// behind it (the barrel, the stock, the body; a sling swivel or a bolt handle that sticks out sideways does not hold
-// the weapon off the back, as the bounds would)
-extern "C" float re4_back_front(const void* model)
+// A weapon model's face towards the back after the quarter turn about x (its s * y becomes z): 85 % of its points
+// lie behind it (the barrel, the stock, the body; a sling swivel or a bolt handle that sticks out sideways does not
+// hold the weapon off the back, as the bounds would)
+extern "C" float re4_back_front(const void* model, int s)
 {
     const cModelData* d = (const cModelData*) model;
     const s16* v = d ? (const s16*) d->vtxOrig : 0;
     if (!v || d->nVtx == 0) {
         return 0.0f;
     }
-    // a histogram of y in 1/64 steps of its range (no sort, no allocation)
-    s16 lo = 32767, hi = -32768;
+    // a histogram of s * y in 1/64 steps of its range (no sort, no allocation)
+    int lo = 1 << 20, hi = -(1 << 20);
     for (u32 i = 0; i < d->nVtx; i++) {
-        lo = v[i * 4 + 1] < lo ? v[i * 4 + 1] : lo;
-        hi = v[i * 4 + 1] > hi ? v[i * 4 + 1] : hi;
+        const int y = s * v[i * 4 + 1];
+        lo = y < lo ? y : lo;
+        hi = y > hi ? y : hi;
     }
     unsigned bins[64] = {0};
     const int span = hi - lo + 1;
     for (u32 i = 0; i < d->nVtx; i++) {
-        bins[(v[i * 4 + 1] - lo) * 64 / span]++;
+        bins[(s * v[i * 4 + 1] - lo) * 64 / span]++;
     }
     const u32 want = d->nVtx * 85 / 100;
     u32 seen = 0;
@@ -301,11 +351,12 @@ void showBack(bool want)
     if (!m.bin) {
         return;
     }
-    if (objOurs() && gObjNo == gLastNo && gObjType == gLastType) {
+    const int adjustWord = gAdjust.load(std::memory_order_relaxed);
+    if (objOurs() && gObjNo == gLastNo && gObjType == gLastType && gAdjustSeen.load() == adjustWord) {
         gObj->setTrans(1);
         return;
     }
-    dropObj("another weapon");
+    dropObj("another weapon or placement");
     const PlArc* arc = 0;
     if (m.file) {
         if (gLoadedNo != gLastNo || gLoadedType != gLastType) {
@@ -339,8 +390,10 @@ void showBack(bool want)
     const cBoundingBox& b = obj->pModelInfo->bound;
     const float c[3] = {b.offset.x, b.offset.y, b.offset.z};
     const float s[3] = {b.size.x, b.size.y, b.size.z};
+    const Adjust adj = adjustOf(adjustWord);
     float p[3], a[3];
-    re4_back_place(c, re4_back_front(obj->pModelInfo->model_addr), 1, re4_back_surface(pPL->pModelInfo), p, a);
+    re4_back_place(c, re4_back_front(obj->pModelInfo->model_addr, re4_back_turn(adj.left, adj.over)), adj.left,
+                   adj.over, adj.slant, adj.height, adj.dist, re4_back_surface(pPL->pModelInfo), p, a);
     obj->pos.x = p[0];
     obj->pos.y = p[1];
     obj->pos.z = p[2];
@@ -355,6 +408,7 @@ void showBack(bool want)
     gObjModel = (void*) obj->pModelInfo->model_addr;
     gObjNo = gLastNo;
     gObjType = gLastType;
+    gAdjustSeen.store(adjustWord);
     re4_log("wardrobe: weapon 0x%x type %d on the back (bounds centre %.0f %.0f %.0f, half %.0f %.0f %.0f; at %.0f %.0f "
             "%.0f, turned %.0f degrees)", gLastNo, gLastType, c[0], c[1], c[2], s[0], s[1], s[2], p[0], p[1], p[2],
             a[2] * 57.2958f);
@@ -374,7 +428,8 @@ void backFrame()
         gLastNo = no;
         gLastType = pG->weapon_type;
     }
-    bool want = gBack.load(std::memory_order_relaxed) && gLastNo >= 0 && no != gLastNo && playerFree();
+    bool want = gBack.load(std::memory_order_relaxed) && gLastNo >= 0 && no != gLastNo &&
+                backShowable(adjustOf(gAdjust.load(std::memory_order_relaxed)));
     if (want) {
         const u16 id = WeaponNo2WeaponId((u8) gLastNo, (u8) gLastType);
         if (id == 0xFFFF || ItemMgr.num(id) == 0) {
@@ -433,6 +488,19 @@ extern "C" void re4_wardrobe_set(int outfit, int back)
     }
     if (!gHooked.exchange(true)) {
         re4_add_frame_hook(hook);
+    }
+}
+
+// The weapon on the back's placement (the app's second aim word, bit 31 set; adjustOf). Any thread; the body is put
+// anew at the next frame.
+extern "C" void re4_back_adjust_set(int word)
+{
+    word &= 0x7FFFFFFF;
+    if (gAdjust.exchange(word) != word) {
+        const Adjust a = adjustOf(word);
+        re4_log("wardrobe: the weapon on the back %.0f degrees over the %s shoulder%s, height %+.0f, distance %+.0f%s",
+                a.slant, a.left ? "left" : "right", a.over ? ", turned over" : "", a.height, a.dist,
+                a.events ? ", also in cutscenes" : "");
     }
 }
 

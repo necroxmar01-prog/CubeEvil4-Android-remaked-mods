@@ -380,5 +380,13 @@
     <string name="ingame_outfit_first">Primeira roupa</string>
     <string name="ingame_outfit_second">Segunda roupa</string>
     <string name="ingame_back_weapon">Arma nas costas</string>
-    <string name="ingame_outfit_help">A roupa que a história dá ao Leon, ou sempre a primeira (com a jaqueta) ou a segunda (sem ela); muda na hora e a sala recomeça onde ele está. Arma nas costas: a última arma longa que ele empunhou (espingarda, rifle, metralhadora, lança-foguetes) fica pendurada nas costas enquanto estiver na maleta e não nas mãos.</string>
+    <string name="ingame_back_slant">Inclinação</string>
+    <string name="ingame_back_height">Altura</string>
+    <string name="ingame_back_distance">Distância</string>
+    <string name="ingame_back_shoulder">Ombro</string>
+    <string name="ingame_back_right">Direito</string>
+    <string name="ingame_back_left">Esquerdo</string>
+    <string name="ingame_back_over">Virada</string>
+    <string name="ingame_back_events">Nas cinemáticas</string>
+    <string name="ingame_outfit_help">A roupa que a história dá ao Leon, ou sempre a primeira (com a jaqueta) ou a segunda (sem ela); muda na hora e a sala recomeça onde ele está. Arma nas costas: a última arma longa que ele empunhou (espingarda, rifle, metralhadora, lança-foguetes) fica pendurada nas costas enquanto estiver na maleta e não nas mãos. A inclinação, a altura, a distância das costas e o ombro ajustam-se a gosto; «Nas cinemáticas» também a mostra nas cenas.</string>
 </resources>

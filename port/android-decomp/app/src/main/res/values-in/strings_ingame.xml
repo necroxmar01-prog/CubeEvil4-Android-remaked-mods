@@ -370,5 +370,13 @@
     <string name="ingame_outfit_first">Pakaian pertama</string>
     <string name="ingame_outfit_second">Pakaian kedua</string>
     <string name="ingame_back_weapon">Senjata di punggung</string>
-    <string name="ingame_outfit_help">Pakaian yang diberikan cerita kepada Leon, atau selalu yang pertama (dengan jaket) atau kedua (tanpa jaket); berganti seketika dan ruangan dimulai ulang di tempat ia berdiri. Senjata di punggung: senjata panjang terakhir yang ia pegang (shotgun, senapan, senapan mesin, peluncur roket) tergantung di punggungnya selama ada di koper dan tidak di tangannya.</string>
+    <string name="ingame_back_slant">Kemiringan</string>
+    <string name="ingame_back_height">Tinggi</string>
+    <string name="ingame_back_distance">Jarak</string>
+    <string name="ingame_back_shoulder">Bahu</string>
+    <string name="ingame_back_right">Kanan</string>
+    <string name="ingame_back_left">Kiri</string>
+    <string name="ingame_back_over">Terbalik</string>
+    <string name="ingame_back_events">Di cutscene</string>
+    <string name="ingame_outfit_help">Pakaian yang diberikan cerita kepada Leon, atau selalu yang pertama (dengan jaket) atau kedua (tanpa jaket); berganti seketika dan ruangan dimulai ulang di tempat ia berdiri. Senjata di punggung: senjata panjang terakhir yang ia pegang (shotgun, senapan, senapan mesin, peluncur roket) tergantung di punggungnya selama ada di koper dan tidak di tangannya. Kemiringan, tinggi, jarak dari punggung, dan bahu bisa diatur sesuka hati; “Di cutscene” juga menampilkannya saat adegan.</string>
 </resources>

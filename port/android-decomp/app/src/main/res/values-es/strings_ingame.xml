@@ -379,5 +379,13 @@
     <string name="ingame_outfit_first">Primer traje</string>
     <string name="ingame_outfit_second">Segundo traje</string>
     <string name="ingame_back_weapon">Arma en la espalda</string>
-    <string name="ingame_outfit_help">El traje que la historia le da a Leon, o siempre el primero (con chaqueta) o el segundo (sin ella); cambia al momento y la sala vuelve a empezar donde está. Arma en la espalda: la última arma larga que llevó (escopeta, rifle, metralleta, lanzacohetes) cuelga de su espalda mientras esté en el maletín y no en sus manos.</string>
+    <string name="ingame_back_slant">Inclinación</string>
+    <string name="ingame_back_height">Altura</string>
+    <string name="ingame_back_distance">Distancia</string>
+    <string name="ingame_back_shoulder">Hombro</string>
+    <string name="ingame_back_right">Derecho</string>
+    <string name="ingame_back_left">Izquierdo</string>
+    <string name="ingame_back_over">Volteada</string>
+    <string name="ingame_back_events">En cinemáticas</string>
+    <string name="ingame_outfit_help">El traje que la historia le da a Leon, o siempre el primero (con chaqueta) o el segundo (sin ella); cambia al momento y la sala vuelve a empezar donde está. Arma en la espalda: la última arma larga que llevó (escopeta, rifle, metralleta, lanzacohetes) cuelga de su espalda mientras esté en el maletín y no en sus manos. Su inclinación, altura, distancia a la espalda y hombro se ajustan al gusto; «En cinemáticas» también la muestra en las escenas.</string>
 </resources>
