@@ -108,6 +108,7 @@ def main(argv=None):
     ap.add_argument("--hue", type=float, help="hue of the colour textures, degrees (brown: about 25-30)")
     ap.add_argument("--sat", type=float, default=1.0)
     ap.add_argument("--value", type=float, default=1.0, help="brightness factor (below 1: darker)")
+    ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
     ap.add_argument("--alpha-ref", type=int, help="alpha compare reference of the model's alpha-textured parts "
                     "(trans.cpp alphaSetup: alpha > ref is drawn; 0 on the disc, higher: no faint texels at the edges)")
     a = ap.parse_args(argv)
@@ -142,7 +143,8 @@ def main(argv=None):
             model[p + 0x14] = max(0, min(254, a.alpha_ref))
     for t, new in sorted(used.items(), key=lambda kv: kv[1]):
         hdr, data = src_imgs[t]
-        if t in colour and (a.hue is not None or a.sat != 1.0 or a.value != 1.0):
+        tinted = a.tint_mats is None or t in {int(x) for x in a.tint_mats.split(",")}
+        if t in colour and tinted and (a.hue is not None or a.sat != 1.0 or a.value != 1.0):
             data = tint(hdr, data, a.hue, a.sat, a.value)
         imgs.append((hdr, data))
     struct.pack_into(">I", model, 0x24, len(imgs))  # nTex: the palette's count
