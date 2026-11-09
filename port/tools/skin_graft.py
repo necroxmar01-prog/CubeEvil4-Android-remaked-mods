@@ -8,6 +8,7 @@ Both are archives written by uhd_skin_convert.py (or the disc's) with the same s
 SOURCE replaces TARGET's; the textures its parts use (colour, bump, alpha, specular) are taken from SOURCE's
 palette --tpl and appended to TARGET's, the part headers renumbered. --hue (degrees), --sat and --value tint the
 colour textures (material_tex) of the grafted model only: the hue set, saturation and brightness scaled.
+--alpha-ref sets the alpha compare reference of its alpha-textured parts (hair: clean strand edges).
 """
 import argparse
 import colorsys
@@ -81,6 +82,8 @@ def main(argv=None):
     ap.add_argument("--hue", type=float, help="hue of the colour textures, degrees (brown: about 25-30)")
     ap.add_argument("--sat", type=float, default=1.0)
     ap.add_argument("--value", type=float, default=1.0, help="brightness factor (below 1: darker)")
+    ap.add_argument("--alpha-ref", type=int, help="alpha compare reference of the model's alpha-textured parts "
+                    "(trans.cpp alphaSetup: alpha > ref is drawn; 0 on the disc, higher: no faint texels at the edges)")
     a = ap.parse_args(argv)
 
     tgt = U.Archive(open(a.target, "rb").read(), ">")
@@ -102,6 +105,8 @@ def main(argv=None):
             if is_colour:
                 colour.add(t)
             model[p + off] = used[t]
+        if a.alpha_ref is not None and flag & 4:
+            model[p + 0x14] = max(0, min(254, a.alpha_ref))
     for t, new in sorted(used.items(), key=lambda kv: kv[1]):
         hdr, data = src_imgs[t]
         if t in colour and (a.hue is not None or a.sat != 1.0 or a.value != 1.0):
