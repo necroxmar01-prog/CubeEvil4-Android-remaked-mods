@@ -2483,7 +2483,7 @@ extern "C" int re4probe_potato(void)
 // weapon of given bounds hangs (barrel up over the right shoulder, the turned centre on the back, behind it)
 extern "C" int re4_leon_outfit(int costume);
 extern "C" void re4_wardrobe_set(int outfit, int back);
-extern "C" void re4_back_place(const float c[3], const float s[3], float pos[3], float ang[3]);
+extern "C" void re4_back_place(const float c[3], const float s[3], int barrelX, float pos[3], float ang[3]);
 extern "C" int re4probe_wardrobe(void)
 {
     if (!pG) {
@@ -2505,14 +2505,19 @@ extern "C" int re4probe_wardrobe(void)
     pG->pl_type = 2;
     bad |= re4_leon_outfit(0) != 0 ? 0x10 : 0;                          // another character keeps his
     pG->pl_type = 0;
-    const float c[3] = {236.0f, -30.0f, 83.0f}, sz[3] = {494.0f, 70.0f, 125.0f};
-    float pos[3], ang[3];
-    re4_back_place(c, sz, pos, ang);
-    const float ca = cosf(ang[2]), sa = sinf(ang[2]);
-    const float cx = c[0] * ca - c[1] * sa + pos[0], cy = c[0] * sa + c[1] * ca + pos[1];
-    bad |= fabsf(cx) > 0.5f || fabsf(cy - 30.0f) > 0.5f ? 0x20 : 0;      // the centre on the back
-    bad |= fabsf(pos[2] + c[2] + sz[2] + 140.0f) > 0.5f ? 0x40 : 0;      // its front just behind the back
-    bad |= !(ca < -0.2f && sa > 0.9f) ? 0x80 : 0;                        // the barrel up over the right (-x)
+    const float c[3] = {-236.0f, -30.0f, 83.0f}, sz[3] = {494.0f, 70.0f, 125.0f};
+    for (int barrel = -1; barrel <= 1; barrel += 2) {
+        float pos[3], ang[3];
+        const float cc[3] = {c[0] * -barrel, c[1], c[2]};
+        re4_back_place(cc, sz, barrel, pos, ang);
+        const float ca = cosf(ang[2]), sa = sinf(ang[2]);
+        const float cx = cc[0] * ca - cc[1] * sa + pos[0], cy = cc[0] * sa + cc[1] * ca + pos[1];
+        bad |= fabsf(cx) > 0.5f || fabsf(cy + 60.0f) > 0.5f ? 0x20 : 0;      // the centre between the shoulder blades
+        bad |= fabsf(pos[2] + cc[2] + sz[2] + 140.0f) > 0.5f ? 0x40 : 0;    // its front just behind the back
+        // the barrel's axis turned: up over the right (-x), 60 degrees over the floor
+        const float bx = barrel * ca, by = barrel * sa;
+        bad |= !(bx < -0.45f && bx > -0.55f && by > 0.85f) ? 0x80 : 0;
+    }
     re4_aim_set(100 << 8);
     pG->pl_type = keepType;
     pG->game_costume = keepCostume;

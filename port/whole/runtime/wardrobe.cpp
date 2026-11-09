@@ -13,7 +13,7 @@
 //    none of the file's sounds reaches the weapon's sound block) to a place of its own in the development half of
 //    MEM1, the rocket launcher's from Leon's archive (objRocket.cpp: entries 0x76 / 0x75). It is an event body
 //    (SetObj18, as the events show weapons) that follows his chest (parts 2, OyaSetObj18): the barrel up over the
-//    right shoulder, behind the back by the model's own bounds. Hidden in events, sub screens and movies.
+//    right shoulder at 60 degrees, between the shoulder blades, behind the back by the model's own bounds. Hidden in events, sub screens and movies.
 #include "types.h"
 #include "global.h"
 #include "item.h"
@@ -203,15 +203,20 @@ void dropObj(const char* why)
 
 }  // namespace
 
-// The place on the back for a weapon model of these bounds (centre c, half extents s; the model's own space, the
-// barrel along +x as in Leon's hand): ang.z turns the barrel up over the right shoulder (Leon's right is -x), pos
-// puts the turned centre on his back, in the chest's space (parts 2: its joint about 1360 high, the back's surface
-// about 125 behind it), the model's front just behind the back. Exported for the runtime tests.
-extern "C" void re4_back_place(const float c[3], const float s[3], float pos[3], float ang[3])
+// The place on the back for a weapon model of these bounds (centre c, half extents s; the model's own space): the
+// weapons' files hold them as Leon's right hand does, the barrel along -x (his arm points along -x in the bind pose;
+// device test 09.11.2026: turned for +x the Chicago Typewriter hung with its stock up), the rocket launcher's model
+// (Leon's archive) along +x (barrelX). ang.z turns the barrel up over the right shoulder (Leon's right is -x), 60
+// degrees from the floor as a sling holds it; pos puts the turned centre between the shoulder blades, in the
+// chest's space (parts 2: its joint about 1360 high, the back's surface about 125 behind it), the model's front just
+// behind the back. Exported for the runtime tests.
+extern "C" void re4_back_place(const float c[3], const float s[3], int barrelX, float pos[3], float ang[3])
 {
-    const float a = 110.0f * 3.14159265f / 180.0f;
+    const float d = 60.0f * 3.14159265f / 180.0f;  // the barrel's angle over the floor
+    // the turn that takes the barrel's axis (+x or -x) to (-cos d, sin d), up over the right shoulder
+    const float a = barrelX > 0 ? 3.14159265f - d : -d;
     const float ca = cosf(a), sa = sinf(a);
-    const float tx = 0.0f, ty = 30.0f, back = -125.0f - 15.0f;
+    const float tx = 0.0f, ty = -60.0f, back = -125.0f - 15.0f;
     pos[0] = tx - (c[0] * ca - c[1] * sa);
     pos[1] = ty - (c[0] * sa + c[1] * ca);
     pos[2] = back - (c[2] + s[2]);
@@ -273,7 +278,7 @@ void showBack(bool want)
     const float c[3] = {b.offset.x, b.offset.y, b.offset.z};
     const float s[3] = {b.size.x, b.size.y, b.size.z};
     float p[3], a[3];
-    re4_back_place(c, s, p, a);
+    re4_back_place(c, s, m.file ? -1 : 1, p, a);
     obj->pos.x = p[0];
     obj->pos.y = p[1];
     obj->pos.z = p[2];
