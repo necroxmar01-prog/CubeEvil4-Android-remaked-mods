@@ -356,4 +356,21 @@
     <string name="ingame_shader_cache_help">Le jeu conserve les shaders qu\'il a créés, pour qu\'une scène ne saccade pas une seconde fois. Videz-le seulement si des erreurs graphiques apparaissent après une mise à jour : le jeu les recrée alors, et les premières scènes peuvent saccader.</string>
     <string name="ingame_shader_clear">Vider le cache des shaders</string>
     <string name="ingame_shader_clear_text">Le jeu redémarre et supprime les shaders créés. Il les recrée pendant la partie, les premières scènes peuvent donc saccader. La progression depuis la dernière sauvegarde est perdue.</string>
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_help">Des fichiers qui remplacent ceux du jeu, comme des skins de personnages faits pour la version GameCube. Choisissez un dossier organisé comme le disque (par exemple em/pl08.das)\u00A0; il s\'applique après un redémarrage. Les mods de la version PC ne fonctionnent pas ici.</string>
+    <string name="ingame_mods_none">Aucun mod</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="one">%1$s\u00A0: %2$d fichier</item>
+        <item quantity="many">%1$s\u00A0: %2$d fichiers</item>
+        <item quantity="other">%1$s\u00A0: %2$d fichiers</item>
+    </plurals>
+    <string name="ingame_mod_add">Ajouter un dossier de mod</string>
+    <string name="ingame_mods_remove">Retirer tous les mods</string>
+    <string name="ingame_mods_remove_text">Le jeu redémarre et utilise de nouveau les fichiers du disque. La progression depuis votre dernière sauvegarde est perdue.</string>
+    <string name="ingame_mod_copying">Copie du mod…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="one">Mod «\u00A0%1$s\u00A0» ajouté (%2$d fichier). Il s\'applique après un redémarrage\u00A0; la progression depuis votre dernière sauvegarde est perdue.</item>
+        <item quantity="many">Mod «\u00A0%1$s\u00A0» ajouté (%2$d fichiers). Il s\'applique après un redémarrage\u00A0; la progression depuis votre dernière sauvegarde est perdue.</item>
+        <item quantity="other">Mod «\u00A0%1$s\u00A0» ajouté (%2$d fichiers). Il s\'applique après un redémarrage\u00A0; la progression depuis votre dernière sauvegarde est perdue.</item>
+    </plurals>
 </resources>

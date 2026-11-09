@@ -367,4 +367,19 @@
     <string name="ingame_shader_cache_help">The game keeps the shaders it built, so a scene does not stutter a second time. Clear them only if graphics errors appear after an update: the game then builds them anew, and the first scenes can stutter.</string>
     <string name="ingame_shader_clear">Clear shader cache</string>
     <string name="ingame_shader_clear_text">The game restarts and deletes the built shaders. It builds them anew as you play, so the first scenes can stutter. Progress since your last save is lost.</string>
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_help">Files that replace the game\'s own, such as character skins made for the GameCube version. Pick a folder laid out like the disc (for example em/pl08.das); it counts after a restart. Mods for the PC version do not work here.</string>
+    <string name="ingame_mods_none">No mods</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="one">%1$s: %2$d file</item>
+        <item quantity="other">%1$s: %2$d files</item>
+    </plurals>
+    <string name="ingame_mod_add">Add mod folder</string>
+    <string name="ingame_mods_remove">Remove all mods</string>
+    <string name="ingame_mods_remove_text">The game restarts and uses the disc\'s own files again. Progress since your last save is lost.</string>
+    <string name="ingame_mod_copying">Copying the mod…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="one">Mod “%1$s” added (%2$d file). It counts after a restart; progress since your last save is lost.</item>
+        <item quantity="other">Mod “%1$s” added (%2$d files). It counts after a restart; progress since your last save is lost.</item>
+    </plurals>
 </resources>

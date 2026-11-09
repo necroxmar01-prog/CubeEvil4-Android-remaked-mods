@@ -355,4 +355,21 @@
     <string name="ingame_shader_cache_help">O jogo guarda os shaders que criou, para que uma cena não trave uma segunda vez. Limpe só se aparecerem erros gráficos depois de uma atualização: o jogo os cria de novo, e as primeiras cenas podem travar.</string>
     <string name="ingame_shader_clear">Limpar cache de shaders</string>
     <string name="ingame_shader_clear_text">O jogo reinicia e apaga os shaders criados. Ele os cria de novo enquanto você joga, então as primeiras cenas podem travar. O progresso desde o último salvamento é perdido.</string>
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_help">Arquivos que substituem os do jogo, como skins de personagens feitas para a versão de GameCube. Escolha uma pasta organizada como o disco (por exemplo em/pl08.das); vale após reiniciar. Mods da versão de PC não funcionam aqui.</string>
+    <string name="ingame_mods_none">Nenhum mod</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="one">%1$s: %2$d arquivo</item>
+        <item quantity="many">%1$s: %2$d arquivos</item>
+        <item quantity="other">%1$s: %2$d arquivos</item>
+    </plurals>
+    <string name="ingame_mod_add">Adicionar pasta de mod</string>
+    <string name="ingame_mods_remove">Remover todos os mods</string>
+    <string name="ingame_mods_remove_text">O jogo reinicia e volta a usar os arquivos do disco. O progresso desde o último salvamento é perdido.</string>
+    <string name="ingame_mod_copying">Copiando o mod…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="one">Mod “%1$s” adicionado (%2$d arquivo). Vale após reiniciar; o progresso desde o último salvamento é perdido.</item>
+        <item quantity="many">Mod “%1$s” adicionado (%2$d arquivos). Vale após reiniciar; o progresso desde o último salvamento é perdido.</item>
+        <item quantity="other">Mod “%1$s” adicionado (%2$d arquivos). Vale após reiniciar; o progresso desde o último salvamento é perdido.</item>
+    </plurals>
 </resources>

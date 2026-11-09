@@ -365,4 +365,27 @@
     <string name="ingame_shader_cache_help">تحتفظ اللعبة بالمظللات التي أنشأتها، حتى لا يتقطع المشهد مرة ثانية. لا تُفرغها إلا إذا ظهرت أخطاء رسومية بعد تحديث: عندها تنشئها اللعبة من جديد، وقد تتقطع المشاهد الأولى.</string>
     <string name="ingame_shader_clear">إفراغ ذاكرة المظللات المؤقتة</string>
     <string name="ingame_shader_clear_text">سيُعاد تشغيل اللعبة وستُحذف المظللات التي أُنشئت. تنشئها اللعبة من جديد أثناء اللعب، لذا قد تتقطع المشاهد الأولى. سيُفقد التقدم منذ آخر حفظ.</string>
+    <string name="ingame_mods">التعديلات</string>
+    <string name="ingame_mods_help">ملفات تحل محل ملفات اللعبة، مثل أشكال الشخصيات المصنوعة لنسخة GameCube. اختر مجلدًا مرتبًا مثل القرص (مثلًا em/pl08.das)؛ ويسري بعد إعادة التشغيل. تعديلات نسخة الحاسوب لا تعمل هنا.</string>
+    <string name="ingame_mods_none">لا توجد تعديلات</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="zero">&#x200F;%1$s: عدد الملفات %2$d</item>
+        <item quantity="one">&#x200F;%1$s: عدد الملفات %2$d</item>
+        <item quantity="two">&#x200F;%1$s: عدد الملفات %2$d</item>
+        <item quantity="few">&#x200F;%1$s: عدد الملفات %2$d</item>
+        <item quantity="many">&#x200F;%1$s: عدد الملفات %2$d</item>
+        <item quantity="other">&#x200F;%1$s: عدد الملفات %2$d</item>
+    </plurals>
+    <string name="ingame_mod_add">إضافة مجلد تعديل</string>
+    <string name="ingame_mods_remove">إزالة كل التعديلات</string>
+    <string name="ingame_mods_remove_text">ستُعاد تشغيل اللعبة وتستخدم ملفات القرص من جديد. يضيع التقدم منذ آخر حفظ.</string>
+    <string name="ingame_mod_copying">جارٍ نسخ التعديل…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="zero">أُضيف التعديل «%1$s» (عدد الملفات %2$d). يسري بعد إعادة التشغيل؛ ويضيع التقدم منذ آخر حفظ.</item>
+        <item quantity="one">أُضيف التعديل «%1$s» (عدد الملفات %2$d). يسري بعد إعادة التشغيل؛ ويضيع التقدم منذ آخر حفظ.</item>
+        <item quantity="two">أُضيف التعديل «%1$s» (عدد الملفات %2$d). يسري بعد إعادة التشغيل؛ ويضيع التقدم منذ آخر حفظ.</item>
+        <item quantity="few">أُضيف التعديل «%1$s» (عدد الملفات %2$d). يسري بعد إعادة التشغيل؛ ويضيع التقدم منذ آخر حفظ.</item>
+        <item quantity="many">أُضيف التعديل «%1$s» (عدد الملفات %2$d). يسري بعد إعادة التشغيل؛ ويضيع التقدم منذ آخر حفظ.</item>
+        <item quantity="other">أُضيف التعديل «%1$s» (عدد الملفات %2$d). يسري بعد إعادة التشغيل؛ ويضيع التقدم منذ آخر حفظ.</item>
+    </plurals>
 </resources>

@@ -352,4 +352,19 @@
     <string name="ingame_shader_cache_help">गेम बनाए गए शेडर रखता है, ताकि कोई दृश्य दोबारा न अटके। इसे तभी साफ़ करें जब किसी अपडेट के बाद ग्राफ़िक्स में गड़बड़ी दिखे: तब गेम उन्हें फिर से बनाता है, और शुरुआती दृश्य अटक सकते हैं।</string>
     <string name="ingame_shader_clear">शेडर कैश साफ़ करें</string>
     <string name="ingame_shader_clear_text">गेम फिर से शुरू होगा और बनाए गए शेडर हटा देगा। खेलते समय वह उन्हें फिर से बनाता है, इसलिए शुरुआती दृश्य अटक सकते हैं। पिछली बार सेव करने के बाद की प्रगति खो जाएगी।</string>
+    <string name="ingame_mods">मॉड</string>
+    <string name="ingame_mods_help">ऐसी फ़ाइलें जो गेम की फ़ाइलों की जगह लेती हैं, जैसे GameCube संस्करण के लिए बने किरदारों के स्किन। डिस्क जैसी संरचना वाला फ़ोल्डर चुनें (जैसे em/pl08.das); यह रीस्टार्ट के बाद लागू होता है। PC संस्करण के मॉड यहाँ काम नहीं करते।</string>
+    <string name="ingame_mods_none">कोई मॉड नहीं</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="one">%1$s: %2$d फ़ाइल</item>
+        <item quantity="other">%1$s: %2$d फ़ाइलें</item>
+    </plurals>
+    <string name="ingame_mod_add">मॉड फ़ोल्डर जोड़ें</string>
+    <string name="ingame_mods_remove">सभी मॉड हटाएँ</string>
+    <string name="ingame_mods_remove_text">गेम रीस्टार्ट होगा और फिर से डिस्क की फ़ाइलें इस्तेमाल करेगा। पिछली सेव के बाद की प्रगति खो जाएगी।</string>
+    <string name="ingame_mod_copying">मॉड कॉपी हो रहा है…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="one">मॉड “%1$s” जोड़ा गया (%2$d फ़ाइल)। यह रीस्टार्ट के बाद लागू होगा; पिछली सेव के बाद की प्रगति खो जाएगी।</item>
+        <item quantity="other">मॉड “%1$s” जोड़ा गया (%2$d फ़ाइलें)। यह रीस्टार्ट के बाद लागू होगा; पिछली सेव के बाद की प्रगति खो जाएगी।</item>
+    </plurals>
 </resources>

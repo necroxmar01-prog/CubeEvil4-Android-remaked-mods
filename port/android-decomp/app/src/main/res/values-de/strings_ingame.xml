@@ -352,4 +352,19 @@
     <string name="ingame_shader_cache_help">Das Spiel behält die gebauten Shader, damit eine Szene kein zweites Mal ruckelt. Leeren ist nur nötig, wenn nach einem Update Grafikfehler auftreten: Das Spiel baut sie dann neu, und die ersten Szenen können ruckeln.</string>
     <string name="ingame_shader_clear">Shader-Speicher leeren</string>
     <string name="ingame_shader_clear_text">Das Spiel startet neu und löscht die gebauten Shader. Es baut sie beim Spielen neu, die ersten Szenen können darum ruckeln. Fortschritt seit dem letzten Speichern geht verloren.</string>
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_help">Dateien, die die des Spiels ersetzen, etwa Charakter-Skins für die GameCube-Version. Wähle einen Ordner, der wie die Disc aufgebaut ist (zum Beispiel em/pl08.das); er gilt nach einem Neustart. Mods für die PC-Version funktionieren hier nicht.</string>
+    <string name="ingame_mods_none">Keine Mods</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="one">%1$s: %2$d Datei</item>
+        <item quantity="other">%1$s: %2$d Dateien</item>
+    </plurals>
+    <string name="ingame_mod_add">Mod-Ordner hinzufügen</string>
+    <string name="ingame_mods_remove">Alle Mods entfernen</string>
+    <string name="ingame_mods_remove_text">Das Spiel startet neu und nutzt wieder die Dateien der Disc. Fortschritt seit dem letzten Speichern geht verloren.</string>
+    <string name="ingame_mod_copying">Mod wird kopiert…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="one">Mod „%1$s“ hinzugefügt (%2$d Datei). Er gilt nach einem Neustart; Fortschritt seit dem letzten Speichern geht verloren.</item>
+        <item quantity="other">Mod „%1$s“ hinzugefügt (%2$d Dateien). Er gilt nach einem Neustart; Fortschritt seit dem letzten Speichern geht verloren.</item>
+    </plurals>
 </resources>

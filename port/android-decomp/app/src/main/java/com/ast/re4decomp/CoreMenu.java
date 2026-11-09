@@ -119,6 +119,12 @@ final class CoreMenu extends Dialog {
     int cheatAction(int what);
     /** The game restarts with its language as it is (the extra games; the menu asked first). */
     void restartGame();
+    /** Mods (ModStore, wish of the project owner, 08.11.2026): pick a folder to copy into game/mods. */
+    void addMod();
+    /** The mod packs in game/mods, "name\tfiles" each. */
+    String[] modPacks();
+    /** Every mod pack goes (the menu asked first); the game restarts so the disc's files count again. */
+    void removeMods();
     /** The renderer (port/docs/vulkan-bauplan.md): Vulkan can run here (Android 10, Vulkan 1.1). */
     boolean vulkanSupported();
     /** Vulkan is the menu's choice (it may not run: not supported, or it fell back to OpenGL ES). */
@@ -182,6 +188,8 @@ final class CoreMenu extends Dialog {
   private TextView graphicsLine, cardLine, slotDetails, slotDate, slotStatus, cheatStatus;
   private int cheatBits;  // the cheat switches as the page sent them last (CoreActivity.CHEATS)
   private Button exportAll, saveSlot, loadSlot;
+  private TextView modsLine;
+  private Button modsRemove;
   private final View.OnLayoutChangeListener windowLayout = (v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
     if (r - l != oldR - oldL || b - t != oldB - oldT) resizeWindow();
   };
@@ -557,7 +565,7 @@ final class CoreMenu extends Dialog {
   private void showPage(int next, boolean focus) {
     if (working) return;
     scrollY[page] = scroll.getScrollY(); page = next; ++requestSerial;
-    body.removeAllViews(); graphicsLine = null; cardLine = null; exportAll = null; cheatStatus = null;
+    body.removeAllViews(); graphicsLine = null; cardLine = null; exportAll = null; modsLine = null; modsRemove = null; cheatStatus = null;
     bindingButtons = null; controllerButton = null; mapStatus = null;
     if (next != CONTROLLER) { captureAction = -1; main.removeCallbacks(captureTimeout); }
     back.setVisibility(page == HOME ? View.GONE : View.VISIBLE);
@@ -1376,6 +1384,12 @@ final class CoreMenu extends Dialog {
     // another release over the imported discs (wish of the project owner, 06.11.2026)
     heading(R.string.ingame_discs); help(R.string.ingame_discs_help);
     cellAction(buttonsRow(body), s(R.string.ingame_import_discs), v -> askImportDiscs());
+    // mods: files that replace the disc's (character skins; wish of the project owner, 08.11.2026)
+    heading(R.string.ingame_mods); help(R.string.ingame_mods_help);
+    modsLine = text("", 15, false); modsLine.setPadding(dp(MenuLayout.GAP), 0, dp(MenuLayout.GAP), 0); body.addView(modsLine);
+    MenuLayout.Buttons modButtons = buttonsRow(body);
+    cellAction(modButtons, s(R.string.ingame_mod_add), v -> host.addMod());
+    modsRemove = cellAction(modButtons, s(R.string.ingame_mods_remove), v -> askRemoveMods()); refreshMods();
     heading(R.string.ingame_log); help(R.string.ingame_log_help);
     MenuLayout.Buttons log = buttonsRow(body);
     toggle(log, R.string.ingame_log_record, CoreLog.enabled(getContext()), on -> host.logChanged(on));
@@ -1679,6 +1693,30 @@ final class CoreMenu extends Dialog {
     slotStatus.setText(s(message));
     // Ready adds no information beyond the enabled buttons; keep useful progress/errors visible.
     slotStatus.setVisibility(message == R.string.ingame_instant_ready ? View.GONE : View.VISIBLE);
+  }
+  /** The line under "Mods": the packs and their files, or none. */
+  void refreshMods() {
+    if (modsLine == null || modsRemove == null) return;
+    String[] packs = host.modPacks();
+    StringBuilder b = new StringBuilder();
+    for (String row : packs) {
+      String[] p = row.split("\t", 2);
+      int files = p.length > 1 ? Integer.parseInt(p[1]) : 0;
+      if (b.length() > 0) b.append('\n');
+      b.append(getContext().getResources().getQuantityString(R.plurals.ingame_mod_line, files, p[0], files));
+    }
+    modsLine.setText(packs.length == 0 ? s(R.string.ingame_mods_none) : b.toString());
+    modsRemove.setEnabled(packs.length > 0);
+  }
+  /** "Remove all mods": the game restarts for it, so the menu asks first. */
+  private void askRemoveMods() {
+    AlertDialog dialog = new AlertDialog.Builder(getContext())
+        .setTitle(R.string.ingame_mods_remove)
+        .setMessage(R.string.ingame_mods_remove_text)
+        .setNegativeButton(R.string.ingame_cancel, null)
+        .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.removeMods(); }).create();
+    dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
+    dialog.show();
   }
   void refreshCard() {
     if (cardLine == null || exportAll == null) return;

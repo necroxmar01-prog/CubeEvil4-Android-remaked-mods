@@ -399,6 +399,70 @@ static void testDvd()
     report("dvd", ok);
 }
 
+// Mods (runtime/dvd.cpp applyMods): <data>/mods/<pack>/ mirrors files/ (or holds files/), any case;
+// a replacement of another size is read whole, a later pack wins, files not on the disc stay out.
+static void testDvdMods()
+{
+    bool ok = true;
+    char tmpl[] = "/tmp/re4-mods-test-XXXXXX";
+    const char* root = mkdtemp(tmpl);
+    CHECK(root != 0);
+    if (!root) {
+        report("dvd mods", false);
+        return;
+    }
+    std::string base = root;
+    std::vector<FstEntry> fst0 = {
+        {true, "em", 0, 4},
+        {false, "pl08.das", 0x1000, 4},
+        {false, "pl09.das", 0x2000, 4},
+        {false, "etc.dat", 0x3000, 3},
+    };
+    std::vector<unsigned char> f0 = buildFst(fst0);
+    unsigned char boot0[0x40] = "G4BE08";
+    CHECK(makeDirs(base + "/disc1/sys") && makeDirs(base + "/disc1/files/em") && makeDirs(base + "/mods/a/EM") &&
+          makeDirs(base + "/mods/b/files/em") && makeDirs(base + "/mods/.hidden"));
+    CHECK(writeFile(base + "/disc1/sys/fst.bin", f0.data(), f0.size()));
+    CHECK(writeFile(base + "/disc1/sys/boot.bin", boot0, sizeof(boot0)));
+    CHECK(writeFile(base + "/disc1/files/em/pl08.das", "PL08", 4));
+    CHECK(writeFile(base + "/disc1/files/em/pl09.das", "PL09", 4));
+    CHECK(writeFile(base + "/disc1/files/etc.dat", "ETC", 3));
+    const char skin[] = "a skin of Leon, longer than the disc's file";  // 43 bytes
+    CHECK(writeFile(base + "/mods/a/EM/PL08.DAS", skin, sizeof(skin) - 1));
+    CHECK(writeFile(base + "/mods/a/EM/pl09.das", "A09", 3));
+    CHECK(writeFile(base + "/mods/b/files/em/pl09.das", "B-09!", 5));  // pack b after a: b wins
+    CHECK(writeFile(base + "/mods/a/notes.txt", "x", 1));              // not on the disc
+    CHECK(writeFile(base + "/mods/.hidden/etc.dat", "NO", 2));         // hidden: not a pack
+
+    char saved[1024];
+    snprintf(saved, sizeof(saved), "%s", re4_data_dir());
+    re4_set_data_dir(root);
+    TestFileInfo fi;
+    memset(&fi, 0, sizeof(fi));
+    unsigned char buf[64];
+    CHECK(DVDOpen("em/pl08.das", &fi) == 1 && fi.length == sizeof(skin) - 1 && fi.startAddr == 0x1000);
+    memset(buf, 0xEE, sizeof(buf));
+    CHECK(DVDReadAsyncPrio(&fi, buf, 64, 0, onRead, 2) == 1 && gReadResult == 64 &&
+          memcmp(buf, skin, sizeof(skin) - 1) == 0 && buf[sizeof(skin) - 1] == 0);
+    CHECK(DVDOpen("em/pl09.das", &fi) == 1 && fi.length == 5);
+    CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "B-09!", 5) == 0);
+    CHECK(DVDOpen("etc.dat", &fi) == 1 && fi.length == 3);
+    CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "ETC", 3) == 0);
+    // the FST in MEM1 carries the new size too
+    const unsigned char* fst = (const unsigned char*) DVDGetFSTLocation();
+    CHECK(fst[2 * 12 + 11] == sizeof(skin) - 1 && fst[3 * 12 + 11] == 5 && fst[4 * 12 + 11] == 3);
+
+    // without mods/ the disc's own files again
+    CHECK(system(("rm -rf '" + base + "/mods'").c_str()) == 0);
+    re4_set_data_dir(root);
+    CHECK(DVDOpen("em/pl08.das", &fi) == 1 && fi.length == 4);
+    CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "PL08", 4) == 0);
+
+    re4_set_data_dir(saved);
+    CHECK(system(("rm -rf '" + base + "'").c_str()) == 0);
+    report("dvd mods", ok);
+}
+
 // The release from each disc header (port/docs/retail-eu-plan.md): debug build, European and US
 // release, a header without the table's place (the test above), another game.
 extern "C" void re4_core_debug_menu(void);    // runtime/core_api.cpp
@@ -2414,6 +2478,7 @@ int re4_runtime_tests()
     gFailures = 0;
     testLink();
     testDvd();
+    testDvdMods();
     testDiscRelease();
     testRetailOrder();
     testYz2();

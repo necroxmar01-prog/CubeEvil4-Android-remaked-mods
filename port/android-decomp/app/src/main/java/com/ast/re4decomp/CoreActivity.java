@@ -153,7 +153,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
    *  extra games kept unlocked, the story's player character << 5 (2 Ada, 3 HUNK, 4 Krauser, 5 Wesker), 256 the
    *  special costume; off). */
   static final String CHEATS = "cheats";
-  private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4;
+  private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_MOD = 5;
   /** SELECT held this long: the game's debug menu. */
   private static final long SELECT_HOLD_MS = 1000;
 
@@ -982,6 +982,25 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setCheats(bits);
     }
 
+    @Override public void addMod() {
+      startForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_MOD);
+    }
+
+    @Override public String[] modPacks() {
+      File root = gameRoot();
+      String[] packs = ModStore.packs(root);
+      for (int i = 0; i < packs.length; i++) {
+        packs[i] = packs[i] + "\t" + ModStore.countFiles(new File(ModStore.dir(root), packs[i]));
+      }
+      return packs;
+    }
+
+    @Override public void removeMods() {
+      boolean gone = ModStore.removeAll(gameRoot());
+      Log.i(TAG, "menu: mods removed" + (gone ? "" : " (not all)"));
+      restartIntoGame("menu: mods removed");
+    }
+
     @Override public void restartGame() {
       Log.i(TAG, "the game restarts (extra games), its language stays");
       CoreBridge.restartGame(0);
@@ -1153,6 +1172,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
           readImport(data.getData());
         }
         importNext(new StringBuilder());
+      } else if (request == REQUEST_MOD && data.getData() != null) {
+        copyMod(data.getData());
       } else if (request == REQUEST_REPORT && data.getData() != null) {
         try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
           if (out == null) throw new IOException("no stream");
@@ -1164,6 +1185,40 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       Log.w(TAG, "menu: " + e);
       message(getString(R.string.ingame_failed, e.getMessage()));
     }
+  }
+
+  private File gameRoot() { return ((Re4Application) getApplication()).imports.root; }
+
+  /** The picked folder into game/mods (ModStore), off the main thread; it counts from the next start. */
+  private void copyMod(Uri tree) {
+    Toast.makeText(this, R.string.ingame_mod_copying, Toast.LENGTH_SHORT).show();
+    final File root = gameRoot();
+    new Thread(() -> {
+      ModStore.Result done = null;
+      String failure = null;
+      try {
+        done = ModStore.copyTree(getContentResolver(), tree, root);
+        Log.i(TAG, "mod " + done.name + ": " + done.files + " files");
+      } catch (IOException | RuntimeException e) {
+        Log.w(TAG, "mod: " + e);
+        failure = e.getMessage();
+      }
+      final ModStore.Result result = done;
+      final String why = failure;
+      main.post(() -> {
+        if (isFinishing()) return;
+        if (menu != null) menu.refreshMods();
+        if (result == null) {
+          message(getString(R.string.ingame_failed, why));
+          return;
+        }
+        new AlertDialog.Builder(this)
+            .setMessage(getResources().getQuantityString(R.plurals.ingame_mod_added, result.files, result.name,
+                result.files))
+            .setNegativeButton(R.string.ingame_later, null)
+            .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mod added")).show();
+      });
+    }, "mod-copy").start();
   }
 
   /** Every file of the card as .gci into the chosen folder. */

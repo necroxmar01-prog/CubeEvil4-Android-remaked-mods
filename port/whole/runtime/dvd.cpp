@@ -111,7 +111,12 @@ struct Disc {
     u32 fstSize;
     u32 count;                // FST entries
     u32* parent;              // per entry: parent directory index
+    char** mod;               // per entry: the replacing file of a mod (mods/), else 0
+    u32 mods;                 // files replaced
 };
+
+void applyMods(Disc& d, int no);
+void freeDisc(Disc& d);
 
 Disc gDiscs[2];
 int gCurrent = -1;
@@ -303,6 +308,7 @@ bool loadDisc(int no)
     d.loaded = true;
     re4_log("DVD: disc %d: %s, %u FST entries, %s%s", no, d.root, d.count, releaseName(d.release),
             d.korean ? " (Korean translation)" : "");
+    applyMods(d, no);
     const Disc& other = gDiscs[no ^ 1];
     if (other.loaded && other.release != d.release) {
         re4_log("DVD: the discs are of different releases (%s, %s): import both discs of one release",
@@ -369,6 +375,16 @@ void entryPath(const Disc& d, u32 i, char* out, size_t outSize)
     while (n > 0 && len < outSize) {
         len += (size_t) snprintf(out + len, outSize - len, "/%s", entryName(d, chain[--n]));
     }
+}
+
+// The file that holds entry i on this device: a mod's replacement (applyMods), else the disc's own.
+void filePath(const Disc& d, u32 i, char* out, size_t outSize)
+{
+    if (d.mod && d.mod[i]) {
+        snprintf(out, outSize, "%s", d.mod[i]);
+        return;
+    }
+    entryPath(d, i, out, outSize);
 }
 
 // The first unreadable file: the app tells the player which file and what to do (reports of
@@ -447,6 +463,133 @@ s32 lookup(const Disc& d, const char* path)
     return (s32) dir;
 }
 
+// Mods (wish of the project owner, 08.11.2026: character skins): <data>/mods/<pack>/ mirrors the
+// disc's files/ folder (or holds it as <pack>/files/); every file there replaces the disc's file
+// of that path (case-insensitive, like the game's own paths) on both discs. Packs apply in name
+// order, a later pack wins. The replacement may differ in size: its size goes into the host FST
+// (and with it the copy in MEM1, DVDFastOpen and the reads), so the game reads the whole file.
+// Files without a counterpart on the disc are named in the log and left out; read when the disc
+// is first loaded (a pack added later counts from the next start).
+void putBe32(unsigned char* p, u32 v)
+{
+    p[0] = (unsigned char) (v >> 24);
+    p[1] = (unsigned char) (v >> 16);
+    p[2] = (unsigned char) (v >> 8);
+    p[3] = (unsigned char) v;
+}
+
+int byName(const void* a, const void* b)
+{
+    return strcmp(*(const char* const*) a, *(const char* const*) b);
+}
+
+// The names in a folder, sorted (hidden ones left out); free each and the list.
+char** listDir(const char* path, int* count)
+{
+    *count = 0;
+    DIR* dir = opendir(path);
+    if (!dir) {
+        return 0;
+    }
+    int cap = 16;
+    char** names = (char**) malloc(cap * sizeof(char*));
+    while (struct dirent* e = readdir(dir)) {
+        if (e->d_name[0] == '.') {
+            continue;
+        }
+        if (*count == cap) {
+            cap *= 2;
+            names = (char**) realloc(names, cap * sizeof(char*));
+        }
+        names[(*count)++] = strdup(e->d_name);
+    }
+    closedir(dir);
+    qsort(names, *count, sizeof(char*), byName);
+    return names;
+}
+
+void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int depth, int no)
+{
+    int count = 0;
+    char** names = listDir(full, &count);
+    for (int k = 0; k < count; k++) {
+        char path[1600], name[600];
+        snprintf(path, sizeof(path), "%s/%s", full, names[k]);
+        snprintf(name, sizeof(name), "%s%s%s", rel, *rel ? "/" : "", names[k]);
+        if (isDirectory(path)) {
+            if (depth < 16) {
+                modFolder(d, pack, path, name, depth + 1, no);
+            }
+            free(names[k]);
+            continue;
+        }
+        s32 entry = lookup(d, name);
+        FILE* f = fopen(path, "rb");
+        long size = -1;
+        if (f && fseek(f, 0, SEEK_END) == 0) {
+            size = ftell(f);
+        }
+        if (f) {
+            fclose(f);
+        }
+        if (entry <= 0 || isDir(d, (u32) entry)) {
+            re4_log("DVD: mod %s: %s is not a file of disc %d, left out", pack, name, no + 1);
+        } else if (size < 0 || size > 0x7FFFFFFFL) {
+            re4_log("DVD: mod %s: %s cannot be read, left out", pack, name);
+        } else {
+            u32 was = word(d, (u32) entry, 2);
+            if (!d.mod[entry]) {
+                d.mods++;
+            }
+            free(d.mod[entry]);
+            d.mod[entry] = strdup(path);
+            putBe32(d.fst + entry * 12 + 8, (u32) size);
+            re4_log("DVD: mod %s: %s replaces the disc's file (%u bytes, on the disc %u)", pack, name, (unsigned) size,
+                    (unsigned) was);
+        }
+        free(names[k]);
+    }
+    free(names);
+}
+
+void applyMods(Disc& d, int no)
+{
+    char mods[1200];
+    snprintf(mods, sizeof(mods), "%s/mods", gDataDir);
+    int count = 0;
+    char** packs = listDir(mods, &count);
+    for (int k = 0; k < count; k++) {
+        char full[1400];
+        snprintf(full, sizeof(full), "%s/%s", mods, packs[k]);
+        if (isDirectory(full)) {
+            char files[1500];
+            snprintf(files, sizeof(files), "%s/files", full);
+            if (!d.mod) {
+                d.mod = (char**) calloc(d.count, sizeof(char*));
+            }
+            modFolder(d, packs[k], isDirectory(files) ? files : full, "", 0, no);
+        }
+        free(packs[k]);
+    }
+    free(packs);
+    if (d.mods) {
+        re4_log("DVD: disc %d: %u files from mods", no + 1, (unsigned) d.mods);
+    }
+}
+
+void freeDisc(Disc& d)
+{
+    if (d.mod) {
+        for (u32 i = 0; i < d.count; i++) {
+            free(d.mod[i]);
+        }
+    }
+    free(d.mod);
+    free(d.fst);
+    free(d.parent);
+    memset(&d, 0, sizeof(d));
+}
+
 s32 entryForStart(const Disc& d, u32 startAddr, u32 length)
 {
     for (u32 i = 1; i < d.count; i++) {
@@ -490,7 +633,7 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
         return -1;
     }
     char path[2048];
-    entryPath(*d, (u32) entry, path, sizeof(path));
+    filePath(*d, (u32) entry, path, sizeof(path));
     FILE* f = fopen(path, "rb");
     if (!f) {
         re4_log("DVD: cannot open %s", path);
@@ -593,7 +736,7 @@ int re4_dvd_header_check(const void* table, const char* name, unsigned offset, u
     s32 entry = d && name ? lookup(*d, name) : -1;
     if (entry > 0) {
         char path[2048];
-        entryPath(*d, (u32) entry, path, sizeof(path));
+        filePath(*d, (u32) entry, path, sizeof(path));
         noteProblem(*d, path, zeros ? "its start reads as zeros on this device (the file is damaged)"
                                     : "its start is damaged on this device (no valid part table)");
     }
@@ -604,9 +747,7 @@ void re4_set_data_dir(const char* dir)
 {
     snprintf(gDataDir, sizeof(gDataDir), "%s", dir);
     for (Disc& d : gDiscs) {
-        free(d.fst);
-        free(d.parent);
-        memset(&d, 0, sizeof(d));
+        freeDisc(d);
     }
     gCurrent = -1;
 }
@@ -674,7 +815,7 @@ void* re4_core_data_place(const char* name, unsigned fixedMax)
         return 0;
     }
     char path[1400];
-    entryPath(*d, (u32) entry, path, sizeof(path));
+    filePath(*d, (u32) entry, path, sizeof(path));
     unsigned char head[0x440];
     FILE* f = fopen(path, "rb");
     size_t got = f ? fread(head, 1, sizeof(head), f) : 0;

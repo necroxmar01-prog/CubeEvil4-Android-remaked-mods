@@ -354,4 +354,21 @@
     <string name="ingame_shader_cache_help">El juego guarda los shaders que ha creado para que una escena no vuelva a ir a tirones. Vacíala solo si aparecen errores gráficos tras una actualización: el juego los vuelve a crear y las primeras escenas pueden ir a tirones.</string>
     <string name="ingame_shader_clear">Vaciar caché de shaders</string>
     <string name="ingame_shader_clear_text">El juego se reinicia y borra los shaders creados. Los vuelve a crear mientras juegas, así que las primeras escenas pueden ir a tirones. Se pierde el progreso desde la última vez que guardaste.</string>
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_help">Archivos que reemplazan los del juego, como skins de personajes hechas para la versión de GameCube. Elige una carpeta con la misma estructura que el disco (por ejemplo em/pl08.das); se aplica tras reiniciar. Los mods de la versión de PC no funcionan aquí.</string>
+    <string name="ingame_mods_none">Sin mods</string>
+    <plurals name="ingame_mod_line">
+        <item quantity="one">%1$s: %2$d archivo</item>
+        <item quantity="many">%1$s: %2$d archivos</item>
+        <item quantity="other">%1$s: %2$d archivos</item>
+    </plurals>
+    <string name="ingame_mod_add">Añadir carpeta de mod</string>
+    <string name="ingame_mods_remove">Quitar todos los mods</string>
+    <string name="ingame_mods_remove_text">El juego se reinicia y vuelve a usar los archivos del disco. Se pierde el progreso desde tu último guardado.</string>
+    <string name="ingame_mod_copying">Copiando el mod…</string>
+    <plurals name="ingame_mod_added">
+        <item quantity="one">Mod «%1$s» añadido (%2$d archivo). Se aplica tras reiniciar; se pierde el progreso desde tu último guardado.</item>
+        <item quantity="many">Mod «%1$s» añadido (%2$d archivos). Se aplica tras reiniciar; se pierde el progreso desde tu último guardado.</item>
+        <item quantity="other">Mod «%1$s» añadido (%2$d archivos). Se aplica tras reiniciar; se pierde el progreso desde tu último guardado.</item>
+    </plurals>
 </resources>
