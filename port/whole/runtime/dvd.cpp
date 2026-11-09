@@ -25,6 +25,7 @@
 #include "re4_runtime.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -524,7 +525,9 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
             continue;
         }
         s32 entry = lookup(d, name);
+        errno = 0;
         FILE* f = fopen(path, "rb");
+        const int openErr = f ? 0 : errno;
         long size = -1;
         if (f && fseek(f, 0, SEEK_END) == 0) {
             size = ftell(f);
@@ -535,7 +538,10 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
         if (entry <= 0 || isDir(d, (u32) entry)) {
             re4_log("DVD: mod %s: %s is not a file of disc %d, left out", pack, name, no + 1);
         } else if (size < 0 || size > 0x7FFFFFFFL) {
-            re4_log("DVD: mod %s: %s cannot be read, left out", pack, name);
+            // a file another app put into the app's folder may not be the app's to read (08.11.2026: a file
+            // manager's copy, EACCES): the menu's "Add mod folder" copies it as the app's own
+            re4_log("DVD: mod %s: %s cannot be read (%s), left out: add the mod through the app's menu (Mods)", pack,
+                    name, openErr ? strerror(openErr) : "no size");
         } else {
             u32 was = word(d, (u32) entry, 2);
             if (!d.mod[entry]) {

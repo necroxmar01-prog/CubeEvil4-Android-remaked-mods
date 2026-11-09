@@ -104,6 +104,16 @@ public final class CoreInputTests {
       v.key(1, R2, true);
       v.pad();
       check(!v.takeReload());
+      // the quick reload on R2, a trigger as an axis (no key event): once per press
+      CoreInput q = new CoreInput();
+      q.setControllerMap(com.ast.re4decomp.ActionMap.decode(com.ast.re4decomp.ActionMap.KIND_CONTROLLER,
+          com.ast.re4decomp.ActionMap.QUICK_RELOAD + "=" + R2));
+      check(q.appFunctionOf(R2, false) == CoreInput.APP_NONE);
+      q.motion(1, 0, 0, 0, 0, 0, 1f, 0, 0);
+      q.pad();
+      check(q.takeReload());
+      q.pad();
+      check(!q.takeReload());
       CoreInput w = new CoreInput();
       w.setControllerMap(com.ast.re4decomp.ActionMap.defaults(com.ast.re4decomp.ActionMap.KIND_CONTROLLER));
       w.key(1, A, true);
@@ -197,6 +207,21 @@ public final class CoreInputTests {
     in.motion(1, 0.3f, -1, 0, 0.8f, 1f, 0, 0, 0);
     a = in.pad();
     check(a[3] == 0 && a[4] == 0);
+    // the layout without the alternate controls too (08.11.2026): R2 ready, the right stick aims, the left walks
+    {
+      CoreInput n = new CoreInput();
+      n.setAimMove(true);
+      n.motion(1, 0.3f, -1, 0, 0.8f, 0, 1f, 0, 0);
+      int[] b = n.pad();
+      check(b[1] == 0 && b[2] == Math.round(-0.8f * 101) && b[3] == Math.round(0.3f * 92) && b[4] == 92);
+      n.motion(1, 0.3f, -1, 0, 0.8f, 0, 0, 0, 0);  // not ready: as before (left walks, right the camera)
+      b = n.pad();
+      check(b[1] == Math.round(0.3f * 101) && b[2] == 101 && b[4] == Math.round(-0.8f * 92));
+      n.setAimMove(false);
+      n.motion(1, 0.3f, -1, 0, 0.8f, 0, 1f, 0, 0);  // without "Move while aiming": the game's own sticks
+      b = n.pad();
+      check(b[1] == Math.round(0.3f * 101) && b[3] == 0);
+    }
     in.motion(1, 0.3f, -1, 0, 0.8f, 0, 0, 0, 0);
     in.key(2, L2, true);  // L2 as a key of another device (the built-in controller)
     a = in.pad();

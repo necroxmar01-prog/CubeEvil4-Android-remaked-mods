@@ -93,6 +93,7 @@ public final class CoreInput {
     boolean trigL, trigR;   // the triggers past half way, as L2 and R2 for the mapping
     int mapped;             // pad(): the GameCube buttons of the mapping, -1 the layout above
     boolean fireKeyDown;    // pad(): the mapping's fire key (the second of fire's two) held at the last pad()
+    boolean quickDown;      // pad(): the mapping's quick reload on a trigger held at the last pad()
     int hats;               // D-pad from the hat axes
     float lx, ly, rx, ry;   // sticks -1..1, y down as Android reports it
     float lt, rt;           // analog triggers 0..1
@@ -335,7 +336,10 @@ public final class CoreInput {
       return appFunction(keyCode);
     }
     if (m.singleOn(keyCode) == ActionMap.APP_MENU) return APP_MENU;
-    if (m.singleOn(keyCode) == ActionMap.QUICK_RELOAD) return APP_RELOAD;
+    if (m.singleOn(keyCode) == ActionMap.QUICK_RELOAD) {
+      // a trigger: pad() (its axis and its key are one press)
+      return keyCode == KEYCODE_BUTTON_L2 || keyCode == KEYCODE_BUTTON_R2 ? APP_NONE : APP_RELOAD;
+    }
     return !keyboard && keyCode == KEYCODE_BUTTON_THUMBR && !m.uses(keyCode) ? APP_GX_DUMP : APP_NONE;
   }
 
@@ -545,6 +549,12 @@ public final class CoreInput {
         boolean fireKey = fireKeys.length == 2 && m.singleOn(fireKeys[1]) < 0 && keyHeld.held(fireKeys[1]);
         if (fireKey && !d.fireKeyDown && !keyHeld.held(fireKeys[0]) && !menu) reloadAsked = true;
         d.fireKeyDown = fireKey;
+        // the quick reload on a trigger: the Retroid's triggers are axes, no key reaches appFunctionOf
+        int[] quick = m.keys(ActionMap.QUICK_RELOAD);
+        boolean quickDown = quick.length == 1 && (quick[0] == KEYCODE_BUTTON_L2 || quick[0] == KEYCODE_BUTTON_R2)
+            && keyHeld.held(quick[0]);
+        if (quickDown && !d.quickDown && !menu) reloadAsked = true;
+        d.quickDown = quickDown;
         for (int code : d.held) bits |= d.keyboard ? ActionMap.fixedKeyboardButton(code) : dpad(code);
         if (!d.keyboard) bits |= d.hats;
         d.mapped = bits;
@@ -576,8 +586,12 @@ public final class CoreInput {
     }
     // the alternate controls aim with the right stick while L1 or L2 holds a weapon ready (on any
     // device: the built-in controller may report the trigger and the sticks apart)
-    boolean aiming = alternate
-        && (Math.round(padL * 255f) >= TRIGGER_PRESSED || Math.round(padR * 255f) >= TRIGGER_PRESSED);
+    boolean readied = Math.round(padL * 255f) >= TRIGGER_PRESSED || Math.round(padR * 255f) >= TRIGGER_PRESSED;
+    boolean aiming = alternate && readied;
+    // "Move while aiming" with the other layouts too (DevJunior, 08.11.2026: without the alternate controls the
+    // left stick aimed and the right one walked): while L or R holds a weapon ready the left stick walks (the C
+    // stick for the game, patch 0900) and the right one aims, as in the remake
+    boolean swapSticks = aimMove && readied;
     // touch aiming: L or R held, on the touch controls or any controller
     Device touchDevice = devices.get(TOUCH);
     boolean touchHeld = touchDevice != null && (touchDevice.l2Key || touchDevice.r2Key)
@@ -594,6 +608,12 @@ public final class CoreInput {
         // the mapping: its buttons (L, R, B above), the keyboard's move keys or the controller's sticks
         buttons |= d.mapped & ~(GC_L | GC_R | GC_B);
         float mainX = d.lx, mainY = d.ly, cX = d.rx, cY = d.ry;
+        if (swapSticks && !d.keyboard) {
+          mainX = d.rx;
+          mainY = d.ry;
+          cX = d.lx;
+          cY = d.ly;
+        }
         if (d.keyboard) {
           final Device dev = d;
           float[] st = mapping(true).stick(dev.held::contains);
@@ -615,7 +635,7 @@ public final class CoreInput {
       if (!touch && d.keyboard) continue;
       buttons |= (touch ? d.buttons : d.buttons & ~GC_B) | d.hats;
       float mainX = d.lx, mainY = d.ly, cX = d.rx, cY = d.ry;
-      if (aiming && !touch) {
+      if ((aiming || swapSticks) && !touch) {
         // "Move while aiming" (patch 0900): the left stick as the C stick, which the game leaves unused then
         cX = aimMove ? d.lx : 0;
         cY = aimMove ? d.ly : 0;
