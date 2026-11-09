@@ -9,6 +9,9 @@
 # frame buffer like the game's own, emptied in SetPrimBuffPtr.
 # event.cpp ExePacket_SetOm: Leon's body in a cutscene (his archive's model) keeps his archive's textures
 # when the player file is a mod (re4_player_modded): the event's own texture set is laid out for the disc's model.
+# event.cpp ExePacket_SetParts: a modded Leon in costume 0 takes his archive's part pl000e for the events'
+# jacket parts ev000e/ev001e, as costumes 1 and 2 do: a skin has no jacket (the PC mods replace pl08).
+# re4_mod_event_part (runtime/dvd.cpp) decides and logs each part an event attaches to a modded Leon.
 --- a/src/game/read.cpp
 +++ b/src/game/read.cpp
 @@ -594,6 +594,8 @@
@@ -98,7 +101,7 @@
  // name prefix (pl00, em10, evm.., scr, wep, ...) selects the obj18 type and foot shadow table;
  // "pl0000" becomes the event player body (PPl). Registered as model type 2.
 +extern "C" int re4_player_modded(void); /* port: runtime/dvd.cpp */
-+
++extern "C" int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume);
  int Event::ExePacket_SetOm(Event* pEvt)
  {
      EvtPacket* pac = pEvt->pPacket;
@@ -115,3 +118,14 @@
      {
          OmTbl tbl[] = {
              {"pl00", 4, OBJ18_TYPE_LEON}, {"pl01", 4, OBJ18_TYPE_ASHLEY}, {"evm90", 5, OBJ18_TYPE_ASHLEY},
+@@ -945,6 +953,10 @@
+     switch (pG->game_costume) {
+     case 0:
+     default:
++        /* port (patch 0901, mods): a skin has no jacket; the events' jacket parts take its pl000e (DevJunior, 09.11.2026) */
++        if (pG->pl_type == 0 && re4_mod_event_part(pac->parts.name, pac->parts.bin, pac->parts.tpl, pac->parts.oya, plCostume)) {
++            return pEvt->ExePacket_SetPartsSub(pac->parts.name, "em/pl00/pl000e.bin", "em/pl00/pl000a.tpl", pac->parts.oya);
++        }
+         switch (plCostume) {
+         case 1:
+         case 2:

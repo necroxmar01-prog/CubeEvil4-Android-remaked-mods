@@ -875,6 +875,19 @@ int re4_player_modded(void)
     return gPlayerModded;
 }
 
+// Patch 0901, ExePacket_SetParts: a part an event attaches to Leon. A skin (the PC mods replace pl08, Leon
+// without the jacket) takes its own pl000e for the jacket parts of costume 0 (ev000e / ev001e), as costumes
+// 1 and 2 do on the disc; 1 = take it. Each part is logged while the player's file is a mod.
+int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume)
+{
+    if (!gPlayerModded) {
+        return 0;
+    }
+    const int jacket = costume == 0 && (strcmp(name, "ev000e") == 0 || strcmp(name, "ev001e") == 0);
+    re4_log("Event: part %s (%s, %s) on %s%s", name, bin, tpl, oya, jacket ? ": the skin's pl000e" : "");
+    return jacket;
+}
+
 void* re4_player_data_place(const char* name, unsigned fixedMax)
 {
     {
