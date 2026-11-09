@@ -117,48 +117,67 @@ def encode_image(img, hdr):
 def inflate(blob, dist, physique="even"):
     """Pushes the positions of a GameCube model of Leon (bind pose, T-pose: y up, arms along x) away from the body's
     axes: the torso from the spine (x 0, z -12; y 950..1560, fading to 0 at 850 and 1620), the arms from their axis
-    (y 1517, z -39; |x| 200..620, fading out to the hands), the legs from theirs (x +-95, z 0; y 300..950, fading out
+    (y 1508, z -34; |x| 200..620, fading out to the hands), the legs from theirs (x +-92, z 0; y 300..950, fading out
     to the shoes at 220 and into the torso up to 1050; wish of DevJunior, 09.11.2026: the legs too, in proportion).
     Away from an axis, not along normals: layers (shirt, vest, straps) move alike and thin double-sided straps do not
-    turn. physique "athletic" (references of DevJunior, 09.11.2026: RE4 Remake Leon, broad shoulders, slim waist):
-    DIST in full at the chest and shoulders, a third at the waist; the deltoids 1.15x, the upper arms in full, the
-    forearms 0.7x; the thighs 0.75x, the calves 0.55x. Returns how many positions moved."""
+    turn. physique "athletic" (references and device test of DevJunior, 09.11.2026: strong, not fat; the neck stays):
+    the torso mostly sideways (broad chest and back), forward only at the pectorals, the waist and belly hardly, the
+    neck and collar (|x| < 80 above y 1440) not at all; the arms by their muscles along the bones of Leon's skeleton
+    (shoulder 172, elbow 436, wrist 590): deltoid in full (its underside, the armpit, 0.4x), biceps 0.85x, elbow 0.3x,
+    forearm 0.45x, the hands not; the legs 0.35x (thighs) to 0.2x (calves). Returns how many positions moved."""
     import numpy as np
     u = lambda o: struct.unpack_from(">I", blob, o)[0]
     shift = blob[0x28]
     nv = struct.unpack_from(">H", blob, 0x38)[0]
     vo = u(0x30)
     moved = 0
+    clip = lambda v: float(np.clip(v, 0, 1))
     for i in range(nv):
         x, y, z = (c / float(1 << shift) for c in struct.unpack_from(">3h", blob, vo + i * 8))
         ax = abs(x)
-        wt = float(np.clip((y - 850) / 100, 0, 1) * np.clip((1620 - y) / 60, 0, 1) * np.clip((300 - ax) / 80, 0, 1))
-        wa = float(np.clip((ax - 200) / 60, 0, 1) * np.clip((680 - ax) / 60, 0, 1)) if 1380 < y < 1660 else 0.0
-        wl = float(np.clip((y - 220) / 80, 0, 1) * np.clip((1050 - y) / 100, 0, 1)) if ax < 260 else 0.0
-        if wt <= 0 and wa <= 0 and wl <= 0:
-            continue
+        sx = 1.0 if x >= 0 else -1.0
         dt = np.array([x, 0.0, z + 12.0])
-        da = np.array([0.0, y - 1517.0, z + 39.0])
-        dl = np.array([x - (95.0 if x >= 0 else -95.0), 0.0, z])
+        da = np.array([0.0, y - 1508.0, z + 34.0])
+        dl = np.array([x - 92.0 * sx, 0.0, z])
         if dl[0] * x < 0:
             dl[0] = 0.0  # the inner side of a leg not towards the other one (the knees nearly touch)
         dt /= np.linalg.norm(dt) or 1.0
         da /= np.linalg.norm(da) or 1.0
         dl /= np.linalg.norm(dl) or 1.0
-        d = dt * wt + da * wa + dl * wl
-        n = np.linalg.norm(d)
-        if n < 1e-6:
-            continue
-        scale = 1.0
-        if physique == "athletic":
-            st = 0.35 + 0.65 * float(np.clip((y - 1100) / 280, 0, 1))  # waist a third, chest in full
-            sa = (1.15 if ax < 330 else 1.0) * (1.0 - 0.3 * float(np.clip((ax - 400) / 120, 0, 1)))  # deltoid, forearm
-            sl = 0.55 + 0.2 * float(np.clip((y - 500) / 200, 0, 1))  # calves, thighs
-            w = wt + wa + wl
-            scale = (st * wt + sa * wa + sl * wl) / w
-        elif physique != "even":
+        if physique == "even":
+            wt = clip((y - 850) / 100) * clip((1620 - y) / 60) * clip((300 - ax) / 80)
+            wa = clip((ax - 200) / 60) * clip((680 - ax) / 60) if 1380 < y < 1660 else 0.0
+            wl = clip((y - 220) / 80) * clip((1050 - y) / 100) if ax < 260 else 0.0
+            if wt <= 0 and wa <= 0 and wl <= 0:
+                continue
+            d = dt * wt + da * wa + dl * wl
+            n = np.linalg.norm(d)
+            if n < 1e-6:
+                continue
+            push = d / n * max(wt, wa, wl)
+        elif physique == "athletic":
+            wt = clip((y - 1000) / 80) * clip((1620 - y) / 60) * clip((280 - ax) / 80)
+            neck = 1.0 - (1.0 - clip((ax - 80) / 70)) * clip((y - 1440) / 40)
+            side = 0.1 + 0.9 * clip((y - 1100) / 200)  # waist hardly, chest and back in full
+            front = 0.45 * clip((y - 1300) / 50) * clip((1500 - y) / 50)  # the pectorals only, no belly
+            back = 0.4 * clip((y - 1200) / 150)  # lats and upper back
+            pt = np.array([dt[0] * side, 0.0, dt[2] * (front if dt[2] > 0 else back)]) * wt * neck
+            pa = np.zeros(3)
+            if 1380 < y < 1660 and ax < 660:
+                prof = float(np.interp(ax, [170, 230, 320, 380, 436, 500, 560, 600, 640],
+                                       [0, 1.0, 0.85, 0.8, 0.3, 0.45, 0.3, 0.08, 0]))
+                if ax < 330 and da[1] < 0:
+                    prof *= 0.4  # the armpit under the deltoid
+                pa = da * prof
+            pl = np.zeros(3)
+            if ax < 260:
+                pl = dl * clip((y - 220) / 80) * clip((1050 - y) / 100) * (0.2 + 0.15 * clip((y - 500) / 200))
+            push = pt + pa + pl
+        else:
             raise ValueError("physique: even or athletic")
-        q = np.array([x, y, z]) + d / n * dist * scale * max(wt, wa, wl)
+        if np.linalg.norm(push) < 1e-6:
+            continue
+        q = np.array([x, y, z]) + push * dist
         qi = [max(-32768, min(32767, int(round(c * (1 << shift))))) for c in q]
         struct.pack_into(">3h", blob, vo + i * 8, *qi)
         moved += 1
@@ -207,8 +226,8 @@ def main(argv=None):
                     help="push a target model's torso, arms and legs out along their normals by DIST (bulkier; after the "
                          "graft, so a grafted model too)")
     ap.add_argument("--physique", choices=("even", "athletic"), default="even",
-                    help="--inflate everywhere alike, or athletic: broad chest and shoulders, slim waist, less on the "
-                         "forearms and legs")
+                    help="--inflate everywhere alike, or athletic: broad chest, back and deltoids, the waist, neck and "
+                         "hands kept, less on the forearms and legs")
     ap.add_argument("--recolor", action="append", default=[], metavar="TPL:SLOTS=R,G,B",
                     help="colour textures SLOTS of the target's palette TPL by their brightness in this mean colour "
                          "(e.g. 1:2,13,16=40,43,52: a shirt and its matching parts)")

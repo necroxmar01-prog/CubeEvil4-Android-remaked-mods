@@ -2512,7 +2512,7 @@ extern "C" int re4probe_wardrobe(void)
         re4_back_place(cc, cc[2] + sz[2], barrel, -150.0f, pos, ang);
         const float ca = cosf(ang[2]), sa = sinf(ang[2]);
         const float cx = cc[0] * ca - cc[1] * sa + pos[0], cy = cc[0] * sa + cc[1] * ca + pos[1];
-        bad |= fabsf(cx) > 0.5f || fabsf(cy + 60.0f) > 0.5f ? 0x20 : 0;      // the centre between the shoulder blades
+        bad |= fabsf(cx) > 0.5f || fabsf(cy - 10.0f) > 0.5f ? 0x20 : 0;      // the centre at the shoulder blades
         bad |= fabsf(pos[2] + cc[2] + sz[2] + 150.0f) > 0.5f ? 0x40 : 0;    // its front on the back's surface
         // the upper end's axis turned: up over the right (-x), 45 degrees over the floor
         const float bx = barrel * ca, by = barrel * sa;

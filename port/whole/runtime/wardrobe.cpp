@@ -209,7 +209,7 @@ void dropObj(const char* why)
 // shoulder and the muzzle down to the left hip, 45 degrees from the floor, its side flat on the back. The weapons'
 // files hold the stock towards +x (as the first try showed: up over the shoulder, which was right), the rocket
 // launcher's model (Leon's archive) its tube along +x as well (barrelX only says which end goes up: +1 the +x end).
-// pos puts the turned centre (c) on the spine between the shoulder blades, in the chest's space (parts 2, its joint
+// pos puts the turned centre (c) on the spine at the height of the shoulder blades, in the chest's space (parts 2, its joint
 // about 1360 high and 13 behind the hips), the model's front (`front`, re4_back_front: its body, not a sight or a
 // handle that sticks out sideways) at `back` (the chest's z of the back's surface, measured on Leon's own model:
 // re4_back_surface), so a bulkier skin carries it as close. Exported for the runtime tests.
@@ -219,7 +219,7 @@ extern "C" void re4_back_place(const float c[3], float front, int barrelX, float
     // the turn that takes the upper end's axis (+x or -x) to (-cos d, sin d), up over the right shoulder
     const float a = barrelX > 0 ? 3.14159265f - d : -d;
     const float ca = cosf(a), sa = sinf(a);
-    const float tx = 0.0f, ty = -60.0f;
+    const float tx = 0.0f, ty = 10.0f;  // shoulder-blade height (device test: -60 hung too low)
     pos[0] = tx - (c[0] * ca - c[1] * sa);
     pos[1] = ty - (c[0] * sa + c[1] * ca);
     pos[2] = back - front;
