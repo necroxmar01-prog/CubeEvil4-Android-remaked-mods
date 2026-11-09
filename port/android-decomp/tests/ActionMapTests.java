@@ -27,7 +27,11 @@ public final class ActionMapTests {
         Y = CoreInput.KEYCODE_BUTTON_Y, L1 = CoreInput.KEYCODE_BUTTON_L1, R1 = CoreInput.KEYCODE_BUTTON_R1,
         L2 = CoreInput.KEYCODE_BUTTON_L2, R2 = CoreInput.KEYCODE_BUTTON_R2;
 
-    // the controller's default: the layout without a mapping
+    // one entry per action in every table (a missing one ended the app at its start, 08.11.2026)
+    check(ActionMap.OUT.length == ActionMap.ACTIONS && ActionMap.HOLD.length == ActionMap.ACTIONS
+        && ActionMap.NAMES.length == ActionMap.ACTIONS);
+    check(ActionMap.defaults(ActionMap.KIND_CONTROLLER).describe(k -> "k" + k).endsWith("quick reload = k102"));
+    check(ActionMap.defaults(ActionMap.KIND_KEYBOARD).describe(k -> "k" + k).contains("quick reload = k46"));
     ActionMap c = ActionMap.defaults(ActionMap.KIND_CONTROLLER);
     check(c.isDefault() && c.encode() == null);
     check(press(c, A) == CoreInput.GC_A && press(c, B) == CoreInput.GC_B && press(c, X) == CoreInput.GC_X);

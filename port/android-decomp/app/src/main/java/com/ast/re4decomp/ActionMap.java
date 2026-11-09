@@ -226,7 +226,7 @@ public final class ActionMap {
   private boolean held(Held h, int action) { return keys[action].length == 1 && h.held(keys[action][0]); }
 
   static final String[] NAMES = {"forward", "back", "left", "right", "action", "run", "aim", "fire", "reload",
-      "knife", "slash", "Ashley", "inventory", "map", "options", "app menu"};
+      "knife", "slash", "Ashley", "inventory", "map", "options", "app menu", "quick reload"};
 
   /** For the log: "action = A, run = B, …, fire = R2+A" with the keys' names. */
   public String describe(java.util.function.IntFunction<String> keyName) {
