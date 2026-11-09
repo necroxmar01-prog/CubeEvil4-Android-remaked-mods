@@ -142,12 +142,84 @@ def add_stubble(rgba, pos, strength, seed=4):
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
+def bump(q, c, r):
+    """Smooth weight 1 at c falling to 0 at distance r."""
+    d = np.linalg.norm(q - np.asarray(c, dtype=np.float64), axis=-1) / r
+    return np.clip(1 - d * d, 0, 1) ** 2
+
+
+def sculpt_face(P, amount=1.0):
+    """Leon's face towards the references' older, harder look (bind pose, model space; all in model units, about
+    millimetres): a longer lower face and a squarer chin, a wider jaw, higher cheekbones over hollower cheeks, a heavier
+    brow, thinner lips. The neck's lowest ring (below 1608) stays where it is."""
+    q = P.astype(np.float64).copy()
+    x, y, z = q[:, 0], q[:, 1], q[:, 2]
+    sx = np.where(x >= 0, 1.0, -1.0)
+    d = np.zeros_like(q)
+    keep = smoothstep(1600, 1612, y)
+    # the lower face a little longer (nothing above the cheekbones)
+    d[:, 1] -= 4.0 * smoothstep(1700, 1630, y) * keep * smoothstep(0, 40, z)
+    # a squarer, firmer chin
+    w = bump(q, (0, 1612, 80), 26) * keep
+    d[:, 1] -= 2.5 * w
+    d[:, 2] += 3.0 * w
+    for s in (-1.0, 1.0):
+        # the jaw's angles wider
+        w = bump(q, (s * 50, 1632, 35), 28) * keep
+        d[:, 0] += s * 4.0 * w
+        # cheekbones higher and further out, the cheeks under them hollower
+        w = bump(q, (s * 54, 1702, 70), 18)
+        d[:, 0] += s * 2.5 * w
+        d[:, 2] += 1.5 * w
+        w = bump(q, (s * 46, 1666, 74), 15)
+        d[:, 0] -= s * 1.8 * w
+        d[:, 2] -= 2.2 * w
+        # a heavier brow (the eyes look deeper)
+        w = bump(q, (s * 26, 1744, 92), 15)
+        d[:, 2] += 2.5 * w
+        d[:, 1] -= 1.0 * w
+    # thinner lips
+    lips = (1 - smoothstep(22, 30, np.abs(x))) * smoothstep(1634, 1640, y) * (1 - smoothstep(1660, 1666, y)) * \
+        smoothstep(76, 84, z)
+    d[:, 1] += (1650 - y) * 0.15 * lips
+    return P + d * amount
+
+
+def sculpt_hair(P, volume=5.0, length=18.0):
+    """Leon's hair fuller and longer (the references' shaggy cut over the ears and the nape): away from the head's
+    middle (0, 1735, -5) by `volume` on the scalp, the hanging ends lower by up to `length` (from 1710 down), a little
+    outwards with them so they stay clear of the face and the neck."""
+    q = P.astype(np.float64).copy()
+    x, y, z = q[:, 0], q[:, 1], q[:, 2]
+    c = np.array([0.0, 1735.0, -5.0])
+    v = q - c
+    n = v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-6)
+    d = n * (volume * smoothstep(1680, 1760, y))[:, None]
+    hang = smoothstep(1710, 1630, y)
+    d[:, 1] -= length * hang
+    out = np.stack([x, np.zeros_like(x), z + 5.0], axis=1)
+    out /= np.linalg.norm(out, axis=1, keepdims=True) + 1e-6
+    d += out * (0.25 * length * hang)[:, None]
+    return P + d
+
+
+def set_positions(blob, P):
+    blob = bytearray(blob)
+    for i, q in enumerate(P):
+        G.set_position(blob, i, q)
+    return bytes(blob)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("inp")
     ap.add_argument("out")
     ap.add_argument("--hair", help="shadow:middle:highlight colours, e.g. 40,32,24:96,80,60:170,150,118")
     ap.add_argument("--stubble", type=float, default=0.0, help="0 none .. 1 full")
+    ap.add_argument("--sculpt-face", type=float, default=0.0, metavar="AMOUNT",
+                    help="the face's shape towards the references (1: as measured; 0 none)")
+    ap.add_argument("--hair-volume", type=float, default=0.0, help="the hair fuller on the scalp (model units)")
+    ap.add_argument("--hair-length", type=float, default=0.0, help="the hanging hair longer (model units)")
     ap.add_argument("--hair-size", type=int, default=512, help="the hair texture's size (power of two, <= 1024)")
     ap.add_argument("--face-size", type=int, default=512, help="the face texture's size (power of two, <= 1024)")
     a = ap.parse_args(argv)
@@ -166,6 +238,18 @@ def main(argv=None):
             src = strands(decode(m), a.hair_size)
             imgs[m] = G.encode_image(Image.fromarray(hair_colour(src, stops), "RGBA"), imgs[m][0])
             print("hair texture %d recoloured (%dx%d, strands)" % (m, src.shape[1], src.shape[0]))
+    if a.sculpt_face:
+        P = G.positions(head)
+        P2 = sculpt_face(P, a.sculpt_face)
+        head = entries[HEAD] = set_positions(head, P2)
+        print("face sculpted: %d positions, at most %.1f" % (int((np.abs(P2 - P).max(1) > 0.05).sum()),
+                                                            float(np.abs(P2 - P).max())))
+    if a.hair_volume or a.hair_length:
+        P = G.positions(entries[HAIR])
+        P2 = sculpt_hair(P, a.hair_volume, a.hair_length)
+        entries[HAIR] = set_positions(entries[HAIR], P2)
+        print("hair shaped: %d positions, at most %.1f" % (int((np.abs(P2 - P).max(1) > 0.05).sum()),
+                                                          float(np.abs(P2 - P).max())))
     img = decode(face)
     if a.face_size and a.face_size != img.shape[1]:
         img = np.asarray(Image.fromarray(img, "RGBA").resize((a.face_size, a.face_size), Image.LANCZOS))
