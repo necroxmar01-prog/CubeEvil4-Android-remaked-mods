@@ -555,12 +555,16 @@ def enc_cmpr(px, w, h):
 
 
 def enc_i8(px, w, h):
+    """GX I8 from the brightness; a texture with an alpha channel gives that instead (Leon Requiem, 09.11.2026:
+    the PC keeps the masks of its I4 alpha textures - fur collar, hair - in the DDS alpha, the colour beside them,
+    white or the fur's own; the brightness made them mostly see-through)."""
+    use_alpha = any(c[3] < 255 for c in px)
     out = bytearray()
     for bx, by in blocks(w, h, 8, 4):
         for y in range(4):
             for x in range(8):
                 c = px[(by + y) * w + bx + x]
-                out.append((c[0] * 3 + c[1] * 6 + c[2]) // 10)
+                out.append(c[3] if use_alpha else (c[0] * 3 + c[1] * 6 + c[2]) // 10)
     return bytes(out)
 
 
