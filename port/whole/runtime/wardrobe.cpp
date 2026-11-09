@@ -204,15 +204,18 @@ void dropObj(const char* why)
 
 }  // namespace
 
-// The place on the back for a weapon model of these bounds (centre c, half extents s; the model's own space; device
-// tests 09.11.2026 and DevJunior's pictures of the remake): slung across the back, the stock up over the right
-// shoulder and the muzzle down to the left hip, 45 degrees from the floor, its side flat on the back. The weapons'
-// files hold the stock towards +x (as the first try showed: up over the shoulder, which was right), the rocket
-// launcher's model (Leon's archive) its tube along +x as well (barrelX only says which end goes up: +1 the +x end).
-// pos puts the turned centre (c) on the spine at the height of the shoulder blades, in the chest's space (parts 2, its joint
-// about 1360 high and 13 behind the hips), the model's front (`front`, re4_back_front: its body, not a sight or a
-// handle that sticks out sideways) at `back` (the chest's z of the back's surface, measured on Leon's own model:
-// re4_back_surface), so a bulkier skin carries it as close. Exported for the runtime tests.
+// The place on the back for a weapon model of these bounds (centre c; the model's own space; device tests
+// 09.11.2026, DevJunior's pictures of the remake and the weapons' files wep07/wep09 he sent): slung across the back,
+// the stock up over the right shoulder and the muzzle down to the left hip, 45 degrees from the floor, its side flat
+// on the back. The weapons' models (wepNN.drs, and the rocket launcher's in Leon's archive) lie as in his hand: the
+// barrel along x (the stock towards +x; barrelX only says which end goes up: +1 the +x end), the profile (stock drop,
+// grip, magazine, sight) along z, the width along y. A quarter turn about x first (ang x 90 degrees: z -> -y,
+// y -> z) lays the profile into the back's plane with the grip and the stock drop hanging down, so nothing stands
+// off the back (before, the stock's heel and the grips stood 20 cm out); then the turn about z sets the slant
+// (RotMatrix: Rz * Ry * Rx). pos puts the turned centre (c) on the spine at the height of the shoulder blades, in the
+// chest's space (parts 2, its joint about 1360 high and 13 behind the hips), the model's face towards the body
+// (`front`, re4_back_front, after the quarter turn) at `back` (the chest's z of the back's surface, measured on
+// Leon's own model: re4_back_surface), so a bulkier skin carries it as close. Exported for the runtime tests.
 extern "C" void re4_back_place(const float c[3], float front, int barrelX, float back, float pos[3], float ang[3])
 {
     const float d = 45.0f * 3.14159265f / 180.0f;  // over the floor
@@ -220,17 +223,19 @@ extern "C" void re4_back_place(const float c[3], float front, int barrelX, float
     const float a = barrelX > 0 ? 3.14159265f - d : -d;
     const float ca = cosf(a), sa = sinf(a);
     const float tx = 0.0f, ty = 10.0f;  // shoulder-blade height (device test: -60 hung too low)
-    pos[0] = tx - (c[0] * ca - c[1] * sa);
-    pos[1] = ty - (c[0] * sa + c[1] * ca);
+    // the centre after the quarter turn about x: (x, -z, y)
+    const float qx = c[0], qy = -c[2];
+    pos[0] = tx - (qx * ca - qy * sa);
+    pos[1] = ty - (qx * sa + qy * ca);
     pos[2] = back - front;
-    ang[0] = 0.0f;
+    ang[0] = 3.14159265f / 2.0f;
     ang[1] = 0.0f;
     ang[2] = a;
 }
 
-// A weapon model's front towards the back: 85 % of its points lie behind it (the barrel, the stock, the body; a
-// sight or a handle that sticks out sideways does not hold the weapon off the back, as the bounds did: the rocket
-// launcher's grip stands 20 cm out of its tube)
+// A weapon model's face towards the back after the quarter turn about x (its y becomes z): 85 % of its points lie
+// behind it (the barrel, the stock, the body; a sling swivel or a bolt handle that sticks out sideways does not hold
+// the weapon off the back, as the bounds would)
 extern "C" float re4_back_front(const void* model)
 {
     const cModelData* d = (const cModelData*) model;
@@ -238,16 +243,16 @@ extern "C" float re4_back_front(const void* model)
     if (!v || d->nVtx == 0) {
         return 0.0f;
     }
-    // a histogram of z in 1/16 steps of its range (no sort, no allocation)
+    // a histogram of y in 1/64 steps of its range (no sort, no allocation)
     s16 lo = 32767, hi = -32768;
     for (u32 i = 0; i < d->nVtx; i++) {
-        lo = v[i * 4 + 2] < lo ? v[i * 4 + 2] : lo;
-        hi = v[i * 4 + 2] > hi ? v[i * 4 + 2] : hi;
+        lo = v[i * 4 + 1] < lo ? v[i * 4 + 1] : lo;
+        hi = v[i * 4 + 1] > hi ? v[i * 4 + 1] : hi;
     }
     unsigned bins[64] = {0};
     const int span = hi - lo + 1;
     for (u32 i = 0; i < d->nVtx; i++) {
-        bins[(v[i * 4 + 2] - lo) * 64 / span]++;
+        bins[(v[i * 4 + 1] - lo) * 64 / span]++;
     }
     const u32 want = d->nVtx * 85 / 100;
     u32 seen = 0;
