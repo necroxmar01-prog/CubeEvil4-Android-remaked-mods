@@ -141,7 +141,7 @@ def stubble_weight(pos):
     return np.nan_to_num(w)
 
 
-def add_stubble(rgba, pos, strength, seed=4):
+def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35)):
     a = rgba.astype(np.float32)
     w = stubble_weight(pos) * strength
     rng = np.random.default_rng(seed)
@@ -150,7 +150,7 @@ def add_stubble(rgba, pos, strength, seed=4):
     dots = np.asarray(Image.fromarray((noise * 255).astype(np.uint8)).filter(
         __import__("PIL.ImageFilter", fromlist=["GaussianBlur"]).GaussianBlur(0.6)), dtype=np.float32) / 255.0
     dots = np.clip((dots - 0.35) * 2.2, 0, 1)
-    hair = np.array([52, 43, 35], dtype=np.float32)  # the stubble's colour (ash brown, a little grey)
+    hair = np.array(colour, dtype=np.float32)  # the stubble's colour (ash brown; greyer with age)
     k = (w * (0.25 + 0.75 * dots))[..., None]
     shade = 1 - 0.22 * w[..., None]  # the skin under it a little darker
     out = a.copy()
@@ -219,11 +219,145 @@ def sculpt_hair(P, volume=5.0, length=18.0):
     return P + d
 
 
+def head_shell(head_P, centre=(0.0, 1730.0, 5.0), bins=36):
+    """The head's outer radius around centre per direction (bins x bins over the angles; the farthest vertex)."""
+    c = np.asarray(centre)
+    v = head_P - c
+    r = np.linalg.norm(v, axis=1)
+    near = r < 200  # the head only (an empty face entry's stand-in points lie far below)
+    v, r = v[near], r[near]
+    th = np.arctan2(v[:, 0], v[:, 2])
+    ph = np.arcsin(np.clip(v[:, 1] / np.maximum(r, 1e-6), -1, 1))
+    i = ((th + np.pi) / (2 * np.pi) * bins).astype(int) % bins
+    j = np.clip(((ph + np.pi / 2) / np.pi * bins).astype(int), 0, bins - 1)
+    shell = np.zeros((bins, bins))
+    np.maximum.at(shell, (i, j), r)
+    # the empty bins from their neighbours
+    for _ in range(4):
+        z = shell == 0
+        if not z.any():
+            break
+        nb = np.maximum.reduce([np.roll(shell, 1, 0), np.roll(shell, -1, 0), np.roll(shell, 1, 1),
+                                np.roll(shell, -1, 1)])
+        shell[z] = nb[z]
+    return c, shell, bins
+
+
+def outside_head(P, shell, gap=2.0):
+    """Positions that a restyle pushed into the head back out along their direction from its centre."""
+    c, sh, bins = shell
+    v = P - c
+    r = np.linalg.norm(v, axis=1)
+    th = np.arctan2(v[:, 0], v[:, 2])
+    ph = np.arcsin(np.clip(v[:, 1] / np.maximum(r, 1e-6), -1, 1))
+    i = ((th + np.pi) / (2 * np.pi) * bins).astype(int) % bins
+    j = np.clip(((ph + np.pi / 2) / np.pi * bins).astype(int), 0, bins - 1)
+    need = sh[i, j] + gap
+    k = np.clip(np.where(r < need, need / np.maximum(r, 1e-6), 1.0), 1.0, 1.25)
+    return c + v * k[:, None]
+
+
+def restyle_re9(P, head_P):
+    """Leon's hair towards Resident Evil Requiem's cut (references of DevJunior, 09.11.2026): parted on his left
+    (+x), the front on the left swept up and back (the left of the forehead free), the fringe right of the part
+    lifted at the roots into a swoop and falling diagonally to his right over the right eye down to the cheekbone
+    (not to the mouth), the right side to the jaw, the crown fuller. Bind pose, model space; then nothing inside the
+    head (head_shell)."""
+    q = P.astype(np.float64).copy()
+    x, y, z = q[:, 0], q[:, 1], q[:, 2]
+    d = np.zeros_like(q)
+    part = 22.0
+    front = smoothstep(25, 55, z)
+    drop = np.clip(1795 - y, 0, None)  # how far below the hairline's top
+    # left of the part: up and back, a little out
+    wl = smoothstep(part, part + 18, x) * front
+    lift = np.minimum(0.35 * drop, 22.0)  # a sweep back, no higher than the roots
+    d[:, 1] += lift * wl
+    d[:, 2] -= np.minimum(0.35 * drop, 35.0) * wl
+    d[:, 0] += np.minimum(0.12 * drop, 12.0) * wl
+    # right of the part: the swoop (roots up and forward), the fringe diagonally to the right
+    wr = (1 - smoothstep(part - 6, part + 6, x)) * front
+    roots = smoothstep(1760, 1805, y)
+    d[:, 1] += 9.0 * roots * wr
+    d[:, 2] += 6.0 * roots * wr
+    d[:, 0] -= 0.22 * drop * wr * smoothstep(-70, 10, x)
+    # the fringe's tips up to the cheekbone (squeezed below 1720)
+    tips = (1 - smoothstep(1650, 1722, y)) * wr * smoothstep(-90, -20, x)
+    d[:, 1] += (1722 - y) * 0.45 * tips
+    # the right side down to the jaw, the crown fuller
+    ws = (1 - smoothstep(-80, -55, x)) * (1 - smoothstep(20, 50, z))
+    d[:, 1] -= 12.0 * smoothstep(1720, 1640, y) * ws
+    c = np.array([0.0, 1735.0, -5.0])
+    v = q - c
+    n = v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-6)
+    d += n * (6.0 * smoothstep(1740, 1800, y))[:, None]
+    out = outside_head(q + d, head_shell(head_P))
+    out[:, 1] = np.minimum(out[:, 1], q[:, 1].max() + 3.0)  # no tuft standing above the crown
+    return out
+
+
 def set_positions(blob, P):
     blob = bytearray(blob)
     for i, q in enumerate(P):
         G.set_position(blob, i, q)
     return bytes(blob)
+
+
+def seg_dist(px, py, pts):
+    """Distance in the front view (x, y) from each texel to a polyline."""
+    best = np.full(px.shape, np.inf)
+    for (x0, y0), (x1, y1) in zip(pts[:-1], pts[1:]):
+        dx, dy = x1 - x0, y1 - y0
+        t = np.clip(((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy + 1e-9), 0, 1)
+        best = np.minimum(best, np.hypot(px - (x0 + t * dx), py - (y0 + t * dy)))
+    return best
+
+
+# Leon's creases of age (the references: Resident Evil Requiem, Infinite Darkness), in the front view (x, y) of the
+# bind pose; each line mirrored to both sides: (points, depth)
+AGE_LINES = [
+    ([(-36, 1761), (-12, 1763), (12, 1763), (36, 1761)], 0.16),  # the forehead
+    ([(-30, 1771), (0, 1773), (30, 1771)], 0.13),
+    ([(-24, 1781), (0, 1782), (24, 1781)], 0.10),
+    ([(5, 1736), (6, 1749)], 0.10),  # between the brows (faint: deeper reads as a scar)
+    ([(44, 1725), (57, 1733)], 0.18),  # crow's feet
+    ([(45, 1722), (60, 1722)], 0.18),
+    ([(44, 1718), (57, 1710)], 0.16),
+    ([(16, 1709), (28, 1703), (41, 1709)], 0.22),  # under the eyes
+    ([(15, 1681), (24, 1668), (29, 1656), (31, 1645)], 0.26),  # nose to mouth
+    ([(28, 1640), (30, 1628)], 0.12),  # down from the mouth's corners
+]
+
+
+def add_age(rgba, pos, strength=1.0):
+    """Creases of age, shadows under the eyes and a weathered skin on the face's texture (front texels only)."""
+    a = rgba.astype(np.float32)
+    x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
+    ok = np.isfinite(x)
+    x, y, z = np.nan_to_num(x), np.nan_to_num(y), np.nan_to_num(z)
+    front = smoothstep(40, 62, z) * ok
+    dark = np.zeros(x.shape)
+    for pts, depth in AGE_LINES:
+        for s in (1, -1):
+            if s == -1 and all(px == 0 for px, _ in pts):
+                continue
+            d = seg_dist(x, y, [(s * px, py) for px, py in pts])
+            dark = np.maximum(dark, depth * np.exp(-(d / 1.3) ** 2))
+    # the shadow under the eyes and in the hollows of the cheeks
+    for s in (1, -1):
+        dark = np.maximum(dark, 0.10 * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * 28, 1703, 0), 9))
+        dark = np.maximum(dark, 0.07 * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * 44, 1668, 0), 14))
+    rng = np.random.default_rng(11)
+    blotch = blur1d(blur1d(rng.standard_normal(x.shape), 3.0, 0), 3.0, 1)
+    blotch /= blotch.std() + 1e-6
+    k = 1 - strength * (dark * front)
+    k = k * (1 + 0.035 * strength * blotch * front)
+    out = a.copy()
+    out[..., :3] = a[..., :3] * k[..., None]
+    # a little less rosy: towards its own grey by 12 %
+    g = out[..., :3].mean(-1, keepdims=True)
+    out[..., :3] = out[..., :3] + (g - out[..., :3]) * (0.12 * strength * front)[..., None]
+    return np.clip(out, 0, 255).astype(np.uint8)
 
 
 def main(argv=None):
@@ -241,10 +375,13 @@ def main(argv=None):
                          "before the strands are drawn")
     ap.add_argument("--sculpt-face", type=float, default=0.0, metavar="AMOUNT",
                     help="the face's shape towards the references (1: as measured; 0 none)")
+    ap.add_argument("--restyle", choices=("re9",), help="the hair's cut: re9 Resident Evil Requiem's")
     ap.add_argument("--hair-volume", type=float, default=0.0, help="the hair fuller on the scalp (model units)")
     ap.add_argument("--hair-length", type=float, default=0.0, help="the hanging hair longer (model units)")
     ap.add_argument("--hair-size", type=int, default=512, help="the hair texture's size (power of two, <= 1024), its strands redrawn; 0: as it is (a texture with "
                          "good strands of its own)")
+    ap.add_argument("--stubble-colour", default="52,43,35", help="R,G,B of the stubble (greyer: older)")
+    ap.add_argument("--age", type=float, default=0.0, help="creases of age on the face (0 none .. 1 full)")
     ap.add_argument("--face-size", type=int, default=512, help="the face texture's size (power of two, <= 1024)")
     a = ap.parse_args(argv)
     arc = U.Archive(Path(a.inp).read_bytes(), ">")
@@ -276,6 +413,12 @@ def main(argv=None):
             print("entry %d sculpted: %d positions, at most %.1f" % (e, int((np.abs(P2 - P).max(1) > 0.05).sum()),
                                                                     float(np.abs(P2 - P).max())))
         head = entries[HEAD]
+    if a.restyle == "re9":
+        P = G.positions(entries[HAIR])
+        P2 = restyle_re9(P, np.concatenate([G.positions(entries[HEAD]), G.positions(entries[4])]))
+        entries[HAIR] = set_positions(entries[HAIR], P2)
+        print("hair restyled (Resident Evil Requiem): %d positions, at most %.1f" % (
+            int((np.abs(P2 - P).max(1) > 0.05).sum()), float(np.abs(P2 - P).max())))
     if a.hair_volume or a.hair_length:
         P = G.positions(entries[HAIR])
         P2 = sculpt_hair(P, a.hair_volume, a.hair_length)
@@ -292,8 +435,11 @@ def main(argv=None):
         painted = np.nan_to_num((y > 1752) | ((y > 1690) & (z < 40)), nan=False).astype(bool) & (lum < 60)
         img = hair_colour(img, stops, painted)
         print("face texture %d: %d hair texels recoloured" % (face, int(painted.sum())))
+    if a.age > 0:
+        img = add_age(img, pos, a.age)
+        print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
-        img = add_stubble(img, pos, a.stubble)
+        img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")])
         print("face texture %d: stubble %.2f" % (face, a.stubble))
     imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
