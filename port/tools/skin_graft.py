@@ -369,6 +369,9 @@ def main(argv=None):
     ap.add_argument("--hide-under", action="append", default=[], metavar="ENTRY:MATS=ENTRY2:MATS2",
                     help="pull ENTRY's parts with colour textures MATS in where ENTRY2's MATS2 cover them (two "
                          "shirts: keep the outer one, e.g. 12:16=0:2,13)")
+    ap.add_argument("--replace-image", action="append", default=[], metavar="TPL:SLOT=PATH@WxH",
+                    help="texture SLOT of the target's palette TPL anew from an image (the mod's own, e.g. its DDS as "
+                         "PNG) at WxH, before --recolor (more detail: 1024x512 instead of 512x256)")
     ap.add_argument("--smooth", type=float, default=0.0, metavar="RADIUS",
                     help="with --recolor: plain cloth, the fabric's blotches blurred away (radius in texels, e.g. 6)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
@@ -470,6 +473,17 @@ def main(argv=None):
         n = lower_collar(blob, float(f), neck_edge(entries[2]))
         entries[int(e)] = bytes(blob)
         print("entry %s: collar lowered, %d positions" % (e, n))
+    for spec in a.replace_image:
+        from PIL import Image
+        where, src = spec.split("=", 1)
+        t, slot = (int(v) for v in where.split(":"))
+        path, wh = src.rsplit("@", 1)
+        size = tuple(int(v) for v in wh.lower().split("x"))
+        imgs_t = tpl_images(entries[t])
+        hdr, _ = imgs_t[slot]
+        imgs_t[slot] = encode_image(Image.open(path).convert("RGBA").resize(size, Image.LANCZOS), hdr)
+        entries[t] = build_tpl(imgs_t)
+        print("palette %d: texture %d from %s at %dx%d" % (t, slot, path, size[0], size[1]))
     for spec in a.recolor:
         where, rgb = spec.split("=")
         t, slots = where.split(":")
