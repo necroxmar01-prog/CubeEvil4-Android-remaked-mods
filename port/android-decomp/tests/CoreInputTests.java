@@ -63,6 +63,13 @@ public final class CoreInputTests {
     check(CoreInput.appFunction(SELECT) == CoreInput.APP_MENU);
     check(CoreInput.appFunction(R3) == CoreInput.APP_GX_DUMP);
     check(CoreInput.appFunction(A) == CoreInput.APP_NONE && !in.key(1, SELECT, true));
+    // the quick reload (reload without aiming): L1 and L3 of the layout without a mapping; L1 is the
+    // alternate controls' knife there
+    check(in.appFunctionOf(L1, false) == CoreInput.APP_RELOAD && in.appFunctionOf(L3, false) == CoreInput.APP_RELOAD);
+    check(in.appFunctionOf(L1, true) == CoreInput.APP_NONE && in.appFunctionOf(A, false) == CoreInput.APP_NONE);
+    in.setAlternate(true);
+    check(in.appFunctionOf(L1, false) == CoreInput.APP_NONE && in.appFunctionOf(L3, false) == CoreInput.APP_RELOAD);
+    in.setAlternate(false);
     // the switch for controllers that send the other layout's codes
     in.setSwapFace(true);
     check(in.gcButton(A) == CoreInput.GC_B && in.gcButton(B) == CoreInput.GC_A
@@ -447,6 +454,11 @@ public final class CoreInputTests {
       check(k.pad()[0] == 0);
       // the app's menu: SELECT, or where the mapping puts it; R3 the graphics capture without a function
       check(k.appFunctionOf(SELECT, false) == CoreInput.APP_MENU && k.appFunctionOf(R3, false) == CoreInput.APP_GX_DUMP);
+      // the quick reload where the mapping puts it
+      com.ast.re4decomp.ActionMap quick = own.assign(com.ast.re4decomp.ActionMap.QUICK_RELOAD, new int[] {R3});
+      k.setControllerMap(quick);
+      check(quick != null && k.appFunctionOf(R3, false) == CoreInput.APP_RELOAD);
+      k.setControllerMap(own);
       k.setControllerMap(own.assign(com.ast.re4decomp.ActionMap.APP_MENU, new int[] {R3}));
       check(k.appFunctionOf(R3, false) == CoreInput.APP_MENU && k.appFunctionOf(SELECT, false) == CoreInput.APP_NONE);
       k.setMenu(true);

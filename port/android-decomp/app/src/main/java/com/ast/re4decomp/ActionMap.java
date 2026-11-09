@@ -21,15 +21,15 @@ public final class ActionMap {
   // the actions, in the order of the page
   public static final int MOVE_FORWARD = 0, MOVE_BACK = 1, MOVE_LEFT = 2, MOVE_RIGHT = 3, ACTION = 4, RUN = 5,
       AIM = 6, FIRE = 7, RELOAD = 8, KNIFE = 9, SLASH = 10, ASHLEY = 11, INVENTORY = 12, MAP = 13, OPTIONS = 14,
-      APP_MENU = 15, ACTIONS = 16;
+      APP_MENU = 15, QUICK_RELOAD = 16, ACTIONS = 17;
   public static final int KIND_CONTROLLER = 0, KIND_KEYBOARD = 1;
 
   /** The GameCube button of each action (the moves: the stick; the app's menu: none). */
   static final int[] OUT = {0, 0, 0, 0, CoreInput.GC_A, CoreInput.GC_B, CoreInput.GC_R, CoreInput.GC_A,
       CoreInput.GC_B, CoreInput.GC_L, CoreInput.GC_A, CoreInput.GC_X, CoreInput.GC_Y, CoreInput.GC_Z,
-      CoreInput.GC_START, 0};
+      CoreInput.GC_START, 0, 0};
   /** The action a combination holds with its first key; -1: a single key. */
-  static final int[] HOLD = {-1, -1, -1, -1, -1, -1, -1, AIM, AIM, -1, KNIFE, -1, -1, -1, -1, -1};
+  static final int[] HOLD = {-1, -1, -1, -1, -1, -1, -1, AIM, AIM, -1, KNIFE, -1, -1, -1, -1, -1, -1};
 
   // android.view.KeyEvent key codes
   static final int KEY_A = 29, KEY_C = 31, KEY_D = 32, KEY_E = 33, KEY_F = 34, KEY_M = 41, KEY_Q = 45, KEY_R = 46,
@@ -89,7 +89,8 @@ public final class ActionMap {
   /**
    * The default of `kind`. The controller's is its layout without a mapping (CoreInput): A action, B run,
    * R2 aim, R2+A fire, R2+B reload, L2 knife, L2+A slash, X Ashley, Y inventory, R1 map, START options,
-   * SELECT the app's menu. The keyboard's with the mouse: WASD move, E action, left Shift run, the right
+   * SELECT the app's menu, L1 the quick reload (reload without aiming, as in the remake: an app action,
+   * CoreBridge.requestReload; wish of DevJunior, 08.11.2026; the keyboard: R). The keyboard's with the mouse: WASD move, E action, left Shift run, the right
    * mouse button aims, right + left fire, right + R reload, C knife, C + left slash, Q Ashley, Tab
    * inventory, M map, Esc options, F1 the app's menu.
    */
@@ -110,6 +111,7 @@ public final class ActionMap {
       m.keys[MAP] = new int[] {CoreInput.KEYCODE_BUTTON_R1};
       m.keys[OPTIONS] = new int[] {CoreInput.KEYCODE_BUTTON_START};
       m.keys[APP_MENU] = new int[] {CoreInput.KEYCODE_BUTTON_SELECT};
+      m.keys[QUICK_RELOAD] = new int[] {CoreInput.KEYCODE_BUTTON_L1};
     } else {
       m.keys[MOVE_FORWARD] = new int[] {KEY_W};
       m.keys[MOVE_BACK] = new int[] {KEY_S};
@@ -127,6 +129,7 @@ public final class ActionMap {
       m.keys[MAP] = new int[] {KEY_M};
       m.keys[OPTIONS] = new int[] {KEY_ESCAPE};
       m.keys[APP_MENU] = new int[] {KEY_F1};
+      m.keys[QUICK_RELOAD] = new int[] {KEY_R};
     }
     return m;
   }

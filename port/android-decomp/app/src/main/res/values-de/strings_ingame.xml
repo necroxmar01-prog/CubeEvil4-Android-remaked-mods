@@ -284,6 +284,7 @@
     <string name="ingame_controller_alternate_note">Die alternative Steuerung ist an: sie behält ihre eigene Belegung; diese gilt, sobald sie aus ist.</string>
     <string name="ingame_act_menu">App-Menü (gehalten: Debug-Menü)</string>
     <string name="ingame_act_menu_app">App-Menü</string>
+    <string name="ingame_act_quick_reload">Schnell nachladen (ohne Zielen)</string>
     <string name="ingame_act_options">Optionen / Überspringen</string>
     <string name="ingame_act_map">Karte</string>
     <string name="ingame_act_inventory">Inventar</string>

@@ -286,6 +286,7 @@
     <string name="ingame_controller_alternate_note">Los controles alternativos están activados: mantienen su propia asignación; esta se aplica cuando estén desactivados.</string>
     <string name="ingame_act_menu">Menú de la app (mantener: menú debug)</string>
     <string name="ingame_act_menu_app">Menú de la app</string>
+    <string name="ingame_act_quick_reload">Recarga rápida (sin apuntar)</string>
     <string name="ingame_act_options">Opciones / Saltar</string>
     <string name="ingame_act_map">Mapa</string>
     <string name="ingame_act_inventory">Inventario</string>

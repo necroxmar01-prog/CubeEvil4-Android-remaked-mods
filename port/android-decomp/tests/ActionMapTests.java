@@ -37,6 +37,8 @@ public final class ActionMapTests {
     check(press(c, L2, A) == (CoreInput.GC_L | CoreInput.GC_A));  // knife and slash
     check(press(c, CoreInput.KEYCODE_BUTTON_START) == CoreInput.GC_START);
     check(press(c, CoreInput.KEYCODE_BUTTON_SELECT) == 0 && c.singleOn(CoreInput.KEYCODE_BUTTON_SELECT) == ActionMap.APP_MENU);
+    check(press(c, L1) == 0 && c.singleOn(L1) == ActionMap.QUICK_RELOAD);  // the quick reload: an app action
+    check(ActionMap.defaults(ActionMap.KIND_KEYBOARD).singleOn(ActionMap.KEY_R) == ActionMap.QUICK_RELOAD);
     check(!ActionMap.available(ActionMap.KIND_CONTROLLER, ActionMap.MOVE_FORWARD));
     check(c.assign(ActionMap.MAP, new int[] {CoreInput.KEYCODE_DPAD_LEFT}) == null);  // the D-pad stays the D-pad
     check(c.assign(ActionMap.MOVE_FORWARD, new int[] {A}) == null);

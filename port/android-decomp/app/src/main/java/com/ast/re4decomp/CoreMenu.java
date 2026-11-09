@@ -966,7 +966,7 @@ final class CoreMenu extends Dialog {
       R.string.ingame_act_left, R.string.ingame_act_right, R.string.ingame_act_action, R.string.ingame_act_run,
       R.string.ingame_act_aim, R.string.ingame_act_fire, R.string.ingame_act_reload, R.string.ingame_act_knife,
       R.string.ingame_act_slash, R.string.ingame_act_ashley, R.string.ingame_act_inventory, R.string.ingame_act_map,
-      R.string.ingame_act_options, R.string.ingame_act_menu};
+      R.string.ingame_act_options, R.string.ingame_act_menu, R.string.ingame_act_quick_reload};
 
   /** An action's name; the app menu's says "held: debug menu" only with the debug build's discs (the retail discs
    *  have none, 06.11.2026). */

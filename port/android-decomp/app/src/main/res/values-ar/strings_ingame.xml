@@ -297,6 +297,7 @@
     <string name="ingame_controller_alternate_note">التحكم البديل مفعّل: يحتفظ بتوزيعه الخاص؛ يُطبَّق هذا التوزيع عند إيقافه.</string>
     <string name="ingame_act_menu">قائمة التطبيق (ضغط مستمر: قائمة التصحيح)</string>
     <string name="ingame_act_menu_app">قائمة التطبيق</string>
+    <string name="ingame_act_quick_reload">إعادة تعبئة سريعة (دون تصويب)</string>
     <string name="ingame_act_options">الخيارات / تخطٍ</string>
     <string name="ingame_act_map">الخريطة</string>
     <string name="ingame_act_inventory">الحقيبة</string>

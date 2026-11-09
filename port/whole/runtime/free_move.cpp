@@ -38,7 +38,9 @@
 //  - Reloading without aiming (with "Move while aiming", wish of DevJunior, 08.11.2026, as in the remake): R
 //    and B pressed together in the walk routines (the app's reload action or a mapped reload key press both at
 //    once; aiming first and then B stays the game's reload), or the touch controls' RLOAD button (its own
-//    request, re4_reload_request: running holds B already, so R + B would not be new together), start the
+//    request, re4_reload_request: running holds B already, so R + B would not be new together; also the app's
+//    "Quick reload" key, L1 by default, wish of DevJunior 08.11.2026, which works without "Move while aiming"
+//    as well: Leon then stands while he reloads), start the
 //    prototype's own direct reload: the weapon routine's reload step (setRno 0/6/4, m_Work0 1) with
 //    PlReloadDirect = 1, as cPlayer::actionSelect does with the reload key type 1 (keyReload; isKamae is 0
 //    then), so Leon does not aim; also while he runs. Meanwhile the main stick moves him at the speed he walks
@@ -272,7 +274,7 @@ void freeMove(cPlayer* pl)
 void reloadInput(cPlayer* pl)
 {
     const u32 both = 0x20 | 0x200;  // R, B
-    const bool together = (Joy[0].trg & both) == both;
+    const bool together = re4_aim_move_on() && (Joy[0].trg & both) == both;
     const bool asked = gReloadAsked.exchange(false);
     if ((!together && !asked) || !walkRoutine(pl) || !pl->Wep || !pl->Wep->m_pWep || !pl->Wep->m_pWep->reloadable()) {
         return;
@@ -618,9 +620,7 @@ void re4_player_input(cPlayer* pl)
     gLegRun = false;
     re4_quick_slots_input(pl);  // first: the D-pad's bits out of the keys when it equips weapons
     re4_parry_input(pl);
-    if (re4_aim_move_on()) {
-        reloadInput(pl);  // before the camera: a reload started now keeps the free camera
-    }
+    reloadInput(pl);  // before the camera: a reload started now keeps the free camera
     if (re4_free_move_on()) {
         freeMove(pl);
     } else {

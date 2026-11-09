@@ -286,6 +286,7 @@
     <string name="ingame_controller_alternate_note">I comandi alternativi sono attivi: mantengono la propria configurazione; questa vale quando sono disattivati.</string>
     <string name="ingame_act_menu">Menu dell’app (tenuto: menu debug)</string>
     <string name="ingame_act_menu_app">Menu dell’app</string>
+    <string name="ingame_act_quick_reload">Ricarica rapida (senza mirare)</string>
     <string name="ingame_act_options">Opzioni / Salta</string>
     <string name="ingame_act_map">Mappa</string>
     <string name="ingame_act_inventory">Inventario</string>

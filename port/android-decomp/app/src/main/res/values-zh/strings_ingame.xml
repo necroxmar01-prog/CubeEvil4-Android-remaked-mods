@@ -283,6 +283,7 @@
     <string name="ingame_controller_alternate_note">替代操作已开启：它保留自己的配置；关闭后此配置才会生效。</string>
     <string name="ingame_act_menu">应用菜单（按住：调试菜单）</string>
     <string name="ingame_act_menu_app">应用菜单</string>
+    <string name="ingame_act_quick_reload">快速装填（不瞄准）</string>
     <string name="ingame_act_options">选项 / 跳过</string>
     <string name="ingame_act_map">地图</string>
     <string name="ingame_act_inventory">物品栏</string>

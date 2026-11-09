@@ -1673,7 +1673,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     boolean keyboard = !controller(e) && !KeyEvent.isGamepadButton(code) && keyboardDevice(e.getDevice());
     int function = input.appFunctionOf(code, keyboard);
     if (function != CoreInput.APP_NONE && first) {
-      String what = function == CoreInput.APP_MENU ? "menu" : tools ? "graphics capture" : "nothing (tools off)";
+      String what = function == CoreInput.APP_MENU ? "menu" : function == CoreInput.APP_RELOAD ? "quick reload"
+          : tools ? "graphics capture" : "nothing (tools off)";
       Log.i(TAG, "key " + KeyEvent.keyCodeToString(code) + " (" + code + ") -> app " + what);
     }
     switch (function) {
@@ -1685,6 +1686,10 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         } else if (e.getAction() == KeyEvent.ACTION_UP) {
           select(false);
         }
+        return true;
+      case CoreInput.APP_RELOAD:
+        // the quick reload (wish of DevJunior, 08.11.2026): reload without aiming, as the touch RLOAD button
+        if (first) CoreBridge.requestReload();
         return true;
       case CoreInput.APP_GX_DUMP:
         // R3 (right stick pressed): the graphics data of the next pictures for the

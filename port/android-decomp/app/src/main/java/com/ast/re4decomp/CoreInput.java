@@ -53,7 +53,7 @@ public final class CoreInput {
       GC_Z = 0x0010, GC_R = 0x0020, GC_L = 0x0040, GC_A = 0x0100, GC_B = 0x0200, GC_X = 0x0400,
       GC_Y = 0x0800, GC_START = 0x1000;
   // what a key does for the app instead of the game
-  public static final int APP_NONE = 0, APP_MENU = 1, APP_GX_DUMP = 2;
+  public static final int APP_NONE = 0, APP_MENU = 1, APP_GX_DUMP = 2, APP_RELOAD = 3;
   // android.view.KeyEvent key codes
   static final int KEYCODE_DPAD_UP = 19, KEYCODE_DPAD_DOWN = 20, KEYCODE_DPAD_LEFT = 21,
       KEYCODE_DPAD_RIGHT = 22, KEYCODE_BUTTON_A = 96, KEYCODE_BUTTON_B = 97,
@@ -321,11 +321,19 @@ public final class CoreInput {
     }
   }
 
-  /** What a key of a controller or of a keyboard does for the app now (its mapping's menu key; R3 without a function). */
+  /**
+   * What a key of a controller or of a keyboard does for the app now (its mapping's menu key; R3 without a function;
+   * the quick reload: the mapping's key, else L1 of the layout without a mapping, which has no function there but
+   * with the alternate controls, and L3).
+   */
   public int appFunctionOf(int keyCode, boolean keyboard) {
     ActionMap m = mapping(keyboard);
-    if (m == null) return appFunction(keyCode);
+    if (m == null) {
+      if (!keyboard && ((keyCode == KEYCODE_BUTTON_L1 && !alternate) || keyCode == KEYCODE_BUTTON_THUMBL)) return APP_RELOAD;
+      return appFunction(keyCode);
+    }
     if (m.singleOn(keyCode) == ActionMap.APP_MENU) return APP_MENU;
+    if (m.singleOn(keyCode) == ActionMap.QUICK_RELOAD) return APP_RELOAD;
     return !keyboard && keyCode == KEYCODE_BUTTON_THUMBR && !m.uses(keyCode) ? APP_GX_DUMP : APP_NONE;
   }
 

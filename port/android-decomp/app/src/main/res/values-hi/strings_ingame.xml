@@ -284,6 +284,7 @@
     <string name="ingame_controller_alternate_note">वैकल्पिक नियंत्रण चालू है: वह अपना लेआउट रखता है; यह उसे बंद करने पर लागू होगा।</string>
     <string name="ingame_act_menu">ऐप मेनू (पकड़ें: डीबग मेनू)</string>
     <string name="ingame_act_menu_app">ऐप मेनू</string>
+    <string name="ingame_act_quick_reload">झटपट रीलोड (बिना निशाना लगाए)</string>
     <string name="ingame_act_options">विकल्प / छोड़ें</string>
     <string name="ingame_act_map">नक्शा</string>
     <string name="ingame_act_inventory">इन्वेंटरी</string>

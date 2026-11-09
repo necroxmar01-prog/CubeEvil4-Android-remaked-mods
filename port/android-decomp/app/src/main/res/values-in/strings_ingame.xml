@@ -281,6 +281,7 @@
     <string name="ingame_controller_alternate_note">Kontrol Alternatif aktif: kontrol itu memakai tata letaknya sendiri; tata letak ini berlaku setelah dinonaktifkan.</string>
     <string name="ingame_act_menu">Menu Aplikasi (tahan: menu debug)</string>
     <string name="ingame_act_menu_app">Menu Aplikasi</string>
+    <string name="ingame_act_quick_reload">Isi ulang cepat (tanpa membidik)</string>
     <string name="ingame_act_options">Opsi / Lewati</string>
     <string name="ingame_act_map">Peta</string>
     <string name="ingame_act_inventory">Inventaris</string>

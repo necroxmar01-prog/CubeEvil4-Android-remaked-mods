@@ -299,6 +299,7 @@
     <string name="ingame_controller_alternate_note">Alternate Controls are on: they keep their own layout; this one applies once they are off.</string>
     <string name="ingame_act_menu">App Menu (held: debug menu)</string>
     <string name="ingame_act_menu_app">App Menu</string>
+    <string name="ingame_act_quick_reload">Quick Reload (not aiming)</string>
     <string name="ingame_act_options">Options / Skip</string>
     <string name="ingame_act_map">Map</string>
     <string name="ingame_act_inventory">Inventory</string>
