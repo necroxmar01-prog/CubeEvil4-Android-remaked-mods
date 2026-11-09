@@ -41,6 +41,7 @@
 extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_formats_part_loaded(const char* name, int nest, int index, const void* part, unsigned addr);
 extern "C" void re4_add_frame_hook(void (*hook)(unsigned));  // runtime/pad.cpp
+extern "C" int re4_player_modded(void);                        // runtime/dvd.cpp: the player's file is a mod
 int PlSetCostume();                                            // pl_sub.cpp
 
 namespace {
@@ -54,6 +55,9 @@ std::atomic<int> gOutfit(0);     // 0 the story's rule, 1 the first outfit, 2 th
 std::atomic<bool> gBack(false);  // the weapon on the back
 std::atomic<int> gAdjust(0);     // its placement (re4_back_adjust_set; 0: the defaults)
 std::atomic<int> gAdjustSeen(0); // the placement the body on the back was put with
+cModel* gCarrier = 0;            // whom it was put on (Leon, or the event's Leon in a cutscene)
+int gWait = 0;                   // frames to wait after a body was destroyed before the next one is made
+cObj* gLoggedEventLeon = 0;      // the event's Leon last described in the log
 std::atomic<bool> gHooked(false);
 
 int gTried = -1;          // the outfit a room restart was asked for (once per choice)
@@ -117,16 +121,38 @@ Adjust adjustOf(int w)
     return a;
 }
 
-// Leon may carry it now: playing, no sub screen or movie; in an event only while he is drawn and the app wants it
-bool backShowable(const Adjust& a)
+// Leon in a cutscene: the event's own body "pl0000" (event.cpp ExePacket_SetOm, an obj18 of type LEON with his
+// archive's model; the player himself is not drawn then). 0 when the event has none.
+cObj* eventLeon()
+{
+    for (u32 i = 0; i < ObjMgr.nArray; i++) {
+        cObj* o = (cObj*) ((u8*) ObjMgr.pArray + ObjMgr.size * i);
+        if (!o->isAlive() || o->id != cObjMgr::ID_EVENT || o->kindid != 1 || o == gObj || !o->pModelInfo) {
+            continue;
+        }
+        const FREE_OBJ18* w = OBJ18_WK((cObj18*) o);
+        if (w->obj18_type == OBJ18_TYPE_LEON && strncmp(w->NameMod, "pl0000", 6) == 0) {
+            return o;
+        }
+    }
+    return 0;
+}
+
+// Who carries the weapon now: Leon while playing (no sub screen or movie); in an event, if the app wants it, the
+// event's Leon while he is drawn. 0: nobody.
+cModel* backCarrier(const Adjust& a)
 {
     if (!pG || !pPL || pG->Rno0 != 3 || StaFlagChk(pG, STA_SUB_SCRN) || StaFlagChk(pG, STA_MOVIE_ON)) {
-        return false;
+        return 0;
     }
     if (StaFlagChk(pG, STA_EVENT)) {
-        return a.events && (pPL->be_flag & 2);
+        if (!a.events) {
+            return 0;
+        }
+        cObj* ev = eventLeon();
+        return ev && (ev->be_flag & 2) ? (cModel*) ev : 0;
     }
-    return true;
+    return (cModel*) pPL;
 }
 
 bool longWeapon(int no)
@@ -242,6 +268,7 @@ void dropObj(const char* why)
     gObj = 0;
     gObjModel = 0;
     gObjNo = gObjType = -1;
+    gCarrier = 0;
 }
 
 }  // namespace
@@ -339,9 +366,37 @@ extern "C" float re4_back_surface(const void* firstInfo)
 
 namespace {
 
-void showBack(bool want)
+// Puts our body on the carrier's chest (parts 2) as the placement word wants; measures the back on the carrier's
+// own models (a skin, or the event's Leon with the event's parts)
+void placeOn(cObj* obj, cModel* carrier, int adjustWord, bool log)
 {
-    if (!want) {
+    const cBoundingBox& b = obj->pModelInfo->bound;
+    const float c[3] = {b.offset.x, b.offset.y, b.offset.z};
+    const float s[3] = {b.size.x, b.size.y, b.size.z};
+    const Adjust adj = adjustOf(adjustWord);
+    float p[3], a[3];
+    re4_back_place(c, re4_back_front(obj->pModelInfo->model_addr, re4_back_turn(adj.left, adj.over)), adj.left,
+                   adj.over, adj.slant, adj.height, adj.dist, re4_back_surface(carrier->pModelInfo), p, a);
+    obj->pos.x = p[0];
+    obj->pos.y = p[1];
+    obj->pos.z = p[2];
+    obj->ang.x = a[0];
+    obj->ang.y = a[1];
+    obj->ang.z = a[2];
+    OyaSetObj18(obj, carrier, 2);
+    gCarrier = carrier;
+    gAdjustSeen.store(adjustWord);
+    if (log) {
+        re4_log("wardrobe: weapon 0x%x type %d on the back of %s (bounds centre %.0f %.0f %.0f, half %.0f %.0f %.0f; "
+                "at %.0f %.0f %.0f, turned %.0f degrees)", gObjNo, gObjType,
+                carrier == (cModel*) pPL ? "Leon" : "the event's Leon", c[0], c[1], c[2], s[0], s[1], s[2], p[0],
+                p[1], p[2], a[2] * 57.2958f);
+    }
+}
+
+void showBack(cModel* carrier)
+{
+    if (!carrier) {
         if (objOurs()) {
             gObj->setTrans(0);
         }
@@ -352,11 +407,24 @@ void showBack(bool want)
         return;
     }
     const int adjustWord = gAdjust.load(std::memory_order_relaxed);
-    if (objOurs() && gObjNo == gLastNo && gObjType == gLastType && gAdjustSeen.load() == adjustWord) {
+    if (objOurs() && gObjNo == gLastNo && gObjType == gLastType) {
+        // the same weapon: put anew on another carrier or with another placement, never destroyed for it (device
+        // test 09.11.2026: destroying and making a body in the same frame crashed in LightSetModel)
+        if (carrier != gCarrier || gAdjustSeen.load() != adjustWord) {
+            placeOn(gObj, carrier, adjustWord, true);
+        }
         gObj->setTrans(1);
         return;
     }
-    dropObj("another weapon or placement");
+    if (objOurs()) {
+        dropObj("another weapon");
+        gWait = 3;  // the old body is gone first, the new one comes a few frames later
+        return;
+    }
+    if (gWait > 0) {
+        gWait--;
+        return;
+    }
     const PlArc* arc = 0;
     if (m.file) {
         if (gLoadedNo != gLastNo || gLoadedType != gLastType) {
@@ -387,40 +455,52 @@ void showBack(bool want)
         gLastNo = -1;
         return;
     }
-    const cBoundingBox& b = obj->pModelInfo->bound;
-    const float c[3] = {b.offset.x, b.offset.y, b.offset.z};
-    const float s[3] = {b.size.x, b.size.y, b.size.z};
-    const Adjust adj = adjustOf(adjustWord);
-    float p[3], a[3];
-    re4_back_place(c, re4_back_front(obj->pModelInfo->model_addr, re4_back_turn(adj.left, adj.over)), adj.left,
-                   adj.over, adj.slant, adj.height, adj.dist, re4_back_surface(pPL->pModelInfo), p, a);
-    obj->pos.x = p[0];
-    obj->pos.y = p[1];
-    obj->pos.z = p[2];
-    obj->ang.x = a[0];
-    obj->ang.y = a[1];
-    obj->ang.z = a[2];
     obj->atari.off();
     obj->setNoClip(1);
+    obj->setNoSuspend(1);  // also while an event suspends the room's objects
     obj->setTrans(1);
-    OyaSetObj18(obj, (cModel*) pPL, 2);
     gObj = obj;
     gObjModel = (void*) obj->pModelInfo->model_addr;
     gObjNo = gLastNo;
     gObjType = gLastType;
-    gAdjustSeen.store(adjustWord);
-    re4_log("wardrobe: weapon 0x%x type %d on the back (bounds centre %.0f %.0f %.0f, half %.0f %.0f %.0f; at %.0f %.0f "
-            "%.0f, turned %.0f degrees)", gLastNo, gLastType, c[0], c[1], c[2], s[0], s[1], s[2], p[0], p[1], p[2],
-            a[2] * 57.2958f);
+    placeOn(obj, carrier, adjustWord, true);
+}
+
+// In a cutscene, what Leon is made of (once per event body; the report of DevJunior, 09.11.2026: his body vanishes
+// in some cutscenes): his body from his archive or not, and each model on it
+void describeEventLeon()
+{
+    if (!pG || !StaFlagChk(pG, STA_EVENT)) {
+        gLoggedEventLeon = 0;
+        return;
+    }
+    cObj* ev = eventLeon();
+    if (!ev || ev == gLoggedEventLeon) {
+        return;
+    }
+    gLoggedEventLeon = ev;
+    const void* body = pG->pPlayer ? arcEntry(pG->pPlayer, 4) : 0;
+    int n = 0;
+    for (const cModelInfo* i = ev->pModelInfo; i && n < 16; i = i->pList, n++) {
+        const cModelData* d = i->model_addr;
+        re4_log("wardrobe: the event's Leon, model %d: %p%s, %u positions, %u textures", n, (const void*) d,
+                (const void*) d == body ? " (his archive's body)" : "", d ? (unsigned) d->nVtx : 0u,
+                d ? (unsigned) d->nTex : 0u);
+    }
+    re4_log("wardrobe: the event's Leon (r%03x): %d models, %s", (unsigned) G_ROOM_ID, n,
+            (ev->be_flag & 2) ? "shown" : "hidden");
 }
 
 void backFrame()
 {
+    if (re4_player_modded()) {
+        describeEventLeon();
+    }
     if (!gBack.load(std::memory_order_relaxed) && !gObj) {
         return;
     }
     if (!pG || !pPL || pG->pl_type != 0) {
-        showBack(false);
+        showBack(0);
         return;
     }
     const int no = pG->weapon_no;
@@ -428,15 +508,16 @@ void backFrame()
         gLastNo = no;
         gLastType = pG->weapon_type;
     }
-    bool want = gBack.load(std::memory_order_relaxed) && gLastNo >= 0 && no != gLastNo &&
-                backShowable(adjustOf(gAdjust.load(std::memory_order_relaxed)));
-    if (want) {
+    cModel* carrier = gBack.load(std::memory_order_relaxed) && gLastNo >= 0 && no != gLastNo
+                          ? backCarrier(adjustOf(gAdjust.load(std::memory_order_relaxed)))
+                          : 0;
+    if (carrier) {
         const u16 id = WeaponNo2WeaponId((u8) gLastNo, (u8) gLastType);
         if (id == 0xFFFF || ItemMgr.num(id) == 0) {
-            want = false;  // sold, or never in the case
+            carrier = 0;  // sold, or never in the case
         }
     }
-    showBack(want);
+    showBack(carrier);
 }
 
 // A changed outfit while playing: the room starts again where Leon stands (once per choice), its start reads his
