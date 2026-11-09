@@ -145,8 +145,18 @@ class Model:
         self.nidx = u(0x4C) if self.version == 0x20030818 else 0  # per normal: weight entry (u16)
         if self.version not in (0x20010801, 0x20030817, 0x20030818):
             raise ValueError("not a model (version %#x)" % self.version)
+        # shape (morph) table: u32 count, count x (u32 offset from the table + 4, s32 entries), the entries
+        # u16 vertex, s16 dx, dy, dz in units of 1 / (1 << shift) (the face's expressions, game/shape.cpp)
+        self.shapes = []
         if self.shape:
-            raise ValueError("shape (morph) tables are not converted yet")
+            n = u(self.shape)
+            for k in range(n):
+                ofs, cnt = struct.unpack_from("<Ii", blob, self.shape + 4 + k * 8)
+                d = {}
+                for j in range(cnt):
+                    v, dx, dy, dz = struct.unpack_from("<Hhhh", blob, self.shape + 4 + ofs + j * 8)
+                    d[v] = (dx, dy, dz)
+                self.shapes.append(d)
         if self.nvtx != self.nnrm:
             raise ValueError("vertices %d, normals %d: the PC layout has one of each" % (self.nvtx, self.nnrm))
 
@@ -248,7 +258,14 @@ def convert_model(blob, cap, stats):
             ref.append(index[it])
         return out, ref
 
-    P, pref = unique([(quant(x, ps), quant(y, ps), quant(z, ps), w) for (x, y, z), w in zip(pos, vw)])
+    # shapes: the deltas in the new shift; a vertex keeps its own position when its deltas differ from those of
+    # another at the same place (the lips: closed at rest, apart in an expression)
+    dscale = float(1 << shift) / float(1 << m.shift)
+    deltas = [{v: tuple(int(round(c * dscale)) for c in d) for v, d in sd.items()} for sd in m.shapes]
+    sig = [tuple(sd.get(v) for sd in deltas) for v in range(nv)] if deltas else [None] * nv
+    P, pref = unique([(quant(x, ps), quant(y, ps), quant(z, ps), w, g)
+                      for (x, y, z), w, g in zip(pos, vw, sig)])
+    P = [p[:4] for p in P]
     if s8:
         N, nref = unique([(quant(x, 64, -128, 127), quant(y, 64, -128, 127), quant(z, 64, -128, 127), w)
                           for (x, y, z), w in zip(nrm, vw)])
@@ -323,6 +340,35 @@ def convert_model(blob, cap, stats):
     if m.blend:
         n = struct.unpack_from("<I", blob, m.blend)[0]
         put("blend", struct.pack(">I", n) + struct.pack(">%dH" % (n * 4), *struct.unpack_from("<%dH" % (n * 4), blob, m.blend + 4)), 4)
+    if m.shapes:
+        lists = []
+        for sd in deltas:
+            seen = {}
+            for v, d in sorted(sd.items()):
+                if v < nv and any(d):
+                    seen.setdefault(pref[v], d)
+            lists.append(sorted(seen.items()))
+        tb = bytearray(struct.pack(">I", len(lists)))
+        ofs = 8 * len(lists)  # from the table + 4 (shape.cpp): behind the entries
+        data = bytearray()
+        for lst in lists:
+            tb += struct.pack(">Ii", ofs + len(data), len(lst))
+            for v, (dx, dy, dz) in lst:
+                data += struct.pack(">Hhhh", v, max(-32768, min(32767, dx)), max(-32768, min(32767, dy)),
+                                    max(-32768, min(32767, dz)))
+        put("shape", tb + data, 4)
+        # every PC vertex in every expression where the game puts it (its merged position plus that one's delta)
+        bad = 0
+        for sd, lst in zip(deltas, lists):
+            got = dict(lst)
+            for v in range(nv):
+                d, g = sd.get(v, (0, 0, 0)), got.get(pref[v], (0, 0, 0))
+                bad += d != g
+        shape_note = ", %d shapes (%s deltas), %d vertices off" % (len(lists), "/".join(str(len(l)) for l in lists), bad)
+        if bad:
+            raise ValueError("shape deltas do not survive the merge (%d vertices)" % bad)
+    else:
+        shape_note = ""
     if m.flip:
         # the PC keeps the x-flip table big-endian, as on the disc
         n = struct.unpack_from(">I", blob, m.flip)[0]
@@ -333,15 +379,15 @@ def convert_model(blob, cap, stats):
     hdr += struct.pack(">BBH", len(merged) & 0xFF, m.nparts, m.nlist)
     hdr += struct.pack(">III", sec["parts"], flags, m.ntex)
     hdr += struct.pack(">BBH", shift, m.x29, len(merged))
-    hdr += struct.pack(">III", 0, sec["vtx"], sec["nrm"])
+    hdr += struct.pack(">III", sec.get("shape", 0), sec["vtx"], sec["nrm"])
     hdr += struct.pack(">HHI", len(P), len(N), m.version)
     if m.version == 0x20030818:
         hdr += struct.pack(">II", sec.get("blend", 0), sec.get("flip", 0))
     out[0:len(hdr)] = hdr
     stats.append("%d vertices (PC %d), %d normals, %d texture coordinates, %d polygons, weights %d -> %d "
-                 "(step %d%%), shift %d, %s normals, %d bytes (PC %d)" %
+                 "(step %d%%), shift %d, %s normals%s, %d bytes (PC %d)" %
                  (len(P), nv, len(N), len(T), total_polys, len(weights), len(merged), step, shift,
-                  "s8" if s8 else "s16", len(out), len(blob)))
+                  "s8" if s8 else "s16", shape_note, len(out), len(blob)))
     return bytes(out), m
 
 
