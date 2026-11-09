@@ -9,6 +9,8 @@ SOURCE replaces TARGET's; the textures its parts use (colour, bump, alpha, specu
 palette --tpl and appended to TARGET's, the part headers renumbered. --hue (degrees), --sat and --value tint the
 colour textures (material_tex) of the grafted model only: the hue set, saturation and brightness scaled.
 --alpha-ref sets the alpha compare reference of its alpha-textured parts (hair: clean strand edges).
+--into puts it in another entry (Leon's pl000l, entry 12, drawn in costumes 1-3), --only-mats keeps some of its
+parts, --drop ENTRY:MATS empties parts of the target (a jacket); emptied parts hold GX NOPs, offsets unchanged.
 """
 import argparse
 import colorsys
@@ -55,6 +57,23 @@ def parts(blob):
         p += 0x20 + struct.unpack_from(">I", blob, p + 0x18)[0]
 
 
+def is_empty(blob, p):
+    size = struct.unpack_from(">I", blob, p + 0x18)[0]
+    return not any(blob[p + 0x20:p + 0x20 + size])
+
+
+def empty_parts(blob, which):
+    """Fills the primitive streams of the parts whose colour texture `which` picks with GX NOPs (0): the part
+    draws nothing, every offset stays. Returns how many."""
+    n = 0
+    for p in list(parts(blob)):
+        if which(blob[p + 0xC]):
+            size = struct.unpack_from(">I", blob, p + 0x18)[0]
+            blob[p + 0x20:p + 0x20 + size] = bytes(size)
+            n += 1
+    return n
+
+
 def tint(hdr, data, hue, sat, value):
     h, w, f = struct.unpack_from(">HHI", hdr)
     if f != 0xE:
@@ -79,6 +98,13 @@ def main(argv=None):
     ap.add_argument("out")
     ap.add_argument("--entry", type=int, required=True, help="the model's DAT entry (Leon's hair: 5)")
     ap.add_argument("--tpl", type=int, required=True, help="its palette's DAT entry (Leon's head: 3)")
+    ap.add_argument("--into", type=int, help="the target's entry it replaces (default: --entry; Leon's pl000l, "
+                    "drawn in costumes 1-3 with palette 1: 12)")
+    ap.add_argument("--into-tpl", type=int, help="the target's palette it draws with (default: --tpl)")
+    ap.add_argument("--only-mats", help="comma-separated colour textures of the source model to keep (its parts "
+                    "with others are emptied)")
+    ap.add_argument("--drop", action="append", default=[], metavar="ENTRY:MATS",
+                    help="empty the target model ENTRY's parts with these colour textures (e.g. 0:6,9: a jacket)")
     ap.add_argument("--hue", type=float, help="hue of the colour textures, degrees (brown: about 25-30)")
     ap.add_argument("--sat", type=float, default=1.0)
     ap.add_argument("--value", type=float, default=1.0, help="brightness factor (below 1: darker)")
@@ -88,12 +114,19 @@ def main(argv=None):
 
     tgt = U.Archive(open(a.target, "rb").read(), ">")
     src = U.Archive(open(a.source, "rb").read(), ">")
+    into = a.entry if a.into is None else a.into
+    into_tpl = a.tpl if a.into_tpl is None else a.into_tpl
     model = bytearray(src.entry(a.entry))
+    if a.only_mats:
+        keep = {int(x) for x in a.only_mats.split(",")}
+        empty_parts(model, lambda m: m not in keep)
     src_imgs = tpl_images(src.entry(a.tpl))
-    imgs = tpl_images(tgt.entry(a.tpl))
+    imgs = tpl_images(tgt.entry(into_tpl))
     first = len(imgs)
     used, colour = {}, set()
     for p in parts(model):
+        if is_empty(model, p):
+            continue
         flag = model[p + 0xB]
         fields = [(0xC, True), (0xD, False), (0xE, False)] + ([(0x17, False)] if flag & 0x10 else [])
         for off, is_colour in fields:
@@ -114,12 +147,19 @@ def main(argv=None):
         imgs.append((hdr, data))
     struct.pack_into(">I", model, 0x24, len(imgs))  # nTex: the palette's count
     entries = [tgt.entry(i) for i in range(len(tgt.offsets))]
-    entries[a.entry] = bytes(model)
-    entries[a.tpl] = build_tpl(imgs)
+    for d in a.drop:
+        e, mats = d.split(":")
+        drop = {int(x) for x in mats.split(",")}
+        blob = bytearray(entries[int(e)])
+        n = empty_parts(blob, lambda m: m in drop)
+        entries[int(e)] = bytes(blob)
+        print("entry %s: %d parts with textures %s emptied" % (e, n, sorted(drop)))
+    entries[into] = bytes(model)
+    entries[into_tpl] = build_tpl(imgs)
     data = U.build_archive(tgt, U.build_body(entries, tgt.types))
     open(a.out, "wb").write(data)
-    print("%s: entry %d from %s, textures %s -> %s (colour %s), %d bytes" %
-          (a.out, a.entry, a.source, sorted(used), [used[t] for t in sorted(used)], sorted(colour), len(data)))
+    print("%s: entry %d from %s as entry %d, textures %s -> %s (colour %s), %d bytes" %
+          (a.out, a.entry, a.source, into, sorted(used), [used[t] for t in sorted(used)], sorted(colour), len(data)))
 
 
 if __name__ == "__main__":
