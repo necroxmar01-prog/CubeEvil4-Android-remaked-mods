@@ -821,12 +821,14 @@ def disc_textures(gc_tpl):
     return out
 
 
-def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None):
+def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None, colour_only=()):
     """A PC texture palette (references to imagePackHD) -> a GameCube TPL with the images,
     scaled to at most `size` pixels a side. A missing texture (one of the PC game's own,
     BIO4/imagePackHD/07000000.pack, which a mod expects on the player's PC): a colour texture
     is painted from the disc palette's largest colour image (the face) through the disc model
-    (bake_texture: the PC lays it out differently), else that image itself; an intensity one white."""
+    (bake_texture: the PC lays it out differently), else that image itself; an intensity one white.
+    colour_only: slots the models draw only as their colour (material) texture; one declared I4/I8 there
+    is CMPR (the PC draws its DDS in colour whatever the slot says; a grey face otherwise)."""
     n = struct.unpack_from("<I", blob, 4)[0]
     disc = disc_textures(gc_tpl)
     disc_colour = max((t for t in disc if t[2] == 0xE), key=lambda t: t[0] * t[1], default=None)
@@ -839,6 +841,8 @@ def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None):
         ref, idx = struct.unpack_from("<II", blob, data) if data + 8 <= len(blob) else (0, 0)
         img = packs.image(ref, idx) if packs else None
         gx, enc = ENCODERS.get(fmt, (0xE, enc_cmpr))
+        if gx == 0x1 and i in colour_only:
+            gx, enc = 0xE, enc_cmpr
         if img is None and gx == 0xE and disc_colour and bake:
             # painted for this model's layout from the disc model's (bake_texture)
             img = bake(i, disc_index, decode_gx(*disc_colour))
@@ -883,6 +887,31 @@ def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None):
 
 
 # ---- the archive -------------------------------------------------------------------------------
+
+# The models that draw with a palette: a player archive's (pl_leon.cpp setModel and the others: body, parts and
+# knife with entry 1, face, head and hair with entry 3), elsewhere the model in front of it.
+PLAYER_TPL_USERS = {1: (0, 6, 9, 12), 3: (2, 4, 5)}
+
+
+def colour_slots(pc, t):
+    """The slots of palette `t` its models use only as colour (material) texture, none as bump, alpha or
+    specular texture."""
+    users = PLAYER_TPL_USERS.get(t, ()) if len(pc.offsets) >= 100 else (t - 1,)
+    colour, other = set(), set()
+    for k in users:
+        if k < 0 or k >= len(pc.offsets) or pc.kind(k) != "BIN" or not pc.entry(k):
+            continue
+        try:
+            m = Model(pc.entry(k))
+        except ValueError:
+            continue
+        for raw, _, _ in m.runs():
+            colour.add(raw[0xC])
+            other.update(x for x in (raw[0xD], raw[0xE]) if x != 0xFF)
+            if raw[0xB] & 0x10:
+                other.add(raw[0x17])
+    return colour - other
+
 
 def check_skeleton(gc_model, pc_model):
     gb = []
@@ -956,7 +985,7 @@ def main(argv=None):
                              len(gc.entry(k)) >= 0x48 and struct.unpack_from(">I", gc.entry(k), 0x24)[0] == count]
                 pc_model = Model(pc.entry(i - 1))
                 bake = lambda t, gt, image: bake_texture(pc_model, t, gc_models, gt, image, min(512, 2 * a.tex))
-            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i), bake)
+            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i), bake, colour_slots(pc, i))
             print("entry %3d TPL: %d textures, %d bytes" % (i, len(stats), len(blob)))
             for s in stats:
                 print(s)
