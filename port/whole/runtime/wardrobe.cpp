@@ -491,6 +491,30 @@ void describeEventLeon()
             (ev->be_flag & 2) ? "shown" : "hidden");
 }
 
+// In a cutscene, why the weapon on the back shows or not, at each change (report of DevJunior, 09.11.2026: it
+// comes and goes between the shots); at most 40 lines an event
+void logEventShots(cModel* carrier, int no)
+{
+    static int last = -1, lines = 0;
+    if (!pG || !StaFlagChk(pG, STA_EVENT) || !gBack.load(std::memory_order_relaxed)) {
+        last = -1;
+        lines = 0;
+        return;
+    }
+    cObj* ev = eventLeon();
+    const int why = carrier ? 0 : !adjustOf(gAdjust.load(std::memory_order_relaxed)).events ? 1 : !ev ? 2
+                  : !(ev->be_flag & 2) ? 3 : gLastNo < 0 ? 4 : no == gLastNo ? 5 : 6;
+    if (why == last || lines >= 40) {
+        return;
+    }
+    static const char* const text[] = {"shown", "off in cutscenes", "no event Leon", "the event's Leon hidden",
+                                       "no long weapon held yet", "the weapon in his hands", "not in the case"};
+    re4_log("wardrobe: cutscene frame %u (event Leon %d): the weapon on the back %s (weapon_no 0x%x)",
+            (unsigned) pG->Frame_cnt, ev ? 0 : -1, text[why], no);
+    last = why;
+    lines++;
+}
+
 void backFrame()
 {
     if (re4_player_modded()) {
@@ -517,6 +541,7 @@ void backFrame()
             carrier = 0;  // sold, or never in the case
         }
     }
+    logEventShots(carrier, no);
     showBack(carrier);
 }
 

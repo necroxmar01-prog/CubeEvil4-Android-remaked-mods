@@ -1,0 +1,31 @@
+# Patch 0903 (report of DevJunior, 09.11.2026: with a skin, Leon has no torso in the codec; the remake mods). Not a
+# bug of the prototype: a port feature for skins.
+# Sscrn/ss_model.cpp tel00ModelInit (the codec's Leon) builds him from his archive's body (pl000a), jacket part
+# (pl000e), hair and the codec's own head and hand, but not pl000l, which the player himself adds in costumes 1..3
+# (pl_leon.cpp cPlLeon::setModel; the sub screen's leonModelInit too since patch 0144). A skin converted with
+# port/tools/skin_graft.py keeps its shirt there (Leon Black Coat: the Leon Requiem shirt, harness and forearms in
+# pl000l); while the player's file is a mod (re4_player_modded, runtime/dvd.cpp) the codec adds it as well. The
+# disc's data stay as they were.
+--- a/src/Sscrn/ss_model.cpp
++++ b/src/Sscrn/ss_model.cpp
+@@ -169,6 +169,7 @@
+ // Codec screen: the player's radio pose model from the player archive plus the radio/hand parts of
+ // ss_term.dat (sub-files 10..13).
+ extern "C" int re4_disc_retail(void), re4_disc_retail_eu(void), re4_disc_retail_jp(void); /* port: runtime/dvd.cpp */
++extern "C" int re4_player_modded(void); /* port: runtime/dvd.cpp (patch 0903) */
+ 
+ void tel00ModelInit(cModel* m, u32* arc)
+ {
+@@ -188,6 +189,12 @@
+         m->addModel(ssModInfoMgr.create(SS_ARC_PTR(wk->pTermDat, 12), SS_ARC_PTR(wk->pTermDat, 13)));
+     }
+     m->addModel(ssModInfoMgr.create(PL_ARC_PTR(leon, 9), PL_ARC_PTR(leon, 7)));
++    /* port (patch 0903, mods): a skin keeps its shirt in pl000l (the player adds it in costumes 1..3: pl_leon.cpp
++       setModel; the sub screen too, patch 0144); the codec draws it as well, else Leon has no torso there
++       (DevJunior, 09.11.2026) */
++    if (re4_player_modded() && leon == pG->pPlayer && pG->pl_costume >= 1 && pG->pl_costume <= 3) {
++        m->addModel(ssModInfoMgr.create(PL_ARC_PTR(leon, 0x10), PL_ARC_PTR(leon, 5)));
++    }
+     ssModelLight(m);
+ }
+ 
