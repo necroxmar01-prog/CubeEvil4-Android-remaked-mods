@@ -2534,3 +2534,64 @@ extern "C" int re4probe_wardrobe(void)
     pG->game_costume = keepCostume;
     return bad;
 }
+
+// Leon's melee moves (runtime/melee.cpp, patch 0904): the game's own motions without a mod and for the other
+// characters; a mod's archive (a standing move of one joint, no kneeling one) read and converted, switched off by
+// the app's bit 25; no neck break without HUNK's motions (the test has no em/em60.drs).
+extern "C" void* re4_melee_motion(int kind, void* game);
+extern "C" int re4_melee_neck(int special);
+extern "C" void re4_mod_melee_path_set(const char* path);
+extern "C" int re4probe_melee(const char* file)
+{
+    if (!pG) {
+        return 0x8000;
+    }
+    const u8 keepType = pG->pl_type;
+    int bad = 0;
+    int game;
+    pG->pl_type = 0;
+    re4_aim_set((int) 0x80000000u);
+    bad |= re4_melee_motion(0, &game) != &game || re4_melee_motion(1, &game) != &game ? 1 : 0;
+    // count 2, offsets 0x20 / 0x60, tags; the motion: last frame 5, one joint of kind 0x0001 (float keys), size
+    // word, curves at 0x10: three axes of one key at frame 0
+    u8 dat[0x60];
+    memset(dat, 0, sizeof(dat));
+    dat[3] = 2;
+    dat[0x13] = 0x20;
+    dat[0x17] = 0x60;
+    memcpy(dat + 0x18, "FCV", 3);
+    memcpy(dat + 0x1C, "FCV", 3);
+    u8* m = dat + 0x20;
+    m[1] = 5;
+    m[2] = 1;
+    m[4] = 1;
+    m[0xF] = 0x10;
+    for (int axis = 0; axis < 3; axis++) {
+        m[0x10 + axis * 16 + 1] = 1;
+    }
+    FILE* f = fopen(file, "wb");
+    if (!f || fwrite(dat, 1, sizeof(dat), f) != sizeof(dat)) {
+        bad |= 0x4000;
+    }
+    if (f) {
+        fclose(f);
+    }
+    re4_mod_melee_path_set(file);
+    const u8* own = (const u8*) re4_melee_motion(0, &game);
+    bad |= own == (const u8*) &game || !own || *(const u16*) own != 5 || own[2] != 1 ? 2 : 0;
+    bad |= re4_melee_motion(1, &game) != &game ? 4 : 0;           // an empty entry: the game's
+    pG->pl_type = 3;
+    bad |= re4_melee_motion(0, &game) != &game ? 8 : 0;           // HUNK keeps his
+    pG->pl_type = 0;
+    re4_aim_set((int) (0x80000000u | 2u << 24));
+    bad |= re4_melee_motion(0, &game) != &game ? 0x10 : 0;        // switched off
+    re4_aim_set((int) (0x80000000u | 1u << 24));
+    bad |= re4_melee_neck(0) != 0 || re4_melee_neck(1) != 0 ? 0x20 : 0;  // no em60.drs here: Leon kicks
+    bad |= re4_melee_motion(2, &game) != &game ? 0x40 : 0;
+    re4_mod_melee_path_set("");
+    bad |= re4_melee_motion(0, &game) != &game ? 0x80 : 0;
+    re4_aim_set((int) (0x80000000u | 45u | 64u << 7 | 64u << 14));
+    pG->pl_type = keepType;
+    remove(file);
+    return bad;
+}

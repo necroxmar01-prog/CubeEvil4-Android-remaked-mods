@@ -510,6 +510,10 @@ char** listDir(const char* path, int* count)
     return names;
 }
 
+// A mod's melee motions (mods/<pack>/melee/melee.dat, port/tools/uhd_motion_convert.py; patch 0904): no file
+// of the disc, read by runtime/melee.cpp. The last pack's in the folder's order.
+char gMeleePath[1600];
+
 void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int depth, int no)
 {
     int count = 0;
@@ -521,6 +525,14 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
         if (isDirectory(path)) {
             if (depth < 16) {
                 modFolder(d, pack, path, name, depth + 1, no);
+            }
+            free(names[k]);
+            continue;
+        }
+        if (strcmp(name, "melee/melee.dat") == 0) {
+            if (strcmp(gMeleePath, path) != 0) {
+                snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
+                re4_log("DVD: mod %s: %s holds its melee motions", pack, name);
             }
             free(names[k]);
             continue;
@@ -875,6 +887,18 @@ void* re4_core_data_place(const char* name, unsigned fixedMax)
 // The player's file came from a mod (re4_player_data_place, before each read of it): patch 0901 lets
 // cutscenes draw Leon's body with his archive's textures then.
 static int gPlayerModded;
+
+// The active mods' melee archive (see gMeleePath), "" without one.
+const char* re4_mod_melee_path(void)
+{
+    return gMeleePath;
+}
+
+// The runtime test's (game_probe.cpp re4probe_melee): the archive as a mod pack would name it
+void re4_mod_melee_path_set(const char* path)
+{
+    snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
+}
 
 int re4_player_modded(void)
 {

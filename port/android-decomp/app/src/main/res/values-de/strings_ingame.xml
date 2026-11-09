@@ -383,5 +383,9 @@
     <string name="ingame_back_left">Links</string>
     <string name="ingame_back_over">Umgedreht</string>
     <string name="ingame_back_events">In Zwischensequenzen</string>
+    <string name="ingame_melee">Nahkampf</string>
+    <string name="ingame_melee_mods">Eigene Animationen (Mod)</string>
+    <string name="ingame_melee_neck">Genickbruch</string>
+    <string name="ingame_melee_help">Nahkampf: Ein Mod mit melee/melee.dat ersetzt die Tritt-Animationen bei betäubten Gegnern. Genickbruch: Leon erledigt einen stehenden, betäubten Ganado wie HUNK (braucht die Söldner-Datei em/em60.drs auf deiner Disc); Gegner mit Parasit werden weiter getreten.</string>
     <string name="ingame_outfit_help">Die Kleidung, die die Geschichte Leon gibt, oder immer seine erste (mit Jacke) oder zweite (ohne); sie wechselt sofort, der Raum beginnt neu, wo er steht. Waffe auf dem Rücken: die letzte lange Waffe, die er hielt (Schrotflinte, Gewehr, Maschinenpistole, Raketenwerfer), hängt auf seinem Rücken, solange sie im Koffer und nicht in seinen Händen ist. Neigung, Höhe, Abstand zum Rücken und Schulter lassen sich einstellen; „In Zwischensequenzen“ zeigt sie auch dort.</string>
 </resources>

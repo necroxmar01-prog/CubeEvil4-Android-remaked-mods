@@ -172,6 +172,13 @@ void* re4_option_data_place(const char* name, unsigned fixedMax);
 void* re4_player_data_place(const char* name, unsigned fixedMax);
 /* 1 while the player's file is a mod's (patch 0901: cutscenes keep its textures). */
 int re4_player_modded(void);
+/* The active mods' melee archive (mods/<pack>/melee/melee.dat, patch 0904, runtime/melee.cpp), "" without one;
+ * read to its own place between the cheats' (up to 0x824E0000 and the stand-in set's scratch table) and the
+ * weapon on the back's (0x82500000). */
+#define RE4_MEM1_MELEE_ADDR 0x824E8000u
+#define RE4_MEM1_MELEE_MAX 0x00018000u
+const char* re4_mod_melee_path(void);
+void re4_mod_melee_path_set(const char* path);
 /* Patch 0901, event.cpp ExePacket_SetParts: 1 = a jacket part of costume 0 takes the skin's pl000e
  * (the PC mods replace pl08, Leon without the jacket); logs each part while the player's file is a mod. */
 int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume);

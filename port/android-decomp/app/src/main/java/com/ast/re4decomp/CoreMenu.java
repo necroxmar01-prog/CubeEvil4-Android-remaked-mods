@@ -1518,6 +1518,7 @@ final class CoreMenu extends Dialog {
     costumeSwitch(row);
     help(R.string.ingame_cheat_character_help);
     wardrobe();
+    melee();
   }
   /** "Leon's outfit" and "Weapon on the back" (wishes of DevJunior, 09.11.2026; runtime/wardrobe.cpp): the outfit
    *  the story gives him or always the first or the second, at once (the room starts again where he stands); the
@@ -1532,6 +1533,19 @@ final class CoreMenu extends Dialog {
         on -> host.wardrobeChanged(input.getInt(CoreActivity.LEON_OUTFIT, 0), on));
     backPlacement();
     help(R.string.ingame_outfit_help);
+  }
+  /** Leon's melee moves (wish of DevJunior, 09.11.2026: "a system for different melee animations"; the core's
+   *  runtime/melee.cpp): a mod pack's own animations for the kicks (melee/melee.dat) and HUNK's neck break on a
+   *  standing stunned Ganado; both go with the weapon on the back's placement word. */
+  private void melee() {
+    heading(R.string.ingame_melee);
+    final Runnable send = () -> CoreBridge.setBackPlacement(CoreActivity.backPlacement(input));
+    MenuLayout.Buttons row = buttonsRow(body);
+    toggle(row, R.string.ingame_melee_mods, input.getBoolean(CoreActivity.MELEE_MODS, true),
+        on -> { input.edit().putBoolean(CoreActivity.MELEE_MODS, on).apply(); send.run(); });
+    toggle(row, R.string.ingame_melee_neck, input.getBoolean(CoreActivity.MELEE_NECK, false),
+        on -> { input.edit().putBoolean(CoreActivity.MELEE_NECK, on).apply(); send.run(); });
+    help(R.string.ingame_melee_help);
   }
   /** The weapon on the back to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it
    *  clashes with the arm"): its slant, height and distance from the back, the shoulder the stock goes over, turned

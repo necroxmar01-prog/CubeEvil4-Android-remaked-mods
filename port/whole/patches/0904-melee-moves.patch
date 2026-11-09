@@ -1,0 +1,59 @@
+# Patch 0904 (wish of DevJunior, 09.11.2026: a system for different melee animations; the remake mods). Not a bug of
+# the prototype: a port feature.
+# em10.cpp, Leon's moves on a stunned Ganado ask the port's runtime/melee.cpp (declared in re4_whole_prelude.h, so
+# em10.cpp keeps its line numbers):
+#  - plem10Kick: the motion on a standing enemy (the enemy archive's 0x29D) and on a kneeling one (Leon's archive,
+#    0x25) is a mod's (mods/<pack>/melee/melee.dat, port/tools/uhd_motion_convert.py) when one is there and the
+#    app's "Custom melee animations" is on (re4_melee_motion 0 / 1).
+#  - em10KickAction: with the app's "Neck break" Leon finishes a standing stunned Ganado as HUNK does (the enemy's
+#    Dm_NeckBreak, R1 0x15, under HUNK's own conditions: no parasite, no core); plem10NeckBreak and Dm_NeckBreak
+#    take HUNK's motions 0x2B9 / 0x2BA / 0x2BB from the Mercenaries' em/em60.drs (runtime/cheats.cpp
+#    loadStandInSet), which the story's files lack (re4_melee_motion 2..4). Without that file Leon kicks.
+# The other characters and the disc's data stay as they were.
+--- a/src/em10/em10.cpp
++++ b/src/em10/em10.cpp
+@@ -14530,7 +14530,7 @@
+         if (w->Claw_rno_r != 4) {
+             w->Claw_rno_r = 3;
+         }
+-        MotionSetCore(em, &em->Motion, PL_ARC_PTR(em->subArc, 0x2BA), PL_ARC_PTR(em->subArc, 0x2BB), 0, 1, 0);
++        MotionSetCore(em, &em->Motion, re4_melee_motion(3, PL_ARC_PTR(em->subArc, 0x2BA)), re4_melee_motion(4, PL_ARC_PTR(em->subArc, 0x2BB)), 0, 1, 0);
+         EstSet(em, -1, 0, 0, EFF_EM10, 0x90, 0, ESP_CORE_KIND_NONE, em, 0);
+         EmCatchPLSet(em, 0.0f, 2, -75.21f, 0.0f, 1076.1f, plem10NeckBreak);
+         em10SetDmWaterEff(em, 1);
+@@ -24153,7 +24153,7 @@
+ {
+     switch (pG->pl_type) {
+     default:
+-        SetPlDamage(em, plem10Kick);
++        if (re4_melee_neck(EM10_WK(em)->pCore != 0 || EM10_WK(em)->pParasite != 0 || (EM10_WK(em)->Be_flg & 0x80))) { em->setRno(2, 0x15, 0, 0); em->dmg.set(0, 0x1E); } else SetPlDamage(em, plem10Kick); /* port: patch 0904 */
+         break;
+     case 5:
+         SetPlDamage(em, plem10Showtay);
+@@ -24211,7 +24211,7 @@
+     switch (pl->r_no_2) {
+     case 0:
+         if (pl->r_no_3) {
+-            MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pG->pPlayer, 0x25), 0, 6, 1, 0);
++            MotionSetCore(pl, &pl->Motion, re4_melee_motion(1, PL_ARC_PTR(pG->pPlayer, 0x25)), 0, 6, 1, 0);
+             pl->m_Work0 = 0x11;
+             pl->m_Work1 = 12;
+             pl->m_Work2 = 0x23;
+@@ -24236,7 +24236,7 @@
+                 SndCall(1, 0x4D, &pl->pos, 0, 0, pPL);
+             }
+         } else {
+-            MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pl->subArc, 0x29D), 0, 6, 1, 0);
++            MotionSetCore(pl, &pl->Motion, re4_melee_motion(0, PL_ARC_PTR(pl->subArc, 0x29D)), 0, 6, 1, 0);
+             pl->m_Work0 = 0x11;
+             pl->m_Work1 = 0xA;
+             pl->m_Work2 = 0x21;
+@@ -24532,7 +24532,7 @@
+     StaFlagOn(pG, STA_PL_EM_ACTION);
+     switch (pl->r_no_2) {
+     case 0:
+-        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pl->subArc, 0x2B9), 0, 0, 1, 0);
++        MotionSetCore(pl, &pl->Motion, re4_melee_motion(2, PL_ARC_PTR(pl->subArc, 0x2B9)), 0, 0, 1, 0);
+         GameAddPoint(LVADD_CRITICALHIT);
+         EstSet(pl, -1, 0, 0, EFF_PL00, 8, 0, ESP_CORE_KIND_NONE, pl, 0);
+         SndCall(1, 0x4D, &pl->pos, 0, 0, pPL);

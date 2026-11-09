@@ -1298,6 +1298,7 @@ int re4probe_free_move(void);
 int re4probe_quick_slots(void);
 int re4probe_parry(void);
 int re4probe_wardrobe(void);
+int re4probe_melee(const char* file);
 int re4probe_qte_touch(void);
 int re4probe_qte_auto(void);
 int re4probe_cheat_extras(void);
@@ -2171,6 +2172,18 @@ static void testWardrobe()
     report("wardrobe", bad == 0);
 }
 
+// Leon's melee moves (runtime/melee.cpp, patch 0904; game_probe.cpp re4probe_melee)
+static void testMelee()
+{
+    char file[64];
+    snprintf(file, sizeof(file), "/tmp/re4-melee-test-%d.dat", (int) getpid());
+    const int bad = re4probe_melee(file);
+    if (bad) {
+        re4_log("  melee: failed checks 0x%x", bad);
+    }
+    report("melee", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2555,6 +2568,7 @@ int re4_runtime_tests()
     testQuickSlots();
     testParry();
     testWardrobe();
+    testMelee();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

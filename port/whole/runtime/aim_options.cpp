@@ -135,11 +135,13 @@ extern "C" {
 extern "C" void re4_camera_recenter(void);  // runtime/free_move.cpp
 extern "C" void re4_reload_request(void);   // runtime/free_move.cpp
 extern "C" void re4_wardrobe_set(int outfit, int back);  // runtime/wardrobe.cpp
+extern "C" void re4_melee_set(int bits);                  // runtime/melee.cpp
 extern "C" void re4_back_adjust_set(int word);           // runtime/wardrobe.cpp
 void re4_aim_set(int bits)
 {
     if (bits < 0) {  // bit 31: the second word
-        re4_back_adjust_set(bits & 0x7FFFFFFF);
+        re4_back_adjust_set(bits & 0x00FFFFFF);
+        re4_melee_set((bits >> 24) & 3);  // bit 24 "Neck break", bit 25 the mods' melee motions off
         return;
     }
     // bits 22..23 "Leon's outfit" (0 the story's, 1 the first, 2 the second), bit 30 "Weapon on the back"

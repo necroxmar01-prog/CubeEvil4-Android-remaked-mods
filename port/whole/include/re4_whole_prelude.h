@@ -105,6 +105,12 @@ extern int re4_story_ganado;
  * player archive's index 0x70 / 0x71 as in the original, Leon's where Ada's, Krauser's or Wesker's has none there
  * (runtime/cheats.cpp; declared here, in no game file, so em10.cpp keeps its line numbers). */
 void* re4_ganado_rocket(int tpl);
+/* Patch 0904 (em10.cpp, Leon's moves on a stunned Ganado; runtime/melee.cpp, declared here so em10.cpp keeps its
+ * line numbers): the motion of the move `kind` (0 on a standing enemy, 1 on a kneeling one, 2 the neck break, 3 / 4
+ * the enemy's motion and sequence in it), `game` the game's own, taken unless a mod's or HUNK's stands in; and 1
+ * when Leon breaks the neck of a standing stunned Ganado instead of kicking (`special`: it has a parasite or core). */
+void* re4_melee_motion(int kind, void* game);
+int re4_melee_neck(int special);
 /* Patch 0212 (the gore checks of em10, em25, em2c, em2d, em31, em32, emwep, obj16, r100, r101, r103): the country
  * they see, pSys->eff_country, but the US release's 1 with the Japanese discs and the Korean translation built on
  * them (runtime/game_language.cpp; declared here so the game files keep their line numbers). */

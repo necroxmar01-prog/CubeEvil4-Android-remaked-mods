@@ -1352,4 +1352,16 @@ void re4_story_char_save(u8* image, const u8* start)
     re4_log("cheat: saved with Leon as the player (%s plays)", kCharName[pG->pl_type]);
 }
 
+// HUNK's entry `no` of the Ganado archives (0x2B4..0x2BD, from the Mercenaries' em/em60.drs) while Leon himself
+// plays: his neck break (runtime/melee.cpp, patch 0904). Read once to the stand-in set's place, which is free
+// while no stand-in plays (a stand-in reads its own anew); 0 without the file.
+void* re4_melee_hunk_entry(unsigned no)
+{
+    if (!pG || pG->pl_type != 0 || no - kSetLo > kSetHi - kSetLo) {
+        return 0;
+    }
+    loadStandInSet(3);
+    return gSetType == 3 ? (void*) (size_t) gSetEntry[no - kSetLo] : 0;
+}
+
 }  // extern "C"
