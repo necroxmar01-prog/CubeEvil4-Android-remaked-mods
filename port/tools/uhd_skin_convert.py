@@ -546,6 +546,192 @@ def tpl_found(blob, packs):
 GX_SIZE = {0x0: 4, 0x1: 8, 0x2: 8, 0x3: 16, 0x4: 16, 0x5: 16, 0x6: 32, 0xE: 4}  # bits per pixel
 
 
+def gc_triangles(blob, tex_index):
+    """The disc model's triangles whose parts use texture `tex_index`: positions, normals and texture
+    coordinates per corner (float arrays n x 3 x 3 / n x 3 x 3 / n x 3 x 2)."""
+    import numpy as np
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    flags, shift = u(0x20), blob[0x28]
+    clr = bool(flags & 0x80000000)
+    s8 = bool(flags & 0x20000000)
+    nv, nn = struct.unpack_from(">HH", blob, 0x38)
+    P = np.frombuffer(blob, ">i2", nv * 4, u(0x30)).reshape(-1, 4)[:, :3] / float(1 << shift)
+    if s8:
+        N = np.frombuffer(blob, ">i1", nn * 4, u(0x34)).reshape(-1, 4)[:, :3] / 64.0
+    else:
+        N = np.frombuffer(blob, ">i2", nn * 4, u(0x34)).reshape(-1, 4)[:, :3] / 16384.0
+    tex = u(0x10)
+    pos, nrm, uvs = [], [], []
+    p = u(0x1C)
+    for _ in range(struct.unpack_from(">H", blob, 0x1A)[0]):
+        size, mat = u(p + 0x18), blob[p + 0xC]
+        s, e = p + 0x20, p + 0x20 + size
+        while s < e and blob[s] != 0:
+            op, cnt = blob[s], struct.unpack_from(">H", blob, s + 1)[0]
+            per = 4 if clr else 3
+            idx = [struct.unpack_from(">%dH" % per, blob, s + 3 + k * per * 2) for k in range(cnt)]
+            s += 3 + cnt * per * 2
+            if mat != tex_index:
+                continue
+            if op == 0x98:
+                tris = [(idx[k], idx[k + 1], idx[k + 2]) for k in range(cnt - 2)]
+            elif op == 0x90:
+                tris = [(idx[k], idx[k + 1], idx[k + 2]) for k in range(0, cnt, 3)]
+            elif op == 0x80:
+                tris = []
+                for k in range(0, cnt, 4):
+                    tris += [(idx[k], idx[k + 1], idx[k + 2]), (idx[k], idx[k + 2], idx[k + 3])]
+            else:
+                continue
+            for t in tris:
+                pos.append([P[v[0]] for v in t])
+                nrm.append([N[v[1]] for v in t])
+                uvs.append([struct.unpack_from(">hh" if clr else ">HH", blob, tex + v[-1] * 4) for v in t])
+        p = e
+    sc = 256.0 if clr else 32768.0
+    return np.array(pos, float), np.array(nrm, float), np.array(uvs, float) / sc
+
+
+def pc_triangles(m, tex_index):
+    """The PC model's triangles of parts using texture `tex_index`: positions, normals, texture coordinates."""
+    import numpy as np
+    P = np.array(m.floats(m.vtx, m.nvtx, 3))
+    N = np.array(m.floats(m.nrm, m.nvtx, 3))
+    T = np.array(m.floats(m.tex, m.nvtx, 2))
+    tris = []
+    first = 0
+    for raw, _, runs in m.runs():
+        for typ, cnt in runs:
+            v = list(range(first, first + cnt))
+            first += cnt
+            if raw[0xC] != tex_index:
+                continue
+            if typ == 6:
+                tris += [(v[k], v[k + 1], v[k + 2]) for k in range(cnt - 2)]
+            elif typ == 5:
+                tris += [(v[k], v[k + 1], v[k + 2]) for k in range(0, cnt, 3)]
+            elif typ == 8:
+                for k in range(0, cnt, 4):
+                    tris += [(v[k], v[k + 1], v[k + 2]), (v[k], v[k + 2], v[k + 3])]
+    t = np.array(tris, int).reshape(-1, 3)
+    return P[t], N[t], T[t]
+
+
+def bake_texture(pc_model, pc_tex, gc_models, gc_tex, gc_image, size=512):
+    """A texture for the PC model's parts of `pc_tex`, painted from the disc model's (same skeleton, same
+    place): every texel's point on the PC model takes the colour of the nearest point of the disc models'
+    parts of `gc_tex` that faces the same way (the disc's face is a model of its own, entry 4 with the lip
+    shapes, the PC mod's is part of the head) (Leon Asia, 08.11.2026: the mod draws the face with the PC game's
+    own face, laid out differently from the disc's). Needs numpy and scipy; None without them."""
+    try:
+        import numpy as np
+        from scipy.spatial import cKDTree
+        from scipy import ndimage
+    except ImportError:
+        return None
+    from PIL import Image
+    tp, tn, tt = pc_triangles(pc_model, pc_tex)
+    parts = [gc_triangles(g, gc_tex) for g in gc_models]
+    parts = [t for t in parts if len(t[0])]
+    if not len(tp) or not parts:
+        return None
+    sp, sn, st = (np.concatenate([t[k] for t in parts]) for k in range(3))
+    # the disc's surface as points: each triangle sampled on a barycentric grid
+    g = 12
+    bary = np.array([(a / g, b / g, 1 - (a + b) / g) for a in range(g + 1) for b in range(g + 1 - a)])
+    pts = np.einsum("kc,tcd->tkd", bary, sp).reshape(-1, 3)
+    nrm = np.einsum("kc,tcd->tkd", bary, sn).reshape(-1, 3)
+    uv = np.einsum("kc,tcd->tkd", bary, st).reshape(-1, 2)
+    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-9
+    tree = cKDTree(pts)
+    src = np.asarray(gc_image.convert("RGBA"), float)
+    sh, sw = src.shape[:2]
+    out = np.zeros((size, size, 4), float)
+    filled = np.zeros((size, size), bool)
+    for (p3, n3, t3) in zip(tp, tn, tt):
+        px = t3 * size - 0.5
+        lo = np.floor(px.min(0)).astype(int)
+        hi = np.ceil(px.max(0)).astype(int)
+        xs, ys = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1))
+        q = np.stack([xs.ravel(), ys.ravel()], 1).astype(float)
+        a, b, c3 = px
+        den = (b[1] - c3[1]) * (a[0] - c3[0]) + (c3[0] - b[0]) * (a[1] - c3[1])
+        if abs(den) < 1e-12:
+            continue
+        w0 = ((b[1] - c3[1]) * (q[:, 0] - c3[0]) + (c3[0] - b[0]) * (q[:, 1] - c3[1])) / den
+        w1 = ((c3[1] - a[1]) * (q[:, 0] - c3[0]) + (a[0] - c3[0]) * (q[:, 1] - c3[1])) / den
+        w2 = 1 - w0 - w1
+        inside = (w0 >= -0.01) & (w1 >= -0.01) & (w2 >= -0.01)
+        if not inside.any():
+            continue
+        q = q[inside].astype(int) % size
+        w = np.stack([w0[inside], w1[inside], w2[inside]], 1)
+        pos = w @ p3
+        nr = w @ n3
+        nr /= np.linalg.norm(nr, axis=1, keepdims=True) + 1e-9
+        _, near = tree.query(pos, k=8)
+        facing = np.einsum("nkd,nd->nk", nrm[near], nr) > 0.2
+        pick = np.where(facing.any(1), near[np.arange(len(near)), facing.argmax(1)], near[:, 0])
+        su = (uv[pick, 0] % 1.0) * sw - 0.5
+        sv = (uv[pick, 1] % 1.0) * sh - 0.5
+        x0, y0 = np.floor(su).astype(int), np.floor(sv).astype(int)
+        fx, fy = (su - x0)[:, None], (sv - y0)[:, None]
+        at = lambda yy, xx: src[np.clip(yy, 0, sh - 1), xx % sw]
+        col = (at(y0, x0) * (1 - fx) * (1 - fy) + at(y0, x0 + 1) * fx * (1 - fy) +
+               at(y0 + 1, x0) * (1 - fx) * fy + at(y0 + 1, x0 + 1) * fx * fy)  # bilinear
+        out[q[:, 1], q[:, 0]] = col
+        filled[q[:, 1], q[:, 0]] = True
+    if not filled.any():
+        return None
+    # past the seams: the nearest painted texel (filtering reads a little beyond each piece)
+    _, (iy, ix) = ndimage.distance_transform_edt(~filled, return_indices=True)
+    out = out[iy, ix]
+    return Image.fromarray(out.clip(0, 255).astype("uint8"), "RGBA")
+
+
+def decode_gx(h, w, f, d):
+    """A disc texture as an RGBA image (CMPR, I4, I8, IA8)."""
+    from PIL import Image
+    img = Image.new("RGBA", (w, h))
+    px = img.load()
+    o = 0
+    if f == 0xE:
+        def c565(c):
+            return (((c >> 11) & 31) * 255 // 31, ((c >> 5) & 63) * 255 // 63, (c & 31) * 255 // 31, 255)
+        for ty in range(0, h, 8):
+            for tx in range(0, w, 8):
+                for sy, sx in ((0, 0), (0, 4), (4, 0), (4, 4)):
+                    c0, c1, bits = struct.unpack_from(">HHI", d, o)
+                    o += 8
+                    p0, p1 = c565(c0), c565(c1)
+                    if c0 > c1:
+                        pal = [p0, p1, tuple((2 * a + b) // 3 for a, b in zip(p0, p1)),
+                               tuple((a + 2 * b) // 3 for a, b in zip(p0, p1))]
+                    else:
+                        pal = [p0, p1, tuple((a + b) // 2 for a, b in zip(p0, p1)), (0, 0, 0, 0)]
+                    for k in range(16):
+                        x, y = tx + sx + k % 4, ty + sy + k // 4
+                        if x < w and y < h:
+                            px[x, y] = pal[(bits >> (30 - 2 * k)) & 3]
+    elif f in (0x0, 0x1, 0x3):
+        bw, bh = {0x0: (8, 8), 0x1: (8, 4), 0x3: (4, 4)}[f]
+        for ty in range(0, h, bh):
+            for tx in range(0, w, bw):
+                for y in range(bh):
+                    for x in range(bw):
+                        if f == 0x0:
+                            v = (d[o + (y * bw + x) // 2] >> (4 if x % 2 == 0 else 0)) & 15
+                            c, a = v * 17, 255
+                        elif f == 0x1:
+                            c, a = d[o + y * bw + x], 255
+                        else:
+                            a, c = d[o + (y * bw + x) * 2], d[o + (y * bw + x) * 2 + 1]
+                        if tx + x < w and ty + y < h:
+                            px[tx + x, ty + y] = (c, c, c, a)
+                o += bw * bh * GX_SIZE[f] // 8
+    return img
+
+
 def disc_textures(gc_tpl):
     """The disc palette's images: (height, width, format, data) each."""
     out = []
@@ -559,22 +745,31 @@ def disc_textures(gc_tpl):
     return out
 
 
-def convert_tpl(blob, packs, size, stats, gc_tpl=None):
+def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None):
     """A PC texture palette (references to imagePackHD) -> a GameCube TPL with the images,
     scaled to at most `size` pixels a side. A missing texture (one of the PC game's own,
     BIO4/imagePackHD/07000000.pack, which a mod expects on the player's PC): a colour texture
-    takes the disc palette's largest colour image (Leon Asia, 08.11.2026: the face, from the
-    disc as the PC game has it in HD), an intensity one white (no change)."""
+    is painted from the disc palette's largest colour image (the face) through the disc model
+    (bake_texture: the PC lays it out differently), else that image itself; an intensity one white."""
     n = struct.unpack_from("<I", blob, 4)[0]
     disc = disc_textures(gc_tpl)
     disc_colour = max((t for t in disc if t[2] == 0xE), key=lambda t: t[0] * t[1], default=None)
+    disc_index = disc.index(disc_colour) if disc_colour else -1
     images = []
     for i in range(n):
+        baked = False
         ho = struct.unpack_from("<I", blob, 12 + i * 8)[0]
         h, w, fmt, data, ws, wt, mn, mg, bias = struct.unpack_from("<HHIIIIIIf", blob, ho)
         ref, idx = struct.unpack_from("<II", blob, data) if data + 8 <= len(blob) else (0, 0)
         img = packs.image(ref, idx) if packs else None
         gx, enc = ENCODERS.get(fmt, (0xE, enc_cmpr))
+        if img is None and gx == 0xE and disc_colour and bake:
+            # painted for this model's layout from the disc model's (bake_texture)
+            img = bake(i, disc_index, decode_gx(*disc_colour))
+            baked = img is not None
+            if img is not None:
+                stats.append("  texture %d: missing (%#x/%d), painted from the disc's model and its %dx%d" %
+                             (i, ref, idx, disc_colour[1], disc_colour[0]))
         if img is None and gx == 0xE and disc_colour:
             dh, dw, df, ddata = disc_colour
             images.append((dh, dw, df, ddata, ws, wt, mn, mg, bias))
@@ -586,13 +781,16 @@ def convert_tpl(blob, packs, size, stats, gc_tpl=None):
             missing = True
         else:
             missing = False
-        scale = min(1.0, size / float(max(img.size)))
+        # a painted texture keeps its size (it is made at most 512, a face needs the detail)
+        scale = 1.0 if baked else min(1.0, size / float(max(img.size)))
         tw = max(8, 1 << int(round(math.log2(max(1, img.size[0] * scale)))))
         th = max(8, 1 << int(round(math.log2(max(1, img.size[1] * scale)))))
         img = img.resize((tw, th))
         raw = img.tobytes()
         px = [tuple(raw[k:k + 4]) for k in range(0, len(raw), 4)]
         images.append((th, tw, gx, enc(px, tw, th), ws, wt, mn, mg, bias))
+        if stats and stats[-1].startswith("  texture %d: missing" % i):
+            continue
         stats.append("  texture %d: %s %dx%d -> %dx%d format %#x" %
                      (i, ("missing (%#x/%d), %s" % (ref, idx, "grey" if gx == 0xE else "white")) if missing
                       else "%#x/%d" % (ref, idx), w, h, tw, th, gx))
@@ -674,7 +872,15 @@ def main(argv=None):
             blob = gc.entry(i)
             print("entry %3d TPL: none of its textures in the mod's packs, the disc's" % i)
         elif kind_pc == "TPL":
-            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i))
+            bake = None
+            if i > 0 and pc.kind(i - 1) == "BIN" and gc.kind(i - 1) == "BIN" and pc.entry(i - 1) and gc.entry(i - 1):
+                # the disc's models drawn with this palette: as many textures as it has
+                count = struct.unpack_from(">I", gc.entry(i), 4)[0] if len(gc.entry(i)) >= 8 else -1
+                gc_models = [gc.entry(k) for k in range(len(gc.offsets)) if gc.kind(k) == "BIN" and
+                             len(gc.entry(k)) >= 0x48 and struct.unpack_from(">I", gc.entry(k), 0x24)[0] == count]
+                pc_model = Model(pc.entry(i - 1))
+                bake = lambda t, gt, image: bake_texture(pc_model, t, gc_models, gt, image, min(512, 2 * a.tex))
+            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i), bake)
             print("entry %3d TPL: %d textures, %d bytes" % (i, len(stats), len(blob)))
             for s in stats:
                 print(s)
