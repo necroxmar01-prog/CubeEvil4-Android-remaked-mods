@@ -213,6 +213,25 @@ def inflate(blob, dist, physique="even"):
     return moved
 
 
+def lower_collar(blob, factor):
+    """A high collar lower: the model's positions around the neck (|x| < 85, above 1565, Leon's neck joint 1560;
+    the head's model reaches down to about 1596) squeezed towards 1565 by factor (device test 09.11.2026: the
+    neck hardly showed). Returns how many positions moved."""
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    shift = blob[0x28]
+    nv = struct.unpack_from(">H", blob, 0x38)[0]
+    vo = u(0x30)
+    moved = 0
+    for i in range(nv):
+        x, y, z = struct.unpack_from(">3h", blob, vo + i * 8)
+        sc = float(1 << shift)
+        if abs(x / sc) < 85 and y / sc > 1565:
+            y2 = 1565 + (y / sc - 1565) * factor
+            struct.pack_into(">h", blob, vo + i * 8 + 2, int(round(y2 * sc)))
+            moved += 1
+    return moved
+
+
 def tint(hdr, data, hue, sat, value):
     h, w, f = struct.unpack_from(">HHI", hdr)
     if f != 0xE:
@@ -260,6 +279,8 @@ def main(argv=None):
     ap.add_argument("--recolor", action="append", default=[], metavar="TPL:SLOTS=R,G,B",
                     help="colour textures SLOTS of the target's palette TPL by their brightness in this mean colour "
                          "(e.g. 1:2,13,16=40,43,52: a shirt and its matching parts)")
+    ap.add_argument("--lower-collar", action="append", default=[], metavar="ENTRY:FACTOR",
+                    help="a model's collar squeezed down towards the neck's base (factor 0.5: half as high)")
     ap.add_argument("--smooth", type=float, default=0.0, metavar="RADIUS",
                     help="with --recolor: plain cloth, the fabric's blotches blurred away (radius in texels, e.g. 6)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
@@ -343,6 +364,12 @@ def main(argv=None):
         n = inflate(blob, float(dist), a.physique)
         entries[int(e)] = bytes(blob)
         print("entry %s: %d positions pushed out by up to %s" % (e, n, dist))
+    for spec in a.lower_collar:
+        e, f = spec.split(":")
+        blob = bytearray(entries[int(e)])
+        n = lower_collar(blob, float(f))
+        entries[int(e)] = bytes(blob)
+        print("entry %s: collar lowered, %d positions" % (e, n))
     for spec in a.recolor:
         where, rgb = spec.split("=")
         t, slots = where.split(":")
