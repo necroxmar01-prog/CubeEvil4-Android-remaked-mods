@@ -2483,7 +2483,7 @@ extern "C" int re4probe_potato(void)
 // weapon of given bounds hangs (barrel up over the right shoulder, the turned centre on the back, behind it)
 extern "C" int re4_leon_outfit(int costume);
 extern "C" void re4_wardrobe_set(int outfit, int back);
-extern "C" void re4_back_place(const float c[3], const float s[3], int barrelX, float pos[3], float ang[3]);
+extern "C" void re4_back_place(const float c[3], float front, int barrelX, float back, float pos[3], float ang[3]);
 extern "C" int re4probe_wardrobe(void)
 {
     if (!pG) {
@@ -2509,14 +2509,14 @@ extern "C" int re4probe_wardrobe(void)
     for (int barrel = -1; barrel <= 1; barrel += 2) {
         float pos[3], ang[3];
         const float cc[3] = {c[0] * -barrel, c[1], c[2]};
-        re4_back_place(cc, sz, barrel, pos, ang);
+        re4_back_place(cc, cc[2] + sz[2], barrel, -150.0f, pos, ang);
         const float ca = cosf(ang[2]), sa = sinf(ang[2]);
         const float cx = cc[0] * ca - cc[1] * sa + pos[0], cy = cc[0] * sa + cc[1] * ca + pos[1];
         bad |= fabsf(cx) > 0.5f || fabsf(cy + 60.0f) > 0.5f ? 0x20 : 0;      // the centre between the shoulder blades
-        bad |= fabsf(pos[2] + cc[2] + sz[2] + 140.0f) > 0.5f ? 0x40 : 0;    // its front just behind the back
-        // the barrel's axis turned: up over the right (-x), 60 degrees over the floor
+        bad |= fabsf(pos[2] + cc[2] + sz[2] + 150.0f) > 0.5f ? 0x40 : 0;    // its front on the back's surface
+        // the upper end's axis turned: up over the right (-x), 45 degrees over the floor
         const float bx = barrel * ca, by = barrel * sa;
-        bad |= !(bx < -0.45f && bx > -0.55f && by > 0.85f) ? 0x80 : 0;
+        bad |= !(bx < -0.68f && bx > -0.73f && by > 0.68f && by < 0.73f) ? 0x80 : 0;
     }
     re4_aim_set(100 << 8);
     pG->pl_type = keepType;

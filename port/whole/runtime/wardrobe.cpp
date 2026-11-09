@@ -13,7 +13,8 @@
 //    none of the file's sounds reaches the weapon's sound block) to a place of its own in the development half of
 //    MEM1, the rocket launcher's from Leon's archive (objRocket.cpp: entries 0x76 / 0x75). It is an event body
 //    (SetObj18, as the events show weapons) that follows his chest (parts 2, OyaSetObj18): the barrel up over the
-//    right shoulder at 60 degrees, between the shoulder blades, behind the back by the model's own bounds. Hidden in events, sub screens and movies.
+//    across the back as a sling holds it (stock up over the right shoulder, 45 degrees), flat on the back's surface as
+//    Leon's own model has it (a bulkier skin carries it as close). Hidden in events, sub screens and movies.
 #include "types.h"
 #include "global.h"
 #include "item.h"
@@ -203,26 +204,82 @@ void dropObj(const char* why)
 
 }  // namespace
 
-// The place on the back for a weapon model of these bounds (centre c, half extents s; the model's own space): the
-// weapons' files hold them as Leon's right hand does, the barrel along -x (his arm points along -x in the bind pose;
-// device test 09.11.2026: turned for +x the Chicago Typewriter hung with its stock up), the rocket launcher's model
-// (Leon's archive) along +x (barrelX). ang.z turns the barrel up over the right shoulder (Leon's right is -x), 60
-// degrees from the floor as a sling holds it; pos puts the turned centre between the shoulder blades, in the
-// chest's space (parts 2: its joint about 1360 high, the back's surface about 125 behind it), the model's front just
-// behind the back. Exported for the runtime tests.
-extern "C" void re4_back_place(const float c[3], const float s[3], int barrelX, float pos[3], float ang[3])
+// The place on the back for a weapon model of these bounds (centre c, half extents s; the model's own space; device
+// tests 09.11.2026 and DevJunior's pictures of the remake): slung across the back, the stock up over the right
+// shoulder and the muzzle down to the left hip, 45 degrees from the floor, its side flat on the back. The weapons'
+// files hold the stock towards +x (as the first try showed: up over the shoulder, which was right), the rocket
+// launcher's model (Leon's archive) its tube along +x as well (barrelX only says which end goes up: +1 the +x end).
+// pos puts the turned centre (c) on the spine between the shoulder blades, in the chest's space (parts 2, its joint
+// about 1360 high and 13 behind the hips), the model's front (`front`, re4_back_front: its body, not a sight or a
+// handle that sticks out sideways) at `back` (the chest's z of the back's surface, measured on Leon's own model:
+// re4_back_surface), so a bulkier skin carries it as close. Exported for the runtime tests.
+extern "C" void re4_back_place(const float c[3], float front, int barrelX, float back, float pos[3], float ang[3])
 {
-    const float d = 60.0f * 3.14159265f / 180.0f;  // the barrel's angle over the floor
-    // the turn that takes the barrel's axis (+x or -x) to (-cos d, sin d), up over the right shoulder
+    const float d = 45.0f * 3.14159265f / 180.0f;  // over the floor
+    // the turn that takes the upper end's axis (+x or -x) to (-cos d, sin d), up over the right shoulder
     const float a = barrelX > 0 ? 3.14159265f - d : -d;
     const float ca = cosf(a), sa = sinf(a);
-    const float tx = 0.0f, ty = -60.0f, back = -125.0f - 15.0f;
+    const float tx = 0.0f, ty = -60.0f;
     pos[0] = tx - (c[0] * ca - c[1] * sa);
     pos[1] = ty - (c[0] * sa + c[1] * ca);
-    pos[2] = back - (c[2] + s[2]);
+    pos[2] = back - front;
     ang[0] = 0.0f;
     ang[1] = 0.0f;
     ang[2] = a;
+}
+
+// A weapon model's front towards the back: 85 % of its points lie behind it (the barrel, the stock, the body; a
+// sight or a handle that sticks out sideways does not hold the weapon off the back, as the bounds did: the rocket
+// launcher's grip stands 20 cm out of its tube)
+extern "C" float re4_back_front(const void* model)
+{
+    const cModelData* d = (const cModelData*) model;
+    const s16* v = d ? (const s16*) d->vtxOrig : 0;
+    if (!v || d->nVtx == 0) {
+        return 0.0f;
+    }
+    // a histogram of z in 1/16 steps of its range (no sort, no allocation)
+    s16 lo = 32767, hi = -32768;
+    for (u32 i = 0; i < d->nVtx; i++) {
+        lo = v[i * 4 + 2] < lo ? v[i * 4 + 2] : lo;
+        hi = v[i * 4 + 2] > hi ? v[i * 4 + 2] : hi;
+    }
+    unsigned bins[64] = {0};
+    const int span = hi - lo + 1;
+    for (u32 i = 0; i < d->nVtx; i++) {
+        bins[(v[i * 4 + 2] - lo) * 64 / span]++;
+    }
+    const u32 want = d->nVtx * 85 / 100;
+    u32 seen = 0;
+    int k = 0;
+    for (; k < 63 && seen + bins[k] < want; k++) {
+        seen += bins[k];
+    }
+    return (lo + (float) (k + 1) * span / 64.0f) / (float) (1 << d->shift);
+}
+
+// The back's surface in the chest's space: the farthest back point of Leon's models (his body and its parts, as
+// drawn: the bind pose, model space) between the shoulder blades (1250..1450 high, within 120 of the spine), 5 into
+// it (the cloth gives); -137 (the disc's Leon) when there is none
+extern "C" float re4_back_surface(const void* firstInfo)
+{
+    float minZ = 1e9f;
+    for (const cModelInfo* info = (const cModelInfo*) firstInfo; info && info->model_addr; info = info->pList) {
+        const cModelData* d = info->model_addr;
+        const s16* v = (const s16*) d->vtxOrig;
+        const float sc = (float) (1 << d->shift);
+        if (!v || d->nVtx == 0) {
+            continue;
+        }
+        for (u32 i = 0; i < d->nVtx; i++, v += 4) {
+            const float x = v[0] / sc, y = v[1] / sc, z = v[2] / sc;
+            if (y > 1250.0f && y < 1450.0f && x > -120.0f && x < 120.0f && z < minZ) {
+                minZ = z;
+            }
+        }
+    }
+    const float chestZ = -13.4f;  // parts 2's joint (its bind position)
+    return minZ < 0.0f && minZ > -400.0f ? minZ - chestZ + 5.0f : -137.0f;
 }
 
 namespace {
@@ -278,7 +335,7 @@ void showBack(bool want)
     const float c[3] = {b.offset.x, b.offset.y, b.offset.z};
     const float s[3] = {b.size.x, b.size.y, b.size.z};
     float p[3], a[3];
-    re4_back_place(c, s, m.file ? -1 : 1, p, a);
+    re4_back_place(c, re4_back_front(obj->pModelInfo->model_addr), 1, re4_back_surface(pPL->pModelInfo), p, a);
     obj->pos.x = p[0];
     obj->pos.y = p[1];
     obj->pos.z = p[2];
@@ -293,8 +350,9 @@ void showBack(bool want)
     gObjModel = (void*) obj->pModelInfo->model_addr;
     gObjNo = gLastNo;
     gObjType = gLastType;
-    re4_log("wardrobe: weapon 0x%x type %d on the back (bounds centre %.0f %.0f %.0f, half %.0f %.0f %.0f)", gLastNo,
-            gLastType, c[0], c[1], c[2], s[0], s[1], s[2]);
+    re4_log("wardrobe: weapon 0x%x type %d on the back (bounds centre %.0f %.0f %.0f, half %.0f %.0f %.0f; at %.0f %.0f "
+            "%.0f, turned %.0f degrees)", gLastNo, gLastType, c[0], c[1], c[2], s[0], s[1], s[2], p[0], p[1], p[2],
+            a[2] * 57.2958f);
 }
 
 void backFrame()
