@@ -1535,8 +1535,8 @@ final class CoreMenu extends Dialog {
     help(R.string.ingame_outfit_help);
   }
   /** Leon's melee moves (wish of DevJunior, 09.11.2026: "a system for different melee animations"; the core's
-   *  runtime/melee.cpp): a mod pack's own animations for the kicks (melee/melee.dat) and HUNK's neck break on a
-   *  standing stunned Ganado; both go with the weapon on the back's placement word. */
+   *  runtime/melee.cpp): a mod pack's own animations for the kicks (melee/melee.dat), HUNK's neck break on a
+   *  standing stunned Ganado and the axe (knife) strike on a kneeling one; both go with the weapon on the back's placement word. */
   private void melee() {
     heading(R.string.ingame_melee);
     final Runnable send = () -> CoreBridge.setBackPlacement(CoreActivity.backPlacement(input));
@@ -1545,6 +1545,8 @@ final class CoreMenu extends Dialog {
         on -> { input.edit().putBoolean(CoreActivity.MELEE_MODS, on).apply(); send.run(); });
     toggle(row, R.string.ingame_melee_neck, input.getBoolean(CoreActivity.MELEE_NECK, false),
         on -> { input.edit().putBoolean(CoreActivity.MELEE_NECK, on).apply(); send.run(); });
+    toggle(buttonsRow(body), R.string.ingame_melee_axe, input.getBoolean(CoreActivity.MELEE_AXE, false),
+        on -> { input.edit().putBoolean(CoreActivity.MELEE_AXE, on).apply(); send.run(); });
     help(R.string.ingame_melee_help);
   }
   /** The weapon on the back to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it

@@ -111,6 +111,8 @@ void* re4_ganado_rocket(int tpl);
  * when Leon breaks the neck of a standing stunned Ganado instead of kicking (`special`: it has a parasite or core). */
 void* re4_melee_motion(int kind, void* game);
 int re4_melee_neck(int special);
+/* The routine of Leon's move on a kneeling stunned Ganado: `game` (plem10Kick), or the axe strike's (patch 0904). */
+void* re4_melee_kneel(void* game);
 /* Patch 0212 (the gore checks of em10, em25, em2c, em2d, em31, em32, emwep, obj16, r100, r101, r103): the country
  * they see, pSys->eff_country, but the US release's 1 with the Japanese discs and the Korean translation built on
  * them (runtime/game_language.cpp; declared here so the game files keep their line numbers). */

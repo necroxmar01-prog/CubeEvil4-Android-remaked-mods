@@ -381,6 +381,7 @@
     <string name="ingame_melee">Jarak dekat</string>
     <string name="ingame_melee_mods">Animasi kustom (mod)</string>
     <string name="ingame_melee_neck">Patahkan leher</string>
-    <string name="ingame_melee_help">Jarak dekat: mod dengan melee/melee.dat mengganti animasi tendangan pada musuh yang terhuyung. Patahkan leher: Leon menghabisi Ganado terhuyung yang berdiri seperti HUNK (perlu berkas Mercenaries em/em60.drs di disc); musuh berparasit tetap ditendang.</string>
+    <string name="ingame_melee_axe">Tebasan kapak (berlutut)</string>
+    <string name="ingame_melee_help">Jarak dekat: mod dengan melee/melee.dat mengganti animasi tendangan pada musuh yang terhuyung. Patahkan leher: Leon menghabisi Ganado terhuyung yang berdiri seperti HUNK (perlu berkas Mercenaries em/em60.drs di disc); musuh berparasit tetap ditendang. Tebasan kapak: pada musuh terhuyung yang berlutut, Leon menebas ke bawah dengan pisaunya, bukan menendang (jika skin menggantinya dengan kapak, yang terlihat kapak).</string>
     <string name="ingame_outfit_help">Pakaian yang diberikan cerita kepada Leon, atau selalu yang pertama (dengan jaket) atau kedua (tanpa jaket); berganti seketika dan ruangan dimulai ulang di tempat ia berdiri. Senjata di punggung: senjata panjang terakhir yang ia pegang (shotgun, senapan, senapan mesin, peluncur roket) tergantung di punggungnya selama ada di koper dan tidak di tangannya. Kemiringan, tinggi, jarak dari punggung, dan bahu bisa diatur sesuka hati; “Di cutscene” juga menampilkannya saat adegan.</string>
 </resources>

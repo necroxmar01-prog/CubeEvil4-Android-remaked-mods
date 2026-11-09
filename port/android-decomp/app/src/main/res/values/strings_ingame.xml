@@ -401,6 +401,7 @@
     <string name="ingame_melee">Melee</string>
     <string name="ingame_melee_mods">Custom animations (mod)</string>
     <string name="ingame_melee_neck">Neck break</string>
-    <string name="ingame_melee_help">Melee: a mod pack with melee/melee.dat replaces the kick animations on stunned enemies. Neck break: Leon finishes a standing stunned Ganado as HUNK does (needs the Mercenaries file em/em60.drs on your disc); enemies with a parasite are still kicked.</string>
+    <string name="ingame_melee_axe">Axe strike (kneeling)</string>
+    <string name="ingame_melee_help">Melee: a mod pack with melee/melee.dat replaces the kick animations on stunned enemies. Neck break: Leon finishes a standing stunned Ganado as HUNK does (needs the Mercenaries file em/em60.drs on your disc); enemies with a parasite are still kicked. Axe strike: on a kneeling stunned enemy Leon chops down with his knife instead of kicking (a skin\'s axe shows in its place).</string>
     <string name="ingame_outfit_help">The outfit the story gives Leon, or always his first (with the jacket) or second (without it); it changes at once and the room starts again where he stands. Weapon on the back: the last long weapon he held (shotgun, rifle, machine gun, rocket launcher) hangs on his back while it is in the case and not in his hands. Its slant, height, distance from the back and shoulder can be set to taste; “In cutscenes” also shows it while Leon is in a scene.</string>
 </resources>

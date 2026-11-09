@@ -5,6 +5,9 @@
 #  - plem10Kick: the motion on a standing enemy (the enemy archive's 0x29D) and on a kneeling one (Leon's archive,
 #    0x25) is a mod's (mods/<pack>/melee/melee.dat, port/tools/uhd_motion_convert.py) when one is there and the
 #    app's "Custom melee animations" is on (re4_melee_motion 0 / 1).
+#  - em10KneeDownAction: with the app's "Axe strike" Leon finishes a kneeling stunned Ganado with his knife (a
+#    skin's axe in its place) instead of the kick: runtime/melee.cpp's own routine (re4_melee_kneel), the knife's
+#    up stance as the wind-up, then its low slash as the chop.
 #  - em10KickAction: with the app's "Neck break" Leon finishes a standing stunned Ganado as HUNK does (the enemy's
 #    Dm_NeckBreak, R1 0x15, under HUNK's own conditions: no parasite, no core); plem10NeckBreak and Dm_NeckBreak
 #    take HUNK's motions 0x2B9 / 0x2BA / 0x2BB from the Mercenaries' em/em60.drs (runtime/cheats.cpp
@@ -30,6 +33,15 @@
          break;
      case 5:
          SetPlDamage(em, plem10Showtay);
+@@ -24187,7 +24187,7 @@
+         pPL->r_no_3 = 1;
+         break;
+     default:
+-        SetPlDamage(em, plem10Kick);
++        SetPlDamage(em, (void (*)(cPlayer*)) re4_melee_kneel((void*) plem10Kick)); /* port: patch 0904 */
+         pPL->r_no_3 = 1;
+         break;
+     }
 @@ -24211,7 +24211,7 @@
      switch (pl->r_no_2) {
      case 0:

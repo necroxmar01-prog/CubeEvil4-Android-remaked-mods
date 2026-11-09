@@ -2541,6 +2541,7 @@ extern "C" int re4probe_wardrobe(void)
 extern "C" void* re4_melee_motion(int kind, void* game);
 extern "C" int re4_melee_neck(int special);
 extern "C" void re4_mod_melee_path_set(const char* path);
+extern "C" void* re4_melee_kneel(void* game);
 extern "C" int re4probe_melee(const char* file)
 {
     if (!pG) {
@@ -2590,6 +2591,15 @@ extern "C" int re4probe_melee(const char* file)
     bad |= re4_melee_motion(2, &game) != &game ? 0x40 : 0;
     re4_mod_melee_path_set("");
     bad |= re4_melee_motion(0, &game) != &game ? 0x80 : 0;
+    // the axe strike on a kneeling enemy: the game's kick unless switched on, for Leon only
+    bad |= re4_melee_kneel(&game) != &game ? 0x100 : 0;
+    re4_aim_set((int) (0x80000000u | 4u << 24));
+    if (pPL && pPL->Body) {
+        bad |= re4_melee_kneel(&game) == &game || !re4_melee_kneel(&game) ? 0x200 : 0;
+    }
+    pG->pl_type = 3;
+    bad |= re4_melee_kneel(&game) != &game ? 0x400 : 0;
+    pG->pl_type = 0;
     re4_aim_set((int) (0x80000000u | 45u | 64u << 7 | 64u << 14));
     pG->pl_type = keepType;
     remove(file);

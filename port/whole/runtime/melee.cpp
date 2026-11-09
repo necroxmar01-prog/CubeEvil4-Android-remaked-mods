@@ -13,12 +13,30 @@
 //    plem10NeckBreak, always fatal). The three motions (0x2B9 Leon's, 0x2BA / 0x2BB the Ganado's) are HUNK's from
 //    em/em60.drs (runtime/cheats.cpp re4_melee_hunk_entry); without them Leon kicks as ever. HUNK's own rule
 //    holds: an enemy with a parasite or a core is kicked.
+//  - Axe strike (wish of DevJunior, 09.11.2026: "his Requiem axe on kneeling enemies"): on a kneeling stunned
+//    Ganado Leon draws his knife (whatever a skin made of it: the axe) and chops down instead of the kick, from
+//    the game's own knife motions of his archive: the up stance 0x83 as the wind-up, then the low slash 0x86 (the
+//    deep crouch with the blade down, the root falling from 1065 to 746). The hit is the kick's (PlWepHitCheck3,
+//    kind 0x14, 1200 around), lower and further out, on the chop's lowest frame; the gun is hidden meanwhile as
+//    the knife routine does (setWepTrans) and shown again at the end, or by the frame hook when something cut
+//    the move short.
 // Only Leon (pl_type 0); the other characters keep their moves.
 #include "types.h"
 #include "global.h"
 #include "main.h"
 #include "dvd.h"
 #include "re4_runtime.h"
+#include "player.h"
+#include "pl_body.h"
+#include "pl_sub.h"
+#include "pl_wep.h"
+#include "motion.h"
+#include "math_sub_decl.h"
+#include "snd.h"
+#include "esp.h"
+#include "game.h"
+#include "em.h"
+#include "em_sub.h"
 
 #include <atomic>
 #include <stdio.h>
@@ -26,10 +44,12 @@
 
 extern "C" void re4_log(const char* fmt, ...);
 extern "C" void* re4_melee_hunk_entry(unsigned no);  // runtime/cheats.cpp
+extern "C" void re4_add_frame_hook(void (*hook)(unsigned));  // runtime/pad.cpp
+extern cPlayer* pPL;
 
 namespace {
 
-std::atomic<int> gBits(0);  // the app's switches: bit 0 "Neck break", bit 1 the mods' motions off
+std::atomic<int> gBits(0);  // the app's switches: bit 0 "Neck break", bit 1 the mods' motions off, bit 2 "Axe strike"
 char gLoaded[1600];         // the archive at RE4_MEM1_MELEE_ADDR ("" none; a path that failed counts as read)
 void* gMotion[2];           // its motions: on a standing enemy, on a kneeling one
 int gSaid;                  // what the log told already (bits by kind)
@@ -108,14 +128,127 @@ void say(int kind, const char* what)
     }
 }
 
+// The axe strike (see the head): its steps in r_no_2, the frames left of each in m_Work0, the turn to the enemy in
+// m_Work1
+const int kWindUp = 9;     // frames of the wind-up (the up stance, blended in over 6)
+const int kHitFrame = 8;   // frame of the chop (0x86) that hits: the blade at its lowest
+const int kCancel = 18;    // frames of the chop before an aim or fire key may end it
+bool gAxeLive = false;     // the knife is out for the axe strike (the gun hidden)
+
+void axeEnd(cPlayer* pl)
+{
+    if (gAxeLive) {
+        gAxeLive = false;
+        pl->Body->setKnife(false);
+        setWepTrans(pl, 1);
+    }
+}
+
+void axeHit(cPlayer* pl)
+{
+    static const f32 kHeights[2] = {1000.0f, 550.0f};
+    bool hit = false;
+    for (int i = 0; i < 2; i++) {
+        Vec v = {0.0f, kHeights[i], 450.0f};
+        PSMTXMultVec(pl->mat, &v, &v);
+        hit = PlWepHitCheck3(&v, 0x14, 1200.0f, 0xA) || hit;
+    }
+    if (hit) {
+        SndCall(1, 0xF, &pl->pos, 0, 0, pPL);
+    }
+}
+
+void plAxeStrike(cPlayer* pl)
+{
+    cEm* em = pl->pEmCatch;
+    PlArc* arc = pG->pPlayer;
+
+    pl->subArc = em->subArc;
+    pl->dmg.set(0, 0x1E);
+    StaFlagOn(pG, STA_PL_EM_ACTION);
+    switch (pl->r_no_2) {
+    case 0:
+        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(arc, 0x83), 0, 6, 1, 0);
+        setWepTrans(pl, 0);
+        pl->Body->setKnife(true);
+        gAxeLive = true;
+        GameAddPoint(LVADD_CRITICALHIT);
+        pl->m_Work0 = kWindUp;
+        pl->m_Work1 = 10;
+        pl->r_no_2 = 1;
+        // fall through
+    case 1:
+        MotionMove(pl, 0);
+        if (pl->m_Work0 && --pl->m_Work0) {
+            break;
+        }
+        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(arc, 0x86), 0, 3, 1, 0);
+        EstSet(pl, -1, 0, 0, EFF_CORE, 0x2B, 0, ESP_CORE_KIND_PL_WEP, 0, 0);
+        SndCall(1, 3, &pl->pos, 0, 0, pPL);
+        pl->m_Work0 = kHitFrame;
+        pl->m_Work2 = kCancel;
+        pl->r_no_2 = 2;
+        break;
+    case 2:
+        if (pl->m_Work0) {
+            pl->m_Work0--;
+            if (pl->m_Work0 == 0) {
+                axeHit(pl);
+            }
+        }
+        if (MotionMove(pl, 0)) {
+            axeEnd(pl);
+            EndPlDamage();
+            pl->dmg.set(0, 0xF);
+        } else if (pl->m_Work2) {
+            pl->m_Work2--;
+        } else if (joyKamae() || (Key.on & 0x10F)) {
+            axeEnd(pl);
+            EndPlDamage();
+            pl->dmg.set(0, 0xF);
+        }
+        break;
+    }
+    if (pl->m_Work1 > 0) {
+        pl->m_Work1--;
+        pl->ang.y += Muku(&pl->pos, &em->pos, pl->ang.y, 0.19634955f);
+        pl->ang.y = LIMIT_ANGLE(pl->ang.y);
+    }
+    pl->subArc = pl->subArc2;
+}
+
+// A grab or a hit that cut the axe strike short: the knife away and the gun back
+void axeWatch(unsigned)
+{
+    if (gAxeLive && pPL && (pPL->r_no_0 != 4 || Pl_func_tbl[4] != plAxeStrike)) {
+        re4_log("melee: the axe strike was cut short (routine %d): knife away, gun shown", (int) pPL->r_no_0);
+        axeEnd(pPL);
+    }
+}
+
 }  // namespace
 
 extern "C" {
 
+void* re4_melee_kneel(void* game)
+{
+    if (!leon() || !(gBits.load() & 4) || !pPL || !pPL->Body) {
+        return game;
+    }
+    static bool hooked = false;
+    if (!hooked) {
+        hooked = true;
+        re4_add_frame_hook(axeWatch);
+    }
+    say(6, "Leon's axe strike on a kneeling enemy (his knife's motions 0x83 / 0x86)");
+    return (void*) plAxeStrike;
+}
+
 void re4_melee_set(int bits)
 {
     if (gBits.exchange(bits) != bits) {
-        re4_log("melee: neck break %s, the mods' melee motions %s", bits & 1 ? "on" : "off", bits & 2 ? "off" : "on");
+        re4_log("melee: neck break %s, the mods' melee motions %s, axe strike on kneeling enemies %s",
+                bits & 1 ? "on" : "off", bits & 2 ? "off" : "on", bits & 4 ? "on" : "off");
     }
 }
 
