@@ -90,11 +90,40 @@ def colorize(img, rgb):
     return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 
-def recolor(img, rgb):
-    """colorize for the dark texels only: bright details (buckles, zippers, patches) fade back to their own colour
-    from brightness 30 to 90, so they do not glare."""
+def smooth(img, radius, keep=0.35):
+    """Plain cloth: the brightness blurred (radius in texels; only over the painted texels, so the empty black around
+    the UV islands does not darken their edges) with keep of its remaining contrast; bright details stay sharp."""
     import numpy as np
     from PIL import Image
+    a = np.asarray(img.convert("RGBA"), dtype=np.float32)
+    lum = a[..., 0] * 0.3 + a[..., 1] * 0.59 + a[..., 2] * 0.11
+    used = (lum > 2).astype(np.float32)
+    r = int(radius * 3 + 0.5)
+    g = np.exp(-0.5 * (np.arange(-r, r + 1) / radius) ** 2)
+    g /= g.sum()
+
+    def blur(m):  # separable Gaussian, edges repeated
+        m = np.pad(m, r, mode="edge")
+        m = np.apply_along_axis(lambda v: np.convolve(v, g, "valid"), 0, m)
+        return np.apply_along_axis(lambda v: np.convolve(v, g, "valid"), 1, m)
+    soft = blur(lum * used) / np.maximum(blur(used), 1e-3)
+    mean = float(lum[used > 0].mean()) if used.any() else 0.0
+    flat = mean + (soft - mean) * keep
+    k = np.clip((90 - lum) / 60, 0, 1) * used  # bright details and the empty texels as they are
+    ratio = np.where(lum > 1e-3, (flat * k + lum * (1 - k)) / np.maximum(lum, 1e-3), 1.0)
+    out = a.copy()
+    for ch in range(3):
+        out[..., ch] = np.where(lum > 1e-3, a[..., ch] * ratio, flat * k)
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+
+
+def recolor(img, rgb, radius=0.0):
+    """colorize for the dark texels only: bright details (buckles, zippers, patches) fade back to their own colour
+    from brightness 30 to 90, so they do not glare. radius > 0: plain cloth first (smooth)."""
+    import numpy as np
+    from PIL import Image
+    if radius > 0:
+        img = smooth(img, radius)
     a = np.asarray(img.convert("RGBA"), dtype=np.float32)
     c = np.asarray(colorize(img, rgb), dtype=np.float32)
     lum = a[..., 0] * 0.3 + a[..., 1] * 0.59 + a[..., 2] * 0.11
@@ -231,6 +260,8 @@ def main(argv=None):
     ap.add_argument("--recolor", action="append", default=[], metavar="TPL:SLOTS=R,G,B",
                     help="colour textures SLOTS of the target's palette TPL by their brightness in this mean colour "
                          "(e.g. 1:2,13,16=40,43,52: a shirt and its matching parts)")
+    ap.add_argument("--smooth", type=float, default=0.0, metavar="RADIUS",
+                    help="with --recolor: plain cloth, the fabric's blotches blurred away (radius in texels, e.g. 6)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
     ap.add_argument("--alpha-ref", type=int, help="alpha compare reference of the model's alpha-textured parts "
                     "(trans.cpp alphaSetup: alpha > ref is drawn; 0 on the disc, higher: no faint texels at the edges)")
@@ -319,7 +350,7 @@ def main(argv=None):
         for k in (int(x) for x in slots.split(",")):
             hdr, data = imgs_t[k]
             img = U.decode_gx(*struct.unpack_from(">HHI", hdr), data)
-            imgs_t[k] = encode_image(recolor(img, [float(v) for v in rgb.split(",")]), hdr)
+            imgs_t[k] = encode_image(recolor(img, [float(v) for v in rgb.split(",")], a.smooth), hdr)
         entries[int(t)] = build_tpl(imgs_t)
         print("palette %s: textures %s recoloured to %s" % (t, slots, rgb))
     data = U.build_archive(tgt, U.build_body(entries, tgt.types))
