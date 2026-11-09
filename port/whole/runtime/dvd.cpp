@@ -31,6 +31,7 @@
 #include <string.h>
 #include <strings.h>
 #include <dirent.h>
+#include <unistd.h>
 
 #include <atomic>
 
@@ -467,7 +468,7 @@ s32 lookup(const Disc& d, const char* path)
 // Mods (wish of the project owner, 08.11.2026: character skins): <data>/mods/<pack>/ mirrors the
 // disc's files/ folder (or holds it as <pack>/files/); every file there replaces the disc's file
 // of that path (case-insensitive, like the game's own paths) on both discs. Packs apply in name
-// order, a later pack wins. The replacement may differ in size: its size goes into the host FST
+// order, a later pack wins; a pack holding the file .off is switched off (the app's menu). The replacement may differ in size: its size goes into the host FST
 // (and with it the copy in MEM1, DVDFastOpen and the reads), so the game reads the whole file.
 // Files without a counterpart on the disc are named in the log and left out; read when the disc
 // is first loaded (a pack added later counts from the next start).
@@ -567,7 +568,12 @@ void applyMods(Disc& d, int no)
     for (int k = 0; k < count; k++) {
         char full[1400];
         snprintf(full, sizeof(full), "%s/%s", mods, packs[k]);
-        if (isDirectory(full)) {
+        char off[1500];
+        snprintf(off, sizeof(off), "%s/.off", full);
+        if (isDirectory(full) && access(off, F_OK) == 0) {
+            // switched off in the app's menu (ModSwitch.java, wish of DevJunior, 09.11.2026: several skins kept)
+            re4_log("DVD: mod %s is switched off", packs[k]);
+        } else if (isDirectory(full)) {
             char files[1500];
             snprintf(files, sizeof(files), "%s/files", full);
             if (!d.mod) {

@@ -30,6 +30,7 @@ import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.os.CombinedVibration;
 import android.provider.DocumentsContract;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.Display;
@@ -990,9 +991,26 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       File root = gameRoot();
       String[] packs = ModStore.packs(root);
       for (int i = 0; i < packs.length; i++) {
-        packs[i] = packs[i] + "\t" + ModStore.countFiles(new File(ModStore.dir(root), packs[i]));
+        File pack = new File(ModStore.dir(root), packs[i]);
+        packs[i] = packs[i] + "\t" + ModStore.countFiles(pack) + "\t" + (ModSwitch.isOn(pack) ? 1 : 0);
       }
       return packs;
+    }
+
+    @Override public void restartForMods() {
+      restartIntoGame("menu: mods switched");
+    }
+
+    @Override public String[] setModOn(String name, boolean on) {
+      try {
+        List<String> off = ModSwitch.set(ModStore.dir(gameRoot()), name, on);
+        Log.i(TAG, "menu: mod " + name + (on ? " on" : " off") + (off.isEmpty() ? "" : ", switched off " + off));
+        return off.toArray(new String[0]);
+      } catch (IOException e) {
+        Log.w(TAG, "menu: mod " + name + ": " + e);
+        message(getString(R.string.ingame_failed, e.getMessage()));
+        return null;
+      }
     }
 
     @Override public void removeMods() {
@@ -1198,7 +1216,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       String failure = null;
       try {
         done = ModStore.copyTree(getContentResolver(), tree, root);
-        Log.i(TAG, "mod " + done.name + ": " + done.files + " files");
+        Log.i(TAG, "mod " + done.name + ": " + done.files + " files"
+            + (done.switchedOff.isEmpty() ? "" : ", switched off " + done.switchedOff));
       } catch (IOException | RuntimeException e) {
         Log.w(TAG, "mod: " + e);
         failure = e.getMessage();
@@ -1212,9 +1231,13 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
           message(getString(R.string.ingame_failed, why));
           return;
         }
+        String text = getResources().getQuantityString(R.plurals.ingame_mod_added, result.files, result.name,
+            result.files);
+        if (!result.switchedOff.isEmpty()) {
+          text += "\n\n" + getString(R.string.ingame_mods_others_off, TextUtils.join(", ", result.switchedOff));
+        }
         new AlertDialog.Builder(this)
-            .setMessage(getResources().getQuantityString(R.plurals.ingame_mod_added, result.files, result.name,
-                result.files))
+            .setMessage(text)
             .setNegativeButton(R.string.ingame_later, null)
             .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mod added")).show();
       });

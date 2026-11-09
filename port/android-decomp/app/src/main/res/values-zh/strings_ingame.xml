@@ -353,7 +353,9 @@
     <string name="ingame_shader_clear">清除着色器缓存</string>
     <string name="ingame_shader_clear_text">游戏将重新启动并删除已构建的着色器。游戏过程中会重新构建，因此最初的几个场景可能会卡顿。上次存档之后的进度将会丢失。</string>
     <string name="ingame_mods">模组</string>
-    <string name="ingame_mods_help">替换游戏自身文件的文件，例如为 GameCube 版制作的角色皮肤。请选择与光盘结构相同的文件夹（例如 em/pl08.das）；重启后生效。PC 版的模组在这里无法使用。</string>
+    <string name="ingame_mods_help">替换游戏自身文件的文件，例如角色皮肤。请选择与光盘结构相同的文件夹（例如 em/pl08.das）。点按模组可开启或关闭：每个文件只能由一个模组替换，因此开启一个会关闭替换相同文件的其他模组。更改在重启后生效。</string>
+    <string name="ingame_mods_changed">模组更改在重启后生效。上次存档之后的进度将会丢失。</string>
+    <string name="ingame_mods_others_off">已关闭，因为它们替换相同的文件：%1$s</string>
     <string name="ingame_mods_none">没有模组</string>
     <plurals name="ingame_mod_line">
         <item quantity="other">%1$s：%2$d 个文件</item>

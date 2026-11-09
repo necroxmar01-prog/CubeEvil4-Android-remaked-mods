@@ -43,7 +43,7 @@ final class ModStore {
     File[] all = folder.listFiles();
     if (all == null) return 0;
     int n = 0;
-    for (File f : all) n += f.isDirectory() ? countFiles(f) : 1;
+    for (File f : all) if (!f.getName().startsWith(".")) n += f.isDirectory() ? countFiles(f) : 1;
     return n;
   }
 
@@ -69,16 +69,19 @@ final class ModStore {
     return !f.exists() || f.delete();
   }
 
-  /** What a copy brought: the pack's folder name and its files. */
+  /** What a copy brought: the pack's folder name, its files and the packs it switched off (ModSwitch). */
   static final class Result {
     final String name;
     final int files;
-    Result(String name, int files) { this.name = name; this.files = files; }
+    final List<String> switchedOff;
+    Result(String name, int files, List<String> switchedOff) {
+      this.name = name; this.files = files; this.switchedOff = switchedOff;
+    }
   }
 
   /**
    * Copies the picked folder (a document tree) to game/mods/<its name>, replacing a pack of that name. It goes to a
-   * hidden folder first, so a copy that fails leaves no half pack the core would read.
+   * hidden folder first, so a copy that fails leaves no half pack the core would read. The new pack is switched on.
    */
   static Result copyTree(ContentResolver resolver, Uri tree, File gameRoot) throws IOException {
     String rootId = DocumentsContract.getTreeDocumentId(tree);
@@ -103,7 +106,8 @@ final class ModStore {
       delete(staging);
       throw new IOException("cannot create " + target);
     }
-    return new Result(name, files);
+    // the new pack is on; the others that replace its files go off (one pack per file)
+    return new Result(name, files, ModSwitch.set(mods, name, true));
   }
 
   private static String displayName(ContentResolver resolver, Uri doc) {

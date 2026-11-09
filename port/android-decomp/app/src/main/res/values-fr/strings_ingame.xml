@@ -358,7 +358,9 @@
     <string name="ingame_shader_clear">Vider le cache des shaders</string>
     <string name="ingame_shader_clear_text">Le jeu redémarre et supprime les shaders créés. Il les recrée pendant la partie, les premières scènes peuvent donc saccader. La progression depuis la dernière sauvegarde est perdue.</string>
     <string name="ingame_mods">Mods</string>
-    <string name="ingame_mods_help">Des fichiers qui remplacent ceux du jeu, comme des skins de personnages faits pour la version GameCube. Choisissez un dossier organisé comme le disque (par exemple em/pl08.das)\u00A0; il s\'applique après un redémarrage. Les mods de la version PC ne fonctionnent pas ici.</string>
+    <string name="ingame_mods_help">Des fichiers qui remplacent ceux du jeu, comme des skins de personnages. Choisissez un dossier organisé comme le disque (par exemple em/pl08.das). Touchez un mod pour l\'activer ou le désactiver\u00A0: un seul mod remplace un fichier, donc en activer un désactive les autres qui ont les mêmes fichiers. Les changements s\'appliquent après un redémarrage.</string>
+    <string name="ingame_mods_changed">Les changements de mods s\'appliquent après un redémarrage. La progression depuis votre dernière sauvegarde est perdue.</string>
+    <string name="ingame_mods_others_off">Désactivés car ils remplacent les mêmes fichiers\u00A0: %1$s</string>
     <string name="ingame_mods_none">Aucun mod</string>
     <plurals name="ingame_mod_line">
         <item quantity="one">%1$s\u00A0: %2$d fichier</item>

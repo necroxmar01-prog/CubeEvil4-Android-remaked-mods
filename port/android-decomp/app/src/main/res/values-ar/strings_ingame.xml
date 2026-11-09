@@ -367,7 +367,9 @@
     <string name="ingame_shader_clear">إفراغ ذاكرة المظللات المؤقتة</string>
     <string name="ingame_shader_clear_text">سيُعاد تشغيل اللعبة وستُحذف المظللات التي أُنشئت. تنشئها اللعبة من جديد أثناء اللعب، لذا قد تتقطع المشاهد الأولى. سيُفقد التقدم منذ آخر حفظ.</string>
     <string name="ingame_mods">التعديلات</string>
-    <string name="ingame_mods_help">ملفات تحل محل ملفات اللعبة، مثل أشكال الشخصيات المصنوعة لنسخة GameCube. اختر مجلدًا مرتبًا مثل القرص (مثلًا em/pl08.das)؛ ويسري بعد إعادة التشغيل. تعديلات نسخة الحاسوب لا تعمل هنا.</string>
+    <string name="ingame_mods_help">ملفات تحل محل ملفات اللعبة، مثل أشكال الشخصيات. اختر مجلدًا مرتبًا مثل القرص (مثلًا em/pl08.das). المس تعديلًا لتشغيله أو إيقافه: تعديل واحد فقط يستبدل كل ملف، لذا يؤدي تشغيل أحدها إلى إيقاف التعديلات الأخرى التي لها الملفات نفسها. تسري التغييرات بعد إعادة التشغيل.</string>
+    <string name="ingame_mods_changed">تسري تغييرات التعديلات بعد إعادة التشغيل. يضيع التقدم منذ آخر حفظ.</string>
+    <string name="ingame_mods_others_off">أُوقفت لأنها تستبدل الملفات نفسها: %1$s</string>
     <string name="ingame_mods_none">لا توجد تعديلات</string>
     <plurals name="ingame_mod_line">
         <item quantity="zero">&#x200F;%1$s: عدد الملفات %2$d</item>

@@ -16,6 +16,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
+import android.text.TextUtils;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.StyleSpan;
 import android.view.Gravity;
@@ -121,8 +122,12 @@ final class CoreMenu extends Dialog {
     void restartGame();
     /** Mods (ModStore, wish of the project owner, 08.11.2026): pick a folder to copy into game/mods. */
     void addMod();
-    /** The mod packs in game/mods, "name\tfiles" each. */
+    /** The mod packs in game/mods, "name\tfiles\ton" each (on: 1, switched off: 0; ModSwitch). */
     String[] modPacks();
+    /** Switches a pack on or off (ModSwitch.set); the packs that went off with it, null when it failed. */
+    String[] setModOn(String name, boolean on);
+    /** The game restarts so a changed pack counts. */
+    void restartForMods();
     /** Every mod pack goes (the menu asked first); the game restarts so the disc's files count again. */
     void removeMods();
     /** The renderer (port/docs/vulkan-bauplan.md): Vulkan can run here (Android 10, Vulkan 1.1). */
@@ -189,6 +194,7 @@ final class CoreMenu extends Dialog {
   private int cheatBits;  // the cheat switches as the page sent them last (CoreActivity.CHEATS)
   private Button exportAll, saveSlot, loadSlot;
   private TextView modsLine;
+  private MenuLayout.Buttons modsBox;
   private Button modsRemove;
   private final View.OnLayoutChangeListener windowLayout = (v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
     if (r - l != oldR - oldL || b - t != oldB - oldT) resizeWindow();
@@ -565,7 +571,7 @@ final class CoreMenu extends Dialog {
   private void showPage(int next, boolean focus) {
     if (working) return;
     scrollY[page] = scroll.getScrollY(); page = next; ++requestSerial;
-    body.removeAllViews(); graphicsLine = null; cardLine = null; exportAll = null; modsLine = null; modsRemove = null; cheatStatus = null;
+    body.removeAllViews(); graphicsLine = null; cardLine = null; exportAll = null; modsLine = null; modsRemove = null; modsBox = null; cheatStatus = null;
     bindingButtons = null; controllerButton = null; mapStatus = null;
     if (next != CONTROLLER) { captureAction = -1; main.removeCallbacks(captureTimeout); }
     back.setVisibility(page == HOME ? View.GONE : View.VISIBLE);
@@ -1387,6 +1393,7 @@ final class CoreMenu extends Dialog {
     // mods: files that replace the disc's (character skins; wish of the project owner, 08.11.2026)
     heading(R.string.ingame_mods); help(R.string.ingame_mods_help);
     modsLine = text("", 15, false); modsLine.setPadding(dp(MenuLayout.GAP), 0, dp(MenuLayout.GAP), 0); body.addView(modsLine);
+    modsBox = buttonsRow(body);
     MenuLayout.Buttons modButtons = buttonsRow(body);
     cellAction(modButtons, s(R.string.ingame_mod_add), v -> host.addMod());
     modsRemove = cellAction(modButtons, s(R.string.ingame_mods_remove), v -> askRemoveMods()); refreshMods();
@@ -1694,19 +1701,44 @@ final class CoreMenu extends Dialog {
     // Ready adds no information beyond the enabled buttons; keep useful progress/errors visible.
     slotStatus.setVisibility(message == R.string.ingame_instant_ready ? View.GONE : View.VISIBLE);
   }
-  /** The line under "Mods": the packs and their files, or none. */
+  /** Under "Mods": a switch per pack (its name and files, on or off), or "No mods". */
   void refreshMods() {
-    if (modsLine == null || modsRemove == null) return;
+    if (modsLine == null || modsRemove == null || modsBox == null) return;
     String[] packs = host.modPacks();
-    StringBuilder b = new StringBuilder();
+    modsBox.removeAllViews();
     for (String row : packs) {
-      String[] p = row.split("\t", 2);
+      String[] p = row.split("\t", 3);
+      final String name = p[0];
       int files = p.length > 1 ? Integer.parseInt(p[1]) : 0;
-      if (b.length() > 0) b.append('\n');
-      b.append(getContext().getResources().getQuantityString(R.plurals.ingame_mod_line, files, p[0], files));
+      boolean on = p.length < 3 || !"0".equals(p[2]);
+      String label = getContext().getResources().getQuantityString(R.plurals.ingame_mod_line, files, name, files);
+      Button b = cellAction(modsBox, "", v -> switchMod(name, !v.isSelected()));
+      b.setSelected(on);
+      b.setText(getContext().getString(R.string.ingame_toggle_value, label, s(on ? R.string.ingame_on : R.string.ingame_off)));
+      b.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+        @Override public void onInitializeAccessibilityNodeInfo(View view, AccessibilityNodeInfo info) {
+          super.onInitializeAccessibilityNodeInfo(view, info); info.setCheckable(true); info.setChecked(view.isSelected());
+        }
+      });
     }
-    modsLine.setText(packs.length == 0 ? s(R.string.ingame_mods_none) : b.toString());
+    modsLine.setText(s(R.string.ingame_mods_none));
+    modsLine.setVisibility(packs.length == 0 ? View.VISIBLE : View.GONE);
+    modsBox.setVisibility(packs.length == 0 ? View.GONE : View.VISIBLE);
     modsRemove.setEnabled(packs.length > 0);
+  }
+  /** A pack on or off (one pack per file: switching one on may switch others off); counts after a restart. */
+  private void switchMod(String name, boolean on) {
+    String[] off = host.setModOn(name, on);
+    refreshMods();
+    if (off == null) return;
+    String text = s(R.string.ingame_mods_changed);
+    if (off.length > 0) text = getContext().getString(R.string.ingame_mods_others_off, TextUtils.join(", ", off)) + "\n\n" + text;
+    AlertDialog dialog = new AlertDialog.Builder(getContext())
+        .setMessage(text)
+        .setNegativeButton(R.string.ingame_later, null)
+        .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.restartForMods(); }).create();
+    dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
+    dialog.show();
   }
   /** "Remove all mods": the game restarts for it, so the menu asks first. */
   private void askRemoveMods() {

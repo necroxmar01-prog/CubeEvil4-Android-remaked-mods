@@ -482,6 +482,12 @@ static void testDvdMods()
     re4_prim_extra_reset(0);
     re4_prim_extra_reset(1);
 
+    // pack b switched off in the menu (a file .off): pack a's pl09 again
+    CHECK(writeFile(base + "/mods/b/.off", "", 0));
+    re4_set_data_dir(root);
+    CHECK(DVDOpen("em/pl09.das", &fi) == 1 && fi.length == 3);
+    CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "A09", 3) == 0);
+
     // without mods/ the disc's own files again
     CHECK(system(("rm -rf '" + base + "/mods'").c_str()) == 0);
     re4_set_data_dir(root);

@@ -40,6 +40,8 @@ jobs:
           java -cp /tmp/jt com.ast.re4decomp.CoreTouchTests
           javac -d /tmp/jt $src/CoreInput.java $src/ActionMap.java port/android-decomp/tests/ActionMapTests.java
           java -cp /tmp/jt com.ast.re4decomp.ActionMapTests
+          javac -d /tmp/jt $src/ModSwitch.java port/android-decomp/tests/ModSwitchTests.java
+          java -cp /tmp/jt com.ast.re4decomp.ModSwitchTests
 
       - uses: actions/setup-java@v4
         with:
