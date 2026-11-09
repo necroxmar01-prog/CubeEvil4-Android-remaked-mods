@@ -543,10 +543,31 @@ def tpl_found(blob, packs):
     return found
 
 
-def convert_tpl(blob, packs, size, stats):
+GX_SIZE = {0x0: 4, 0x1: 8, 0x2: 8, 0x3: 16, 0x4: 16, 0x5: 16, 0x6: 32, 0xE: 4}  # bits per pixel
+
+
+def disc_textures(gc_tpl):
+    """The disc palette's images: (height, width, format, data) each."""
+    out = []
+    if not gc_tpl or len(gc_tpl) < 12 or struct.unpack_from(">I", gc_tpl, 0)[0] != 0x0020AF30:
+        return out
+    for i in range(struct.unpack_from(">I", gc_tpl, 4)[0]):
+        ho = struct.unpack_from(">I", gc_tpl, 12 + i * 8)[0]
+        h, w, f, data = struct.unpack_from(">HHII", gc_tpl, ho)
+        if f in GX_SIZE:
+            out.append((h, w, f, gc_tpl[data:data + w * h * GX_SIZE[f] // 8]))
+    return out
+
+
+def convert_tpl(blob, packs, size, stats, gc_tpl=None):
     """A PC texture palette (references to imagePackHD) -> a GameCube TPL with the images,
-    scaled to at most `size` pixels a side (grey 8x8 stand-ins for missing ones)."""
+    scaled to at most `size` pixels a side. A missing texture (one of the PC game's own,
+    BIO4/imagePackHD/07000000.pack, which a mod expects on the player's PC): a colour texture
+    takes the disc palette's largest colour image (Leon Asia, 08.11.2026: the face, from the
+    disc as the PC game has it in HD), an intensity one white (no change)."""
     n = struct.unpack_from("<I", blob, 4)[0]
+    disc = disc_textures(gc_tpl)
+    disc_colour = max((t for t in disc if t[2] == 0xE), key=lambda t: t[0] * t[1], default=None)
     images = []
     for i in range(n):
         ho = struct.unpack_from("<I", blob, 12 + i * 8)[0]
@@ -554,9 +575,14 @@ def convert_tpl(blob, packs, size, stats):
         ref, idx = struct.unpack_from("<II", blob, data) if data + 8 <= len(blob) else (0, 0)
         img = packs.image(ref, idx) if packs else None
         gx, enc = ENCODERS.get(fmt, (0xE, enc_cmpr))
+        if img is None and gx == 0xE and disc_colour:
+            dh, dw, df, ddata = disc_colour
+            images.append((dh, dw, df, ddata, ws, wt, mn, mg, bias))
+            stats.append("  texture %d: missing (%#x/%d), the disc's %dx%d" % (i, ref, idx, dw, dh))
+            continue
         if img is None:
             from PIL import Image
-            img = Image.new("RGBA", (8, 8), (128, 128, 128, 255))
+            img = Image.new("RGBA", (8, 8), (128, 128, 128, 255) if gx == 0xE else (255, 255, 255, 255))
             missing = True
         else:
             missing = False
@@ -568,7 +594,8 @@ def convert_tpl(blob, packs, size, stats):
         px = [tuple(raw[k:k + 4]) for k in range(0, len(raw), 4)]
         images.append((th, tw, gx, enc(px, tw, th), ws, wt, mn, mg, bias))
         stats.append("  texture %d: %s %dx%d -> %dx%d format %#x" %
-                     (i, "missing, grey" if missing else "%#x/%d" % (ref, idx), w, h, tw, th, gx))
+                     (i, ("missing (%#x/%d), %s" % (ref, idx, "grey" if gx == 0xE else "white")) if missing
+                      else "%#x/%d" % (ref, idx), w, h, tw, th, gx))
     head = 12 + n * 8
     hdrs = align(head + n * 0x24)
     out = bytearray(hdrs)
@@ -647,7 +674,7 @@ def main(argv=None):
             blob = gc.entry(i)
             print("entry %3d TPL: none of its textures in the mod's packs, the disc's" % i)
         elif kind_pc == "TPL":
-            blob = convert_tpl(blob_pc, packs, a.tex, stats)
+            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i))
             print("entry %3d TPL: %d textures, %d bytes" % (i, len(stats), len(blob)))
             for s in stats:
                 print(s)
