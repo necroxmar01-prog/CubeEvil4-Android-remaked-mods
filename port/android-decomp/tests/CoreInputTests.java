@@ -70,6 +70,46 @@ public final class CoreInputTests {
     in.setAlternate(true);
     check(in.appFunctionOf(L1, false) == CoreInput.APP_NONE && in.appFunctionOf(L3, false) == CoreInput.APP_RELOAD);
     in.setAlternate(false);
+    // the fire key without aiming: a quick reload (takeReload). The alternate controls: R2 alone asks once,
+    // with L2 (aiming) it fires; the layout without them: R2 aims
+    {
+      CoreInput t = new CoreInput();
+      t.setAlternate(true);
+      t.motion(1, 0, 0, 0, 0, 0, 1f, 0, 0);
+      t.pad();
+      check(t.takeReload() && !t.takeReload());
+      t.pad();
+      check(!t.takeReload());  // held: once
+      t.motion(1, 0, 0, 0, 0, 0, 0, 0, 0);
+      t.pad();
+      t.motion(1, 0, 0, 0, 0, 1f, 0, 0, 0);
+      t.pad();
+      t.motion(1, 0, 0, 0, 0, 1f, 1f, 0, 0);
+      check((t.pad()[0] & CoreInput.GC_A) != 0 && !t.takeReload());  // aiming: fire
+      CoreInput u = new CoreInput();
+      u.motion(1, 0, 0, 0, 0, 0, 1f, 0, 0);
+      u.pad();
+      check(!u.takeReload());
+      // a mapping: fire on L2 + R2 (R2 no action of its own) asks; the default's fire key A (the action) does not
+      com.ast.re4decomp.ActionMap fm = com.ast.re4decomp.ActionMap.decode(com.ast.re4decomp.ActionMap.KIND_CONTROLLER,
+          com.ast.re4decomp.ActionMap.AIM + "=" + L2 + ";" + com.ast.re4decomp.ActionMap.FIRE + "=" + L2 + "+" + R2);
+      CoreInput v = new CoreInput();
+      v.setControllerMap(fm);
+      v.key(1, R2, true);
+      v.pad();
+      check(v.takeReload());
+      v.key(1, R2, false);
+      v.key(1, L2, true);
+      v.pad();
+      v.key(1, R2, true);
+      v.pad();
+      check(!v.takeReload());
+      CoreInput w = new CoreInput();
+      w.setControllerMap(com.ast.re4decomp.ActionMap.defaults(com.ast.re4decomp.ActionMap.KIND_CONTROLLER));
+      w.key(1, A, true);
+      w.pad();
+      check(!w.takeReload());
+    }
     // the switch for controllers that send the other layout's codes
     in.setSwapFace(true);
     check(in.gcButton(A) == CoreInput.GC_B && in.gcButton(B) == CoreInput.GC_A

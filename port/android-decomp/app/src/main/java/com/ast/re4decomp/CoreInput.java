@@ -92,6 +92,7 @@ public final class CoreInput {
     final java.util.Set<Integer> held = new java.util.HashSet<>();  // the keys held (the mapping reads them)
     boolean trigL, trigR;   // the triggers past half way, as L2 and R2 for the mapping
     int mapped;             // pad(): the GameCube buttons of the mapping, -1 the layout above
+    boolean fireKeyDown;    // pad(): the mapping's fire key (the second of fire's two) held at the last pad()
     int hats;               // D-pad from the hat axes
     float lx, ly, rx, ry;   // sticks -1..1, y down as Android reports it
     float lt, rt;           // analog triggers 0..1
@@ -106,6 +107,7 @@ public final class CoreInput {
   private boolean latchedL, latchedR, latchedB;  // held by the controller's latching
   private boolean pressedL, pressedR, pressedB;  // the controller's L, R, B at the last pad()
   private boolean clickL, clickR, fire;          // the triggers' digital L/R and fire at the last pad()
+  private boolean reloadAsked;                   // the fire key pressed without aiming: a quick reload (takeReload)
   private ActionMap controllerMap;               // the controller's own mapping, null: the layout above
   private ActionMap keyboardMap = ActionMap.defaults(ActionMap.KIND_KEYBOARD);
   private static final ActionMap KEYBOARD_DEFAULT = ActionMap.defaults(ActionMap.KIND_KEYBOARD);
@@ -533,8 +535,16 @@ public final class CoreInput {
         d.trigL = d.lt >= (d.trigL ? LATCH_RELEASE : LATCH_PRESS);
         d.trigR = d.rt >= (d.trigR ? LATCH_RELEASE : LATCH_PRESS);
         final Device dev = d;
-        int bits = m.buttons(code -> dev.held.contains(code) || code == KEYCODE_BUTTON_L2 && (dev.trigL || dev.l2Key)
-            || code == KEYCODE_BUTTON_R2 && (dev.trigR || dev.r2Key));
+        ActionMap.Held keyHeld = code -> dev.held.contains(code) || code == KEYCODE_BUTTON_L2 && (dev.trigL || dev.l2Key)
+            || code == KEYCODE_BUTTON_R2 && (dev.trigR || dev.r2Key);
+        int bits = m.buttons(keyHeld);
+        // the fire key without aim's key: a quick reload (wish of DevJunior, 08.11.2026: the trigger that fires
+        // does nothing without aiming); not in the game's menus
+        int[] fireKeys = m.keys(ActionMap.FIRE);
+        // (only a key that is no single action of its own: with the default mapping fire's key is A, the action)
+        boolean fireKey = fireKeys.length == 2 && m.singleOn(fireKeys[1]) < 0 && keyHeld.held(fireKeys[1]);
+        if (fireKey && !d.fireKeyDown && !keyHeld.held(fireKeys[0]) && !menu) reloadAsked = true;
+        d.fireKeyDown = fireKey;
         for (int code : d.held) bits |= d.keyboard ? ActionMap.fixedKeyboardButton(code) : dpad(code);
         if (!d.keyboard) bits |= d.hats;
         d.mapped = bits;
@@ -658,7 +668,11 @@ public final class CoreInput {
         fireR2 = Math.max(fireR2, r2);
       }
     }
-    fire = alternate && fireR2 >= (fire ? FIRE_RELEASE : FIRE_PRESS);
+    boolean fireNow = alternate && fireR2 >= (fire ? FIRE_RELEASE : FIRE_PRESS);
+    // the alternate controls' R2 without L1 or L2: a quick reload as well (the core takes the A it presses
+    // too away when the reload starts; with a full weapon A stays the action button)
+    if (fireNow && !fire && !aiming && !menu) reloadAsked = true;
+    fire = fireNow;
     if (fire) buttons |= GC_A;
     // the triggers' digital L/R: only at the end stop, the game reads the analog
     // value (PadRead: any value past the dead zone counts as L/R)
@@ -676,6 +690,13 @@ public final class CoreInput {
     lastButtons = buttons;
     return new int[] {buttons, raw(lx, MAIN_RAW), raw(-ly, MAIN_RAW), raw(rx, C_RAW),
         raw(-ry, C_RAW), Math.round(lt * 255f), Math.round(rt * 255f)};
+  }
+
+  /** Whether the fire key went down without aiming since the last call: reload without aiming (CoreBridge.requestReload). */
+  public boolean takeReload() {
+    boolean r = reloadAsked;
+    reloadAsked = false;
+    return r;
   }
 
   private static int raw(float v, float range) {

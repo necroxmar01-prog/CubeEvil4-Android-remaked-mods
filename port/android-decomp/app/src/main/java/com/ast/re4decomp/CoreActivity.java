@@ -1541,6 +1541,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
 
   private void send() {
     int[] p = input.pad();
+    if (input.takeReload()) CoreBridge.requestReload();  // the fire key without aiming (CoreInput)
     CoreBridge.pad(p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
     String stick = stickWatch.sample(SystemClock.uptimeMillis(), p[1], p[2]);
     if (stick != null) Log.i(TAG, stick);

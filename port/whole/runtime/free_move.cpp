@@ -39,8 +39,9 @@
 //    and B pressed together in the walk routines (the app's reload action or a mapped reload key press both at
 //    once; aiming first and then B stays the game's reload), or the touch controls' RLOAD button (its own
 //    request, re4_reload_request: running holds B already, so R + B would not be new together; also the app's
-//    "Quick reload" key, L1 by default, wish of DevJunior 08.11.2026, which works without "Move while aiming"
-//    as well: Leon then stands while he reloads), start the
+//    "Quick reload" key, L1 by default, and the fire key without aiming (R2 with the alternate controls, or a
+//    mapping's fire key that is no action of its own), wish of DevJunior 08.11.2026, which work without "Move
+//    while aiming" as well: Leon then stands while he reloads), start the
 //    prototype's own direct reload: the weapon routine's reload step (setRno 0/6/4, m_Work0 1) with
 //    PlReloadDirect = 1, as cPlayer::actionSelect does with the reload key type 1 (keyReload; isKamae is 0
 //    then), so Leon does not aim; also while he runs. Meanwhile the main stick moves him at the speed he walks
@@ -271,8 +272,22 @@ void freeMove(cPlayer* pl)
 // R and B pressed together in the walk routines: the prototype's direct reload (cPlayer::actionSelect with the
 // reload key type 1: setRno(0, 6, 4, 0), m_Work0 1; PlReloadDirect 1 = not aiming). Their bits out of this frame
 // (no run, no aim).
+int gEatA;  // frames in which A stays from the game after a quick reload started
+
+void eatA()
+{
+    Joy[0].on &= ~0x100u;
+    Joy[0].trg &= ~0x100u;
+    Key.on &= ~(u64) 0x80;
+    Key.trg &= ~(u64) 0x80;
+}
+
 void reloadInput(cPlayer* pl)
 {
+    if (gEatA > 0) {
+        gEatA--;
+        eatA();  // held longer, A has no new press for the game afterwards
+    }
     const u32 both = 0x20 | 0x200;  // R, B
     const bool together = re4_aim_move_on() && (Joy[0].trg & both) == both;
     const bool asked = gReloadAsked.exchange(false);
@@ -287,6 +302,12 @@ void reloadInput(cPlayer* pl)
         Joy[0].trg &= ~both;
         Key.on &= ~(u64) 0x40000000;  // the run key (B)
         Key.trg &= ~(u64) 0x40000000;
+    }
+    if (asked) {
+        // the alternate controls' R2 asks with A pressed (the fire key without aiming), which reaches the game
+        // in this frame or the next: no action or shot besides (eatA)
+        gEatA = 6;
+        eatA();
     }
 }
 
