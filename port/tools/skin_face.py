@@ -29,9 +29,12 @@ import skin_graft as G  # noqa: E402
 HEAD, HEAD_TPL, HAIR = 2, 3, 5
 
 
-def uv_positions(blob, mat, w, h):
-    """Per texel (h x w) of texture mat the model position on its triangle (nan where none)."""
-    P, _, UV = U.gc_triangles(blob, mat)
+def uv_positions(blobs, mat, w, h):
+    """Per texel (h x w) of texture mat the model position on its triangle (nan where none), over the given models
+    (Leon's head and his face with its shapes, entry 4, when that has one)."""
+    tris = [U.gc_triangles(b, mat) for b in blobs]
+    P = np.concatenate([t[0] for t in tris if len(t[0])]) if any(len(t[0]) for t in tris) else np.zeros((0, 3, 3))
+    UV = np.concatenate([t[2] for t in tris if len(t[0])]) if len(P) else np.zeros((0, 3, 2))
     pos = np.full((h, w, 3), np.nan)
     for k in range(len(P)):
         sx, sy = UV[k][:, 0] * w, UV[k][:, 1] * h
@@ -86,18 +89,31 @@ def blur1d(m, sigma, axis):
     return np.apply_along_axis(lambda v: np.convolve(v, g, "valid"), axis, np.pad(m, pad, mode="edge"))
 
 
-def strands(rgba, size, seed=7):
+def strands(rgba, size, seed=7, equalize=False):
     """The hair texture enlarged to size and its brightness redrawn as strands: blurred along them (the atlas runs
     them up and down) so the old texture's 4x4 blocks no longer show once it is lighter, then fine lighter and darker
     strands (noise per column, long along them) for the highlights."""
     img = np.asarray(Image.fromarray(rgba, "RGBA").resize((size, size), Image.LANCZOS)).astype(np.float32)
     lum = img[..., 0] * 0.3 + img[..., 1] * 0.59 + img[..., 2] * 0.11
     used = lum > 2
+    if equalize and used.any():
+        # each patch to the atlas's mean brightness (its own large-scale brightness divided out, only over hair)
+        um = used.astype(np.float32)
+        r = size / 24.0
+        big = blur1d(blur1d(lum * um, r, 0), r, 1) / np.maximum(blur1d(blur1d(um, r, 0), r, 1), 1e-3)
+        lum_eq = np.where(used, lum / np.maximum(big, 1.0) * float(lum[used].mean()), lum)
+        ratio = np.where(lum > 1e-3, lum_eq / np.maximum(lum, 1e-3), 1.0)
+        for c in range(3):
+            img[..., c] = np.where(used, np.clip(img[..., c] * ratio, 0, 255), img[..., c])
+        lum = lum_eq
+    if equalize and used.any():
+        # the patches' own tone kept only weakly: an even base with the strands drawn on it
+        lum = np.where(used, 0.25 * lum + 0.75 * float(lum[used].mean()), lum)
     soft = blur1d(blur1d(lum, size / 64.0, 0), 0.6, 1)
     rng = np.random.default_rng(seed)
     streak = blur1d(blur1d(rng.standard_normal(lum.shape), size / 24.0, 0), 0.5, 1)
     streak /= streak.std() + 1e-6
-    new = np.clip(soft * (1 + 0.28 * streak), 0, 255)
+    new = np.clip(soft * (1 + (0.35 if equalize else 0.28) * streak), 0, 255)
     ratio = np.where(lum > 1e-3, new / np.maximum(lum, 1e-3), 1.0)
     out = img.copy()
     for c in range(3):
@@ -216,34 +232,50 @@ def main(argv=None):
     ap.add_argument("out")
     ap.add_argument("--hair", help="shadow:middle:highlight colours, e.g. 40,32,24:96,80,60:170,150,118")
     ap.add_argument("--stubble", type=float, default=0.0, help="0 none .. 1 full")
+    ap.add_argument("--head-from", metavar="SKIN.drs",
+                    help="Leon's whole head (head, palette, face with its shapes, hair: entries 2..5) from another "
+                         "converted skin first (DevJunior, 09.11.2026: the hair of Resident Evil Requiem, from the "
+                         "Leon Requiem mod)")
+    ap.add_argument("--equalize", action="store_true",
+                    help="the hair texture's patches of different brightness (tiles of the mod's atlas) evened out "
+                         "before the strands are drawn")
     ap.add_argument("--sculpt-face", type=float, default=0.0, metavar="AMOUNT",
                     help="the face's shape towards the references (1: as measured; 0 none)")
     ap.add_argument("--hair-volume", type=float, default=0.0, help="the hair fuller on the scalp (model units)")
     ap.add_argument("--hair-length", type=float, default=0.0, help="the hanging hair longer (model units)")
-    ap.add_argument("--hair-size", type=int, default=512, help="the hair texture's size (power of two, <= 1024)")
+    ap.add_argument("--hair-size", type=int, default=512, help="the hair texture's size (power of two, <= 1024), its strands redrawn; 0: as it is (a texture with "
+                         "good strands of its own)")
     ap.add_argument("--face-size", type=int, default=512, help="the face texture's size (power of two, <= 1024)")
     a = ap.parse_args(argv)
     arc = U.Archive(Path(a.inp).read_bytes(), ">")
     entries = [arc.entry(i) for i in range(len(arc.offsets))]
+    if a.head_from:
+        src = U.Archive(Path(a.head_from).read_bytes(), ">")
+        for e in (HEAD, HEAD_TPL, 4, HAIR):  # the head, its palette, the face with its shapes, the hair
+            entries[e] = src.entry(e)
+        print("head, face and hair (entries 2..5) from %s" % a.head_from)
     head = entries[HEAD]
     imgs = G.tpl_images(entries[HEAD_TPL])
     decode = lambda k: np.asarray(U.decode_gx(*struct.unpack_from(">HHI", imgs[k][0]), imgs[k][1]).convert("RGBA"))
     # the head's colour textures: the face (the one with most texels, not the eyes'), the hair's
-    mats = sorted({head[p + 0xC] for p in G.parts(head) if not G.is_empty(head, p)})
-    face = max(mats, key=lambda m: len(U.gc_triangles(head, m)[0]))
+    mats = {head[p + 0xC] for p in G.parts(head) if not G.is_empty(head, p)}
+    mats |= {entries[4][p + 0xC] for p in G.parts(entries[4]) if not G.is_empty(entries[4], p)}
+    face = max(mats, key=lambda m: len(U.gc_triangles(head, m)[0]) + len(U.gc_triangles(entries[4], m)[0]))
     hair_mats = sorted({entries[HAIR][p + 0xC] for p in G.parts(entries[HAIR]) if not G.is_empty(entries[HAIR], p)})
     stops = [[float(v) for v in c.split(",")] for c in a.hair.split(":")] if a.hair else None
     if stops:
         for m in hair_mats:
-            src = strands(decode(m), a.hair_size)
+            src = strands(decode(m), a.hair_size, equalize=a.equalize) if a.hair_size else decode(m)
             imgs[m] = G.encode_image(Image.fromarray(hair_colour(src, stops), "RGBA"), imgs[m][0])
-            print("hair texture %d recoloured (%dx%d, strands)" % (m, src.shape[1], src.shape[0]))
+            print("hair texture %d recoloured (%dx%d%s)" % (m, src.shape[1], src.shape[0], ", strands" if a.hair_size else ""))
     if a.sculpt_face:
-        P = G.positions(head)
-        P2 = sculpt_face(P, a.sculpt_face)
-        head = entries[HEAD] = set_positions(head, P2)
-        print("face sculpted: %d positions, at most %.1f" % (int((np.abs(P2 - P).max(1) > 0.05).sum()),
-                                                            float(np.abs(P2 - P).max())))
+        for e in (HEAD, 4):  # the head and the face with its shapes (their deltas stay as they are)
+            P = G.positions(entries[e])
+            P2 = sculpt_face(P, a.sculpt_face)
+            entries[e] = set_positions(entries[e], P2)
+            print("entry %d sculpted: %d positions, at most %.1f" % (e, int((np.abs(P2 - P).max(1) > 0.05).sum()),
+                                                                    float(np.abs(P2 - P).max())))
+        head = entries[HEAD]
     if a.hair_volume or a.hair_length:
         P = G.positions(entries[HAIR])
         P2 = sculpt_hair(P, a.hair_volume, a.hair_length)
@@ -253,7 +285,7 @@ def main(argv=None):
     img = decode(face)
     if a.face_size and a.face_size != img.shape[1]:
         img = np.asarray(Image.fromarray(img, "RGBA").resize((a.face_size, a.face_size), Image.LANCZOS))
-    pos = uv_positions(head, face, img.shape[1], img.shape[0])
+    pos = uv_positions([head, entries[4]], face, img.shape[1], img.shape[0])
     if stops:
         lum = img[..., 0] * 0.3 + img[..., 1] * 0.59 + img[..., 2] * 0.11
         y, z = pos[..., 1], pos[..., 2]
