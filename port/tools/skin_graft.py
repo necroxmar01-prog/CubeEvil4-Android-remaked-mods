@@ -213,22 +213,106 @@ def inflate(blob, dist, physique="even"):
     return moved
 
 
-def lower_collar(blob, factor):
-    """A high collar lower: the model's positions around the neck (|x| < 85, above 1565, Leon's neck joint 1560;
-    the head's model reaches down to about 1596) squeezed towards 1565 by factor (device test 09.11.2026: the
-    neck hardly showed). Returns how many positions moved."""
+def part_positions(blob, mats):
+    """Position indices the parts with these colour textures draw (their primitive streams)."""
     u = lambda o: struct.unpack_from(">I", blob, o)[0]
-    shift = blob[0x28]
+    per = 4 if u(0x20) & 0x80000000 else 3
+    out = set()
+    for p in parts(blob):
+        size, mat = u(p + 0x18), blob[p + 0xC]
+        s, e = p + 0x20, p + 0x20 + size
+        while s < e and blob[s] != 0:
+            cnt = struct.unpack_from(">H", blob, s + 1)[0]
+            if mat in mats:
+                out.update(struct.unpack_from(">H", blob, s + 3 + k * per * 2)[0] for k in range(cnt))
+            s += 3 + cnt * per * 2
+    return out
+
+
+def positions(blob):
+    import numpy as np
     nv = struct.unpack_from(">H", blob, 0x38)[0]
-    vo = u(0x30)
+    vo = struct.unpack_from(">I", blob, 0x30)[0]
+    return np.frombuffer(blob, ">i2", nv * 4, vo).reshape(-1, 4)[:, :3] / float(1 << blob[0x28])
+
+
+def set_position(blob, i, q):
+    sc = float(1 << blob[0x28])
+    vo = struct.unpack_from(">I", blob, 0x30)[0]
+    struct.pack_into(">3h", blob, vo + i * 8, *[max(-32768, min(32767, int(round(c * sc)))) for c in q])
+
+
+def cyl(q):
+    """Leon's torso in cylinder coordinates around his spine (x 0, z -12): angle (degrees), height, radius."""
+    import numpy as np
+    return np.degrees(np.arctan2(q[..., 0], q[..., 2] + 12.0)), q[..., 1], np.hypot(q[..., 0], q[..., 2] + 12.0)
+
+
+def hide_under(blob, mats, cover_tris, depth=15.0, step_a=4.0, step_y=10.0):
+    """The parts with colour textures mats pulled in towards the spine by depth where another layer covers them
+    (cover_tris: its triangles, n x 3 x 3), so the two do not show through each other (device test 09.11.2026:
+    \"two shirts\": Black Coat's front and collar over Leon Requiem's shirt). Covered: the point's cell (angle step_a,
+    height step_y) and its four neighbours are covered (the edges stay, overlapping a little: no gap). Returns how
+    many positions moved."""
+    import numpy as np
+    cov = set()
+    for t in cover_tris:
+        n = int(max(np.linalg.norm(t[1] - t[0]), np.linalg.norm(t[2] - t[0]), np.linalg.norm(t[2] - t[1])) / 3) + 2
+        for i in range(n + 1):
+            for j in range(n + 1 - i):
+                pt = t[0] + (t[1] - t[0]) * i / n + (t[2] - t[0]) * j / n
+                ang, y, _ = cyl(pt)
+                cov.add((int(np.floor(ang / step_a)), int(np.floor(y / step_y))))
+    P = positions(blob)
     moved = 0
-    for i in range(nv):
-        x, y, z = struct.unpack_from(">3h", blob, vo + i * 8)
-        sc = float(1 << shift)
-        if abs(x / sc) < 85 and y / sc > 1565:
-            y2 = 1565 + (y / sc - 1565) * factor
-            struct.pack_into(">h", blob, vo + i * 8 + 2, int(round(y2 * sc)))
+    for i in sorted(part_positions(blob, mats)):
+        ang, y, r = cyl(P[i])
+        c = (int(np.floor(ang / step_a)), int(np.floor(y / step_y)))
+        if all(((c[0] + da) % int(360 / step_a), c[1] + dy) in cov or (c[0] + da, c[1] + dy) in cov
+               for da, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))):
+            k = max(0.0, (r - depth) / r) if r > 1e-3 else 1.0
+            q = P[i].copy()
+            q[0] *= k
+            q[2] = (q[2] + 12.0) * k - 12.0
+            set_position(blob, i, q)
             moved += 1
+    return moved
+
+
+def neck_edge(head_blob):
+    """The lowest point of the head's model per 30 degrees around the neck (x 0, z -20): where its neck ends."""
+    import numpy as np
+    P = positions(head_blob)
+    q = P[sorted(part_positions(head_blob, set(range(256))))]
+    q = q[(np.hypot(q[:, 0], q[:, 2] + 20) < 110) & (q[:, 1] < 1700)]
+    ang = np.degrees(np.arctan2(q[:, 0], q[:, 2] + 20))
+    edge = []
+    for a0 in range(-180, 180, 30):
+        m = (ang >= a0) & (ang < a0 + 30)
+        edge.append(float(q[m][:, 1].min()) if m.any() else 1596.0)
+    return edge
+
+
+def lower_collar(blob, factor, edge=None, margin=8.0):
+    """A high collar lower: the model's positions around the neck (|x| < 85, above 1565, Leon's neck joint 1560)
+    squeezed towards 1565 by factor (device test 09.11.2026: the neck hardly showed), but never below the head's
+    neck edge + margin at their angle (edge: neck_edge; the head's model ends there, below it the neck would float).
+    Returns how many positions moved."""
+    import numpy as np
+    P = positions(blob)
+    moved = 0
+    for i, (x, y, z) in enumerate(P):
+        if abs(x) < 85 and y > 1565:
+            y2 = 1565 + (y - 1565) * factor
+            if edge is not None:
+                a = (np.degrees(np.arctan2(x, z + 20)) + 180) % 360
+                k = a / 30 - 0.5  # between the sectors' middles
+                k0 = int(np.floor(k)) % 12
+                f = k - np.floor(k)
+                y2 = max(y2, edge[k0] * (1 - f) + edge[(k0 + 1) % 12] * f + margin)
+            if y2 < y - 0.5:
+                set_position(blob, i, (x, y2, z))
+                moved += 1
     return moved
 
 
@@ -280,7 +364,11 @@ def main(argv=None):
                     help="colour textures SLOTS of the target's palette TPL by their brightness in this mean colour "
                          "(e.g. 1:2,13,16=40,43,52: a shirt and its matching parts)")
     ap.add_argument("--lower-collar", action="append", default=[], metavar="ENTRY:FACTOR",
-                    help="a model's collar squeezed down towards the neck's base (factor 0.5: half as high)")
+                    help="a model's collar squeezed down towards the neck's base (factor 0.5: half as high), never "
+                         "below where the head's model (entry 2) ends + 8")
+    ap.add_argument("--hide-under", action="append", default=[], metavar="ENTRY:MATS=ENTRY2:MATS2",
+                    help="pull ENTRY's parts with colour textures MATS in where ENTRY2's MATS2 cover them (two "
+                         "shirts: keep the outer one, e.g. 12:16=0:2,13)")
     ap.add_argument("--smooth", type=float, default=0.0, metavar="RADIUS",
                     help="with --recolor: plain cloth, the fabric's blotches blurred away (radius in texels, e.g. 6)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
@@ -364,10 +452,22 @@ def main(argv=None):
         n = inflate(blob, float(dist), a.physique)
         entries[int(e)] = bytes(blob)
         print("entry %s: %d positions pushed out by up to %s" % (e, n, dist))
+    for spec in a.hide_under:
+        inner, outer = spec.split("=")
+        e, mats = inner.split(":")
+        e2, mats2 = outer.split(":")
+        tris = []
+        for m in (int(x) for x in mats2.split(",")):
+            P, _, _ = U.gc_triangles(entries[int(e2)], m)
+            tris += list(P)
+        blob = bytearray(entries[int(e)])
+        n = hide_under(blob, {int(x) for x in mats.split(",")}, tris)
+        entries[int(e)] = bytes(blob)
+        print("entry %s: %d positions of textures %s pulled under entry %s's %s" % (e, n, mats, e2, mats2))
     for spec in a.lower_collar:
         e, f = spec.split(":")
         blob = bytearray(entries[int(e)])
-        n = lower_collar(blob, float(f))
+        n = lower_collar(blob, float(f), neck_edge(entries[2]))
         entries[int(e)] = bytes(blob)
         print("entry %s: collar lowered, %d positions" % (e, n))
     for spec in a.recolor:
