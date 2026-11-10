@@ -167,10 +167,21 @@ def stubble_weight(pos, prof=None, cheeks=1.0):
     return np.nan_to_num(w)
 
 
-def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0, cheeks=1.0):
-    """Short beard; grey: the share of grey hairs among the dark (0 none .. 1 all; salt and pepper)."""
+def smooth_noise(pos, scale=1.0):
+    """A smooth noise over the model (sines of the position: no seams between the texture's islands), about -1..1."""
+    x, y, z = (np.nan_to_num(pos[..., c]) * scale for c in range(3))
+    n = (np.sin(x * 0.31 + 1.3) * np.sin(y * 0.27 + 0.7) + np.sin(x * 0.17 - y * 0.21 + 2.0) * np.sin(z * 0.23 + 0.4) +
+         np.sin(x * 0.53 + z * 0.19 + 0.9) * np.sin(y * 0.47 - 1.1) * 0.6)
+    return n / 1.6
+
+
+def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0, cheeks=1.0, patchy=0.0):
+    """Short beard; grey: the share of grey hairs among the dark (0 none .. 1 all; salt and pepper); patchy: thinner
+    in patches (0 even .. 1 patches almost bare)."""
     a = rgba.astype(np.float32)
     w = stubble_weight(pos, prof, cheeks) * strength
+    if patchy > 0:
+        w = w * (1 - patchy * smoothstep(-0.3, 0.6, smooth_noise(pos)))
     rng = np.random.default_rng(seed)
     noise = rng.random(w.shape)
     # dots a texel wide, a little blurred into the skin
@@ -382,6 +393,39 @@ AGE_SHADOWS = {
 }
 
 
+# the eyes' sockets (deep-set eyes, Infinite Darkness): under the brows, the inner corners, the outer corners
+SOCKETS = {
+    "re4": [((29, 1726), 11, 0.14), ((14, 1716), 6, 0.12), ((44, 1718), 7, 0.08)],
+    "remake": [((29, 1732), 11, 0.16), ((13, 1722), 6, 0.14), ((44, 1724), 7, 0.09)],
+}
+
+
+def add_skin(rgba, pos, pale=0.0, sockets=0.0, pores=0.0, profile="re4"):
+    """The skin of the references (Infinite Darkness): paler and cooler (less rosy, the lips a little), deeper eye
+    sockets, a fine grain of pores over the face."""
+    a = rgba.astype(np.float32)
+    x, y = np.nan_to_num(pos[..., 0]), np.nan_to_num(pos[..., 1])
+    ok = np.isfinite(pos[..., 0])
+    out = a.copy()
+    if pale > 0:
+        g = out[..., :3].mean(-1, keepdims=True)
+        out[..., :3] = out[..., :3] + (g - out[..., :3]) * (0.35 * pale * ok)[..., None]
+        out[..., :3] *= 1 + pale * ok[..., None] * np.array((-0.03, 0.0, 0.035))
+    if sockets > 0:
+        dark = np.zeros(x.shape)
+        q = np.stack([x, y, np.zeros_like(x)], -1)
+        for (cx, cy), r, depth in SOCKETS[profile]:
+            for sgn in (1, -1):
+                dark = np.maximum(dark, depth * bump(q, (sgn * cx, cy, 0), r))
+        out[..., :3] *= (1 - sockets * dark * ok)[..., None]
+    if pores > 0:
+        rng = np.random.default_rng(23)
+        n = blur1d(blur1d(rng.standard_normal(x.shape), 0.7, 0), 0.7, 1)
+        n /= n.std() + 1e-6
+        out[..., :3] *= (1 + 0.05 * pores * n * ok)[..., None]
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
 def add_age(rgba, pos, strength=1.0, profile="re4"):
     """Creases of age, shadows under the eyes and a weathered skin on the face's texture (front texels only)."""
     a = rgba.astype(np.float32)
@@ -444,6 +488,11 @@ def main(argv=None):
     ap.add_argument("--stubble-cheeks", type=float, default=1.0,
                     help="how much stubble on the cheeks above the jaw line (1 all .. 0 none: a light beard on the "
                          "chin, the jaw and the upper lip)")
+    ap.add_argument("--stubble-patchy", type=float, default=0.0,
+                    help="the stubble thinner in patches (0 even .. 1 patches almost bare)")
+    ap.add_argument("--pale", type=float, default=0.0, help="the skin paler and cooler (0 as it is .. 1)")
+    ap.add_argument("--sockets", type=float, default=0.0, help="deeper eye sockets (0 none .. 1)")
+    ap.add_argument("--pores", type=float, default=0.0, help="a fine grain of pores over the face (0 none .. 1)")
     ap.add_argument("--stubble-grey", type=float, default=0.0,
                     help="the share of grey hairs in the stubble (0 none .. 1 all; salt and pepper)")
     a = ap.parse_args(argv)
@@ -498,13 +547,16 @@ def main(argv=None):
         painted = np.nan_to_num((y > 1752) | ((y > 1690) & (z < 40)), nan=False).astype(bool) & (lum < 60)
         img = hair_colour(img, stops, painted)
         print("face texture %d: %d hair texels recoloured" % (face, int(painted.sum())))
+    if a.pale > 0 or a.sockets > 0 or a.pores > 0:
+        img = add_skin(img, pos, a.pale, a.sockets, a.pores, a.face_model)
+        print("face texture %d: pale %.2f, sockets %.2f, pores %.2f" % (face, a.pale, a.sockets, a.pores))
     if a.age > 0:
         img = add_age(img, pos, a.age, a.face_model)
         print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
         img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
                           prof=PROFILES[a.face_model], grey=a.stubble_grey,
-                          cheeks=a.stubble_cheeks)
+                          cheeks=a.stubble_cheeks, patchy=a.stubble_patchy)
         print("face texture %d: stubble %.2f" % (face, a.stubble))
     imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
