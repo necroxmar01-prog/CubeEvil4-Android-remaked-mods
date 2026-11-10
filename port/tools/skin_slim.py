@@ -28,6 +28,9 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
                      hidden when COVER lies in front of it, out from the skeleton within 60. With @MATS only the parts
                      with these colour textures, and COVER = ENTRY: the model's other parts cover them (a shirt inside
                      its jacket's model).
+--inside ENTRY:COVER pushes ENTRY's positions above y 1150 that poke out through COVER (within 25 of it, outside
+                     it) 5 under it (a shirt through a jacket's shoulders); the jacket's open front, further away,
+                     and the legs stay.
 --cut ENTRY:Y        drops ENTRY's triangles that reach above y Y (the body's upper half under a jacket model that
                      brings its own shirt).
 --compact ENTRY      drops what nothing in ENTRY draws any more (after skin_graft.py --drop).
@@ -388,6 +391,28 @@ def hide(model, cover, reach=60.0, mats=None):
     return (rebuild(model, kept) if after < before else model), before, after
 
 
+def inside(model, cover, near=25.0, inset=5.0, low=1150.0):
+    """Pushes `model`'s positions that poke out through `cover` (a shirt through a jacket's shoulders) back under it:
+    a position whose nearest point of `cover` lies within `near` and inwards of it (towards the skeleton) goes `inset`
+    under that point. Where the cover is further (the jacket's open front) the model stays. Returns (model, how many)."""
+    from scipy.spatial import cKDTree
+    P = G.positions(model)
+    C = G.positions(cover)
+    d, j = cKDTree(C).query(P)
+    dirs, _ = outward(P)
+    out = bytearray(model)
+    n = 0
+    for i in range(len(P)):
+        if d[i] > near or P[i][1] < low:
+            continue  # far from the cover, or below the jacket's body (the legs by its holsters stay)
+        along = float((P[i] - C[j[i]]) @ dirs[i])
+        if along <= -inset:
+            continue
+        G.set_position(out, i, P[i] - dirs[i] * (along + inset))
+        n += 1
+    return bytes(out), n
+
+
 def cut(model, top):
     """Drops the triangles of `model` that reach above y `top` (the body's upper half under a jacket model that brings
     its own shirt). Returns (model, triangles before, after)."""
@@ -478,6 +503,8 @@ def main(argv=None):
     ap.add_argument("--carry", action="append", default=[], metavar="ENTRY:LIST")
     ap.add_argument("--hide", action="append", default=[], metavar="ENTRY[@MATS]:COVER",
                     help="drop ENTRY's triangles (with @MATS: of these parts) that model COVER hides")
+    ap.add_argument("--inside", action="append", default=[], metavar="ENTRY:COVER",
+                    help="push ENTRY's positions that poke out through model COVER back under it")
     ap.add_argument("--cut", action="append", default=[], metavar="ENTRY:Y",
                     help="drop ENTRY's triangles that reach above y Y")
     ap.add_argument("--compact", action="append", default=[], metavar="ENTRY",
@@ -548,6 +575,10 @@ def main(argv=None):
         entries[e], before, after = hide(entries[e], None if c == e else entries[c], mats=mats)
         print("entry %d: %d of %d triangles hidden under entry %d dropped, %d positions left" %
               (e, before - after, before, c, len(G.positions(entries[e]))))
+    for spec in a.inside:
+        e, c = (int(x) for x in spec.split(":"))
+        entries[e], n = inside(entries[e], entries[c])
+        print("entry %d: %d positions pushed back under entry %d" % (e, n, c))
     for spec in a.cut:
         e, y = spec.split(":")
         entries[int(e)], before, after = cut(entries[int(e)], float(y))
