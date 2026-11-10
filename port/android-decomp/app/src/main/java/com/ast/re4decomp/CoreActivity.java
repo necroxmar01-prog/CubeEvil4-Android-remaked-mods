@@ -146,8 +146,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       BACK_LEFT = "backLeft", BACK_OVER = "backOver", BACK_EVENTS = "backEvents";
   // Leon's melee moves (wish of DevJunior, 09.11.2026; the core's runtime/melee.cpp): "Neck break" (bit 24 of the
   // placement word), a mod pack's own melee animations (on unless bit 25) and the axe strike on a kneeling enemy
-  // (bit 26)
-  static final String MELEE_NECK = "meleeNeck", MELEE_MODS = "meleeMods", MELEE_AXE = "meleeAxe";
+  // (bit 26); the random mix among them and the game's own (on unless bit 27)
+  static final String MELEE_NECK = "meleeNeck", MELEE_MODS = "meleeMods", MELEE_AXE = "meleeAxe",
+      MELEE_RANDOM = "meleeRandom";
   /** The placement word for CoreBridge.setBackPlacement (the core's runtime/wardrobe.cpp adjustOf). */
   static int backPlacement(SharedPreferences p) {
     final int slant = Math.max(10, Math.min(80, p.getInt(BACK_SLANT, 45)));
@@ -156,7 +157,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     return slant | height << 7 | distance << 14 | (p.getBoolean(BACK_LEFT, false) ? 1 << 21 : 0)
         | (p.getBoolean(BACK_OVER, false) ? 1 << 22 : 0) | (p.getBoolean(BACK_EVENTS, false) ? 1 << 23 : 0)
         | (p.getBoolean(MELEE_NECK, false) ? 1 << 24 : 0) | (p.getBoolean(MELEE_MODS, true) ? 0 : 1 << 25)
-        | (p.getBoolean(MELEE_AXE, false) ? 1 << 26 : 0);
+        | (p.getBoolean(MELEE_AXE, false) ? 1 << 26 : 0) | (p.getBoolean(MELEE_RANDOM, true) ? 0 : 1 << 27);
   }
   static final float AIM_SPEED_MIN = 0.5f, AIM_SPEED_MAX = 3f, AIM_SPEED_STEP = 0.25f;
   // the menu's "Field of view" (PLAYER VIEW; wish of the project owner, 05.11.2026): degrees added to the shoulder

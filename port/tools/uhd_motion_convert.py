@@ -2,7 +2,7 @@
 """Converts motions (FCV) of the PC release (Resident Evil 4 UHD mods, little-endian) to the GameCube's form and
 packs them as the melee archive of a mod (wish of DevJunior, 09.11.2026: custom melee animations).
 
-    uhd_motion_convert.py OUT/melee/melee.dat --punch "Super Punch.fcv" --kick "Super Kick.fcv"
+    uhd_motion_convert.py OUT/melee/melee.dat --punch "Super Punch.fcv" --kick "Super Kick.fcv" [--punch ... --kick ...]
     uhd_motion_convert.py --check GC.drs PC.udas          (every motion both archives hold: converted == disc)
 
 MotionData (port/whole/runtime/formats/formats_model.cpp convertMotionAt): u16 maxFrame, u8 joints, u16 kind[n]
@@ -10,9 +10,10 @@ MotionData (port/whole/runtime/formats/formats_model.cpp convertMotionAt): u16 m
 curves; a joint has three axes of u16 count, u16 frames[count] and count keys of the kind's size (kind >> 12: 12,
 8, 6, -, 10, 6, 4, -, 9, 5, 3 bytes: a value and two slopes, KEY_WORDS). The PC stores every word little-endian.
 
-The melee archive (runtime/melee.cpp reads mods/<pack>/melee/melee.dat): a DAT of two FCV entries, 0 the move on a
-standing enemy (the kick's place, enemy archives' entry 0x29D), 1 the move on a kneeling one (Leon's archive, entry
-0x25); an empty entry keeps the game's own motion. Mod and disc files never go into the repository."""
+The melee archive (runtime/melee.cpp reads mods/<pack>/melee/melee.dat): a DAT of FCV entries, the even ones moves on
+a standing enemy (the kick's place, enemy archives' entry 0x29D), the odd ones on a kneeling one (Leon's archive,
+entry 0x25), up to 8 of each (--punch / --kick repeated); an empty entry is none. The game draws each move among
+them and its own (the app's random mix). Mod and disc files never go into the repository."""
 import argparse
 import struct
 import sys
@@ -100,18 +101,23 @@ def check(gc_path, pc_path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out", nargs="?")
-    ap.add_argument("--punch", help="PC motion for a standing enemy (the kick's place)")
-    ap.add_argument("--kick", help="PC motion for a kneeling enemy")
+    ap.add_argument("--punch", action="append", default=[], help="PC motion for a standing enemy (the kick's place)")
+    ap.add_argument("--kick", action="append", default=[], help="PC motion for a kneeling enemy")
     ap.add_argument("--check", nargs=2, metavar=("GC.drs", "PC.udas"))
     a = ap.parse_args(argv)
     if a.check:
         sys.exit(0 if check(*a.check) else 1)
-    entries = [convert(Path(p).read_bytes()) if p else b"" for p in (a.punch, a.kick)]
-    body = U.build_body(entries, [b"FCV\x00", b"FCV\x00"])
+    if len(a.punch) > 8 or len(a.kick) > 8 or not (a.punch or a.kick):
+        sys.exit("one to eight motions of each kind")
+    entries = []
+    for k in range(max(len(a.punch), len(a.kick))):
+        for moves in (a.punch, a.kick):
+            entries.append(convert(Path(moves[k]).read_bytes()) if k < len(moves) else b"")
+    body = U.build_body(entries, [b"FCV\x00"] * len(entries))
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_bytes(body)
-    print("%s: %d bytes (standing %d, kneeling %d)" % (a.out, len(body), len(entries[0]), len(entries[1])))
-
+    print("%s: %d bytes, %d moves on a standing enemy, %d on a kneeling one" % (a.out, len(body), len(a.punch),
+                                                                             len(a.kick)))
 
 if __name__ == "__main__":
     main()

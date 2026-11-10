@@ -141,7 +141,8 @@ void re4_aim_set(int bits)
 {
     if (bits < 0) {  // bit 31: the second word
         re4_back_adjust_set(bits & 0x00FFFFFF);
-        re4_melee_set((bits >> 24) & 7);  // bit 24 "Neck break", bit 25 the mods' melee motions off, bit 26 "Axe strike"
+        re4_melee_set((bits >> 24) & 15);  // bit 24 "Neck break", bit 25 the mods' melee motions off, bit 26 "Axe strike",
+                                           // bit 27 the random mix off
         return;
     }
     // bits 22..23 "Leon's outfit" (0 the story's, 1 the first, 2 the second), bit 30 "Weapon on the back"

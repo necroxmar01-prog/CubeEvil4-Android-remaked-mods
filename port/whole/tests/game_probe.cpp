@@ -2536,12 +2536,14 @@ extern "C" int re4probe_wardrobe(void)
 }
 
 // Leon's melee moves (runtime/melee.cpp, patch 0904): the game's own motions without a mod and for the other
-// characters; a mod's archive (a standing move of one joint, no kneeling one) read and converted, switched off by
-// the app's bit 25; no neck break without HUNK's motions (the test has no em/em60.drs).
+// characters; a mod's archive (two moves on a standing enemy, none on a kneeling one) read and converted, the
+// random mix drawing the game's and both, never the same twice in a row; the mix off: the mod's first; switched
+// off by the app's bit 25; no neck break without HUNK's motions (the test has no em/em60.drs); the axe strike.
 extern "C" void* re4_melee_motion(int kind, void* game);
 extern "C" int re4_melee_neck(int special);
 extern "C" void re4_mod_melee_path_set(const char* path);
 extern "C" void* re4_melee_kneel(void* game);
+extern "C" void re4_melee_reset(void);
 extern "C" int re4probe_melee(const char* file)
 {
     if (!pG) {
@@ -2551,24 +2553,30 @@ extern "C" int re4probe_melee(const char* file)
     int bad = 0;
     int game;
     pG->pl_type = 0;
+    re4_melee_reset();
     re4_aim_set((int) 0x80000000u);
     bad |= re4_melee_motion(0, &game) != &game || re4_melee_motion(1, &game) != &game ? 1 : 0;
-    // count 2, offsets 0x20 / 0x60, tags; the motion: last frame 5, one joint of kind 0x0001 (float keys), size
-    // word, curves at 0x10: three axes of one key at frame 0
-    u8 dat[0x60];
+    // count 4: standing, kneeling (empty), standing, kneeling (empty); each motion: last frame 5 / 6, one joint of
+    // kind 0x0001 (float keys), size word, curves at 0x10: three axes of one key at frame 0
+    u8 dat[0xC0];
     memset(dat, 0, sizeof(dat));
-    dat[3] = 2;
-    dat[0x13] = 0x20;
-    dat[0x17] = 0x60;
-    memcpy(dat + 0x18, "FCV", 3);
-    memcpy(dat + 0x1C, "FCV", 3);
-    u8* m = dat + 0x20;
-    m[1] = 5;
-    m[2] = 1;
-    m[4] = 1;
-    m[0xF] = 0x10;
-    for (int axis = 0; axis < 3; axis++) {
-        m[0x10 + axis * 16 + 1] = 1;
+    dat[3] = 4;
+    dat[0x13] = 0x40;
+    dat[0x17] = 0x80;
+    dat[0x1B] = 0x80;
+    dat[0x1F] = 0xC0;
+    for (int i = 0; i < 4; i++) {
+        memcpy(dat + 0x20 + i * 4, "FCV", 3);
+    }
+    for (int k = 0; k < 2; k++) {
+        u8* m = dat + 0x40 + k * 0x40;
+        m[1] = (u8) (5 + k);
+        m[2] = 1;
+        m[4] = 1;
+        m[0xF] = 0x10;
+        for (int axis = 0; axis < 3; axis++) {
+            m[0x10 + axis * 16 + 1] = 1;
+        }
     }
     FILE* f = fopen(file, "wb");
     if (!f || fwrite(dat, 1, sizeof(dat), f) != sizeof(dat)) {
@@ -2578,22 +2586,46 @@ extern "C" int re4probe_melee(const char* file)
         fclose(f);
     }
     re4_mod_melee_path_set(file);
-    const u8* own = (const u8*) re4_melee_motion(0, &game);
-    bad |= own == (const u8*) &game || !own || *(const u16*) own != 5 || own[2] != 1 ? 2 : 0;
-    bad |= re4_melee_motion(1, &game) != &game ? 4 : 0;           // an empty entry: the game's
+    // the mix: over 60 prompts the game's kick and both mod moves, never the same twice in a row
+    int seen[3] = {0, 0, 0};
+    int last = -1, twice = 0;
+    for (int i = 0; i < 60; i++) {
+        bad |= re4_melee_neck(0) != 0 ? 0x10000 : 0;
+        const u8* own = (const u8*) re4_melee_motion(0, &game);
+        const int frames = own && own != (const u8*) &game ? *(const u16*) own : 0;  // converted: host order
+        const int which = own == (const u8*) &game ? 0 : own && own[2] == 1 && (frames == 5 || frames == 6) ? frames - 4 : -1;
+        if (which < 0) {
+            bad |= 2;
+            break;
+        }
+        seen[which]++;
+        twice += which == last;
+        last = which;
+    }
+    bad |= !seen[0] || !seen[1] || !seen[2] || twice ? 0x20000 : 0;
+    re4_melee_neck(0);
+    bad |= re4_melee_kneel(&game) != &game || re4_melee_motion(1, &game) != &game ? 4 : 0;  // no kneeling move
     pG->pl_type = 3;
     bad |= re4_melee_motion(0, &game) != &game ? 8 : 0;           // HUNK keeps his
     pG->pl_type = 0;
+    re4_aim_set((int) (0x80000000u | 8u << 24));                 // the mix off: the mod's first, every time
+    for (int i = 0; i < 4; i++) {
+        re4_melee_neck(0);
+        const u8* own = (const u8*) re4_melee_motion(0, &game);
+        bad |= own == (const u8*) &game || *(const u16*) own != 5 ? 0x40000 : 0;
+    }
     re4_aim_set((int) (0x80000000u | 2u << 24));
+    re4_melee_neck(0);
     bad |= re4_melee_motion(0, &game) != &game ? 0x10 : 0;        // switched off
     re4_aim_set((int) (0x80000000u | 1u << 24));
     bad |= re4_melee_neck(0) != 0 || re4_melee_neck(1) != 0 ? 0x20 : 0;  // no em60.drs here: Leon kicks
     bad |= re4_melee_motion(2, &game) != &game ? 0x40 : 0;
     re4_mod_melee_path_set("");
+    re4_melee_neck(0);
     bad |= re4_melee_motion(0, &game) != &game ? 0x80 : 0;
     // the axe strike on a kneeling enemy: the game's kick unless switched on, for Leon only
     bad |= re4_melee_kneel(&game) != &game ? 0x100 : 0;
-    re4_aim_set((int) (0x80000000u | 4u << 24));
+    re4_aim_set((int) (0x80000000u | (4u | 8u) << 24));
     if (pPL && pPL->Body) {
         bad |= re4_melee_kneel(&game) == &game || !re4_melee_kneel(&game) ? 0x200 : 0;
     }
@@ -2601,6 +2633,7 @@ extern "C" int re4probe_melee(const char* file)
     bad |= re4_melee_kneel(&game) != &game ? 0x400 : 0;
     pG->pl_type = 0;
     re4_aim_set((int) (0x80000000u | 45u | 64u << 7 | 64u << 14));
+    re4_melee_reset();
     pG->pl_type = keepType;
     remove(file);
     return bad;

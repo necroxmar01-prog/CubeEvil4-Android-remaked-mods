@@ -177,6 +177,10 @@ int re4_player_modded(void);
  * weapon on the back's (0x82500000). */
 #define RE4_MEM1_MELEE_ADDR 0x824E8000u
 #define RE4_MEM1_MELEE_MAX 0x00018000u
+/* Leon's copy of the Ganados' axe attack (runtime/melee.cpp), behind the stand-in set's scratch table (up to
+ * 0x824E1600). */
+#define RE4_MEM1_MELEE_AXE_ADDR 0x824E2000u
+#define RE4_MEM1_MELEE_AXE_MAX 0x00006000u
 const char* re4_mod_melee_path(void);
 void re4_mod_melee_path_set(const char* path);
 /* Patch 0901, event.cpp ExePacket_SetParts: 1 = a jacket part of costume 0 takes the skin's pl000e
