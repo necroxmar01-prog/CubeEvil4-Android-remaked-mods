@@ -142,8 +142,10 @@ final class CoreMenu extends Dialog {
     void clearShaderCache();
     /** Asks GitHub for the newest release (AppUpdate.check), once per run; `listener` hears it. */
     void checkUpdate(AppUpdate.Listener listener);
-    /** The update button: downloads the newest APK and hands it to Android's installer (AppUpdate.install). */
-    void startUpdate(AppUpdate.Listener listener);
+    /** The update button: the newest release's page on GitHub in the browser (AppUpdate.open, since 0.99.6). */
+    void openUpdate();
+    /** This run draws with Vulkan (the renderer the game started with, not only the menu's choice). */
+    boolean vulkanRunning();
   }
 
   private interface Changed<T> { void accept(T value); }
@@ -220,7 +222,7 @@ final class CoreMenu extends Dialog {
     resume = button(s(R.string.ingame_back), v -> close());
     // the update button left of "Back to the game" (wish of the project owner, 30.10.2026; AppUpdate): hidden
     // until GitHub answered
-    update = button(s(R.string.ingame_update), v -> { if (host != null) host.startUpdate(updates); });
+    update = button(s(R.string.ingame_update), v -> { if (host != null) host.openUpdate(); });
     update.setVisibility(View.GONE);
     LinearLayout actions = row();
     LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -241,20 +243,8 @@ final class CoreMenu extends Dialog {
     if (host != null) host.checkUpdate(updates);
   }
 
-  /** The update button's look: green "Up to date" (off), red "Update", the download's progress on it. */
-  private final AppUpdate.Listener updates = new AppUpdate.Listener() {
-    @Override public void checked(int state) { showUpdate(state); }
-    @Override public void progress(int percent, String problem) {
-      if (percent < 0) {
-        if (problem != null) android.widget.Toast.makeText(getContext(), problem, android.widget.Toast.LENGTH_LONG).show();
-        showUpdate(AppUpdate.OLDER);
-        return;
-      }
-      update.setEnabled(false);
-      update.setText(percent >= 100 ? s(R.string.ingame_update_install)
-          : getContext().getString(R.string.ingame_update_loading, percent));
-    }
-  };
+  /** The update button's look: green "Up to date" (off), red "Update" (opens the release's page). */
+  private final AppUpdate.Listener updates = this::showUpdate;
 
   void showUpdate(int state) {
     if (state == AppUpdate.UNKNOWN) { update.setVisibility(View.GONE); return; }
@@ -733,10 +723,18 @@ final class CoreMenu extends Dialog {
       CoreBridge.setDof(next);
     });
     valueLabel(dof, R.string.ingame_dof, dofLabels[dofLevel(graphics)], dofLevel(graphics) != 0);
-    // a faint glow at torches, candles and fires (wish of the project owner, 04.11.2026; off by default)
-    toggle(buttonsRow(effects), R.string.ingame_flares, graphics.getBoolean("flares", false), on -> {
-      graphics.edit().putBoolean("flares", on).apply(); CoreBridge.setFlares(on);
+    // a faint glow at torches, candles and fires (wish of the project owner, 04.11.2026; off by default); since 0.99.6
+    // each press moves it on (wish of the project owner, 09.11.2026): off, lens flares (the coloured rings only), halos +
+    // lens flares (the glow and star at the lights too, as the switch's "on" before)
+    final int[] flareLabels = {R.string.ingame_off, R.string.ingame_flares_lens, R.string.ingame_flares_both};
+    Button flares = cellAction(buttonsRow(effects), "", v -> {
+      int next = (CoreBridge.flareMode(graphics) + 1) % 3;
+      graphics.edit().putInt(CoreBridge.FLARE_MODE, next).putBoolean("flares", next != 0).apply();
+      valueLabel((Button) v, R.string.ingame_flares, flareLabels[next], next != 0);
+      CoreBridge.setFlares(next);
     });
+    valueLabel(flares, R.string.ingame_flares, flareLabels[CoreBridge.flareMode(graphics)], CoreBridge.flareMode(graphics) != 0);
+    indentedHelp(s(R.string.ingame_flares_help));
     // the picture filters one under the other, one general line under both (wish of the project owner, 02.11.2026)
     LinearLayout filters = labelledOptions(R.string.ingame_filter);
     // the GameCube's own softening for the TV (wish of the project owner, 01.11.2026)
@@ -1337,15 +1335,30 @@ final class CoreMenu extends Dialog {
     Button particles = cellAction(morePotato, "", v -> {
       int next = (CoreBridge.particleEffects(graphics) + 1) % 3;
       graphics.edit().putInt("particleEffects", next).apply();
-      valueLabel((Button) v, R.string.ingame_potato_particles, particleLabels[next], next == 0);
+      valueLabel((Button) v, R.string.ingame_potato_particles, particleLabels[next], next != 2);
       CoreBridge.setPotato(CoreBridge.potatoMask(graphics));
     });
+    // lit while there are particles, "Less" too; off only at "None" (wish of the project owner, 09.11.2026)
     valueLabel(particles, R.string.ingame_potato_particles, particleLabels[CoreBridge.particleEffects(graphics)],
-        CoreBridge.particleEffects(graphics) == 0);
+        CoreBridge.particleEffects(graphics) != 2);
     toggle(morePotato, R.string.ingame_potato_shadows, graphics.getBoolean("shadowsLight", true), on -> {
       graphics.edit().putBoolean("shadowsLight", on).apply(); CoreBridge.setPotato(CoreBridge.potatoMask(graphics));
     });
+    // a third row (wish of the project owner, 09.11.2026, from the OUYA branch): "View distance" in three steps, each
+    // press moves it on (Normal, Medium, Short; off only at Short), the distance fog nearer and nothing drawn beyond it
+    // (patch 0223, in the core: OpenGL ES and Vulkan alike)
+    final int[] viewLabels = {R.string.ingame_view_normal, R.string.ingame_view_medium, R.string.ingame_view_short};
+    MenuLayout.Buttons lastPotato = buttonsRow(body);
+    Button view = cellAction(lastPotato, "", v -> {
+      int next = (CoreBridge.viewDistance(graphics) + 1) % 3;
+      graphics.edit().putInt(CoreBridge.VIEW_DISTANCE, next).apply();
+      valueLabel((Button) v, R.string.ingame_potato_view, viewLabels[next], next != 2);
+      CoreBridge.setViewDistance(CoreBridge.VIEW_PERCENT[next]);
+    });
+    valueLabel(view, R.string.ingame_potato_view, viewLabels[CoreBridge.viewDistance(graphics)],
+        CoreBridge.viewDistance(graphics) != 2);
     help(R.string.ingame_potato_help);
+    help(R.string.ingame_view_help);
     // the picture output under a heading of its own (wish of the project owner, 30.10.2026); since 05.11.2026
     // without a row label in two columns, frame skip | 60 FPS over merged draws | vertex ring, the explanations
     // over the whole width
@@ -1370,18 +1383,27 @@ final class CoreMenu extends Dialog {
     });
     // merged draw calls (an experiment for phones with a slow graphics driver; wish of the project
     // owner, 30.10.2026: below 60 FPS); the renderer leaves it out while 60 FPS is on
-    toggle(more, R.string.ingame_merge_draws, graphics.getBoolean("mergeDraws", false), on -> {
+    // with Vulkan both greyed out and shown off (question of the project owner, 09.11.2026): Vulkan always streams
+    // the vertices through mapped buffers (gx_vk.cpp, the vertex ring has no effect there) and its draw calls are
+    // cheap, merging only adds pipelines to build (core_mode.cpp leaves it out); the choice stays for OpenGL ES
+    final boolean vulkanRun = host != null && host.vulkanRunning();
+    Button merge = toggle(more, R.string.ingame_merge_draws, graphics.getBoolean("mergeDraws", false), on -> {
       graphics.edit().putBoolean("mergeDraws", on).apply(); CoreBridge.setMerge(on);
     });
     // the vertex ring at the bottom (wish of the project owner, 01.11.2026: off by default, for Mali)
-    toggle(more, R.string.ingame_vertex_ring, graphics.getBoolean("vertexRing", false), on -> {
+    Button ring = toggle(more, R.string.ingame_vertex_ring, graphics.getBoolean("vertexRing", false), on -> {
       graphics.edit().putBoolean("vertexRing", on).apply(); CoreBridge.setVertexRing(on);
     });
+    if (vulkanRun) {
+      toggleLabel(merge, R.string.ingame_merge_draws, false); merge.setEnabled(false);
+      toggleLabel(ring, R.string.ingame_vertex_ring, false); ring.setEnabled(false);
+    }
     help(R.string.ingame_frame_skip_help);
     help(R.string.ingame_smooth_help);
     help(R.string.ingame_skip_or_smooth);
     help(R.string.ingame_merge_help);
     help(R.string.ingame_vertex_ring_help);
+    if (vulkanRun) help(R.string.ingame_vulkan_perf_help);
   }
   private void management() {
     heading(R.string.ingame_card); help(R.string.ingame_card_help);

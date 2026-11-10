@@ -327,6 +327,7 @@ struct GxCore {
   // word, how many of its draws came; the draw's own key (object and n-th draw) while it is drawn
   std::uint64_t ownerBase = 0, curOwner = 0;
   std::uint32_t ownerLife = ~0u, ownerDraws = 0, curLife = ~0u;
+  std::uint32_t ownerWords[4] = {0, 0, 0xFF, ~0u};  // the owner tag as sent (the lens flares' log and test)
   std::unordered_map<std::uint64_t, std::uint32_t> recByOwner;
   // draws per object (ownerBase): of the chunk noted (recOwnerDraws, filled while recording) and of the
   // next one (nextOwnerDraws, counted ahead by Interpolate). An object that draws more or fewer quads
@@ -402,6 +403,9 @@ struct GxCore {
                            std::uint32_t vertexCount, bool flat = false);
   // q moved by the camera's move c (a point in view space before -> after).
   static void CameraApply(const float (&c)[3][4], const float *q, float *out);
+  // A particle found by its object moved from `before` to `t` (view space) farther than it can in one game picture:
+  // it jumped (wrapped around the camera, started its path again), BlendDraw draws it as a new one.
+  bool Jumped(const float *before, const float *t) const;
   // A 3D draw without a counterpart in the picture before (a new flame of a fire, a slot used anew, a
   // part of the ground that drew otherwise) while the camera's move is known (NoteCamera): its rows as if it
   // stood still in the world, between where that move puts it in the picture before and where it is now.
@@ -525,6 +529,9 @@ struct GxCore {
   // (their matrices are the blended ones).
   static constexpr int kFlareSlots = 32;
   bool flaresOn = false, flareFailed = false;
+  // the glow and star at each light ("Halos + lens flares", as before 0.99.6); off: only the ghosts ("Lens flares",
+  // wish of the project owner, 09.11.2026): the flare shader's size.z = 1 leaves the slot's first quad out
+  bool flareHalos = true;
   std::uint32_t flareAfter = 0;  // the op offset after the scene's last 3D draw (0: none in this chunk)
   bool flareDone = false;
   struct FlareCand {
@@ -535,6 +542,7 @@ struct GxCore {
     unsigned tev = 0;         // (the log) the TEV stages of the last draw
     std::uint32_t zmode = 0, blend = 0, tevc = 0;  // (the log) BP 0x40, 0x41, the TEV colour of the last draw
     std::uint32_t layout = 0;
+    std::uint32_t owner[4] = {0, 0, 0xFF, ~0u};  // (the log) the owner tag of the last draw
   };
   std::vector<FlareCand> flareCands;
   struct FlareSlot {
@@ -672,6 +680,7 @@ struct GxCore {
   void SetTvFilter(bool on);
   void SetPsx(bool on);
   void SetFlares(bool on);
+  void SetFlareHalos(bool on);
   void SetDofStrong(bool on);
   void SetShownRows(int top, int bottom);
   void SetWiden(float factor);

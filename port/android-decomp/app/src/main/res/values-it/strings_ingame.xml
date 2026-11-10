@@ -27,6 +27,9 @@
     <string name="ingame_perf_section">Prestazioni</string>
     <string name="ingame_minimap">Minimappa</string>
     <string name="ingame_flares">Riflessi lente</string>
+    <string name="ingame_flares_lens">Riflessi lente</string>
+    <string name="ingame_flares_both">Aloni + riflessi</string>
+    <string name="ingame_flares_help">Riflessi lente: tenui anelli colorati che attraversano l\'immagine dalle luci più forti, come in un obiettivo fotografico. Aloni + riflessi: in più un bagliore morbido con una sottile stella su candele, torce e lampade.</string>
     <string name="ingame_dof">Profondità di campo</string>
     <string name="ingame_fps_display">Mostra gli FPS</string>
     <string name="ingame_fps_bottom_left">In basso a sinistra</string>
@@ -47,7 +50,12 @@
     <string name="ingame_particles_less">Ridotti</string>
     <string name="ingame_particles_none">Nessuno</string>
     <string name="ingame_potato_shadows">Ombre e luce</string>
+    <string name="ingame_potato_view">Distanza visiva</string>
+    <string name="ingame_view_normal">Normale</string>
+    <string name="ingame_view_medium">Media</string>
+    <string name="ingame_view_short">Corta</string>
     <string name="ingame_potato_help">Effetti meteo: banchi di nebbia, pioggia, schizzi d\'acqua. Effetti speciali: vapore, distorsione da calore, acqua. Effetti particellari: sangue, polvere, fumo, schizzi, scintille e fuoco; Ridotti ne disegna la metà, Nessuno li toglie tutti tranne fuoco ed esplosioni, che restano a metà come avviso. Ombre e luce: disattivato toglie ombre (anche nei filmati), aloni e raggi di luce; le stanze mantengono la loro illuminazione. Ogni impostazione riduce il lavoro grafico sui dispositivi meno potenti; il punto colpito, le indicazioni, il laser e tutti gli effetti dei filmati restano.</string>
+    <string name="ingame_view_help">Distanza visiva: Media e Corta avvicinano la nebbia in lontananza, e ciò che sta oltre non viene disegnato. Aiuta dove il processore o il numero di oggetti frenano il gioco, sui telefoni più lenti a bassa risoluzione: nel villaggio sparisce circa metà degli oggetti. Ad alta risoluzione il chip grafico è impegnato con i pixel e guadagna poco. Le stanze senza nebbia in lontananza, e quelle la cui nebbia sta ben oltre ciò che vedi (il castello, l\'isola), restano come sono.</string>
     <string name="ingame_resolution_line">Risoluzione: %1$d × %2$d pixel (livello %3$s) · schermo %4$d × %5$d · si applica alla chiusura del menu. I livelli più alti richiedono più potenza.</string>
     <string name="ingame_resolution_line_auto">Risoluzione: %1$d × %2$d pixel (livello %3$s, Dinamica) · schermo %4$d × %5$d · si applica alla chiusura del menu. Dinamica scende di un livello finché la GPU non tiene il passo.</string>
 
@@ -96,10 +104,7 @@
     <string name="ingame_aim_help">Inverti verticale e Velocità di mira: per mirare con il coltello e le armi al tocco o con un controller, non con il giroscopio. Inverti verticale cambia l’opzione del gioco stesso.</string>
     <string name="ingame_update">Aggiorna</string>
     <string name="ingame_up_to_date">Aggiornato</string>
-    <string name="ingame_update_loading">Download %1$d %%</string>
-    <string name="ingame_update_install">Installazione…</string>
-    <string name="ingame_update_failed">Aggiornamento non riuscito: %1$s</string>
-    <string name="ingame_update_allow">Consenti a CubeEvil4 di installare app, poi premi di nuovo Aggiorna.</string>
+    <string name="ingame_update_page">L\'ultima versione si apre su GitHub: scarica lì l\'APK e installalo.</string>
 
     <string name="ingame_card">Memory Card (slot A)</string>
     <string name="ingame_card_help">Esporta e importa i dati di gioco: i salvataggi come .gci (per Dolphin o GameCube) e il tuo layout touch personalizzato come CubeEvil4-touch-layout.json. L’importazione ripristina entrambi.</string>
@@ -225,6 +230,7 @@
     <string name="ingame_skip_or_smooth">Salto fotogrammi e 60 FPS si escludono: attivandone uno si disattiva l’altro.</string>
     <string name="ingame_merge_help">Unisce più oggetti in una sola chiamata al driver grafico. Può aiutare i telefoni con un driver grafico lento (ad es. GPU Mali) e costare un po’ sugli altri. Nessun effetto finché i 60 FPS sono attivi.</string>
     <string name="ingame_vertex_ring_help">Invia i vertici di ogni immagine al chip grafico tramite un buffer che resta mappato, invece di un nuovo buffer per ogni immagine. Può far risparmiare tempo sulle GPU Mali e usa un po\' più di memoria grafica. Ha effetto subito.</string>
+    <string name="ingame_vulkan_perf_help">Con Vulkan, Unisci le chiamate di disegno e Buffer circolare dei vertici sono in grigio e non vengono usati: Vulkan invia sempre i vertici tramite un buffer che resta mappato e le sue chiamate di disegno costano poco, quindi unire aggiungerebbe solo pipeline da creare. La tua scelta torna con OpenGL ES.</string>
     <string name="ingame_game_language">Lingua del gioco</string>
     <string name="ingame_language_device">Lingua del dispositivo</string>
     <string name="ingame_language_help">La lingua dei testi e dei sottotitoli del gioco. Lingua del dispositivo: quella del dispositivo se il gioco la offre, altrimenti l\'inglese. Una modifica riavvia il gioco.</string>

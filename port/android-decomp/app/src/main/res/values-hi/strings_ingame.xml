@@ -27,6 +27,9 @@
     <string name="ingame_perf_section">परफ़ॉर्मेंस</string>
     <string name="ingame_minimap">मिनी-मैप</string>
     <string name="ingame_flares">लेंस फ़्लेयर</string>
+    <string name="ingame_flares_lens">लेंस फ़्लेयर</string>
+    <string name="ingame_flares_both">हेलो + लेंस फ़्लेयर</string>
+    <string name="ingame_flares_help">लेंस फ़्लेयर: सबसे चमकीली रोशनियों से पूरी तस्वीर में हल्के रंगीन छल्ले, जैसे कैमरे के लेंस में बनते हैं। हेलो + लेंस फ़्लेयर: साथ में मोमबत्तियों, मशालों और लैंपों पर हल्की चमक और बारीक तारा।</string>
     <string name="ingame_dof">डेप्थ ऑफ़ फ़ील्ड</string>
     <string name="ingame_fps_display">FPS दिखाएँ</string>
     <string name="ingame_fps_bottom_left">नीचे बाएँ</string>
@@ -47,7 +50,12 @@
     <string name="ingame_particles_less">कम</string>
     <string name="ingame_particles_none">कोई नहीं</string>
     <string name="ingame_potato_shadows">छाया और रोशनी</string>
+    <string name="ingame_potato_view">देखने की दूरी</string>
+    <string name="ingame_view_normal">सामान्य</string>
+    <string name="ingame_view_medium">मध्यम</string>
+    <string name="ingame_view_short">कम</string>
     <string name="ingame_potato_help">मौसम प्रभाव: कोहरे के बादल, बारिश, पानी के छींटे। विशेष प्रभाव: भाप, गर्मी की लहरें, पानी। कण प्रभाव: खून, धूल, धुआँ, छींटे, चिंगारियाँ और आग; “कम” इनमें से आधे दिखाता है, “कोई नहीं” आग और विस्फोटों को छोड़कर सब हटा देता है, जो चेतावनी के लिए आधे रहते हैं। छाया और रोशनी: बंद करने पर छायाएँ (कटसीन में भी), रोशनी की चमक और प्रकाश किरणें हट जाती हैं; कमरों की रोशनी वैसी ही रहती है। हर सेटिंग कमज़ोर डिवाइस पर ग्राफ़िक्स का काम कम करती है; गोली लगने की जगह, संकेत, लेज़र और कटसीन के सभी प्रभाव बने रहते हैं।</string>
+    <string name="ingame_view_help">देखने की दूरी: मध्यम और कम दूर के कोहरे को पास ले आते हैं, और उसके पीछे जो है वह नहीं बनता। यह वहाँ मदद करता है जहाँ प्रोसेसर या चीज़ों की संख्या खेल को धीमा करती है, यानी कम रेज़ॉल्यूशन पर धीमे फ़ोन पर: गाँव में लगभग आधी चीज़ें हट जाती हैं। ऊँचे रेज़ॉल्यूशन पर ग्राफ़िक्स चिप पिक्सेल में व्यस्त रहती है और कम फ़ायदा होता है। बिना दूर के कोहरे वाले कमरे, और वे जिनका कोहरा दिखने वाली हर चीज़ से बहुत पीछे है (क़िला, द्वीप), वैसे ही रहते हैं।</string>
     <string name="ingame_resolution_line">रिज़ॉल्यूशन: %1$d × %2$d पिक्सेल (स्तर %3$s) · स्क्रीन %4$d × %5$d · मेनू बंद होने पर लागू होता है। ऊँचे स्तरों को ज़्यादा क्षमता चाहिए।</string>
     <string name="ingame_resolution_line_auto">रिज़ॉल्यूशन: %1$d × %2$d पिक्सेल (स्तर %3$s, डायनैमिक) · स्क्रीन %4$d × %5$d · मेनू बंद होने पर लागू होता है। जब तक GPU साथ नहीं दे पाता, डायनैमिक एक स्तर नीचे रहता है।</string>
 
@@ -96,10 +104,7 @@
     <string name="ingame_aim_help">वर्टिकल उलटें और निशाने की गति: टच या कंट्रोलर से चाकू और हथियारों से निशाना लगाने के लिए, जाइरो के लिए नहीं। वर्टिकल उलटें खेल का अपना विकल्प बदलता है।</string>
     <string name="ingame_update">अपडेट</string>
     <string name="ingame_up_to_date">नवीनतम</string>
-    <string name="ingame_update_loading">डाउनलोड %1$d %%</string>
-    <string name="ingame_update_install">इंस्टॉल हो रहा है…</string>
-    <string name="ingame_update_failed">अपडेट विफल: %1$s</string>
-    <string name="ingame_update_allow">CubeEvil4 को ऐप इंस्टॉल करने की अनुमति दें, फिर दोबारा अपडेट दबाएँ।</string>
+    <string name="ingame_update_page">नई रिलीज़ GitHub पर खुलती है: वहाँ से APK डाउनलोड करें और इंस्टॉल करें।</string>
 
     <string name="ingame_card">मेमोरी कार्ड (स्लॉट A)</string>
     <string name="ingame_card_help">गेम डेटा एक्सपोर्ट और इम्पोर्ट करें: सेव गेम .gci के रूप में (Dolphin या GameCube के लिए) और आपका अपना टच लेआउट CubeEvil4-touch-layout.json के रूप में। इम्पोर्ट दोनों को वापस ले आता है।</string>
@@ -223,6 +228,7 @@
     <string name="ingame_skip_or_smooth">फ़्रेम स्किप और 60 FPS साथ नहीं चलते: एक को चालू करने पर दूसरा बंद हो जाता है।</string>
     <string name="ingame_merge_help">कई वस्तुओं को ग्राफ़िक्स ड्राइवर की एक ही कॉल में मिलाता है। धीमे ग्राफ़िक्स ड्राइवर वाले फ़ोन (जैसे Mali GPU) पर मदद कर सकता है और दूसरों पर थोड़ा धीमा कर सकता है। 60 FPS चालू होने पर इसका कोई असर नहीं होता।</string>
     <string name="ingame_vertex_ring_help">हर चित्र के वर्टेक्स डेटा को हर बार नए बफ़र के बजाय एक स्थायी रूप से मैप किए गए बफ़र से ग्राफ़िक्स चिप तक भेजता है। Mali GPU पर समय बचा सकता है और थोड़ी अधिक ग्राफ़िक्स मेमोरी लेता है। तुरंत लागू होता है।</string>
+    <string name="ingame_vulkan_perf_help">Vulkan के साथ ड्रॉ कॉल मिलाएँ और वर्टेक्स रिंग बफ़र धूसर रहते हैं और काम नहीं करते: Vulkan वर्टेक्स डेटा हमेशा ऐसे बफ़र से भेजता है जो मैप रहता है, और उसकी ड्रॉ कॉल सस्ती हैं, इसलिए मिलाने से बस और पाइपलाइन बनानी पड़तीं। OpenGL ES पर आपकी पसंद फिर लागू होती है।</string>
     <string name="ingame_game_language">गेम की भाषा</string>
     <string name="ingame_language_device">डिवाइस की भाषा</string>
     <string name="ingame_language_help">गेम के टेक्स्ट और सबटाइटल की भाषा। डिवाइस की भाषा: अगर गेम में डिवाइस की भाषा है तो वही, नहीं तो अंग्रेज़ी। बदलाव करने पर गेम फिर से शुरू होता है।</string>

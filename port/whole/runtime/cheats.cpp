@@ -58,6 +58,7 @@
 // stood still, the Ganado slid about). The character's entries are read from its Mercenaries file once
 // (loadStandInSet) and stand in for the story's. The X button commands Ashley (wait / follow) as with Leon.
 #include "types.h"
+#include "atari.h"
 #include "global.h"
 #include "item.h"
 #include "main.h"
@@ -767,6 +768,7 @@ bool ownWeapon(int type, int no, int wtype)
 // its item: the same room deals the same items after a reload, a death or a room change. The item's flags stay,
 // so what was taken stays taken and a save plays with the switch on or off alike.
 const u8 kMark = 0xA5;  // pad2[0] of a record the deal has seen
+const f32 kRestAbove = 100.0f;  // a dealt item at most this far above the floor below is put down onto it (dealRoom)
 const u8 kAmmoIds[] = {0x04, 0x18, 0x07, 0x20, 0x00};
 const u8 kGrenadeIds[] = {0x01, 0x02, 0x0E};
 const u8 kHealIds[] = {0x06, 0x19, 0x1C, 0x05, 0x08, 0x09, 0x0A, 0x12, 0x13, 0x14, 0x15, 0x16, 0xA8, 0x95, 0x97};
@@ -885,7 +887,7 @@ void dealRoom(SCE_AT_DATA* work, int num)
     const int wanted = wantedBits();
     const bool on = (wanted & kItemRandom) && storyGame() && pG->pl_type != 1;
     const u32 seed = (u32) (wanted & kSeedMask) >> kSeedShift;
-    int pool = 0, changed = 0;
+    int pool = 0, changed = 0, down = 0;
     char list[600];
     int len = 0;
     list[0] = 0;
@@ -937,10 +939,21 @@ void dealRoom(SCE_AT_DATA* work, int num)
         }
         it.item_id = (u16) id;
         it.item_num = count;
+        // the new model put down onto the surface below, as the game puts down the items enemies drop (sceAtSetItem:
+        // EatMgr.getFloor): the records hold the old item a little above it (r227, the crate by the merchant: 49..57
+        // units, the boxes' flat models hide it; a herb's pot or a grenade there stood in the air, the project owner's
+        // Retroid screenshot 08.11.2026). Only within kRestAbove: farther down is a floor under furniture without
+        // collision, where the item stays as the record has it
+        const f32 floor = EatMgr.getFloor(&it.item_pos, 0, 0.0f, 100000.0f, 0);
+        if (floor <= it.item_pos.y && it.item_pos.y - floor <= kRestAbove) {
+            down += it.item_pos.y > floor ? 1 : 0;
+            it.item_pos.y = floor;
+        }
     }
     if (on) {
-        re4_log("cheat: random items in r%03x (seed %u): %d of %d items of the pool changed, %d records%s",
-                (unsigned) pG->room_id, (unsigned) seed, changed, pool, num, list);
+        re4_log("cheat: random items in r%03x (seed %u): %d of %d items of the pool changed (%d put down onto the "
+                "surface below), %d records%s",
+                (unsigned) pG->room_id, (unsigned) seed, changed, pool, down, num, list);
     }
 }
 
@@ -1155,6 +1168,20 @@ void re4_story_char_room(void)
         }
     }
     re4_story_ganado = standIn() && gSetType == pG->pl_type;
+}
+
+// Patch 0222 (game.cpp GameContinue, right after GameSave.load): the continue point of a stand-in holds Leon
+// (re4_story_char_save), but the stand-in's player is still in memory: its type again, so that PlSetCostume and
+// ContinueWepData take its tables and its weapon buffer. Leon's weapon place (WEP_DATA_ADDR) lies inside Krauser's
+// player archive with his player module; a weapon changed since the save was read there, and OSLink crashed on the
+// overwritten module list (user report 09.11.2026, "crashing every time they die or retry"). The room start
+// (re4_story_char_room) changes the character as before when the cheat menu asks for another one.
+void re4_story_char_continue(void)
+{
+    if (gSwitched >= 2 && gSwitched <= 5 && pG->pl_type == 0 && storyGame()) {
+        pG->pl_type = (u8) gSwitched;
+        re4_log("cheat: continue with %s (the continue point holds Leon)", kCharName[gSwitched]);
+    }
 }
 
 // 1 while Ada, HUNK, Krauser or Wesker plays the story for Leon (the instant save allows them, 04.11.2026)

@@ -31,6 +31,9 @@
     <string name="ingame_perf_section">الأداء</string>
     <string name="ingame_minimap">خريطة مصغرة</string>
     <string name="ingame_flares">وهج العدسة</string>
+    <string name="ingame_flares_lens">وهج العدسة</string>
+    <string name="ingame_flares_both">هالات + وهج العدسة</string>
+    <string name="ingame_flares_help">وهج العدسة: حلقات ملونة خافتة تعبر الصورة من أسطع الأضواء، كما تصنعها عدسة الكاميرا. هالات + وهج العدسة: وأيضًا توهج ناعم مع نجمة دقيقة عند الشموع والمشاعل والمصابيح.</string>
     <string name="ingame_dof">عمق الميدان</string>
     <string name="ingame_fps_display">عرض FPS</string>
     <string name="ingame_fps_bottom_left">أسفل اليسار</string>
@@ -51,7 +54,12 @@
     <string name="ingame_particles_less">أقل</string>
     <string name="ingame_particles_none">لا شيء</string>
     <string name="ingame_potato_shadows">الظلال والضوء</string>
+    <string name="ingame_potato_view">مدى الرؤية</string>
+    <string name="ingame_view_normal">عادية</string>
+    <string name="ingame_view_medium">متوسطة</string>
+    <string name="ingame_view_short">قصيرة</string>
     <string name="ingame_potato_help">تأثيرات الطقس: سحب الضباب والمطر ورذاذ الماء. التأثيرات الخاصة: البخار وتموج الحرارة والماء. تأثيرات الجسيمات: الدم والغبار والدخان والرذاذ والشرر والنار؛ «أقل» يرسم نصفها، و«لا شيء» يزيلها كلها ما عدا النار والانفجارات التي تبقى بالنصف تحذيرًا. الظلال والضوء: الإيقاف يزيل الظلال (وفي المشاهد السينمائية أيضًا) وتوهج الأضواء وأشعة الضوء؛ وتبقى إضاءة الغرف كما هي. كل إعداد يخفف عبء الرسوميات على الأجهزة الأضعف؛ يبقى موضع الإصابة والتلميحات والليزر وكل التأثيرات في المشاهد السينمائية.</string>
+    <string name="ingame_view_help">مدى الرؤية: «متوسطة» و«قصيرة» تقرّبان ضباب المسافة، ولا يُرسم ما وراءه. يفيد ذلك حيث يبطئ المعالج أو عدد الأجسام اللعبة، أي على الهواتف الأبطأ بدقة منخفضة: في القرية يختفي نحو نصف الأجسام. أما بدقة عالية فتنشغل شريحة الرسوميات بالبكسلات ولا تكسب إلا قليلًا. تبقى الغرف التي بلا ضباب مسافة، وتلك التي يقع ضبابها بعيدًا خلف كل ما تراه (القلعة، الجزيرة)، كما هي.</string>
     <string name="ingame_resolution_line">الدقة: %1$d&#x200E; × &#x200E;%2$d بكسل (المستوى %3$s) · الشاشة %4$d&#x200E; × &#x200E;%5$d · تُطبَّق عند إغلاق القائمة. المستويات الأعلى تتطلب أداءً أعلى.</string>
     <string name="ingame_resolution_line_auto">الدقة: %1$d&#x200E; × &#x200E;%2$d بكسل (المستوى %3$s، ديناميكي) · الشاشة %4$d&#x200E; × &#x200E;%5$d · تُطبَّق عند إغلاق القائمة. يخفض الوضع الديناميكي المستوى درجة ما دام معالج الرسوميات لا يواكب.</string>
 
@@ -100,10 +108,7 @@
     <string name="ingame_aim_help">عكس الاتجاه الرأسي وسرعة التصويب: للتصويب بالسكين والأسلحة باللمس أو بوحدة التحكم، لا بالجيروسكوب. عكس الاتجاه الرأسي يغيّر خيار اللعبة نفسها.</string>
     <string name="ingame_update">تحديث</string>
     <string name="ingame_up_to_date">محدَّث</string>
-    <string name="ingame_update_loading">جارٍ التنزيل %1$d %%</string>
-    <string name="ingame_update_install">جارٍ التثبيت…</string>
-    <string name="ingame_update_failed">فشل التحديث: %1$s</string>
-    <string name="ingame_update_allow">اسمح لـ CubeEvil4 بتثبيت التطبيقات، ثم اضغط تحديث مرة أخرى.</string>
+    <string name="ingame_update_page">يُفتح أحدث إصدار على GitHub: نزّل ملف APK من هناك وثبّته.</string>
 
     <string name="ingame_card">بطاقة الذاكرة (الفتحة A)</string>
     <string name="ingame_card_help">تصدير بيانات اللعبة واستيرادها: ملفات الحفظ بصيغة &#x200E;.gci (لـ Dolphin أو GameCube) وتخطيط اللمس الخاص بك في الملف &#x200E;CubeEvil4-touch-layout.json. يعيد الاستيراد كليهما.</string>
@@ -236,6 +241,7 @@
     <string name="ingame_skip_or_smooth">‏تخطي الإطارات و60 إطارًا في الثانية لا يعملان معًا: تشغيل أحدهما يوقف الآخر.</string>
     <string name="ingame_merge_help">‏يدمج عدة أجسام في استدعاء واحد لبرنامج تشغيل الرسوميات. قد يفيد الهواتف ذات برنامج تشغيل رسوميات بطيء (مثل وحدات Mali) وقد يكلّف قليلًا على غيرها. لا يعمل ما دامت 60 إطارًا في الثانية مفعّلة.</string>
     <string name="ingame_vertex_ring_help">يرسل بيانات رؤوس كل صورة إلى شريحة الرسوميات عبر مخزن واحد يبقى معيّنًا بدلًا من مخزن جديد لكل صورة. قد يوفّر الوقت على معالجات Mali الرسومية ويستخدم ذاكرة رسوميات أكثر قليلًا. يسري فورًا.</string>
+    <string name="ingame_vulkan_perf_help">مع Vulkan يظهر دمج استدعاءات الرسم ومخزن الرؤوس الدائري باللون الرمادي ولا يُستخدمان: يرسل Vulkan بيانات الرؤوس دائمًا عبر مخزن يبقى معيّنًا، واستدعاءات الرسم فيه رخيصة، فلن يضيف الدمج سوى خطوط معالجة يجب بناؤها. يعود اختيارك مع OpenGL ES.</string>
     <string name="ingame_game_language">لغة اللعبة</string>
     <string name="ingame_language_device">لغة الجهاز</string>
     <string name="ingame_language_help">لغة نصوص اللعبة وترجماتها. لغة الجهاز: لغة الجهاز إذا كانت اللعبة تدعمها، وإلا فالإنجليزية. يؤدي التغيير إلى إعادة تشغيل اللعبة.</string>

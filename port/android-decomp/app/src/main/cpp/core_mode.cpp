@@ -109,6 +109,7 @@ struct CoreApi {
   int (*cheatAction)(int){};     // optional (cores since 27.10.2026): a cheat menu button
   int (*roomOutline)(float *, int, unsigned *){};  // optional (cores since 04.11.2026): the minimap's room outline
   void (*setLaserColour)(int){};  // optional (cores since 04.11.2026, patch 0198): the laser sight's colour
+  void (*setViewDistance)(int){};  // optional (cores since 09.11.2026, patch 0223): the view distance in percent
   void (*setViewAspect)(int){};   // optional (cores since 07.11.2026, patch 0214): "Native", the 3D's aspect x 10000
   void (*setHudLayout)(int, int, int){};  // optional (cores since 07.11.2026, patch 0215): the life gauge's corner
   void (*touch)(float, float){};  // optional (cores since 22.10.2026): a tap on the picture
@@ -456,6 +457,7 @@ void loadCore(JNIEnv *env) {
   api.cheatAction = reinterpret_cast<int (*)(int)>(dlsym(api.main, "re4_core_cheat_action"));
   api.roomOutline = reinterpret_cast<int (*)(float *, int, unsigned *)>(dlsym(api.main, "re4_core_room_outline"));
   api.setLaserColour = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_laser_colour"));
+  api.setViewDistance = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_view_distance"));
   api.setViewAspect = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_view_aspect"));
   api.setHudLayout = reinterpret_cast<void (*)(int, int, int)>(dlsym(api.main, "re4_core_set_hud_layout"));
   api.touch = reinterpret_cast<void (*)(float, float)>(dlsym(api.main, "re4_core_touch"));
@@ -679,7 +681,7 @@ std::atomic<int> optFxaa{0};   // the menu's FXAA (CoreBridge.setFxaa)
 std::atomic<int> optSharpen{0};  // the menu's sharpening (CoreBridge.setSharpen: 0 off, 1 light, 2 strong)
 std::atomic<int> optLaserColour{0};  // the menu's laser sight colour (CoreBridge.setLaserColour), sent at the start
 std::atomic<int> optMinimap{0};   // the menu's minimap (CoreBridge.setMinimap)
-std::atomic<int> optFlares{0};    // the menu's lens flares (CoreBridge.setFlares; or RE4_GX_FLARES=1)
+std::atomic<int> optFlares{0};    // the menu's lens flares: 0 off, 1 lens flares, 2 halos + lens flares (CoreBridge.setFlares; or RE4_GX_FLARES=1)
 std::atomic<int> optPsx{0};       // the menu's PSone demake (CoreBridge.setPsx; or RE4_GX_PSX=1)
 std::atomic<int> optTvFilter{0};  // the menu's original TV filter (CoreBridge.setTvFilter; or RE4_GX_TV_FILTER=1)
 std::atomic<int> optSmooth{0};  // the menu's 60 FPS from in-between pictures (CoreBridge.setSmooth)
@@ -720,6 +722,10 @@ int fastSent = -1;    // what the core was told last (-1: nothing yet)
 // shadows and light effects off (the core's runtime/potato.cpp); 0 the default.
 std::atomic<int> optPotato{0};
 int potatoSent = -1;  // what the core was told last (-1: nothing yet; the GPU bench sets its own)
+// The menu's "View distance" (CoreBridge.setViewDistance, wish of the project owner, 09.11.2026; patch 0223): percent of
+// the room's distance fog and far plane, 100 Normal, 75 Medium, 50 Short
+std::atomic<int> optViewDistance{100};
+int viewDistanceSent = -1;  // what the core was told last (-1: nothing yet)
 // The menu's "Invert vertical" and "Aim speed" for touch and controllers (CoreBridge.setAim, wish of the
 // project owner, 30.10.2026): bit 0 inverted, bits 8.. the speed in percent (the core's runtime/aim_options.cpp).
 std::atomic<int> optAim{100 << 8};
@@ -1735,6 +1741,7 @@ bool drawGx() {
       scale = scaleText ? static_cast<int>(std::lround(std::atof(scaleText) * 2.0)) : 0;
     }
     autoLevelOn = scale < 2 || scale > 8;
+    int proven = 0;  // the benchmark's level (AutoLevel: up to it a step up needs the GPU only not clearly behind)
     if (scale < 2 || scale > 8) {
       // automatic: one level below the one whose 336 picture rows come closest to the screen's
       // rows (wish of the project owner, 19.10.2026: the Retroid's 1080 rows take 2, not 3;
@@ -1747,6 +1754,7 @@ bool drawGx() {
       const int cap = optSmooth.load() ? optCap60.load() : optCap30.load();
       if (cap >= 2 && cap <= 8) {
         scale = std::min(8, cap + 1);
+        proven = cap;
         LOG("dynamic resolution: up to %sx, half a level above the benchmark's %sx for %d pictures a second",
             ScaleName(scale).c_str(), ScaleName(cap).c_str(), optSmooth.load() ? 60 : 30);
       }
@@ -1873,7 +1881,7 @@ bool drawGx() {
     if (autoLevelOn) {
       // in half steps down to 1x (wish of the project owner, 27.10.2026: 2x straight to 1x lost too much)
       autoLevel.Start(scale, std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(),
-                      2, true);
+                      2, true, proven);
       LOG("dynamic resolution: from level %sx (the screen's), half a level lower while the GPU falls behind",
           ScaleName(scale).c_str());
     }
@@ -1955,9 +1963,12 @@ bool drawGx() {
   gx->SetPsx(optPsx.load() != 0 || psxEnv);
   static const bool flaresEnv = getenv("RE4_GX_FLARES") && *getenv("RE4_GX_FLARES") == '1';
   gx->SetFlares(optFlares.load() != 0 || flaresEnv);
+  gx->SetFlareHalos(optFlares.load() != 1);
   gx->SetDofStrong(optDof.load() == 2);
   static const bool mergeEnv = getenv("RE4_GX_MERGE") && *getenv("RE4_GX_MERGE") == '1';
-  gx->SetMerge(optMerge.load() != 0 || mergeEnv);
+  // not with Vulkan (question of the project owner, 09.11.2026): its draw calls are cheap, merging only adds pipelines
+  // to build (the menu greys the switch out); the test switch RE4_GX_MERGE=1 still merges there
+  gx->SetMerge((optMerge.load() != 0 && gx->Api() != re4gx::GxApi::kVulkan) || mergeEnv);
   if (!smoothOn && smoothPrev) {
     api.gxRelease(smoothPrev);
     smoothPrev = nullptr;
@@ -2145,6 +2156,14 @@ bool drawGx() {
       api.setPotato(potato);
       potatoSent = potato;
     }
+    const int viewDistance = optViewDistance.load();
+    if (api.setViewDistance && viewDistance != viewDistanceSent) {
+      api.setViewDistance(viewDistance);
+      viewDistanceSent = viewDistance;
+      // (the reports: what the core was told; the core logs each fog it shortens, "view: fog type ...")
+      LOG("view distance to the core: %s (%d %% of each room's distance fog and far plane)",
+          viewDistance >= 100 ? "Normal" : viewDistance >= 75 ? "Medium" : "Short", viewDistance);
+    }
     const int aim = optAim.load() | (optFarCamera.load() ? 8 : 0)  // bit 3 "Far camera" (patch 0171)
                     | (optMovement.load() & 3) << 4                   // bits 4, 5 "Free movement", "Move while aiming"
                     | (optMovement.load() & 4) << 5                   // bit 7 "D-pad quick slots"
@@ -2217,13 +2236,17 @@ bool drawGx() {
     // its own level over the benchmark's)
     if (autoLevelOn && !between && !levelBench.active) {
       const auto &st = gx->Stats();
-      std::string why;
+      std::string why, status;
       const int level = autoLevel.Chunk(std::chrono::duration<double>(now.time_since_epoch()).count(), st.behindSum,
                                         st.behindChecks,
                                         !corePaused.load() && !gxDumpSeriesLeft && !gxHitShotsLeft && !bench.measuring &&
                                             !levelBench.active,
                                         &why, gxBetweenDropped,  // (counts only while 60 FPS is on; never falls back)
-                                        gxRunWaitMs);
+                                        gxRunWaitMs,
+                                        // 60 FPS making in-between pictures now: a step up by them, not the fences
+                                        optSmooth.load() != 0 && !smoothTooSlow && !smoothPacer.Off(), &status);
+      if (!status.empty())
+        LOG("%s", status.c_str());  // why it stays below the top (every 10 s at most)
       if (level != gx->Halves()) {
         LOG("%s", why.c_str());
         // no in-between picture across the change (a chunk taken ahead, skipNext, is not run yet:
@@ -2308,12 +2331,12 @@ bool drawGx() {
         // (60fps-plan.md S0) without a counterpart, by kind; found by their object, slots used anew;
         // texture matrices blended / left out at their edge, TEV and light colours blended
         LOG("60 FPS draws without a counterpart: particles %u of %u, figures %u of %u, room %u of %u, 2D %u of %u "
-            "(%u moved with the camera); by their object %u (%u new in an old slot); texture matrices %u (%u over the "
-            "edge), TEV colours %u, light colours %u",
+            "(%u moved with the camera); by their object %u (%u new in an old slot, %u particles jumped); texture "
+            "matrices %u (%u over the edge), TEV colours %u, light colours %u",
             s.interpKindUnmatched[0], s.interpKind[0], s.interpKindUnmatched[1], s.interpKind[1],
             s.interpKindUnmatched[2], s.interpKind[2], s.interpKindUnmatched[3], s.interpKind[3], s.interpCameraMoved,
-            s.interpOwned, s.interpOwnedNew, s.interpTexBlends, s.interpTexWraps, s.interpTevBlends,
-            s.interpLightBlends);
+            s.interpOwned, s.interpOwnedNew, s.interpOwnedJumps, s.interpTexBlends, s.interpTexWraps,
+            s.interpTevBlends, s.interpLightBlends);
         if (behind > 2.5 && !levelBench.active) {
           smoothTooSlow = true;
           LOG("60 FPS: the GPU does not keep up, in-between pictures off until the renderer starts anew");
@@ -2624,6 +2647,7 @@ void useCoreProcess(const std::string &why) {
   api.cheatAction = re4ipc_cheat_action;
   api.roomOutline = re4ipc_room_outline;
   api.setLaserColour = re4ipc_set_laser_colour;
+  api.setViewDistance = re4ipc_set_view_distance;
   api.setViewAspect = re4ipc_set_view_aspect;
   api.setHudLayout = re4ipc_set_hud_layout;
   api.touch = re4ipc_touch;
@@ -2905,6 +2929,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_surfaceCreat
   hudSent = {-1, -1, -1, -1};
   fastSent = -1;
   potatoSent = -1;
+  viewDistanceSent = -1;
   aimSent = -1;
   backPlaceSent = -1;
   soundSent = -1;
@@ -3027,11 +3052,19 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setFastCores
   if (optFastCores.exchange(want) != want) LOG("Force Performance: %s", want ? "use performance cores" : "default");
 }
 
-// The menu's Potato mode (drawGx tells the core): bit 0 weather effects off, bit 1 special effects off.
+// The menu's Potato mode (drawGx tells the core): bit 0 weather effects off, bit 1 special effects off, bits 2..3 particle
+// effects (1 less, 2 none), bit 4 shadows and light effects off. (Until 0.99.6 this kept only bits 0 and 1: the menu's
+// "Particle effects" and "Shadows & light" of 0.99.3 never reached the core; found 09.11.2026.)
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setPotato(JNIEnv *, jclass, jint mask) {
-  const int want = static_cast<int>(mask) & 3;
+  const int want = static_cast<int>(mask) & 31;
   if (optPotato.exchange(want) != want)
-    LOG("Potato mode: weather effects %s, special effects %s", want & 1 ? "off" : "on", want & 2 ? "off" : "on");
+    LOG("Potato mode: %s", want ? PotatoName(want).c_str() + 2 : "everything drawn");
+}
+
+// The menu's "View distance" (PERFORMANCE, Potato mode; drawGx tells the core): 100 Normal, 75 Medium, 50 Short.
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setViewDistance(JNIEnv *, jclass, jint percent) {
+  const int want = percent < 20 ? 20 : percent > 100 ? 100 : static_cast<int>(percent);
+  if (optViewDistance.exchange(want) != want) LOG("view distance: %d %%", want);
 }
 
 // The menu's "Invert vertical" and "Aim speed" (drawGx tells the core): stick aiming with touch and controllers.
@@ -3186,10 +3219,13 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMinimap(J
   if (optMinimap.exchange(want) != want) LOG("minimap: %s", want ? "on" : "off");
 }
 
-// Lens flares (the menu, wish of the project owner, 04.11.2026): a faint glow at the game's lights (GxRenderer::SetFlares).
-extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setFlares(JNIEnv *, jclass, jboolean on) {
-  const int want = on ? 1 : 0;
-  if (optFlares.exchange(want) != want) LOG("lens flares: %s", want ? "on" : "off");
+// Lens flares (the menu, wish of the project owner, 04.11.2026): a faint glow at the game's lights (GxRenderer::SetFlares);
+// since 0.99.6 three steps (wish of the project owner, 09.11.2026): 0 off, 1 the lens flares' ghosts only, 2 halos + lens
+// flares (the glow and star at each light too, as before)
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setFlares(JNIEnv *, jclass, jint mode) {
+  const int want = mode < 0 ? 0 : mode > 2 ? 2 : static_cast<int>(mode);
+  static const char *const kName[3] = {"off", "lens flares", "halos + lens flares"};
+  if (optFlares.exchange(want) != want) LOG("lens flares: %s", kName[want]);
 }
 
 // FXAA (the menu): an edge smoothing pass over every picture (GxRenderer::SetFxaa).

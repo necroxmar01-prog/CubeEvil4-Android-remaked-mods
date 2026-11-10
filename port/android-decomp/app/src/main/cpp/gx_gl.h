@@ -33,6 +33,7 @@ struct GxStats {
   unsigned programs = 0;         // shaders built
   unsigned programsLoaded = 0;   // of them taken from the program cache
   unsigned programsAhead = 0;    // of them made before their first draw (Prewarm)
+  unsigned pipelinesAhead = 0;   // Vulkan: pipelines of the app's list made on a thread of their own (AheadThread)
   unsigned textures = 0;         // textures decoded
   unsigned textureCopies = 0;    // EFB copies to a texture
   unsigned displayCopies = 0;    // EFB copies to the XFB
@@ -132,6 +133,9 @@ struct GxStats {
   unsigned interpCameraMoved = 0;
   // one-frame effects the game makes anew each picture (the laser sight), matched to the one of their id before
   unsigned interpOneFrame = 0;
+  // particles found by their object that jumped (GxCore::Jumped: weather particles wrapping around the camera),
+  // drawn as new ones
+  unsigned interpOwnedJumps = 0;
   // (interpOwnedRecount: draws of objects that drew another number of quads than in the picture before:
   // matched the old way, not by "n-th draw")
 };
@@ -284,6 +288,9 @@ public:
   // last 3D draw (under the HUD), only where the source is not hidden in the EFB depth, faded in and out over
   // a few pictures. Takes effect with the next chunk.
   void SetFlares(bool on);
+  // With the lens flares on: the soft glow and fine star at each light too (true, the default: the menu's "Halos +
+  // lens flares"), or only the coloured ghosts towards the picture's centre (false: "Lens flares"; 0.99.6).
+  void SetFlareHalos(bool on);
   // the menu's depth of field "Strong" (0.98.4): the gameplay autofocus blurs more and wider than "Light"
   void SetDofStrong(bool on);
   // The EFB rows the app shows (0..448 of the game's picture: all, or 56..392 in the 16:9 formats,

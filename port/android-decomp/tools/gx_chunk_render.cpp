@@ -14,6 +14,9 @@
 // leaves the picture before on screen. Any other chunk must start over
 // (RE4_GX_CHUNK_RESET) and gets a fresh renderer.
 //
+// RE4_GX_SERIES=1: dumps of the core up to 4 frames apart (RE4_GX_DUMP_AT="7141,7142,..."), each starting over, run
+// on the same renderer as one series (the lens flares, which fade in over pictures).
+//
 // RE4_GX_INVALIDATE_POISON=1: what the renderer lets the GPU forget (copy targets, the blur and
 // the focus of the autofocus; GPU step b) is painted magenta instead: the pictures must not
 // change (whole_r100_check.sh compares them).
@@ -170,7 +173,13 @@ int main(int argc, char **argv) {
       loaded.chunk.opWords = static_cast<uint32_t>(loaded.ops.size());
     }
     Re4GxChunk chunk = loaded.chunk;
-    const bool follows = renderer && chunk.sequence == lastSequence + 1 && loaded.frame == lastFrame + 1;
+    // RE4_GX_SERIES=1 (09.11.2026): the core's dumps a few frames apart (RE4_GX_DUMP_AT with consecutive frame numbers:
+    // each one starts over with RE4_GX_CHUNK_RESET) run on the same renderer, as the app's chunks do after a dump; what
+    // follows from picture to picture (the lens flares fading in, their slots) is seen then
+    static const bool series = std::getenv("RE4_GX_SERIES") && *std::getenv("RE4_GX_SERIES") == '1';
+    const bool follows = renderer && ((chunk.sequence == lastSequence + 1 && loaded.frame == lastFrame + 1) ||
+                                      (series && (chunk.flags & RE4_GX_CHUNK_RESET) && loaded.frame > lastFrame &&
+                                       loaded.frame - lastFrame <= 4));
     if (!follows) {
       if (!(chunk.flags & RE4_GX_CHUNK_RESET)) {
         std::printf("%s: Folgebild ohne das Bild davor (Bildstück %u), übersprungen\n", Stem(path).c_str(),
@@ -301,15 +310,16 @@ int main(int argc, char **argv) {
                   now.interpMatched - was.interpMatched, now.interpVertexBlends - was.interpVertexBlends);
       std::printf("%s: ohne Gegenstück Teilchen %u/%u, Figuren %u/%u, Raum %u/%u, 2D %u/%u (%u mit der Kamera "
                   "bewegt); über das Objekt %u "
-                  "(%u neu belegt, %u Einbild-Effekte wiedererkannt); Texturmatrizen %u (%u über den Rand), "
-                  "TEV-Farben %u, Lichtfarben %u\n",
+                  "(%u neu belegt, %u gesprungen, %u Einbild-Effekte wiedererkannt); Texturmatrizen %u (%u über den "
+                  "Rand), TEV-Farben %u, Lichtfarben %u\n",
                   Stem(path).c_str(), now.interpKindUnmatched[0] - was.interpKindUnmatched[0],
                   now.interpKind[0] - was.interpKind[0], now.interpKindUnmatched[1] - was.interpKindUnmatched[1],
                   now.interpKind[1] - was.interpKind[1], now.interpKindUnmatched[2] - was.interpKindUnmatched[2],
                   now.interpKind[2] - was.interpKind[2], now.interpKindUnmatched[3] - was.interpKindUnmatched[3],
                   now.interpKind[3] - was.interpKind[3], now.interpCameraMoved - was.interpCameraMoved,
                   now.interpOwned - was.interpOwned,
-                  now.interpOwnedNew - was.interpOwnedNew, now.interpOneFrame - was.interpOneFrame,
+                  now.interpOwnedNew - was.interpOwnedNew, now.interpOwnedJumps - was.interpOwnedJumps,
+                  now.interpOneFrame - was.interpOneFrame,
                   now.interpTexBlends - was.interpTexBlends,
                   now.interpTexWraps - was.interpTexWraps, now.interpTevBlends - was.interpTevBlends,
                   now.interpLightBlends - was.interpLightBlends);

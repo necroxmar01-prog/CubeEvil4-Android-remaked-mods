@@ -28,6 +28,9 @@
     <string name="ingame_perf_section">Performa</string>
     <string name="ingame_minimap">Peta mini</string>
     <string name="ingame_flares">Pantulan lensa (lens flare)</string>
+    <string name="ingame_flares_lens">Lens flare</string>
+    <string name="ingame_flares_both">Halo + lens flare</string>
+    <string name="ingame_flares_help">Lens flare: cincin berwarna samar melintasi gambar dari cahaya paling terang, seperti pada lensa kamera. Halo + lens flare: ditambah cahaya lembut dengan bintang halus pada lilin, obor, dan lampu.</string>
     <string name="ingame_dof">Kedalaman bidang (depth of field)</string>
     <string name="ingame_fps_display">Tampilan FPS</string>
     <string name="ingame_fps_bottom_left">Kiri bawah</string>
@@ -48,7 +51,12 @@
     <string name="ingame_particles_less">Sedikit</string>
     <string name="ingame_particles_none">Tidak ada</string>
     <string name="ingame_potato_shadows">Bayangan &amp; cahaya</string>
+    <string name="ingame_potato_view">Jarak pandang</string>
+    <string name="ingame_view_normal">Normal</string>
+    <string name="ingame_view_medium">Sedang</string>
+    <string name="ingame_view_short">Pendek</string>
     <string name="ingame_potato_help">Efek cuaca: kabut tebal, hujan, percikan air. Efek khusus: uap, getaran udara panas, air. Efek partikel: darah, debu, asap, percikan, bunga api, dan api; Sedikit menggambar separuhnya, Tidak ada menghapus semuanya kecuali api dan ledakan, yang tetap separuh sebagai peringatan. Bayangan &amp; cahaya: nonaktif menghapus bayangan (juga dalam adegan cerita), pendar cahaya, dan berkas cahaya; pencahayaan ruangan tetap sama. Setiap pengaturan mengurangi beban grafis di perangkat yang lebih lemah; titik kena tembak, petunjuk, laser, dan semua efek dalam adegan cerita tetap ada.</string>
+    <string name="ingame_view_help">Jarak pandang: Sedang dan Pendek mendekatkan kabut jauh, dan yang ada di baliknya tidak digambar. Ini membantu bila prosesor atau jumlah objek menahan permainan, pada ponsel yang lebih lambat dengan resolusi rendah: di desa sekitar separuh objek hilang. Pada resolusi tinggi chip grafis sibuk dengan piksel dan hanya sedikit terbantu. Ruangan tanpa kabut jauh, dan yang kabutnya jauh di belakang semua yang terlihat (kastil, pulau), tetap seperti semula.</string>
     <string name="ingame_resolution_line">Resolusi: %1$d × %2$d piksel (tingkat %3$s) · layar %4$d × %5$d · berlaku saat menu ditutup. Tingkat yang lebih tinggi butuh daya lebih besar.</string>
     <string name="ingame_resolution_line_auto">Resolusi: %1$d × %2$d piksel (tingkat %3$s, Dinamis) · layar %4$d × %5$d · berlaku saat menu ditutup. Dinamis turun satu tingkat selama GPU tidak sanggup mengikuti.</string>
 
@@ -97,10 +105,7 @@
     <string name="ingame_aim_help">Balik vertikal dan Kecepatan bidik: untuk membidik pisau dan senjata dengan sentuhan atau controller, bukan dengan giroskop. Balik vertikal mengatur opsi bawaan game.</string>
     <string name="ingame_update">Perbarui</string>
     <string name="ingame_up_to_date">Sudah terbaru</string>
-    <string name="ingame_update_loading">Mengunduh %1$d %%</string>
-    <string name="ingame_update_install">Memasang…</string>
-    <string name="ingame_update_failed">Pembaruan gagal: %1$s</string>
-    <string name="ingame_update_allow">Izinkan CubeEvil4 memasang aplikasi, lalu tekan Perbarui lagi.</string>
+    <string name="ingame_update_page">Rilis terbaru terbuka di GitHub: unduh APK di sana lalu pasang.</string>
 
     <string name="ingame_card">Kartu memori (slot A)</string>
     <string name="ingame_card_help">Ekspor dan impor data game: data simpanan sebagai .gci (untuk Dolphin atau GameCube) dan tata letak sentuh milik Anda sebagai CubeEvil4-touch-layout.json. Impor memulihkan keduanya.</string>
@@ -221,6 +226,7 @@
     <string name="ingame_skip_or_smooth">Lewati frame dan 60 FPS tidak bisa aktif bersamaan: mengaktifkan yang satu menonaktifkan yang lain.</string>
     <string name="ingame_merge_help">Menggabungkan beberapa objek menjadi satu panggilan ke driver grafis. Dapat membantu ponsel dengan driver grafis lambat (mis. GPU Mali) dan mungkin sedikit memperlambat ponsel lain. Tidak berpengaruh selama 60 FPS aktif.</string>
     <string name="ingame_vertex_ring_help">Mengirim data verteks setiap gambar ke chip grafis melalui satu buffer yang tetap terpetakan, bukan buffer baru setiap gambar. Dapat menghemat waktu pada GPU Mali dan memakai sedikit lebih banyak memori grafis. Langsung berlaku.</string>
+    <string name="ingame_vulkan_perf_help">Dengan Vulkan, Gabungkan panggilan gambar dan Ring buffer verteks berwarna abu-abu dan tidak dipakai: Vulkan selalu mengirim data verteks lewat buffer yang tetap dipetakan, dan panggilan gambarnya murah, jadi penggabungan hanya menambah pipeline yang harus dibuat. Pilihan Anda berlaku lagi dengan OpenGL ES.</string>
     <string name="ingame_game_language">Bahasa game</string>
     <string name="ingame_language_device">Bahasa perangkat</string>
     <string name="ingame_language_help">Bahasa teks dan subtitel game. Bahasa perangkat: bahasa perangkat jika tersedia di game, jika tidak bahasa Inggris. Perubahan akan memulai ulang game.</string>

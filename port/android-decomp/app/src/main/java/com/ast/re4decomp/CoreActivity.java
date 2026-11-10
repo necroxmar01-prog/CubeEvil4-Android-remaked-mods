@@ -198,10 +198,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   static final int VULKAN_MIN_SDK = 29;
   private static final int VULKAN_1_1 = (1 << 22) | (1 << 12);
   private boolean vulkan;
-  // the menu's renderer (GRAPHICS_PREFS): "gles" (the default) or "vulkan"; the crash guard: set while Vulkan starts,
-  // cleared once it has drawn for a few seconds (vulkanGuard); still set at the next start: that one ended in Vulkan's
-  // start, OpenGL ES then (vulkan-bauplan.md E7)
-  static final String RENDERER = "renderer", VULKAN_STARTING = "vulkanStarting";
+  // the menu's renderer (GRAPHICS_PREFS): "gles" (the default) or "vulkan"; the crash guard (VulkanGuard): its mark set
+  // at the first Vulkan start of a process, cleared once Vulkan has drawn for a few seconds (vulkanGuard), when the
+  // game ends normally or goes to the background; still set at the next start: OpenGL ES then if that process crashed
+  // (vulkan-bauplan.md E7; since 0.99.6 by how it ended)
+  static final String RENDERER = "renderer", VULKAN_STARTING = VulkanGuard.STARTING;
+  private static boolean vulkanMarked;  // this process set the mark (once: not again for a new activity)
   private static final long VULKAN_GUARD_MS = 2000;
   private static final long VULKAN_GUARD_PICTURES = 120;
   private int vulkanGuardChecks;
@@ -297,9 +299,15 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     Log.i(TAG, "shader cache: " + ShaderCache.prepare(this));
     String programs = "RE4_GX_PROGRAM_CACHE=" + ShaderCache.dir(this).getAbsolutePath();
     // the app's list of shader programs (port/tools/gx_program_list.py): made ahead from the first start
-    String programList = programList();
+    String programList = assetFile("gx-programs.keys");
     if (programList != null) programs += ";RE4_GX_PROGRAM_LIST=" + programList;
+    // Vulkan's pipelines of all rooms (port/tools/gx_vkpipe_list.py, 0.99.5): made ahead on a thread of the renderer
+    String pipeList = assetFile("gx-vkpipes.keys");
+    if (pipeList != null) programs += ";RE4_GX_VK_PIPE_LIST=" + pipeList;
     String coreSettings = settings.isEmpty() ? programs : settings + ";" + programs;
+    // how the game's last process ended (Android 11 on; the crash guard below, the reports)
+    VulkanGuard.Exit lastEnd = VulkanGuard.lastExit(this, 0);
+    if (lastEnd != null) Log.i(TAG, "the game's last process ended: " + lastEnd);
     // the renderer: Vulkan (the test switch RE4_GX_API=vulkan) or OpenGL ES; the core hears it as RE4_GX_API
     vulkan = chooseVulkan();
     coreSettings = withRenderer(coreSettings, vulkan);
@@ -425,7 +433,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setSharpen(CoreMenu.sharpenLevel(g));
       CoreBridge.setTvFilter(g.getBoolean("tvFilter", false));
       CoreBridge.setPsx(g.getBoolean("psx", false));
-      CoreBridge.setFlares(g.getBoolean("flares", false));
+      CoreBridge.setFlares(CoreBridge.flareMode(g));
+      CoreBridge.setViewDistance(CoreBridge.VIEW_PERCENT[CoreBridge.viewDistance(g)]);
       CoreBridge.setMinimap(g.getBoolean("minimap", false));
       CoreBridge.setLaserColour(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getInt(LASER_COLOUR, 0));
       CoreBridge.setMerge(g.getBoolean("mergeDraws", false));
@@ -731,6 +740,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   }
 
   private void quit() {
+    clearVulkanMark("the player ended the game");
     CoreLog.stop();
     finishAndRemoveTask();
     // the core cannot be restarted inside this process
@@ -750,6 +760,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
    */
   private void restartIntoGame(String why) {
     Log.i(TAG, "the app restarts into the game (" + why + ")");
+    clearVulkanMark("the app restarts");
     CoreLog.stop();
     startActivity(new Intent(this, LauncherRestartActivity.class)
         .putExtra(LauncherRestartActivity.GAME_PID, Process.myPid())
@@ -760,6 +771,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
 
   private void openStartScreen(String why) {
     Log.i(TAG, "the game ends, the start screen opens (" + why + ")");
+    clearVulkanMark("the game ends for the start screen");
     CoreLog.stop();
     startActivity(new Intent(this, LauncherRestartActivity.class)
         .putExtra(LauncherRestartActivity.GAME_PID, Process.myPid()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -932,7 +944,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       AppUpdate.check(CoreActivity.this, listener);
     }
 
-    @Override public void startUpdate(AppUpdate.Listener listener) { AppUpdate.install(CoreActivity.this, listener); }
+    @Override public void openUpdate() { AppUpdate.open(CoreActivity.this); }
 
     @Override public void aimInvertChanged(boolean on) {
       getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).edit().putBoolean(AIM_INVERT_V, on).apply();
@@ -1055,6 +1067,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     }
 
     @Override public boolean vulkanSupported() { return CoreActivity.this.vulkanSupported(); }
+
+    @Override public boolean vulkanRunning() { return surface instanceof VulkanSurface; }
 
     @Override public boolean vulkanChosen() {
       return "vulkan".equals(getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).getString(RENDERER, "gles"));
@@ -1472,17 +1486,18 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
 
   /** The card's file list (without the saves themselves) for the report. */
   /**
-   * The asset gx-programs.keys (the shader programs of all devices' error reports, merged by
-   * port/tools/gx_program_list.py) as a file the core reads; null when the app has none.
+   * An asset as a file the core reads, in the cache folder (written again only when it changed); null when the app has
+   * none: gx-programs.keys (the shader programs of all devices' error reports, merged by port/tools/gx_program_list.py),
+   * gx-vkpipes.keys (Vulkan's pipelines of the PC's room tours and the reports, port/tools/gx_vkpipe_list.py).
    */
-  private String programList() {
+  private String assetFile(String name) {
     byte[] list;
-    try (InputStream in = getAssets().open("gx-programs.keys")) {
+    try (InputStream in = getAssets().open(name)) {
       list = CoreLog.readAll(in);
     } catch (IOException e) {
       return null;
     }
-    File file = new File(getCacheDir(), "gx-programs.keys");
+    File file = new File(getCacheDir(), name);
     try {
       boolean same = false;
       if (file.length() == list.length) {
@@ -1497,7 +1512,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       }
       return file.getAbsolutePath();
     } catch (IOException e) {
-      Log.w(TAG, "program list: " + e);
+      Log.w(TAG, "asset " + name + ": " + e);
       return null;
     }
   }
@@ -1508,6 +1523,13 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.writeProgramKeys(new File(CoreLog.folder(this), "program-keys.bin").getAbsolutePath());
     } catch (UnsatisfiedLinkError e) {
       Log.w(TAG, "program keys: " + e);
+    }
+    // Vulkan's pipelines of the rooms this device drew (they go into the app's list, port/tools/gx_vkpipe_list.py)
+    File pipes = new File(CoreLog.folder(this), "vk-pipes.bin");
+    try {
+      if (!ShaderCache.writeRoomPipes(ShaderCache.dir(this), pipes)) pipes.delete();
+    } catch (IOException e) {
+      Log.w(TAG, "pipeline lists: " + e);
     }
     StringBuilder card = new StringBuilder();
     String[] rows = CoreBridge.cardList();
@@ -2540,14 +2562,31 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       return false;
     }
     if (!test && g.getBoolean(VULKAN_STARTING, false)) {
-      // the last start with Vulkan ended before it drew (a driver's crash): OpenGL ES, the menu's choice back
-      g.edit().putString(RENDERER, "gles").putBoolean(VULKAN_STARTING, false).commit();
-      rendererLine = "OpenGL ES (the last start with Vulkan ended while Vulkan started)";
-      Log.w(TAG, "renderer: " + rendererLine);
-      main.post(() -> message(getString(R.string.ingame_vulkan_crashed)));
-      return false;
+      // the mark of the last start is still there: how did its process end (VulkanGuard)?
+      final int markPid = g.getInt(VulkanGuard.PID, 0);
+      final long markAt = g.getLong(VulkanGuard.AT, 0);
+      final int unsure = g.getInt(VulkanGuard.UNSURE, 0);
+      final VulkanGuard.Exit end = markPid != 0 ? VulkanGuard.lastExit(this, markPid) : null;
+      final VulkanGuard.Verdict v = VulkanGuard.judge(true, markPid, markAt, Build.VERSION.SDK_INT, end, unsure);
+      Log.i(TAG, "renderer: the crash guard's mark of the last start (pid " + markPid + ", set "
+          + VulkanGuard.time(markAt) + ") was still there: " + v.why);
+      if (v.fallBack) {
+        // that start crashed while Vulkan started (a driver's crash): OpenGL ES, the menu's choice back
+        g.edit().putString(RENDERER, "gles").putBoolean(VULKAN_STARTING, false).putInt(VulkanGuard.UNSURE, 0).commit();
+        rendererLine = "OpenGL ES (the last start with Vulkan ended while Vulkan started)";
+        Log.w(TAG, "renderer: " + rendererLine);
+        main.post(() -> message(getString(R.string.ingame_vulkan_crashed)));
+        return false;
+      }
+      g.edit().putBoolean(VULKAN_STARTING, false).putInt(VulkanGuard.UNSURE, v.unsure ? unsure + 1 : 0).commit();
     }
-    if (!test) g.edit().putBoolean(VULKAN_STARTING, true).commit();  // (commit: it must be on disk before Vulkan)
+    if (!test && !vulkanMarked) {
+      // (commit: it must be on disk before Vulkan; once a process: a new activity of it is no new start)
+      vulkanMarked = true;
+      g.edit().putBoolean(VULKAN_STARTING, true).putInt(VulkanGuard.PID, Process.myPid())
+          .putLong(VulkanGuard.AT, System.currentTimeMillis()).commit();
+      Log.i(TAG, "renderer: the crash guard's mark set (pid " + Process.myPid() + ")");
+    }
     rendererLine = test ? "Vulkan (test switch)" : "Vulkan";
     Log.i(TAG, "renderer: " + rendererLine);
     return true;
@@ -2558,13 +2597,21 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     @Override public void run() {
       if (destroyed || !(surface instanceof VulkanSurface)) return;
       if (CoreBridge.pictures() >= VULKAN_GUARD_PICTURES && CoreBridge.rendererProblem().isEmpty()) {
-        getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).edit().putBoolean(VULKAN_STARTING, false).apply();
-        Log.i(TAG, "renderer: Vulkan drew " + CoreBridge.pictures() + " pictures; the crash guard is cleared");
+        clearVulkanMark("Vulkan drew " + CoreBridge.pictures() + " pictures");
         return;
       }
       if (++vulkanGuardChecks < 150) main.postDelayed(this, VULKAN_GUARD_MS);
     }
   };
+
+  /** The crash guard's mark off (the log says why); nothing when it is not there. */
+  private void clearVulkanMark(String why) {
+    SharedPreferences g = getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE);
+    if (!g.getBoolean(VULKAN_STARTING, false)) return;
+    // (commit: the game may end right after)
+    g.edit().putBoolean(VULKAN_STARTING, false).putInt(VulkanGuard.UNSURE, 0).commit();
+    Log.i(TAG, "renderer: the crash guard's mark cleared (" + why + ")");
+  }
 
   /** The core's settings with the renderer: RE4_GX_API=vulkan for Vulkan, none for OpenGL ES. */
   static String withRenderer(String coreSettings, boolean vulkan) {
@@ -2652,6 +2699,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   @Override
   protected void onStop() {
     Log.i(TAG, "activity stopped");
+    // (an end in the background is no crash of Vulkan's start)
+    clearVulkanMark("the app went to the background");
     super.onStop();
   }
 

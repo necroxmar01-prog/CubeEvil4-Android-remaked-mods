@@ -1818,6 +1818,121 @@ void TestAutoLevel() {
     Check(r.a.Ups() == 1, "auto level: up again once it hardly waits");
   }
   {
+    // up to the benchmark's level (0.99.5, the project owner's Retroid report 08.11.2026: 60 FPS, down to 1x after a
+    // hitch, never up again): with every in-between picture shown and the game at 30, a GPU a third behind (the fence of
+    // the newest in-between picture still open at every third look) goes up to the benchmark's 1.5x, not above it
+    auto play = [](AutoRun &r, double seconds, unsigned behindEvery) {
+      const double end = r.t + seconds;
+      while (r.t < end) {
+        r.t += 1.0 / 30.0;
+        r.checks++;
+        r.sum += behindEvery && r.checks % behindEvery == 0 ? 1u : 0u;
+        std::string why;
+        r.a.Chunk(r.t, r.sum, r.checks, true, &why, r.dropped, r.waited);
+        if (!why.empty())
+          r.lines.push_back(why);
+      }
+    };
+    AutoRun r;
+    r.a.Start(4, 0.0, 2, true, 3);  // the benchmark's 1.5x, Dynamic up to 2x
+    r.Play(6.5, 20.0, 1);
+    r.Play(6.5, 20.0, 1);
+    Check(r.a.Level() == 2, "auto level, benchmark 1.5x: down to 1x after a long hitch");
+    play(r, 30.0, 3);
+    Check(r.a.Level() == 3 && r.a.Ups() == 1, "auto level, benchmark 1.5x: up to 1.5x with the GPU a third behind");
+    play(r, 120.0, 3);
+    Check(r.a.Level() == 3 && r.a.Ups() == 1, "auto level, benchmark 1.5x: not above it unless the GPU keeps up");
+    play(r, 30.0, 0);
+    Check(r.a.Level() == 4 && r.a.Ups() == 2, "auto level, benchmark 1.5x: 2x once the GPU keeps up");
+    AutoRun half;
+    half.a.Start(4, 0.0, 2, true, 3);
+    half.Play(13.0, 20.0, 1);
+    play(half, 60.0, 2);
+    Check(half.a.Level() == 2 && half.a.Ups() == 0, "auto level, benchmark 1.5x: not up with the GPU half behind");
+    AutoRun none;
+    none.a.Start(4, 0.0, 2, true);  // no benchmark: as before
+    none.Play(13.0, 20.0, 1);
+    play(none, 60.0, 3);
+    Check(none.a.Level() == 2 && none.a.Ups() == 0, "auto level, no benchmark: not up with the GPU a third behind");
+  }
+  {
+    // 60 FPS (0.99.5, the project owner's reports 08.11.2026, GLES and Vulkan): a heavy moment at 2x took it to 1.5x;
+    // then he stood still facing a wall, 60 shown a second, no in-between picture left out, the fences 0.7 behind, and
+    // it never went back up. Now: up again 10-20 s later; a level too heavy goes back within 5 s, and each next try
+    // waits longer (no pendulum); below the top a status line every 10 s says why it stays.
+    // `behindOf10`: of every 10 looks that many find the GPU behind; `droppedEvery`: one in-between picture of so many
+    // chunks left out (0: none)
+    auto play60 = [](AutoRun &r, double seconds, unsigned behindOf10, unsigned droppedEvery,
+                     std::vector<std::string> *status) {
+      const double end = r.t + seconds;
+      while (r.t < end) {
+        r.t += 1.0 / 30.0;
+        r.checks++;
+        r.sum += r.checks % 10 < behindOf10 ? 1u : 0u;
+        if (droppedEvery && r.checks % droppedEvery == 0)
+          r.dropped++;
+        std::string why, line;
+        r.a.Chunk(r.t, r.sum, r.checks, true, &why, r.dropped, r.waited, true, &line);
+        if (!why.empty())
+          r.lines.push_back(why);
+        if (!line.empty() && status)
+          status->push_back(line);
+      }
+    };
+    AutoRun r;
+    std::vector<std::string> status;
+    r.a.Start(4, 0.0, 2, true, 3);  // the benchmark's 1.5x, Dynamic up to 2x (the owner's Retroid)
+    play60(r, 6.5, 10, 4, &status);  // heavy: a quarter left out, the GPU behind
+    Check(r.a.Level() == 3, "auto level, 60 FPS: a heavy moment takes 2x to 1.5x");
+    const double downAt = r.t;
+    while (r.a.Ups() == 0 && r.t < downAt + 120.0)
+      play60(r, 0.5, 7, 0, &status);  // standing still: none left out, the fences 0.7 behind (as the owner's GLES log)
+    Check(r.a.Level() == 4 && r.t - downAt >= 9.9 && r.t - downAt <= 20.5,
+          "auto level, 60 FPS: steady at 1.5x (none left out, fences 0.7 behind): back at 2x within 10-20 s");
+    std::fprintf(stderr, "  auto level, 60 FPS: back at 2x %.1f s after the step down\n", r.t - downAt);
+    Check(!r.lines.empty() && r.lines.back().find("every in-between picture shown") != std::string::npos,
+          "auto level, 60 FPS: the step up logged");
+    bool told = false;
+    for (const std::string &l : status)
+      told = told || l.find("dynamic resolution: stays at 1.5x below 2x: ") != std::string::npos;
+    Check(told, "auto level, 60 FPS: a status line says why it stays below the top");
+    const unsigned downs = r.a.Downs();
+    play60(r, 60.0, 9, 0, &status);  // steady at 2x: it stays
+    Check(r.a.Level() == 4 && r.a.Downs() == downs, "auto level, 60 FPS: steady at 2x, it stays");
+    // in-between pictures left out at 1.5x: no step up, the status says so
+    AutoRun lost;
+    std::vector<std::string> lostStatus;
+    lost.a.Start(4, 0.0, 2, true, 3);
+    play60(lost, 6.5, 10, 4, &lostStatus);
+    play60(lost, 60.0, 7, 20, &lostStatus);  // a twentieth left out (5 %): not steady
+    // (the window across the switch from heavy to light may take it half a level further down: no matter)
+    Check(lost.a.Level() <= 3 && lost.a.Ups() == 0, "auto level, 60 FPS: not up while in-between pictures are left out");
+    told = false;
+    for (const std::string &l : lostStatus)
+      told = told || l.find("in-between pictures left out") != std::string::npos;
+    Check(told, "auto level, 60 FPS: the status names the in-between pictures left out");
+    // too heavy at 2x, fine at 1.5x for 5 minutes: tries 2x again and again, each try later than the last
+    AutoRun swing;
+    swing.a.Start(4, 0.0, 2, true, 3);
+    std::vector<double> ups;
+    while (swing.t < 300.0) {
+      const unsigned before = swing.a.Ups();
+      if (swing.a.Level() == 4)
+        play60(swing, 0.5, 10, 4, nullptr);
+      else
+        play60(swing, 0.5, 7, 0, nullptr);
+      if (swing.a.Ups() != before)
+        ups.push_back(swing.t);
+    }
+    std::fprintf(stderr, "  auto level, 60 FPS, 2x too heavy for 5 minutes: %u steps down, %zu up, the wait %.0f s\n",
+                 swing.a.Downs(), ups.size(), swing.a.Hold());
+    Check(swing.a.Downs() <= 6 && swing.a.Downs() >= 2, "auto level, 60 FPS: 2x too heavy: few tries in 5 minutes");
+    Check(!ups.empty() && ups.front() <= 25.0, "auto level, 60 FPS: the first try within 25 s");
+    for (size_t i = 2; i < ups.size(); i++)
+      Check(ups[i] - ups[i - 1] > ups[i - 1] - ups[i - 2], "auto level, 60 FPS: each try later than the last");
+    Check(swing.a.Hold() >= 80.0, "auto level, 60 FPS: the wait grown after the bounces");
+  }
+  {
     // in halves (the app): from 2x (4) half a level at a time, never below 1x (2), named "1.5x"
     AutoRun r;
     r.a.Start(4, 0.0, 2, true);
@@ -2513,6 +2628,59 @@ void TestInterpolationOwners() {
     Check(glGetError() == GL_NO_ERROR, "owners: no GL error");
     r.Release();
   }
+}
+
+// A weather particle that wraps around the camera (esp15.cpp, id 0x15; the project owner's fog in r227, GX series
+// 08.11.2026: a sprite 7 m to the side): A +3500, B -3500, the same object and life. Halfway (0) it stood where it is
+// in neither picture, a brighter fog bank in each such in-between picture; now it stands where it is in B. A second
+// one drifts 1000 to the left (from -6000 to -7000) and still goes halfway (-6500).
+void WrapScene(Builder &b, std::uint32_t sequence, bool second, Re4GxChunk *out) {
+  Baseline(b);
+  b.flags = sequence == 1 ? RE4_GX_CHUNK_RESET | RE4_GX_CHUNK_XFB : RE4_GX_CHUNK_XFB;
+  DisplayCopy(b, true, kBlack);
+  const float n = 100.0f, f = 1000000.0f;
+  b.XfF(0x1020, {1.0f, 0.0f, 1.0f, 0.0f, -n / (f - n), -f * n / (f - n)});
+  b.Xf(0x1026, {0});
+  auto particle = [&](std::uint32_t object, float x) {
+    b.Owner(object, 0x81234560u, 0x15, 0x00150ed7u);
+    b.XfF(0, {1, 0, 0, x, 0, 1, 0, 0, 0, 0, 1, -20000.0f});
+    std::vector<std::uint8_t> v;
+    V(v, -250.0f, -250.0f, 0.0f, kGreen);
+    V(v, 250.0f, -250.0f, 0.0f, kGreen);
+    V(v, 250.0f, 250.0f, 0.0f, kGreen);
+    V(v, -250.0f, 250.0f, 0.0f, kGreen);
+    b.Draw(RE4_GX_V_COLOR0, 16, v, 4, 0x80);
+  };
+  particle(0x80100000u, second ? -3500.0f : 3500.0f);
+  particle(0x80100150u, second ? -7000.0f : -6000.0f);
+  b.Owner(0, 0, 0xFF);
+  DisplayCopy(b, false, kBlack);
+  *out = b.Chunk();
+  out->sequence = sequence;
+}
+
+void TestInterpolationWrap() {
+  auto px = [](float x) { return static_cast<int>(std::lround(320.0f + x / 20000.0f * 320.0f)); };
+  std::string error;
+  re4gx::GxRenderer r;
+  Require(r.Init(1, &error), error.c_str());
+  r.SetRecording(true);
+  Builder ba, bb;
+  Re4GxChunk a, b;
+  WrapScene(ba, 1, false, &a);
+  WrapScene(bb, 2, true, &b);
+  r.Run(a);
+  Check(r.Interpolate(a, b, 0.5f), "wrap: the in-between picture is shown");
+  const GLuint xfb = r.Xfb(nullptr, nullptr);
+  const auto asInB = TexPixel(xfb, px(-3500.0f), 264), halfway = TexPixel(xfb, px(0.0f), 264),
+             asInA = TexPixel(xfb, px(3500.0f), 264), drift = TexPixel(xfb, px(-6500.0f), 264);
+  const bool right = Near(asInB, 0, 255, 0) && Near(halfway, 0, 0, 0) && Near(asInA, 0, 0, 0) && Near(drift, 0, 255, 0);
+  Check(right, "wrap: a particle that wrapped around stands where it is in B, a drifting one halfway");
+  Check(r.Stats().interpOwnedJumps == 1 && r.Stats().interpOwned == 1, "wrap: one jumped, one found by its object");
+  if (!right)
+    Print("asInB", asInB), Print("halfway", halfway), Print("asInA", asInA), Print("drift", drift);
+  Check(glGetError() == GL_NO_ERROR, "wrap: no GL error");
+  r.Release();
 }
 
 // A room part of 24 vertices (not a particle) whose texture matrix index changes from A (identity) to B
@@ -3417,6 +3585,121 @@ std::vector<std::string> CacheFiles(const std::string &dir, const char *ending) 
 // The shader programs made ahead (decision of the project owner, 23.10.2026): the render thread's
 // Prewarm only loads binaries; WarmProgramCache, on a thread with a context of its own, links what
 // the cache's keys and the app's list (a key list file) still lack and removes old files.
+// CanonicalShaderKey (0.99.5): what the shaders do not use set to 0, what they use kept
+void TestCanonicalKey() {
+  re4gx::ShaderKey a{};
+  a.numStages = 2;
+  a.colorEnv[0] = 0x0008FA;  // inputs a 0, b 8, c 15, d 10: none KONST (14)
+  a.alphaEnv[0] = (1u << 13) | (2u << 10) | (3u << 7) | (4u << 4) | 0u;  // inputs 1..4 (KONST is 6), swap tables 0, 0
+  a.colorEnv[1] = 14u << 12;  // input a: KONST colour
+  a.alphaEnv[1] = (6u << 4) | 1u | (2u << 2);  // input d: KONST alpha, swap tables 1 and 2
+  a.konst[0] = 0x1D0D;
+  a.konst[1] = 0x1C0C;
+  a.swap[0] = 0x11, a.swap[1] = 0x22, a.swap[2] = 0x33, a.swap[3] = 0x44;
+  a.fog = 1;  // projection without fog
+  const re4gx::ShaderKey c = re4gx::CanonicalShaderKey(a);
+  Check(c.konst[0] == 0 && c.konst[1] == 0x1C0C, "canonical key: KONST kept only where an input takes it");
+  Check(c.swap[0] == 0x11 && c.swap[1] == 0x22 && c.swap[2] == 0x33 && c.swap[3] == 0,
+        "canonical key: the swap tables the stages select kept, the others 0");
+  Check(c.fog == 0, "canonical key: no fog, no projection bit");
+  re4gx::ShaderKey b = a;
+  b.konst[0] = 0x0606;  // another unused selection: the same canonical key
+  b.swap[3] = 0x55;
+  const re4gx::ShaderKey cb = re4gx::CanonicalShaderKey(b);
+  Check(std::memcmp(&c, &cb, sizeof(c)) == 0, "canonical key: keys that differ in unused fields alike");
+  b.konst[1] = 0x1C0D;  // the KONST colour stage 1 takes: a different shader
+  const re4gx::ShaderKey cd = re4gx::CanonicalShaderKey(b);
+  Check(std::memcmp(&c, &cd, sizeof(c)) != 0, "canonical key: a used selection still tells keys apart");
+  a.fog = 0xE;
+  Check(re4gx::CanonicalShaderKey(a).fog == 0xE, "canonical key: fog kept");
+}
+
+#ifdef RE4_GX_VULKAN
+// The app's pipeline list made ahead (0.99.5, gx_vk.cpp AheadThread): a Vulkan renderer draws the random TEV setups in
+// room 0x227 and leaves its room list (room-227.vkpipes); that list as the app's list (RE4VKL01, as
+// port/tools/gx_vkpipe_list.py writes it) goes through the thread of a second renderer on an empty cache folder while it
+// draws: every pipeline made, the list marked; a third renderer on that folder leaves it out (the mark), one with merged
+// draws on goes through it again (the mark names the setting).
+void TestVkAhead() {
+  char a[] = "/tmp/re4-vkahead-a-XXXXXX", b[] = "/tmp/re4-vkahead-b-XXXXXX";
+  Require(mkdtemp(a) != nullptr && mkdtemp(b) != nullptr, "vk ahead: folders for the caches");
+  const std::string dirA = a, dirB = b, list = dirB + ".keys";
+  std::string error;
+  {
+    re4gx::GxRenderer r(re4gx::GxApi::kVulkan);
+    Require(r.Init(1, &error), error.c_str());
+    Check(r.SetProgramCache(dirA), "vk ahead: the cache folder");
+    r.SetRoom(0x227);
+    TestShaderVariety(r);
+    r.Release();
+  }
+  std::vector<char> room;
+  if (FILE *f = std::fopen((dirA + "/room-227.vkpipes").c_str(), "rb")) {
+    char buffer[65536];
+    for (std::size_t n; (n = std::fread(buffer, 1, sizeof(buffer), f)) > 0;)
+      room.insert(room.end(), buffer, buffer + n);
+    std::fclose(f);
+  }
+  std::uint32_t head[2] = {};
+  if (room.size() >= 16)
+    std::memcpy(head, room.data() + 8, sizeof(head));
+  const std::uint32_t count = head[1];
+  Check(room.size() >= 16 && std::memcmp(room.data(), "RE4VKP01", 8) == 0 && count >= 10 &&
+            room.size() == 16 + static_cast<std::size_t>(count) * (head[0] + 24),
+        "vk ahead: the room's pipeline list written");
+  {
+    FILE *f = std::fopen(list.c_str(), "wb");
+    Require(f != nullptr, "vk ahead: the app's list");
+    const std::uint32_t h[3] = {head[0], count, 1};
+    std::fwrite("RE4VKL01", 8, 1, f);
+    std::fwrite(h, sizeof(h), 1, f);
+    std::fwrite(room.data() + 16, 1, room.size() - 16, f);
+    const std::uint32_t r[2] = {0x227, count};
+    std::fwrite(r, sizeof(r), 1, f);
+    for (std::uint32_t i = 0; i < count; i++)
+      std::fwrite(&i, 4, 1, f);
+    std::fclose(f);
+  }
+  setenv("RE4_GX_VK_PIPE_LIST", list.c_str(), 1);
+  auto run = [&](bool merge, const char *what, bool psx = false) {
+    re4gx::GxRenderer r(re4gx::GxApi::kVulkan);
+    Require(r.Init(1, &error), error.c_str());
+    Check(r.SetProgramCache(dirB), "vk ahead: the second cache folder");
+    // (as core_mode: the menu's settings after SetProgramCache, before the first Run, where the thread starts)
+    r.SetMerge(merge);
+    r.SetPsx(psx);
+    r.SetRoom(0x227);
+    // drawing on meanwhile (the thread made its pipelines beside the render thread)
+    const auto start = std::chrono::steady_clock::now();
+    unsigned made = 0;
+    while (std::chrono::steady_clock::now() - start < std::chrono::seconds(60)) {
+      Builder bl;
+      Baseline(bl);
+      DisplayCopy(bl, true, kBlack);
+      Quad(bl, 0, 0, 32, 32, 0, kRed);
+      DisplayCopy(bl, false, kBlack);
+      r.Run(bl.Chunk());
+      made = r.Stats().pipelinesAhead;
+      if (made >= count || (std::string(what) == "again" && std::chrono::steady_clock::now() - start >
+                                                                 std::chrono::seconds(2)))
+        break;
+    }
+    r.Release();
+    std::fprintf(stderr, "  vk ahead (%s): %u of %u made ahead\n", what, made, count);
+    return made;
+  };
+  Check(run(false, "first") == count, "vk ahead: every pipeline of the list made ahead");
+  FILE *mark = std::fopen((dirB + "/vk-ahead.done").c_str(), "rb");
+  Check(mark != nullptr, "vk ahead: the list marked as made");
+  if (mark)
+    std::fclose(mark);
+  Check(run(false, "again") == 0, "vk ahead: a list made on this driver before is left out");
+  Check(run(true, "merged draws on") == count, "vk ahead: another setting (merged draws) goes through it again");
+  Check(run(true, "PSone demake on", true) == count, "vk ahead: the PSone demake's keys made too (another mark)");
+  unsetenv("RE4_GX_VK_PIPE_LIST");
+}
+#endif
+
 void TestPrewarm() {
   char folder[] = "/tmp/re4-prewarm-XXXXXX";
   Require(mkdtemp(folder) != nullptr, "prewarm: a folder for the program cache");
@@ -3588,6 +3871,7 @@ int main() {
     Check(wrong == 0, "GPU check: the movie colours as the GameCube computes them");
   }
   TestTevMath();
+  TestCanonicalKey();
   TestPrewarm();
   TestRescale();
   TestAutoLevel();
@@ -3598,6 +3882,7 @@ int main() {
     TestVkRescale();
     TestVkHandOverCopies();
     TestVkOverlay();
+    TestVkAhead();
   }
 #endif
   TestMerge();
@@ -3656,6 +3941,7 @@ int main() {
   TestInterpolationEffects();
   TestInterpolationForget();
   TestInterpolationOwners();
+  TestInterpolationWrap();
   TestInterpolationRoomPart();
   TestInterpolationSparkle();
   TestInterpolationOneFrame();

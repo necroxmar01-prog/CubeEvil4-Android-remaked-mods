@@ -696,10 +696,11 @@ public class CoreMenuLayoutTest {
       assertTrue(particles.getText().toString().endsWith(normal)); assertTrue(particles.isSelected());
       assertTrue(shadows.isSelected());
       particles.performClick();
-      assertEquals(4, Bridge.potato); assertFalse(particles.isSelected());
+      // lit at "Less" too, off only at "None" (wish of the project owner, 09.11.2026)
+      assertEquals(4, Bridge.potato); assertTrue(particles.isSelected());
       assertTrue(particles.getText().toString().endsWith(controller.get().getString(R.string.ingame_particles_less)));
       particles.performClick();
-      assertEquals(8, Bridge.potato);
+      assertEquals(8, Bridge.potato); assertFalse(particles.isSelected());
       assertTrue(particles.getText().toString().endsWith(controller.get().getString(R.string.ingame_particles_none)));
       shadows.performClick();
       assertEquals(8 | 16, Bridge.potato); assertFalse(shadows.isSelected());
@@ -820,5 +821,101 @@ public class CoreMenuLayoutTest {
       org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
       assertEquals("Restart clears the shader cache", 1, calls[0]);
     }
+  }
+
+  /** With Vulkan (09.11.2026): "Merge draw calls" and "Vertex ring buffer" greyed out and shown off, a line says why;
+   *  the stored choice stays for OpenGL ES. */
+  @Test public void vulkanGreysMergeAndVertexRingOut() throws Exception {
+    for (boolean vulkan : new boolean[] {false, true}) {
+      CoreMenu.Host host = (CoreMenu.Host) Proxy.newProxyInstance(CoreMenu.Host.class.getClassLoader(),
+          new Class<?>[] {CoreMenu.Host.class}, (proxy, method, args) -> {
+            if (method.getName().equals("vulkanRunning")) return vulkan;
+            return method.getReturnType() == boolean.class ? Boolean.FALSE : method.getReturnType() == int.class ? (Object) 0
+                : method.getReturnType() == float.class ? (Object) 1f : null;
+          });
+      try (var controller = Robolectric.buildActivity(Activity.class).create()) {
+        Activity activity = controller.get();
+        activity.getSharedPreferences(CoreActivity.GRAPHICS_PREFS, 0).edit().clear()
+            .putBoolean("mergeDraws", true).putBoolean("vertexRing", true).apply();
+        CoreMenu menu = new CoreMenu(activity, host, false, 1920, 1080);
+        Method show = CoreMenu.class.getDeclaredMethod("showPage", int.class, boolean.class); show.setAccessible(true);
+        show.invoke(menu, 4, false);  // PERFORMANCE
+        View root = (View) field(menu, "root");
+        Button merge = findButton(root, activity.getString(R.string.ingame_merge_draws));
+        Button ring = findButton(root, activity.getString(R.string.ingame_vertex_ring));
+        assertNotNull(merge); assertNotNull(ring);
+        assertEquals(!vulkan, merge.isEnabled()); assertEquals(!vulkan, ring.isEnabled());
+        assertEquals(!vulkan, merge.isSelected()); assertEquals(!vulkan, ring.isSelected());
+        assertEquals(vulkan, hasText(root, activity.getString(R.string.ingame_vulkan_perf_help)));
+        assertTrue(activity.getSharedPreferences(CoreActivity.GRAPHICS_PREFS, 0).getBoolean("mergeDraws", false));
+      }
+    }
+  }
+
+  /** Lens flares in three steps (0.99.6): off, lens flares, halos + lens flares; the old switch "flares" on becomes the
+   *  third step (as it looked before), off the first; lit while not off. */
+  @Test public void lensFlaresMoveThroughThreeStepsAndKeepTheOldSwitch() throws Exception {
+    try (var controller = Robolectric.buildActivity(Activity.class).create()) {
+      Activity activity = controller.get();
+      android.content.SharedPreferences g = activity.getSharedPreferences(CoreActivity.GRAPHICS_PREFS, 0);
+      g.edit().clear().putBoolean("flares", true).apply();
+      assertEquals(2, CoreBridge.flareMode(g));
+      g.edit().clear().putBoolean("flares", false).apply();
+      assertEquals(0, CoreBridge.flareMode(g));
+      g.edit().clear().putBoolean("flares", true).apply();
+      CoreMenu menu = new CoreMenu(activity, null, false, 1920, 1080);
+      Method show = CoreMenu.class.getDeclaredMethod("showPage", int.class, boolean.class); show.setAccessible(true);
+      show.invoke(menu, 1, false);  // DISPLAY
+      View root = (View) field(menu, "root");
+      Button flares = findButton(root, activity.getString(R.string.ingame_flares));
+      assertNotNull(flares);
+      String both = activity.getString(R.string.ingame_flares_both), lens = activity.getString(R.string.ingame_flares_lens);
+      assertTrue(flares.getText().toString().endsWith(both)); assertTrue(flares.isSelected());
+      flares.performClick();
+      assertEquals(0, CoreBridge.flareMode(g)); assertFalse(flares.isSelected());
+      assertTrue(flares.getText().toString().endsWith(activity.getString(R.string.ingame_off)));
+      flares.performClick();
+      assertEquals(1, CoreBridge.flareMode(g)); assertTrue(flares.isSelected());
+      assertTrue(flares.getText().toString().endsWith(lens));
+      flares.performClick();
+      assertEquals(2, CoreBridge.flareMode(g)); assertTrue(flares.getText().toString().endsWith(both));
+      assertTrue(hasText(root, activity.getString(R.string.ingame_flares_help)));
+    }
+  }
+
+  /** Potato mode, 0.99.6: "View distance" in a third row, Normal (the default, lit), Medium (lit), Short (off), with its
+   *  own line of help. */
+  @Test public void viewDistanceMovesThroughThreeStepsAndIsOffOnlyAtShort() throws Exception {
+    try (var controller = Robolectric.buildActivity(Activity.class).create()) {
+      Activity activity = controller.get();
+      android.content.SharedPreferences g = activity.getSharedPreferences(CoreActivity.GRAPHICS_PREFS, 0);
+      g.edit().clear().apply();
+      CoreMenu menu = new CoreMenu(activity, null, false, 1920, 1080);
+      Method show = CoreMenu.class.getDeclaredMethod("showPage", int.class, boolean.class); show.setAccessible(true);
+      show.invoke(menu, 4, false);  // PERFORMANCE
+      View root = (View) field(menu, "root");
+      Button view = findButton(root, activity.getString(R.string.ingame_potato_view));
+      Button particles = findButton(root, activity.getString(R.string.ingame_potato_particles));
+      assertNotNull(view); assertNotSame(particles.getParent(), view.getParent());
+      assertTrue(view.getText().toString().endsWith(activity.getString(R.string.ingame_view_normal)));
+      assertTrue(view.isSelected());
+      view.performClick();
+      assertEquals(1, CoreBridge.viewDistance(g)); assertTrue(view.isSelected());
+      assertTrue(view.getText().toString().endsWith(activity.getString(R.string.ingame_view_medium)));
+      view.performClick();
+      assertEquals(2, CoreBridge.viewDistance(g)); assertFalse(view.isSelected());
+      assertTrue(view.getText().toString().endsWith(activity.getString(R.string.ingame_view_short)));
+      assertEquals(50, CoreBridge.VIEW_PERCENT[CoreBridge.viewDistance(g)]);
+      view.performClick();
+      assertEquals(0, CoreBridge.viewDistance(g)); assertTrue(view.isSelected());
+      assertTrue(hasText(root, activity.getString(R.string.ingame_view_help)));
+    }
+  }
+
+  private static boolean hasText(View view, String text) {
+    if (view instanceof TextView && !(view instanceof Button) && ((TextView) view).getText().toString().equals(text)) return true;
+    if (view instanceof ViewGroup)
+      for (int i = 0; i < ((ViewGroup) view).getChildCount(); i++) if (hasText(((ViewGroup) view).getChildAt(i), text)) return true;
+    return false;
   }
 }

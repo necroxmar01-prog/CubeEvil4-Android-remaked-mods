@@ -179,6 +179,8 @@ std::uint64_t GxCore::OwnerKey(const std::uint32_t *p) {
 void GxCore::SetOwner(const std::uint32_t *p) {
   ownerBase = OwnerKey(p);
   ownerLife = p[3];
+  for (int i = 0; i < 4; i++)
+    ownerWords[i] = p[i];
   ownerDraws = 0;
 }
 
@@ -219,6 +221,18 @@ const GxCore::DrawRec *GxCore::MatchDraw(const std::vector<std::uint32_t> &candi
     return nullptr;
   recUsed[static_cast<std::size_t>(best)] = 1;
   return &rec[static_cast<std::size_t>(best)];
+}
+
+bool GxCore::Jumped(const float *before, const float *t) const {
+  // where the particle was, moved by the camera's move (when known), against where it is now; the tolerance of
+  // MatchDraw without the camera's move (a quarter of the distance and 400), so that fast sparks still count as
+  // moving, and the wraps of the weather particles (1.2 times the box's half size, thousands of units) do not
+  float p[3] = {before[0], before[1], before[2]};
+  if (camValid)
+    CameraApply(cam, before, p);
+  const float reach = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+  const float dx = p[0] - t[0], dy = p[1] - t[1], dz = p[2] - t[2];
+  return std::sqrt(dx * dx + dy * dy + dz * dz) > 0.25f * reach + 400.0f;
 }
 
 void GxCore::CameraApply(const float (&c)[3][4], const float *q, float *out) {
@@ -906,6 +920,13 @@ void GxCore::FlareNote(const Re4GxDraw &d, const Re4GxChunk &chunk, std::uint32_
     return;
   if (d.vertexCount == 0 || d.vertexCount > 512 || d.stride < 12)
     return;
+  // nothing on a figure (wish of the project owner, 09.11.2026: halos only at the room's lights and glowing points,
+  // never on a figure that moves): a draw of a figure or of a particle attached to one (the merchant's glowing eyes
+  // in r11c, an enemy's torch); the core marks them in the owner tag (runtime/gx_owner.cpp)
+  // (tests: RE4_GX_FLARE_FIGURES=1 takes them as before 0.99.6)
+  static const bool figures = std::getenv("RE4_GX_FLARE_FIGURES") && *std::getenv("RE4_GX_FLARE_FIGURES") == '1';
+  if (!figures && ownerWords[2] != 0xFF && (ownerWords[2] & RE4_GX_OWNER_FIGURE))
+    return;
   // lines and points are no light (the laser sight's beam is a GX line, its dot elsewhere)
   if ((d.primitive & 0xFF) == RE4_GX_LINES || (d.primitive & 0xFF) == RE4_GX_POINTS)
     return;
@@ -924,6 +945,8 @@ void GxCore::FlareNote(const Re4GxDraw &d, const Re4GxChunk &chunk, std::uint32_
   f.layout = d.layout;
   f.blend = c;
   f.tevc = bp[0xC0];
+  for (int i = 0; i < 4; i++)
+    f.owner[i] = ownerWords[i];
   float zSum = 0.0f;
   unsigned counted = 0;
   const unsigned step = d.vertexCount > 64 ? d.vertexCount / 64 : 1;
@@ -1104,8 +1127,9 @@ void GxCore::FlareTrack() {
           merged.size(), used);
     for (const FlareCand &m : merged)
       GXLOG("lens flares:   source (%.0f %.0f)-(%.0f %.0f) depth %.5f, %d draws, %d with normals, up to %u vertices, "
-            "z %06x blend %06x tev %06x layout %08x", m.x0, m.y0, m.x1, m.y1, m.z, m.draws, m.normals, m.verts,
-            m.zmode & 0xFFFFFF, m.blend & 0xFFFFFF, m.tevc & 0xFFFFFF, m.layout);
+            "z %06x blend %06x tev %06x layout %08x, owner %08x %08x table %u life %08x", m.x0, m.y0, m.x1, m.y1, m.z,
+            m.draws, m.normals, m.verts, m.zmode & 0xFFFFFF, m.blend & 0xFFFFFF, m.tevc & 0xFFFFFF, m.layout, m.owner[0],
+            m.owner[1], m.owner[2], m.owner[3]);
   }
   flarePictures++;
 }
@@ -1220,6 +1244,7 @@ void GxCore::SetFxaa(bool on) { this->fxaaOn = on; }
 void GxCore::SetSharpen(int level) { this->sharpLevel = level < 0 ? 0 : level > 2 ? 2 : level; }
 void GxCore::SetPsx(bool on) { this->psxOn = on; }
 void GxCore::SetFlares(bool on) { this->flaresOn = on; }
+void GxCore::SetFlareHalos(bool on) { this->flareHalos = on; }
 void GxCore::SetDofStrong(bool on) { this->dofStrong = on; }
 void GxCore::SetTvFilter(bool on) { this->tvFilter = on; }
 void GxCore::SetWiden(float factor) {
@@ -1358,6 +1383,9 @@ void GxCore::Run(const Re4GxChunk &chunk) {
   m.RunState();
   m.ownerBase = 0;
   m.ownerLife = ~0u;
+  m.ownerWords[0] = m.ownerWords[1] = 0;
+  m.ownerWords[2] = 0xFF;
+  m.ownerWords[3] = ~0u;
   m.Split(GxStats::kSplitState);
   // lens flares: after the scene's last 3D draw (FlareScan); its light sources noted on the way (FlareNote)
   // none on a menu screen of the game (RE4_GX_CHUNK_STILL: the option screen, the retry / load menu, sub screens,
@@ -1698,6 +1726,15 @@ std::uint32_t GxCore::BlendDraw(const Re4GxDraw &d, const ShaderKey &k, const Re
         stats.interpOwnedNew++;
         stats.interpKindUnmatched[kind]++;
         return flat ? 0 : BlendByCamera(first, rows);
+      }
+      // a particle that jumped: the weather particles of esp15.cpp (rain, snow, fog) wrap around in a box around the
+      // camera, the path sprites of esp06.cpp start their path again. Halfway it stood where it is in neither picture:
+      // drawn as a new one (the project owner's GX series 08.11.2026, r227 in fog: a sprite 7 m to the side, a
+      // brighter fog bank in one in-between picture now and then, 60 FPS only)
+      if (kind == 0 && c.rows == 3 && c.posRow == first && Jumped(c.t, t)) {
+        stats.interpOwnedJumps++;
+        stats.interpKindUnmatched[kind]++;
+        return BlendByCamera(first, rows);
       }
       a = &c;
       owned = sameShape;

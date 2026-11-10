@@ -29,6 +29,9 @@
     <string name="ingame_perf_section">Performances</string>
     <string name="ingame_minimap">Mini-carte</string>
     <string name="ingame_flares">Halos lumineux</string>
+    <string name="ingame_flares_lens">Reflets d\'objectif</string>
+    <string name="ingame_flares_both">Halos + reflets</string>
+    <string name="ingame_flares_help">Reflets d\'objectif\u00A0: de légers anneaux colorés qui traversent l\'image depuis les lumières les plus vives, comme avec un objectif d\'appareil photo. Halos + reflets\u00A0: en plus, une lueur douce avec une fine étoile autour des bougies, torches et lampes.</string>
     <string name="ingame_dof">Profondeur de champ</string>
     <string name="ingame_fps_display">Afficher les FPS</string>
     <string name="ingame_fps_bottom_left">En bas à gauche</string>
@@ -49,7 +52,12 @@
     <string name="ingame_particles_less">Réduits</string>
     <string name="ingame_particles_none">Aucun</string>
     <string name="ingame_potato_shadows">Ombres et lumière</string>
+    <string name="ingame_potato_view">Distance de vue</string>
+    <string name="ingame_view_normal">Normale</string>
+    <string name="ingame_view_medium">Moyenne</string>
+    <string name="ingame_view_short">Courte</string>
     <string name="ingame_potato_help">Effets météo : nappes de brouillard, pluie, éclaboussures. Effets spéciaux : vapeur, ondulations de chaleur, eau. Effets de particules : sang, poussière, fumée, éclaboussures, étincelles et feu ; Réduits en dessine la moitié, Aucun les retire tous sauf le feu et les explosions, qui restent à moitié comme avertissement. Ombres et lumière : désactivé retire les ombres (aussi dans les cinématiques), les halos et les rayons de lumière ; les pièces gardent leur éclairage. Chaque réglage allège le travail graphique sur les appareils modestes ; le point d\'impact, les indications, le laser et tous les effets des cinématiques restent.</string>
+    <string name="ingame_view_help">Distance de vue\u00A0: Moyenne et Courte rapprochent le brouillard lointain, et ce qui se trouve derrière n\'est pas dessiné. Cela aide là où le processeur ou le nombre d\'objets freine le jeu, sur les téléphones plus lents en basse résolution\u00A0: au village, environ la moitié des objets disparaît. En haute résolution, la puce graphique est occupée par les pixels et gagne peu. Les pièces sans brouillard lointain, et celles dont le brouillard se trouve bien au-delà de ce que vous voyez (le château, l\'île), restent inchangées.</string>
     <string name="ingame_resolution_line">Résolution\u00A0: %1$d × %2$d pixels (niveau %3$s) · écran %4$d × %5$d · s’applique à la fermeture du menu. Les niveaux plus élevés demandent plus de puissance.</string>
     <string name="ingame_resolution_line_auto">Résolution\u00A0: %1$d × %2$d pixels (niveau %3$s, Dynamique) · écran %4$d × %5$d · s’applique à la fermeture du menu. Dynamique descend d’un niveau tant que le GPU ne suit pas.</string>
 
@@ -98,10 +106,7 @@
     <string name="ingame_aim_help">Inverser la verticale et Vitesse de visée\u00A0: pour viser avec le couteau et les armes au toucher ou à la manette, pas au gyroscope. Inverser la verticale change l’option du jeu lui-même.</string>
     <string name="ingame_update">Mettre à jour</string>
     <string name="ingame_up_to_date">À jour</string>
-    <string name="ingame_update_loading">Téléchargement %1$d %%</string>
-    <string name="ingame_update_install">Installation…</string>
-    <string name="ingame_update_failed">Échec de la mise à jour\u00A0: %1$s</string>
-    <string name="ingame_update_allow">Autorisez CubeEvil4 à installer des applications, puis appuyez de nouveau sur Mettre à jour.</string>
+    <string name="ingame_update_page">La dernière version s\'ouvre sur GitHub\u00A0: téléchargez-y l\'APK et installez-le.</string>
 
     <string name="ingame_card">Carte mémoire (emplacement A)</string>
     <string name="ingame_card_help">Exporter et importer les données de jeu\u00A0: les sauvegardes au format .gci (pour Dolphin ou GameCube) et votre disposition tactile personnalisée dans CubeEvil4-touch-layout.json. L’importation restaure les deux.</string>
@@ -227,6 +232,7 @@
     <string name="ingame_skip_or_smooth">Le saut d’images et les 60 FPS s’excluent : activer l’un désactive l’autre.</string>
     <string name="ingame_merge_help">Regroupe plusieurs objets en un seul appel au pilote graphique. Peut aider les téléphones au pilote graphique lent (p. ex. GPU Mali) et coûter un peu sur les autres. Sans effet tant que les 60 FPS sont activés.</string>
     <string name="ingame_vertex_ring_help">Envoie les sommets de chaque image à la puce graphique par un tampon qui reste mappé, au lieu d\'un nouveau tampon par image. Peut faire gagner du temps sur les GPU Mali et utilise un peu plus de mémoire graphique. Prend effet immédiatement.</string>
+    <string name="ingame_vulkan_perf_help">Avec Vulkan, Regrouper les appels de dessin et Tampon circulaire de sommets sont grisés et inutilisés\u00A0: Vulkan envoie toujours les sommets par un tampon qui reste mappé, et ses appels de dessin coûtent peu, regrouper ne ferait qu\'ajouter des pipelines à créer. Votre choix revient avec OpenGL ES.</string>
     <string name="ingame_game_language">Langue du jeu</string>
     <string name="ingame_language_device">Langue de l\'appareil</string>
     <string name="ingame_language_help">La langue des textes et des sous-titres du jeu. Langue de l\'appareil : celle de l\'appareil si le jeu la propose, sinon l\'anglais. Un changement redémarre le jeu.</string>
