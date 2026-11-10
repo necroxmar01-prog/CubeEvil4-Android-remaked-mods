@@ -138,7 +138,7 @@ PROFILES = {
 }
 
 
-def stubble_weight(pos, prof=None, cheeks=1.0, under_lip=0.0):
+def stubble_weight(pos, prof=None, cheeks=1.0, under_lip=0.0, lip_margin=0.0):
     """0..1 per texel: where the beard grows (from the model position); cheeks: how much of it on the cheeks above
     the jaw line (1 all; less: a light beard on the chin, the jaw and the upper lip)."""
     q = PROFILES["re4"] if prof is None else prof
@@ -157,8 +157,9 @@ def stubble_weight(pos, prof=None, cheeks=1.0, under_lip=0.0):
     if q["neck"]:  # (remake: none where the head's model meets the body's neck, no edge there)
         w *= smoothstep(q["neck"][0], q["neck"][1], y)
     lx, (l0, l1, l2, l3), (z0, z1) = q["lips_x"], q["lips_y"], q["lips_z"]
-    lips = (1 - smoothstep(lx[0], lx[1], ax)) * smoothstep(l0, l1, y) * (1 - smoothstep(l2, l3, y)) * \
-        smoothstep(z0, z1, z)
+    m = lip_margin  # a clean edge around the lips and the mouth's corners (no grime at the mouth)
+    lips = (1 - smoothstep(lx[0] + m, lx[1] + m, ax)) * smoothstep(l0 - m, l1 - m, y) * \
+        (1 - smoothstep(l2 + m, l3 + m, y)) * smoothstep(z0 - 2 * m, z1 - 2 * m, z)
     w *= 1 - lips
     w *= 1 - 0.35 * smoothstep(q["cheek"][0], q["cheek"][1], y) * smoothstep(30, 60, ax)  # sparser up on the cheeks
     if under_lip > 0:  # the hollow under the lower lip clean, down to the chin's tip (a tired, grown-out look)
@@ -180,11 +181,11 @@ def smooth_noise(pos, scale=1.0):
 
 
 def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0, cheeks=1.0, patchy=0.0,
-                under_lip=0.0):
+                under_lip=0.0, lip_margin=0.0):
     """Short beard; grey: the share of grey hairs among the dark (0 none .. 1 all; salt and pepper); patchy: thinner
     in patches (0 even .. 1 patches almost bare)."""
     a = rgba.astype(np.float32)
-    w = stubble_weight(pos, prof, cheeks, under_lip) * strength
+    w = stubble_weight(pos, prof, cheeks, under_lip, lip_margin) * strength
     if patchy > 0:
         w = w * (1 - patchy * smoothstep(-0.3, 0.6, smooth_noise(pos)))
     rng = np.random.default_rng(seed)
@@ -199,7 +200,7 @@ def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, gre
         hair = np.where(salt, np.array((112, 106, 100), dtype=np.float32), hair)
     soft = prof is not None and prof.get("soft")  # (remake: an even shadow of beard, the single hairs fainter)
     k = (w * ((0.5 + 0.5 * dots) if soft else (0.25 + 0.75 * dots)))[..., None]
-    shade = 1 - 0.22 * w[..., None]  # the skin under it a little darker
+    shade = 1 - (0.1 if soft else 0.22) * w[..., None]  # the skin under it a little darker (remake: less, no grime)
     out = a.copy()
     out[..., :3] = (a[..., :3] * shade) * (1 - k * 0.8) + hair * (k * 0.8)
     return np.clip(out, 0, 255).astype(np.uint8)
@@ -431,7 +432,7 @@ def add_skin(rgba, pos, pale=0.0, sockets=0.0, pores=0.0, profile="re4"):
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def add_age(rgba, pos, strength=1.0, profile="re4"):
+def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0):
     """Creases of age, shadows under the eyes and a weathered skin on the face's texture (front texels only)."""
     a = rgba.astype(np.float32)
     x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
@@ -442,6 +443,8 @@ def add_age(rgba, pos, strength=1.0, profile="re4"):
     for line in AGE_LINES[profile]:
         pts, depth = line[0], line[1]
         width = line[2] if len(line) > 2 else 1.3
+        if max(py for _, py in pts) < 1650:  # down from the mouth's corners
+            depth *= mouth
         for s in (1, -1):
             if s == -1 and all(px == 0 for px, _ in pts):
                 continue
@@ -497,6 +500,10 @@ def main(argv=None):
                     help="the stubble thinner in patches (0 even .. 1 patches almost bare)")
     ap.add_argument("--stubble-under-lip", type=float, default=0.0,
                     help="the hollow under the lower lip clean (0 bearded .. 1 clean)")
+    ap.add_argument("--stubble-lip-margin", type=float, default=0.0,
+                    help="a clean edge around the lips and the mouth's corners (model units, e.g. 3)")
+    ap.add_argument("--mouth-lines", type=float, default=1.0,
+                    help="the creases at the mouth's corners (1 as the age gives them .. 0 none)")
     ap.add_argument("--pale", type=float, default=0.0, help="the skin paler and cooler (0 as it is .. 1)")
     ap.add_argument("--sockets", type=float, default=0.0, help="deeper eye sockets (0 none .. 1)")
     ap.add_argument("--pores", type=float, default=0.0, help="a fine grain of pores over the face (0 none .. 1)")
@@ -558,13 +565,13 @@ def main(argv=None):
         img = add_skin(img, pos, a.pale, a.sockets, a.pores, a.face_model)
         print("face texture %d: pale %.2f, sockets %.2f, pores %.2f" % (face, a.pale, a.sockets, a.pores))
     if a.age > 0:
-        img = add_age(img, pos, a.age, a.face_model)
+        img = add_age(img, pos, a.age, a.face_model, a.mouth_lines)
         print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
         img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
                           prof=PROFILES[a.face_model], grey=a.stubble_grey,
                           cheeks=a.stubble_cheeks, patchy=a.stubble_patchy,
-                          under_lip=a.stubble_under_lip)
+                          under_lip=a.stubble_under_lip, lip_margin=a.stubble_lip_margin)
         print("face texture %d: stubble %.2f" % (face, a.stubble))
     imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
