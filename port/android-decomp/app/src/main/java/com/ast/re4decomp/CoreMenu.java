@@ -151,7 +151,7 @@ final class CoreMenu extends Dialog {
   private interface Changed<T> { void accept(T value); }
   // the pages, the main menu's buttons in this order (wish of the project owner, 30.10.2026)
   private static final int HOME = 0, DISPLAY = 1, AUDIO = 2, CONTROLS = 3, PERFORMANCE = 4, CHEATS = 5,
-      MANAGEMENT = 6, CONTROLLER = 7;
+      MANAGEMENT = 6, CONTROLLER = 7, MODS = 8;
   private static final long CHEAT_FLASH_MS = 1500;
   /** The story's player character in the cheat switches: its player type << 5 (runtime/cheats.cpp). */
   static final int CHARACTER_SHIFT = 5, CHARACTER_BITS = 7 << CHARACTER_SHIFT;
@@ -180,8 +180,8 @@ final class CoreMenu extends Dialog {
   // the Benchmark button: the green of "Up to date", quieter (wish of the project owner, 06.11.2026)
   private static final int BENCH_GREEN = 0xff223a27, BENCH_GREEN_EDGE = 0xff3b6343, BENCH_TEXT = 0xffc3d6c5;
   private final Handler main = new Handler(Looper.getMainLooper());
-  private final int[] scrollY = new int[8];
-  private final Button[] navigation = new Button[7];
+  private final int[] scrollY = new int[9];
+  private final Button[] navigation = new Button[9];
   // the button mapping: the button of each action, the device shown, the action whose keys are being
   // pressed (-1: none) with a combination's first key (0 before it), what the last change did
   private Button[] bindingButtons;
@@ -569,7 +569,7 @@ final class CoreMenu extends Dialog {
     back.setVisibility(page == HOME ? View.GONE : View.VISIBLE);
     int[] titles = {R.string.ingame_title, R.string.ingame_display, R.string.ingame_audio,
         R.string.ingame_controls_page, R.string.ingame_performance, R.string.ingame_cheats,
-        R.string.ingame_management, R.string.ingame_controller_config};
+        R.string.ingame_management, R.string.ingame_controller_config, R.string.ingame_mods};
     if (page == HOME && version() != null) {
       SpannableStringBuilder t = new SpannableStringBuilder(s(titles[page]));
       int start = t.length(); t.append(" (v").append(version()).append(")");
@@ -580,6 +580,7 @@ final class CoreMenu extends Dialog {
     if (page == HOME) home(); else if (page == DISPLAY) display(); else if (page == AUDIO) audio();
     else if (page == CONTROLS) controls(); else if (page == PERFORMANCE) performance();
     else if (page == CHEATS) cheats(); else if (page == CONTROLLER) controller();
+    else if (page == MODS) mods();
     else management();
     separator(body);
     TextView footer = text(s(R.string.ingame_navigation), 14, false);
@@ -638,13 +639,16 @@ final class CoreMenu extends Dialog {
     slotStatus.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(6));
     slotStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(slotStatus);
     heading(R.string.ingame_settings);
-    MenuLayout.Buttons first = buttonsRow(body), second = buttonsRow(body), third = buttonsRow(body);
+    MenuLayout.Buttons first = buttonsRow(body), second = buttonsRow(body), third = buttonsRow(body),
+        fourth = buttonsRow(body);
     navigation[DISPLAY] = nav(first, R.string.ingame_display, R.string.ingame_display_summary, DISPLAY);
     navigation[AUDIO] = nav(first, R.string.ingame_audio, R.string.ingame_audio_summary, AUDIO);
     navigation[CONTROLS] = nav(second, R.string.ingame_controls_page, R.string.ingame_controls_summary, CONTROLS);
     navigation[PERFORMANCE] = nav(second, R.string.ingame_performance, R.string.ingame_performance_summary, PERFORMANCE);
     navigation[CHEATS] = nav(third, R.string.ingame_cheats, R.string.ingame_cheats_summary, CHEATS);
     navigation[MANAGEMENT] = nav(third, R.string.ingame_management, R.string.ingame_management_summary, MANAGEMENT);
+    // everything of the remake mods on a page of its own (wish of DevJunior, 09.11.2026: "so nothing we added gets lost")
+    navigation[MODS] = nav(fourth, R.string.ingame_mods, R.string.ingame_mods_summary, MODS);
     if (host != null && host.gameLanguages()) gameLanguage();
     main.post(() -> { if (isShowing() && page == HOME && !working) refreshInstant(); });
   }
@@ -838,18 +842,6 @@ final class CoreMenu extends Dialog {
     MenuLayout.Buttons third = buttonsRow(body);
     toggle(third, R.string.ingame_auto_aim, input.getBoolean(CoreActivity.AUTO_AIM, false), on -> host.autoAimChanged(on));
     toggle(third, R.string.ingame_always_run, input.getBoolean(CoreActivity.ALWAYS_RUN, false), on -> host.alwaysRunChanged(on));
-    // "Free movement" and "Move while aiming" (patch 0900, runtime/free_move.cpp): the remake's way to move
-    MenuLayout.Buttons fourth = buttonsRow(body);
-    toggle(fourth, R.string.ingame_free_move, input.getBoolean(CoreActivity.FREE_MOVE, false),
-        on -> movement(on, null, null, null));
-    toggle(fourth, R.string.ingame_aim_move, input.getBoolean(CoreActivity.AIM_MOVE, false),
-        on -> movement(null, on, null, null));
-    // "D-pad quick slots" (runtime/quick_slots.cpp) and "Knife parry" (runtime/parry.cpp), as in the remake
-    MenuLayout.Buttons fifth = buttonsRow(body);
-    toggle(fifth, R.string.ingame_quick_slots, input.getBoolean(CoreActivity.QUICK_SLOTS, false),
-        on -> movement(null, null, on, null));
-    toggle(fifth, R.string.ingame_parry, input.getBoolean(CoreActivity.PARRY, false),
-        on -> movement(null, null, null, on));
     // aiming the knife and the guns by touch or a controller (wish of the project owner, 30.10.2026): the game's
     // own "reverse" option and the stick's speed while aiming, right under the latches
     switchWithSlider(R.string.ingame_aim_invert_v, input.getBoolean(CoreActivity.AIM_INVERT_V, false),
@@ -857,9 +849,7 @@ final class CoreMenu extends Dialog {
         CoreActivity.AIM_SPEED_MAX, CoreActivity.AIM_SPEED_STEP,
         CoreActivity.clampAimSpeed(input.getFloat(CoreActivity.AIM_SPEED, 1f)), value -> host.aimSpeedChanged(value));
     help(R.string.ingame_alternate_help); help(R.string.ingame_latch_help); help(R.string.ingame_auto_aim_help);
-    help(R.string.ingame_always_run_help); help(R.string.ingame_free_move_help); help(R.string.ingame_aim_move_help);
-    help(R.string.ingame_quick_slots_help); help(R.string.ingame_parry_help);
-    help(R.string.ingame_aim_help); help(R.string.ingame_knife_swipe_help);
+    help(R.string.ingame_always_run_help); help(R.string.ingame_aim_help); help(R.string.ingame_knife_swipe_help);
     // touch aiming (wish of the project owner, 28.10.2026): what aims while L or R is held; since 05.11.2026 a section
     // of its own, a third of the row each
     heading(R.string.ingame_touch_aim);
@@ -1414,13 +1404,6 @@ final class CoreMenu extends Dialog {
     // another release over the imported discs (wish of the project owner, 06.11.2026)
     heading(R.string.ingame_discs); help(R.string.ingame_discs_help);
     cellAction(buttonsRow(body), s(R.string.ingame_import_discs), v -> askImportDiscs());
-    // mods: files that replace the disc's (character skins; wish of the project owner, 08.11.2026)
-    heading(R.string.ingame_mods); help(R.string.ingame_mods_help);
-    modsLine = text("", 15, false); modsLine.setPadding(dp(MenuLayout.GAP), 0, dp(MenuLayout.GAP), 0); body.addView(modsLine);
-    modsBox = buttonsRow(body);
-    MenuLayout.Buttons modButtons = buttonsRow(body);
-    cellAction(modButtons, s(R.string.ingame_mod_add), v -> host.addMod());
-    modsRemove = cellAction(modButtons, s(R.string.ingame_mods_remove), v -> askRemoveMods()); refreshMods();
     heading(R.string.ingame_log); help(R.string.ingame_log_help);
     MenuLayout.Buttons log = buttonsRow(body);
     toggle(log, R.string.ingame_log_record, CoreLog.enabled(getContext()), on -> host.logChanged(on));
@@ -1539,8 +1522,35 @@ final class CoreMenu extends Dialog {
     }
     costumeSwitch(row);
     help(R.string.ingame_cheat_character_help);
-    wardrobe();
+  }
+  /** The MODS page (wish of DevJunior, 09.11.2026: "everything we added on a tab of its own, so nothing gets lost"):
+   *  the remake's gameplay (from Controls), the melee moves, Leon's outfit and the weapon on his back (from Cheats)
+   *  and the mod packs (from Management). The preference keys and the host's callbacks stay as they were. */
+  private void mods() {
+    // "Free movement", "Move while aiming" (patch 0900, runtime/free_move.cpp), "D-pad quick slots"
+    // (runtime/quick_slots.cpp) and "Knife parry" (runtime/parry.cpp), as in the remake
+    heading(R.string.ingame_remake_gameplay);
+    MenuLayout.Buttons move = buttonsRow(body);
+    toggle(move, R.string.ingame_free_move, input.getBoolean(CoreActivity.FREE_MOVE, false),
+        on -> movement(on, null, null, null));
+    toggle(move, R.string.ingame_aim_move, input.getBoolean(CoreActivity.AIM_MOVE, false),
+        on -> movement(null, on, null, null));
+    MenuLayout.Buttons combat = buttonsRow(body);
+    toggle(combat, R.string.ingame_quick_slots, input.getBoolean(CoreActivity.QUICK_SLOTS, false),
+        on -> movement(null, null, on, null));
+    toggle(combat, R.string.ingame_parry, input.getBoolean(CoreActivity.PARRY, false),
+        on -> movement(null, null, null, on));
+    help(R.string.ingame_free_move_help); help(R.string.ingame_aim_move_help);
+    help(R.string.ingame_quick_slots_help); help(R.string.ingame_parry_help);
     melee();
+    wardrobe();
+    // mods: files that replace the disc's (character skins; wish of the project owner, 08.11.2026)
+    heading(R.string.ingame_mod_packs); help(R.string.ingame_mods_help);
+    modsLine = text("", 15, false); modsLine.setPadding(dp(MenuLayout.GAP), 0, dp(MenuLayout.GAP), 0); body.addView(modsLine);
+    modsBox = buttonsRow(body);
+    MenuLayout.Buttons modButtons = buttonsRow(body);
+    cellAction(modButtons, s(R.string.ingame_mod_add), v -> host.addMod());
+    modsRemove = cellAction(modButtons, s(R.string.ingame_mods_remove), v -> askRemoveMods()); refreshMods();
   }
   /** "Leon's outfit" and "Weapon on the back" (wishes of DevJunior, 09.11.2026; runtime/wardrobe.cpp): the outfit
    *  the story gives him or always the first or the second, at once (the room starts again where he stands); the

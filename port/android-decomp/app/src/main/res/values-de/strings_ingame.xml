@@ -360,6 +360,9 @@
     <string name="ingame_shader_clear">Shader-Speicher leeren</string>
     <string name="ingame_shader_clear_text">Das Spiel startet neu und löscht die gebauten Shader. Es baut sie beim Spielen neu, die ersten Szenen können darum ruckeln. Fortschritt seit dem letzten Speichern geht verloren.</string>
     <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_summary">Remake-Gameplay, Nahkampf, Kleidung &amp; Skins</string>
+    <string name="ingame_remake_gameplay">Remake-Gameplay</string>
+    <string name="ingame_mod_packs">Mod-Pakete</string>
     <string name="ingame_mods_help">Dateien, die die des Spiels ersetzen, etwa Charakter-Skins. Wähle einen Ordner, der wie die Disc aufgebaut ist (zum Beispiel em/pl08.das). Tippe auf einen Mod, um ihn ein- oder auszuschalten: Nur ein Mod ersetzt eine Datei, darum schaltet das Einschalten die anderen mit denselben Dateien aus. Änderungen gelten nach einem Neustart.</string>
     <string name="ingame_mods_changed">Änderungen an den Mods gelten nach einem Neustart. Der Fortschritt seit dem letzten Speichern geht verloren.</string>
     <string name="ingame_mods_others_off">Ausgeschaltet, weil sie dieselben Dateien ersetzen: %1$s</string>

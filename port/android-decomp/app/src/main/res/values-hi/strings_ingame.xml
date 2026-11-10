@@ -360,6 +360,9 @@
     <string name="ingame_shader_clear">शेडर कैश साफ़ करें</string>
     <string name="ingame_shader_clear_text">गेम फिर से शुरू होगा और बनाए गए शेडर हटा देगा। खेलते समय वह उन्हें फिर से बनाता है, इसलिए शुरुआती दृश्य अटक सकते हैं। पिछली बार सेव करने के बाद की प्रगति खो जाएगी।</string>
     <string name="ingame_mods">मॉड</string>
+    <string name="ingame_mods_summary">रीमेक गेमप्ले, नज़दीकी लड़ाई, पोशाक और स्किन</string>
+    <string name="ingame_remake_gameplay">रीमेक गेमप्ले</string>
+    <string name="ingame_mod_packs">मॉड पैक</string>
     <string name="ingame_mods_help">ऐसी फ़ाइलें जो गेम की फ़ाइलों की जगह लेती हैं, जैसे किरदारों के स्किन। डिस्क जैसी संरचना वाला फ़ोल्डर चुनें (जैसे em/pl08.das)। किसी मॉड को चालू या बंद करने के लिए टैप करें: हर फ़ाइल को केवल एक मॉड बदलता है, इसलिए एक को चालू करने पर उन्हीं फ़ाइलों वाले बाकी मॉड बंद हो जाते हैं। बदलाव रीस्टार्ट के बाद लागू होते हैं।</string>
     <string name="ingame_mods_changed">मॉड के बदलाव रीस्टार्ट के बाद लागू होते हैं। पिछली सेव के बाद की प्रगति खो जाएगी।</string>
     <string name="ingame_mods_others_off">बंद किए गए क्योंकि वे वही फ़ाइलें बदलते हैं: %1$s</string>

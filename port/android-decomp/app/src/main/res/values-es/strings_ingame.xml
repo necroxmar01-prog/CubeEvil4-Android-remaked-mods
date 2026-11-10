@@ -362,6 +362,9 @@
     <string name="ingame_shader_clear">Vaciar caché de shaders</string>
     <string name="ingame_shader_clear_text">El juego se reinicia y borra los shaders creados. Los vuelve a crear mientras juegas, así que las primeras escenas pueden ir a tirones. Se pierde el progreso desde la última vez que guardaste.</string>
     <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_summary">Jugabilidad del Remake, cuerpo a cuerpo, ropa y skins</string>
+    <string name="ingame_remake_gameplay">Jugabilidad del Remake</string>
+    <string name="ingame_mod_packs">Paquetes de mods</string>
     <string name="ingame_mods_help">Archivos que reemplazan los del juego, como skins de personajes. Elige una carpeta con la misma estructura que el disco (por ejemplo em/pl08.das). Toca un mod para activarlo o desactivarlo: solo un mod reemplaza cada archivo, así que al activar uno se desactivan los demás con los mismos archivos. Los cambios se aplican tras reiniciar.</string>
     <string name="ingame_mods_changed">Los cambios de mods se aplican tras reiniciar. Se pierde el progreso desde la última vez que guardaste.</string>
     <string name="ingame_mods_others_off">Desactivados porque reemplazan los mismos archivos: %1$s</string>

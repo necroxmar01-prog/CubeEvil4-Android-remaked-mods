@@ -103,12 +103,12 @@ public class CoreMenuLayoutTest {
         menu.showUpdate(scale == 1.5f ? AppUpdate.CURRENT : AppUpdate.OLDER);
         View root = (View) field(menu, "root");
         root.setLayoutDirection(config.getLayoutDirection());
-        for (int page = 0; page < 9; page++) {  // 7: the button mapping of the controller, 8: of the keyboard
+        for (int page = 0; page < 10; page++) {  // 7: the button mapping of the controller, 8: of the keyboard, 9: MODS
           if (page >= 7) {
             java.lang.reflect.Field kind = CoreMenu.class.getDeclaredField("mapKind"); kind.setAccessible(true);
             kind.setInt(menu, page == 7 ? ActionMap.KIND_CONTROLLER : ActionMap.KIND_KEYBOARD);
           }
-          show.invoke(menu, Math.min(page, 7), false);
+          show.invoke(menu, page == 9 ? 8 : Math.min(page, 7), false);
           if (page == 0) metadata.invoke(menu, (Object) new long[] {0, 1, 1, 1, 0x100, 101, 123456, 1792841040});
           if (page == 5) {
             // the cheat buttons' longest answer shown under them

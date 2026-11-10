@@ -375,6 +375,9 @@
     <string name="ingame_shader_clear">Clear shader cache</string>
     <string name="ingame_shader_clear_text">The game restarts and deletes the built shaders. It builds them anew as you play, so the first scenes can stutter. Progress since your last save is lost.</string>
     <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods_summary">Remake gameplay, melee, outfit &amp; skins</string>
+    <string name="ingame_remake_gameplay">Remake gameplay</string>
+    <string name="ingame_mod_packs">Mod packs</string>
     <string name="ingame_mods_help">Files that replace the game\'s own, such as character skins. Pick a folder laid out like the disc (for example em/pl08.das). Tap a mod to switch it on or off: only one mod replaces a file, so switching one on switches off the others with the same files. Changes count after a restart.</string>
     <string name="ingame_mods_changed">Mod changes count after a restart. Progress since your last save is lost.</string>
     <string name="ingame_mods_others_off">Switched off because they replace the same files: %1$s</string>

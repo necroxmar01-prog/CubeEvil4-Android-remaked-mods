@@ -357,6 +357,9 @@
     <string name="ingame_shader_clear">Kosongkan cache shader</string>
     <string name="ingame_shader_clear_text">Game dimulai ulang dan menghapus shader yang sudah dibuat. Game membuatnya lagi saat Anda bermain, jadi adegan pertama bisa tersendat. Progres sejak penyimpanan terakhir akan hilang.</string>
     <string name="ingame_mods">Mod</string>
+    <string name="ingame_mods_summary">Gameplay remake, jarak dekat, pakaian &amp; skin</string>
+    <string name="ingame_remake_gameplay">Gameplay remake</string>
+    <string name="ingame_mod_packs">Paket mod</string>
     <string name="ingame_mods_help">File yang menggantikan file game, seperti skin karakter. Pilih folder dengan susunan seperti disk (misalnya em/pl08.das). Ketuk mod untuk menyalakan atau mematikannya: hanya satu mod yang mengganti sebuah file, jadi menyalakan satu mod mematikan mod lain dengan file yang sama. Perubahan berlaku setelah dimulai ulang.</string>
     <string name="ingame_mods_changed">Perubahan mod berlaku setelah dimulai ulang. Progres sejak penyimpanan terakhir akan hilang.</string>
     <string name="ingame_mods_others_off">Dimatikan karena mengganti file yang sama: %1$s</string>
