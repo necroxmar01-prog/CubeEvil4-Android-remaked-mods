@@ -17,6 +17,13 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
                      model's muscles on the lighter one. Where BASE's model lies further out (pouches, straps) it stays;
                      head, neck, hands and shoes stay. The push is smoothed over neighbouring positions.
                      Two rounds by default (--passes): the smoothing leaves some of the way after the first.
+--collar ENTRY=SRC:E moves model ENTRY's collar onto the collar of SRC's model E, the body the taken head was made for
+                     (DevJunior, 09.11.2026: "the neck": a turtleneck made for another head stands off the new
+                     neck): each position to the nearest point of E around the neck, in full from y 1580, fading out
+                     below; the shoulders stay.
+--tuck HEAD:BODY     keeps the base of head HEAD's neck under the collar of model BODY (after --fit and --collar):
+                     a head position below y 1660 further from the neck's axis than the body's inner side around it
+                     goes 4 inside it (skin made for a lower neckline showed through at the trapezius).
 --carry ENTRY:LIST   moves the models LIST (straps, a harness) as the nearest positions of ENTRY moved in --fit.
 """
 import argparse
@@ -277,6 +284,71 @@ def fit(target, ref, most=70.0, smooth=30.0):
     return bytes(out), P, dirs * smoothed[:, None]
 
 
+def collar(target, ref, low=1545.0, full=1580.0, most=60.0, smooth=20.0):
+    """Moves target's collar onto the collar of `ref` (the model the head was made for: its collar wraps that neck),
+    each position to the nearest point of ref's surface around the neck, in full from y `full`, fading out to `low`;
+    the shoulders (more than 125 from the spine) stay. Returns (model, positions before, the move per position)."""
+    from scipy.spatial import cKDTree
+    P = G.positions(target)
+    Q = G.positions(ref)
+    zone = lambda X: (X[:, 1] > low - 30) & (np.hypot(X[:, 0], X[:, 2] + 30) < 140)
+    cents = []
+    for _, tris in part_lists(ref):
+        if tris:
+            idx = np.array([[r[0] for r in t] for t in tris])
+            cents.append(Q[idx].mean(1))
+    S = np.concatenate([Q] + cents)
+    S = S[zone(S)]
+    tree = cKDTree(S)
+    move = np.zeros_like(P)
+    w = np.clip((P[:, 1] - low) / (full - low), 0, 1) * np.clip((125 - np.hypot(P[:, 0], P[:, 2] + 30)) / 25, 0, 1)
+    for i in np.nonzero(w > 0)[0]:
+        d, j = tree.query(P[i])
+        if d <= most:
+            move[i] = (S[j] - P[i]) * w[i]
+    ptree = cKDTree(P)
+    sm = np.array([move[ptree.query_ball_point(P[i], smooth)].mean(0) if w[i] > 0 else move[i] for i in range(len(P))])
+    out = bytearray(target)
+    for i in np.nonzero(np.linalg.norm(sm, axis=1) > 0.05)[0]:
+        G.set_position(out, i, P[i] + sm[i])
+    return bytes(out), P, sm
+
+
+def tuck(head, body, top=1660.0, inset=4.0, axis=(0.0, -30.0)):
+    """Keeps the base of a head's neck under the body's collar: below `top`, a head position that lies further from the
+    neck's axis (x, z = `axis`) than the body around it (the same height and direction) goes `inset` inside it.
+    Returns (model, how many moved)."""
+    P = G.positions(head)
+    B = G.positions(body)
+    B = B[(B[:, 1] > 1450) & (np.hypot(B[:, 0] - axis[0], B[:, 2] - axis[1]) < 220)]
+    bd = np.stack([B[:, 0] - axis[0], B[:, 2] - axis[1]], 1)
+    br = np.linalg.norm(bd, axis=1)
+    ba = np.arctan2(bd[:, 0], bd[:, 1])
+    out = bytearray(head)
+    n = 0
+    for i, p in enumerate(P):
+        if p[1] >= top:
+            continue
+        d = np.array([p[0] - axis[0], p[2] - axis[1]])
+        r = np.linalg.norm(d)
+        if r < 1e-3:
+            continue
+        a = np.arctan2(d[0], d[1])
+        near = (np.abs(B[:, 1] - p[1]) < 20) & (np.abs((ba - a + np.pi) % (2 * np.pi) - np.pi) < np.radians(12))
+        if not near.any():
+            continue
+        # the body's inner side around here: the collar's ring nearest the neck
+        rb = br[near].min()
+        if r <= rb - inset:
+            continue
+        nr = rb - inset
+        q = p.copy()
+        q[0], q[2] = axis[0] + d[0] / r * nr, axis[1] + d[1] / r * nr
+        G.set_position(out, i, q)
+        n += 1
+    return bytes(out), n
+
+
 def carry(model, P, moves, radius=40.0):
     """Moves model's positions as the nearest of P moved (moves: the push per position of P), by the pushes within
     `radius` of the nearest, averaged."""
@@ -316,6 +388,9 @@ def main(argv=None):
     ap.add_argument("--take", action="append", default=[], metavar="SRC:ENTRIES")
     ap.add_argument("--cards", action="append", default=[], metavar="ENTRY:KEEP")
     ap.add_argument("--fit", action="append", default=[], metavar="ENTRY=SRC:E")
+    ap.add_argument("--collar", action="append", default=[], metavar="ENTRY=SRC:E")
+    ap.add_argument("--tuck", action="append", default=[], metavar="HEAD:BODY",
+                    help="keep the base of head HEAD's neck under the collar of model BODY")
     ap.add_argument("--carry", action="append", default=[], metavar="ENTRY:LIST")
     ap.add_argument("--most", type=float, default=70.0, help="--fit's largest push (default 70)")
     ap.add_argument("--passes", type=int, default=2, help="--fit's rounds (default 2: the smoothing leaves some of the "
@@ -354,6 +429,18 @@ def main(argv=None):
         n = np.linalg.norm(push, axis=1)
         print("entry %s fitted to %s's %s: %d of %d positions pushed out, at most %.0f, mean %.0f" %
               (e, src, re_, (n > 0.05).sum(), len(n), n.max(), n[n > 0.05].mean() if (n > 0.05).any() else 0))
+    for spec in a.collar:
+        e, ref = spec.split("=")
+        src, re_ = ref.rsplit(":", 1)
+        entries[int(e)], P, mv = collar(entries[int(e)], arc(src).entry(int(re_)))
+        n = np.linalg.norm(mv, axis=1)
+        print("entry %s: collar moved onto %s's model %s: %d positions moved, at most %.0f" %
+              (e, src, re_, (n > 0.05).sum(), n.max()))
+        # the straps keep to the body's --fit only: the collar's move would pull their ends near the neck out of it
+    for spec in a.tuck:
+        h, b = (int(x) for x in spec.split(":"))
+        entries[h], n = tuck(entries[h], entries[b])
+        print("entry %d: the neck's base kept under entry %d's collar, %d positions moved" % (h, b, n))
     for spec in a.carry:
         e, which = spec.split(":")
         P, push = moved[int(e)]
