@@ -138,7 +138,7 @@ PROFILES = {
 }
 
 
-def stubble_weight(pos, prof=None, cheeks=1.0):
+def stubble_weight(pos, prof=None, cheeks=1.0, under_lip=0.0):
     """0..1 per texel: where the beard grows (from the model position); cheeks: how much of it on the cheeks above
     the jaw line (1 all; less: a light beard on the chin, the jaw and the upper lip)."""
     q = PROFILES["re4"] if prof is None else prof
@@ -161,6 +161,10 @@ def stubble_weight(pos, prof=None, cheeks=1.0):
         smoothstep(z0, z1, z)
     w *= 1 - lips
     w *= 1 - 0.35 * smoothstep(q["cheek"][0], q["cheek"][1], y) * smoothstep(30, 60, ax)  # sparser up on the cheeks
+    if under_lip > 0:  # the hollow under the lower lip clean, down to the chin's tip (a tired, grown-out look)
+        l0 = q["lips_y"][0]
+        gap = (1 - smoothstep(13, 22, ax)) * smoothstep(l0 - 12, l0 - 7, y) * (1 - smoothstep(l0 - 1, l0 + 3, y))
+        w *= 1 - under_lip * gap
     if cheeks < 1:  # the jaw line: from the chin (its lowest point) up to the jaw's angle below the ear
         jaw = q["chin"][1] + 1 + 0.7 * np.maximum(ax - 15, 0)
         w *= 1 - (1 - cheeks) * smoothstep(jaw + 4, jaw + 14, y) * smoothstep(24, 34, ax)
@@ -175,11 +179,12 @@ def smooth_noise(pos, scale=1.0):
     return n / 1.6
 
 
-def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0, cheeks=1.0, patchy=0.0):
+def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0, cheeks=1.0, patchy=0.0,
+                under_lip=0.0):
     """Short beard; grey: the share of grey hairs among the dark (0 none .. 1 all; salt and pepper); patchy: thinner
     in patches (0 even .. 1 patches almost bare)."""
     a = rgba.astype(np.float32)
-    w = stubble_weight(pos, prof, cheeks) * strength
+    w = stubble_weight(pos, prof, cheeks, under_lip) * strength
     if patchy > 0:
         w = w * (1 - patchy * smoothstep(-0.3, 0.6, smooth_noise(pos)))
     rng = np.random.default_rng(seed)
@@ -490,6 +495,8 @@ def main(argv=None):
                          "chin, the jaw and the upper lip)")
     ap.add_argument("--stubble-patchy", type=float, default=0.0,
                     help="the stubble thinner in patches (0 even .. 1 patches almost bare)")
+    ap.add_argument("--stubble-under-lip", type=float, default=0.0,
+                    help="the hollow under the lower lip clean (0 bearded .. 1 clean)")
     ap.add_argument("--pale", type=float, default=0.0, help="the skin paler and cooler (0 as it is .. 1)")
     ap.add_argument("--sockets", type=float, default=0.0, help="deeper eye sockets (0 none .. 1)")
     ap.add_argument("--pores", type=float, default=0.0, help="a fine grain of pores over the face (0 none .. 1)")
@@ -556,7 +563,8 @@ def main(argv=None):
     if a.stubble > 0:
         img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
                           prof=PROFILES[a.face_model], grey=a.stubble_grey,
-                          cheeks=a.stubble_cheeks, patchy=a.stubble_patchy)
+                          cheeks=a.stubble_cheeks, patchy=a.stubble_patchy,
+                          under_lip=a.stubble_under_lip)
         print("face texture %d: stubble %.2f" % (face, a.stubble))
     imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
