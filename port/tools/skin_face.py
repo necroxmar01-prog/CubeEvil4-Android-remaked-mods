@@ -351,6 +351,88 @@ def set_positions(blob, P):
     return bytes(blob)
 
 
+def pos_normal_pairs(blob):
+    """Each (position index, normal index) the model draws with."""
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    per = 4 if u(0x20) & 0x80000000 else 3
+    pairs = set()
+    p = u(0x1C)
+    for _ in range(struct.unpack_from(">H", blob, 0x1A)[0]):
+        size = u(p + 0x18)
+        s, e = p + 0x20, p + 0x20 + size
+        while s < e and blob[s] != 0:
+            cnt = struct.unpack_from(">H", blob, s + 1)[0]
+            for k in range(cnt):
+                v = struct.unpack_from(">2H", blob, s + 3 + k * per * 2)
+                pairs.add(v)
+            s += 3 + cnt * per * 2
+        p = e
+    return pairs
+
+
+def fold_band(x, y, profile, inner=3.0, outer=7.0):
+    """0..1: how close (front view) to a fold from the nose to the mouth."""
+    band = np.zeros(np.shape(x))
+    for line in AGE_LINES[profile]:
+        if len(line) > 3 and line[3] == "nose":
+            pts = [(px, py + 2) for px, py in line[0]] + [(line[0][-1][0], line[0][-1][1] - 6)]
+            for sgn in (1, -1):
+                d = seg_dist(x, y, [(sgn * px, py) for px, py in pts])
+                band = np.maximum(band, 1 - smoothstep(inner, outer, d))
+    return band
+
+
+def fill_folds_model(blob, amount=1.0, profile="re4", radius=7.0, do_pos=True, do_nrm=True):
+    """The folds from the nose to the mouth out of the head's shape and its lighting: in a band along each fold the
+    depth (z) of the positions and the normals drawn with them move towards their neighbourhood's (a Gaussian over
+    the front view, radius in model units); the nostrils and the lips (z far off the neighbourhood) stay."""
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    s8 = bool(u(0x20) & 0x20000000)
+    P = G.positions(blob)
+    front = P[:, 2] > 60
+    band = fold_band(P[:, 0], P[:, 1], profile) * front * amount
+    sel = np.where(band > 0.01)[0]
+    F = np.where(front)[0]
+    P2 = P.copy()
+    for i in (sel if do_pos else ()):
+        d2 = (P[F, 0] - P[i, 0]) ** 2 + (P[F, 1] - P[i, 1]) ** 2
+        w = np.exp(-d2 / (2 * (radius / 2) ** 2)) * (d2 < radius * radius)
+        z = (w * P[F, 2]).sum() / max(w.sum(), 1e-9)
+        if abs(z - P[i, 2]) < 4:  # (not the nostrils' rims nor the lips)
+            P2[i, 2] = P[i, 2] + (z - P[i, 2]) * band[i]
+    out = bytearray(set_positions(blob, P2))
+    nn = struct.unpack_from(">H", blob, 0x3A)[0]
+    no, sc = u(0x34), (64.0 if s8 else 16384.0)
+    N = (np.frombuffer(blob, ">i1" if s8 else ">i2", nn * 4, no).reshape(-1, 4)[:, :3] / sc).astype(float)
+    by_n = {}
+    for vp, vn in pos_normal_pairs(blob):
+        if vp < len(P) and vn < nn:
+            by_n.setdefault(vn, []).append(vp)
+    # the neighbourhood's normal at each front position
+    # (a normal the converter shares between distant positions of equal value stays: only those drawn at one spot)
+    pos_of = {vn: np.mean(P[vps], axis=0) for vn, vps in by_n.items() if np.ptp(P[vps], axis=0).max() < 3}
+    keys = np.array(sorted(pos_of))
+    Q = np.array([pos_of[k] for k in keys])
+    moved = 0
+    for vn, q in (zip(keys, Q) if do_nrm else ()):
+        b = float(fold_band(q[0], q[1], profile)) * (q[2] > 60) * amount
+        if b <= 0.01 or N[vn][2] < 0.4 * np.linalg.norm(N[vn]):  # (only skin facing forwards: not under the
+            continue                                                 # nostrils nor the lips' undersides)
+        d2 = (Q[:, 0] - q[0]) ** 2 + (Q[:, 1] - q[1]) ** 2
+        fwd = N[keys][:, 2] > 0.4 * np.linalg.norm(N[keys], axis=1)
+        m = (d2 < radius * radius) & (np.abs(Q[:, 2] - q[2]) < 4) & fwd
+        w = np.exp(-d2[m] / (2 * (radius / 2) ** 2))
+        avg = (w[:, None] * N[keys[m]]).sum(0)
+        n = N[vn] + (avg / (np.linalg.norm(avg) + 1e-9) - N[vn] / (np.linalg.norm(N[vn]) + 1e-9)) * b
+        n = n / (np.linalg.norm(n) + 1e-9)
+        if s8:
+            struct.pack_into(">3b", out, no + vn * 4, *[max(-64, min(63, int(round(c * 64)))) for c in n])
+        else:
+            struct.pack_into(">3h", out, no + vn * 8, *[max(-16384, min(16383, int(round(c * 16384)))) for c in n])
+        moved += 1
+    return bytes(out), len(sel), moved
+
+
 def seg_dist(px, py, pts):
     """Distance in the front view (x, y) from each texel to a polyline."""
     best = np.full(px.shape, np.inf)
@@ -373,7 +455,7 @@ AGE_LINES = {
         ([(45, 1722), (60, 1722)], 0.18),
         ([(44, 1718), (57, 1710)], 0.16),
         ([(16, 1709), (28, 1703), (41, 1709)], 0.22),  # under the eyes
-        ([(15, 1681), (24, 1668), (29, 1656), (31, 1645)], 0.26),  # nose to mouth
+        ([(15, 1681), (24, 1668), (29, 1656), (31, 1645)], 0.26, 1.3, "nose"),  # nose to mouth
         ([(28, 1640), (30, 1628)], 0.12),  # down from the mouth's corners
     ],
     # the Remake's head: eyes x 12..44 / y 1712..1732 (pupil 28/1722), brows 1740, nose's wings 16/1682,
@@ -388,7 +470,7 @@ AGE_LINES = {
         ([(46, 1717), (54, 1712)], 0.12, 0.9),
         ([(14, 1711), (21, 1706), (29, 1704), (37, 1706), (44, 1711)], 0.17, 1.4),  # the bags' lower edge
         ([(18, 1700), (29, 1696), (40, 1700)], 0.07, 2.0),  # below them, faint
-        ([(17, 1683), (22, 1673), (27, 1662), (29, 1652), (30, 1642)], 0.22, 2.0),  # nose to mouth
+        ([(17, 1683), (22, 1673), (27, 1662), (29, 1652), (30, 1642)], 0.22, 2.0, "nose"),  # nose to mouth
         ([(27, 1644), (29, 1632)], 0.09, 1.4),  # down from the mouth's corners
     ],
 }
@@ -432,7 +514,28 @@ def add_skin(rgba, pos, pale=0.0, sockets=0.0, pores=0.0, profile="re4"):
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0):
+def fill_folds(rgba, pos, amount=1.0, profile="re4"):
+    """The folds from the nose to the mouth painted into the texture itself (the Remake's face has them) filled: in a
+    band along each fold the darker texels are lifted to the skin's local brightness (a wide blur), their colour and
+    grain kept."""
+    a = rgba.astype(np.float32)
+    x, y = np.nan_to_num(pos[..., 0]), np.nan_to_num(pos[..., 1])
+    ok = np.isfinite(pos[..., 0]) & (np.nan_to_num(pos[..., 2]) > 60)
+    band = fold_band(x, y, profile)
+    band *= ok
+    lum = a[..., :3].mean(-1)
+    k = 10.0 * a.shape[1] / 512  # texels
+    num = blur1d(blur1d(lum * ok, k, 0), k, 1)
+    den = blur1d(blur1d(ok.astype(np.float64), k, 0), k, 1)
+    local = num / np.maximum(den, 1e-3)
+    lift = np.clip(local / np.maximum(lum, 1.0), 1.0, 1.6)  # only lighter, never darker
+    f = 1 + (lift - 1) * band * amount
+    out = a.copy()
+    out[..., :3] = a[..., :3] * f[..., None]
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0, nose=1.0):
     """Creases of age, shadows under the eyes and a weathered skin on the face's texture (front texels only)."""
     a = rgba.astype(np.float32)
     x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
@@ -445,6 +548,10 @@ def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0):
         width = line[2] if len(line) > 2 else 1.3
         if max(py for _, py in pts) < 1650:  # down from the mouth's corners
             depth *= mouth
+        if len(line) > 3 and line[3] == "nose":  # the folds from the nose to the mouth
+            depth *= nose
+        if depth <= 0:
+            continue
         for s in (1, -1):
             if s == -1 and all(px == 0 for px, _ in pts):
                 continue
@@ -452,6 +559,8 @@ def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0):
             dark = np.maximum(dark, depth * np.exp(-(d / width) ** 2))
     # the shadow under the eyes and in the hollows of the cheeks
     for (cx, cy), r, depth in AGE_SHADOWS[profile]:
+        if cy < 1690:  # the hollows of the cheeks, beside the folds from the nose to the mouth
+            depth *= nose
         for s in (1, -1):
             dark = np.maximum(dark, depth * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * cx, cy, 0), r))
     rng = np.random.default_rng(11)
@@ -504,6 +613,8 @@ def main(argv=None):
                     help="a clean edge around the lips and the mouth's corners (model units, e.g. 3)")
     ap.add_argument("--mouth-lines", type=float, default=1.0,
                     help="the creases at the mouth's corners (1 as the age gives them .. 0 none)")
+    ap.add_argument("--nose-lines", type=float, default=1.0,
+                    help="the folds from the nose to the mouth (1 as the age gives them .. 0 none)")
     ap.add_argument("--pale", type=float, default=0.0, help="the skin paler and cooler (0 as it is .. 1)")
     ap.add_argument("--sockets", type=float, default=0.0, help="deeper eye sockets (0 none .. 1)")
     ap.add_argument("--pores", type=float, default=0.0, help="a fine grain of pores over the face (0 none .. 1)")
@@ -564,8 +675,14 @@ def main(argv=None):
     if a.pale > 0 or a.sockets > 0 or a.pores > 0:
         img = add_skin(img, pos, a.pale, a.sockets, a.pores, a.face_model)
         print("face texture %d: pale %.2f, sockets %.2f, pores %.2f" % (face, a.pale, a.sockets, a.pores))
+    if a.nose_lines < 1:  # the head's shape and normals, and the texture's own folds
+        entries[HEAD], npos, nnrm = fill_folds_model(entries[HEAD], 1 - a.nose_lines, a.face_model)
+        head = entries[HEAD]
+        print("head: folds from the nose to the mouth filled (%d positions, %d normals)" % (npos, nnrm))
+        img = fill_folds(img, pos, 1 - a.nose_lines, a.face_model)
+        print("face texture %d: folds from the nose to the mouth filled %.2f" % (face, 1 - a.nose_lines))
     if a.age > 0:
-        img = add_age(img, pos, a.age, a.face_model, a.mouth_lines)
+        img = add_age(img, pos, a.age, a.face_model, a.mouth_lines, a.nose_lines)
         print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
         img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
