@@ -31,6 +31,8 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
 --inside ENTRY:COVER pushes ENTRY's positions above y 1150 that poke out through COVER (within 25 of it, outside
                      it) 5 under it (a shirt through a jacket's shoulders); the jacket's open front, further away,
                      and the legs stay.
+--cover HAIR:HEAD    lifts hair model HAIR over head model HEAD's skull (a hair made for another head): above
+                     y 1700, every hair position at least 4 further out from the skull's centre than the head there.
 --cut ENTRY:Y        drops ENTRY's triangles that reach above y Y (the body's upper half under a jacket model that
                      brings its own shirt).
 --compact ENTRY      drops what nothing in ENTRY draws any more (after skin_graft.py --drop).
@@ -413,6 +415,45 @@ def inside(model, cover, near=25.0, inset=5.0, low=1150.0):
     return bytes(out), n
 
 
+def cover(hair, head, centre=(0.0, 1715.0, -15.0), gap=4.0, low=1700.0, cone=12.0):
+    """Lifts a hair made for another head over this one's skull (DevJunior, 09.11.2026: the Remake's head under
+    Black Coat's hair, its scalp showed through): seen from the skull's centre, every hair position above y `low`
+    lies at least `gap` further out than the head's surface in its direction (within `cone` degrees); the push is
+    shared with the neighbouring positions so the cards keep their shape. Returns (model, how many moved, the most)."""
+    from scipy.spatial import cKDTree
+    c = np.array(centre)
+    P = G.positions(hair)
+    H = G.positions(head)
+    H = H[H[:, 1] > low - 30]
+    hd = H - c
+    hr = np.linalg.norm(hd, axis=1)
+    hu = hd / hr[:, None]
+    cos = np.cos(np.radians(cone))
+    push = np.zeros(len(P))
+    for i, p in enumerate(P):
+        if p[1] < low:
+            continue
+        d = p - c
+        r = np.linalg.norm(d)
+        u = d / r
+        sel = hu @ u > cos
+        if not sel.any():
+            continue
+        want = hr[sel].max() + gap
+        if r < want:
+            push[i] = want - r
+    tree = cKDTree(P)
+    smooth = np.array([push[tree.query_ball_point(P[i], 15.0)].max() if P[i][1] >= low - 20 else 0.0
+                       for i in range(len(P))])
+    out = bytearray(hair)
+    n = 0
+    for i in np.nonzero(smooth > 0.05)[0]:
+        d = P[i] - c
+        G.set_position(out, i, P[i] + d / np.linalg.norm(d) * smooth[i])
+        n += 1
+    return bytes(out), n, float(smooth.max())
+
+
 def cut(model, top):
     """Drops the triangles of `model` that reach above y `top` (the body's upper half under a jacket model that brings
     its own shirt). Returns (model, triangles before, after)."""
@@ -505,6 +546,8 @@ def main(argv=None):
                     help="drop ENTRY's triangles (with @MATS: of these parts) that model COVER hides")
     ap.add_argument("--inside", action="append", default=[], metavar="ENTRY:COVER",
                     help="push ENTRY's positions that poke out through model COVER back under it")
+    ap.add_argument("--cover", action="append", default=[], metavar="HAIR:HEAD",
+                    help="lift hair model HAIR over the skull of head model HEAD (a hair made for another head)")
     ap.add_argument("--cut", action="append", default=[], metavar="ENTRY:Y",
                     help="drop ENTRY's triangles that reach above y Y")
     ap.add_argument("--compact", action="append", default=[], metavar="ENTRY",
@@ -575,6 +618,10 @@ def main(argv=None):
         entries[e], before, after = hide(entries[e], None if c == e else entries[c], mats=mats)
         print("entry %d: %d of %d triangles hidden under entry %d dropped, %d positions left" %
               (e, before - after, before, c, len(G.positions(entries[e]))))
+    for spec in a.cover:
+        h, hd = (int(x) for x in spec.split(":"))
+        entries[h], n, most = cover(entries[h], entries[hd])
+        print("entry %d: %d positions lifted over entry %d's skull, at most %.0f" % (h, n, hd, most))
     for spec in a.inside:
         e, c = (int(x) for x in spec.split(":"))
         entries[e], n = inside(entries[e], entries[c])
