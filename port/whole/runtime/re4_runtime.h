@@ -186,6 +186,9 @@ void re4_mod_melee_path_set(const char* path);
 /* Patch 0901, event.cpp ExePacket_SetParts: 1 = a jacket part of costume 0 takes the skin's pl000e
  * (the PC mods replace pl08, Leon without the jacket); logs each part while the player's file is a mod. */
 int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume);
+/* Patch 0906, event.cpp ExePacket_SetPartsSub: the player archive part (6 head, 8 face) a modded Leon draws instead of
+ * the event's head ev0001 / eyes ev0002, 0 none (those stay, drawn at scale 0, for the event's motions and shapes). */
+int re4_mod_event_head(const char* name, const char* oya);
 /* The primitive buffer's overflow (patch 0901, trans.cpp GetPrimBuff): the room's buffer (cons
  * CONS_R_NPRIM) is sized for the disc's models; a converted skin skins tens of thousands of vertices
  * into it each frame. What no longer fits comes from here, one half per frame buffer (DblBufIdx) as

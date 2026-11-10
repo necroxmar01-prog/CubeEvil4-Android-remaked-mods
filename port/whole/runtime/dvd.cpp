@@ -918,6 +918,23 @@ int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const
     return jacket;
 }
 
+// Patch 0906 (event.cpp ExePacket_SetPartsSub): the player archive's part to draw instead of an event's Leon head
+// part while the player's file is a mod (DevJunior, 10.11.2026: the cutscenes showed the disc's face with every skin):
+// ev0001 (the event's head with its face shapes) -> 6 (the skin's head), ev0002 (the event's eyes) -> 8 (the skin's
+// face); 0 keeps the event's. Only on Leon's event body (pl0000).
+int re4_mod_event_head(const char* name, const char* oya)
+{
+    if (!gPlayerModded || name == 0 || oya == 0 || strcmp(oya, "pl0000") != 0) {
+        return 0;
+    }
+    const int own = strcmp(name, "ev0001") == 0 ? 6 : strcmp(name, "ev0002") == 0 ? 8 : 0;
+    if (own != 0) {
+        re4_log("Event: part %s on %s: drawn as the skin's %s (archive part %d)", name, oya,
+                own == 6 ? "head" : "face", own);
+    }
+    return own;
+}
+
 void* re4_player_data_place(const char* name, unsigned fixedMax)
 {
     {

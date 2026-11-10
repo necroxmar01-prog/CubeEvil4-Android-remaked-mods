@@ -461,6 +461,7 @@ static void testDvdMods()
     // the player's place (patch 0901): the disc's archive keeps the fixed one
     CHECK(re4_player_data_place("em/pl10.drs", 0x118000) == 0 && !re4_player_modded());
     CHECK(re4_mod_event_part("ev000e", "b", "t", "pl0000", 0) == 0); // the disc's Leon keeps the jacket
+    CHECK(re4_mod_event_head("ev0001", "pl0000") == 0 && re4_mod_event_head("ev0002", "pl0000") == 0); // and his head
     CHECK(re4_player_data_place("em/missing.drs", 0x118000) == 0);
 
     // a larger mod: the place behind the cheats' (and the primitive buffer's overflow, per half)
@@ -471,6 +472,10 @@ static void testDvdMods()
     // cutscenes: a skin's jacket parts in costume 0 take its pl000e, nothing else
     CHECK(re4_mod_event_part("ev000e", "b", "t", "pl0000", 0) && re4_mod_event_part("ev001e", "b", "t", "pl0000", 0));
     CHECK(!re4_mod_event_part("ev000e", "b", "t", "pl0000", 1) && !re4_mod_event_part("ev0002", "b", "t", "pl0000", 0));
+    // and its head (patch 0906): the event's head ev0001 and eyes ev0002 on Leon's body, nothing else
+    CHECK(re4_mod_event_head("ev0001", "pl0000") == 6 && re4_mod_event_head("ev0002", "pl0000") == 8);
+    CHECK(re4_mod_event_head("ev0003", "pl0000") == 0 && re4_mod_event_head("ev0001", "em1000") == 0 &&
+          re4_mod_event_head("ev1001", "pl0000") == 0);
     re4_prim_extra_reset(0);
     re4_prim_extra_reset(1);
     CHECK(re4_prim_extra(1, 0x21) == (void*) (unsigned long) (RE4_MEM1_PRIM_EXTRA_ADDR + RE4_MEM1_PRIM_EXTRA_HALF));

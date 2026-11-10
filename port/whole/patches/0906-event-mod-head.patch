@@ -1,0 +1,42 @@
+# Patch 0906 (wish of DevJunior, 10.11.2026: "in the cutscenes every mod shows the original Leon's face"). Not a bug
+# of the prototype: a port feature for the mods of patch 0901.
+# event.cpp ExePacket_SetPartsSub: an event dresses Leon's event body (pl0000, his archive's body) with its own head
+# ev0001 (head and face with the event's face shapes) and eyes ev0002 (whose part table also sets the body's parts
+# offsets), with the event's textures: a skin's own head never showed in a cutscene. While the player's file is a mod
+# (re4_mod_event_head, runtime/dvd.cpp, logs each swap) those two stay registered for the event's motion, shape and
+# offset packets but are drawn at scale 0 (as cPlBody::setKnife hides the knife), and the skin's head (archive 6) and
+# face (archive 8) with its palette (7) are added to the body. The disc's files: as before.
+--- a/src/game/event.cpp
++++ b/src/game/event.cpp
+@@ -957,6 +957,7 @@
+ 
+ // Creates the parts cModelInfo from bin/tpl and adds it to parent `oya` (the ev*02 head parts also
+ // set the parent's parts offset); registered as model type 3.
++extern "C" int re4_mod_event_head(const char* name, const char* oya); /* port (patch 0906): runtime/dvd.cpp */
+ int Event::ExePacket_SetPartsSub(char* nm, char* bin, char* tpl, char* oya)
+ {
+     void* b;
+@@ -990,6 +991,23 @@
+         pLog->err(0, 0, "Event::ExePacket_SetParts : failed");
+         return 1;
+     }
++    /* port (patch 0906, mods): a skin's head in the cutscenes too (DevJunior, 10.11.2026): the event's own Leon
++       head (ev0001) and eyes (ev0002) stay for their motions and shapes but are drawn at scale 0, as the game
++       hides the knife; the skin's head and face from the player archive (6, 8, palette 7) are drawn instead */
++    {
++        int own = pG->pl_type == 0 && pG->pPlayer != 0 ? re4_mod_event_head(nm, oya) : 0;
++
++        if (own != 0) {
++            cModelInfo* skin = ModInfoMgr.create(PL_ARC_PTR(pG->pPlayer, own), PL_ARC_PTR(pG->pPlayer, 7));
++
++            if (skin != 0) {
++                info->mat[0][0] = 0.0f;
++                info->mat[1][1] = 0.0f;
++                info->mat[2][2] = 0.0f;
++                m->addModel(skin);
++            }
++        }
++    }
+     return 1;
+ }
+ 
