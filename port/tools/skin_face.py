@@ -138,8 +138,9 @@ PROFILES = {
 }
 
 
-def stubble_weight(pos, prof=None):
-    """0..1 per texel: where the beard grows (from the model position)."""
+def stubble_weight(pos, prof=None, cheeks=1.0):
+    """0..1 per texel: where the beard grows (from the model position); cheeks: how much of it on the cheeks above
+    the jaw line (1 all; less: a light beard on the chin, the jaw and the upper lip)."""
     q = PROFILES["re4"] if prof is None else prof
     x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
     ax = np.abs(x)
@@ -160,13 +161,16 @@ def stubble_weight(pos, prof=None):
         smoothstep(z0, z1, z)
     w *= 1 - lips
     w *= 1 - 0.35 * smoothstep(q["cheek"][0], q["cheek"][1], y) * smoothstep(30, 60, ax)  # sparser up on the cheeks
+    if cheeks < 1:  # the jaw line: from the chin (its lowest point) up to the jaw's angle below the ear
+        jaw = q["chin"][1] + 1 + 0.7 * np.maximum(ax - 15, 0)
+        w *= 1 - (1 - cheeks) * smoothstep(jaw + 4, jaw + 14, y) * smoothstep(24, 34, ax)
     return np.nan_to_num(w)
 
 
-def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0):
+def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0, cheeks=1.0):
     """Short beard; grey: the share of grey hairs among the dark (0 none .. 1 all; salt and pepper)."""
     a = rgba.astype(np.float32)
-    w = stubble_weight(pos, prof) * strength
+    w = stubble_weight(pos, prof, cheeks) * strength
     rng = np.random.default_rng(seed)
     noise = rng.random(w.shape)
     # dots a texel wide, a little blurred into the skin
@@ -437,6 +441,9 @@ def main(argv=None):
     ap.add_argument("--face-model", choices=sorted(PROFILES), default="re4",
                     help="whose head the archive carries (where the stubble and the creases go): re4 the game's "
                          "Leon, remake the head of the Resident Evil 4 Remake mod")
+    ap.add_argument("--stubble-cheeks", type=float, default=1.0,
+                    help="how much stubble on the cheeks above the jaw line (1 all .. 0 none: a light beard on the "
+                         "chin, the jaw and the upper lip)")
     ap.add_argument("--stubble-grey", type=float, default=0.0,
                     help="the share of grey hairs in the stubble (0 none .. 1 all; salt and pepper)")
     a = ap.parse_args(argv)
@@ -496,7 +503,8 @@ def main(argv=None):
         print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
         img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
-                          prof=PROFILES[a.face_model], grey=a.stubble_grey)
+                          prof=PROFILES[a.face_model], grey=a.stubble_grey,
+                          cheeks=a.stubble_cheeks)
         print("face texture %d: stubble %.2f" % (face, a.stubble))
     imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
