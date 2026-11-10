@@ -1,0 +1,33 @@
+# Patch 0907 (wish of DevJunior, 10.11.2026: "the skins should move the mouth"). Not a bug of the prototype: a port
+# feature for the mods of patches 0901 and 0906.
+# shape.cpp ShapeSet: an event's face animation (event.cpp ExePacket_Shp, on Leon's event head ev0001) is also set
+# on the skin's head that patch 0906 draws in its place, when that head carries the event head's face shapes in as
+# many slots (port/tools/skin_shapes.py; event.cpp pairs the two, re4_mod_shape_pair, runtime/dvd.cpp). Both then
+# run frame by frame alike (ShapeMove, ClrShape, ShapeEnd go over the body's parts list, which holds both). A skin
+# without those shapes, or the disc's files: as before.
+--- a/src/game/shape.cpp
++++ b/src/game/shape.cpp
+@@ -18,6 +18,7 @@
+ void ShapeEnd(void* work);
+ 
+ // Start a shape animation on a model part. Returns 0 when the data has no frames.
++extern "C" void* re4_mod_shape_twin(void* info, void* model, void** skin_model); /* port (patch 0907): runtime/dvd.cpp */
+ int ShapeSet(void* work, int frame, void* data, int flags)
+ {
+     cModelInfo* info = (cModelInfo*) work;
+@@ -34,6 +35,15 @@
+         ShapeEnd(work);
+         return 0;
+     }
++    /* port (patch 0907, mods): the skin's head drawn for an event's Leon head plays the same face animation */
++    {
++        void* model = 0;
++        cModelInfo* twin = (cModelInfo*) re4_mod_shape_twin(work, info->model_addr, &model);
++
++        if (twin != 0 && twin->model_addr == model) {
++            ShapeSet(twin, frame, data, flags);
++        }
++    }
+     return 0;
+ }
+ 

@@ -476,6 +476,22 @@ static void testDvdMods()
     CHECK(re4_mod_event_head("ev0001", "pl0000") == 6 && re4_mod_event_head("ev0002", "pl0000") == 8);
     CHECK(re4_mod_event_head("ev0003", "pl0000") == 0 && re4_mod_event_head("ev0001", "em1000") == 0 &&
           re4_mod_event_head("ev1001", "pl0000") == 0);
+    // the skin's head plays the event head's face animation (patch 0907) while the event head holds its model
+    {
+        int ev = 0, ev2 = 0, skin = 0, skin2 = 0, model = 0, model2 = 0, other = 0;
+        void* m = 0;
+        CHECK(re4_mod_shape_twin(&ev, &model, &m) == 0);
+        re4_mod_shape_pair(&ev, &model, &skin, &model2);
+        CHECK(re4_mod_shape_twin(&ev, &model, &m) == &skin && m == &model2);
+        CHECK(re4_mod_shape_twin(&skin, &model2, &m) == 0); // one way only
+        re4_mod_shape_pair(&ev2, &model, &skin2, &model2);
+        CHECK(re4_mod_shape_twin(&ev2, &model, 0) == &skin2 && re4_mod_shape_twin(&ev, &model, 0) == &skin);
+        CHECK(re4_mod_shape_twin(&ev, &other, 0) == 0 && re4_mod_shape_twin(&ev, &model, 0) == 0); // reused: gone
+        re4_mod_shape_pair(&ev2, &model, &skin, &model2); // a new pair for the same event head replaces the old
+        CHECK(re4_mod_shape_twin(&ev2, &model, 0) == &skin);
+        re4_mod_shape_pair(&ev, &model, &ev, &model);
+        CHECK(re4_mod_shape_twin(&ev, &model, 0) == 0);
+    }
     re4_prim_extra_reset(0);
     re4_prim_extra_reset(1);
     CHECK(re4_prim_extra(1, 0x21) == (void*) (unsigned long) (RE4_MEM1_PRIM_EXTRA_ADDR + RE4_MEM1_PRIM_EXTRA_HALF));

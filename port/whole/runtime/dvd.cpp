@@ -935,6 +935,59 @@ int re4_mod_event_head(const char* name, const char* oya)
     return own;
 }
 
+// Patch 0907 (shape.cpp ShapeSet): an event's Leon head (ev0001) and the skin's head patch 0906 draws in its place,
+// when the skin's head carries the event head's face shapes (port/tools/skin_shapes.py): the skin's head then plays
+// each face animation the event sets on its head. A pair counts while both model infos still hold the models they
+// held when paired (the game reuses model infos for other parts later). Few heads at a time: the oldest pair goes.
+namespace {
+struct ShapePair {
+    void* event;
+    void* eventModel;
+    void* skin;
+    void* skinModel;
+};
+ShapePair gShapePairs[4];
+unsigned gShapePairNext;
+} // namespace
+
+void re4_mod_shape_pair(void* event_info, void* event_model, void* skin_info, void* skin_model)
+{
+    if (event_info == 0 || skin_info == 0 || event_info == skin_info) {
+        return;
+    }
+    ShapePair* slot = &gShapePairs[gShapePairNext++ % 4];
+    for (ShapePair& p : gShapePairs) {
+        if (p.event == event_info || p.skin == event_info || p.event == skin_info || p.skin == skin_info) {
+            slot = &p; // one pair per model info
+            break;
+        }
+    }
+    *slot = ShapePair{event_info, event_model, skin_info, skin_model};
+    re4_log("Event: the skin's head plays the event head's face animation");
+}
+
+// The skin's head paired with an event head that still holds its model, and the model the skin's head held when
+// paired (*skin_model; the game checks it on its model info); 0 none.
+void* re4_mod_shape_twin(void* info, void* model, void** skin_model)
+{
+    if (info == 0) {
+        return 0;
+    }
+    for (ShapePair& p : gShapePairs) {
+        if (p.event == info) {
+            if (p.eventModel != model) {
+                p = ShapePair{}; // a model info used for something else since
+                return 0;
+            }
+            if (skin_model != 0) {
+                *skin_model = p.skinModel;
+            }
+            return p.skin;
+        }
+    }
+    return 0;
+}
+
 void* re4_player_data_place(const char* name, unsigned fixedMax)
 {
     {

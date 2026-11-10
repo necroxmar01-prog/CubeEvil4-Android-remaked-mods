@@ -189,6 +189,11 @@ int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const
 /* Patch 0906, event.cpp ExePacket_SetPartsSub: the player archive part (6 head, 8 face) a modded Leon draws instead of
  * the event's head ev0001 / eyes ev0002, 0 none (those stay, drawn at scale 0, for the event's motions and shapes). */
 int re4_mod_event_head(const char* name, const char* oya);
+/* Patch 0907, shape.cpp ShapeSet: an event's head (ev0001) and the skin's head drawn in its place (0906) with the event
+ * head's face shapes; the skin's head then plays the event head's face animations. Pairs stay while the event head's
+ * model info holds the model it held when paired; re4_mod_shape_twin gives the skin's model info and its model then. */
+void re4_mod_shape_pair(void* event_info, void* event_model, void* skin_info, void* skin_model);
+void* re4_mod_shape_twin(void* info, void* model, void** skin_model);
 /* The primitive buffer's overflow (patch 0901, trans.cpp GetPrimBuff): the room's buffer (cons
  * CONS_R_NPRIM) is sized for the disc's models; a converted skin skins tens of thousands of vertices
  * into it each frame. What no longer fits comes from here, one half per frame buffer (DblBufIdx) as
