@@ -30,6 +30,7 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
                      its jacket's model).
 --cut ENTRY:Y        drops ENTRY's triangles that reach above y Y (the body's upper half under a jacket model that
                      brings its own shirt).
+--compact ENTRY      drops what nothing in ENTRY draws any more (after skin_graft.py --drop).
 --prune TPL          keeps only the textures of palette TPL its models draw (after a graft or a hide).
 --carry ENTRY:LIST   moves the models LIST (straps, a harness) as the nearest positions of ENTRY moved in --fit.
 """
@@ -479,6 +480,9 @@ def main(argv=None):
                     help="drop ENTRY's triangles (with @MATS: of these parts) that model COVER hides")
     ap.add_argument("--cut", action="append", default=[], metavar="ENTRY:Y",
                     help="drop ENTRY's triangles that reach above y Y")
+    ap.add_argument("--compact", action="append", default=[], metavar="ENTRY",
+                    help="drop the positions, normals, colours and texture coordinates nothing in ENTRY draws (after "
+                         "skin_graft.py --drop emptied parts)")
     ap.add_argument("--prune", action="append", default=[], metavar="TPL",
                     help="keep only the textures of palette TPL that its models draw (Leon's 1: 0, 6, 9, 12; 3: 2, 4, 5)")
     ap.add_argument("--most", type=float, default=70.0, help="--fit's largest push (default 70)")
@@ -549,6 +553,11 @@ def main(argv=None):
         entries[int(e)], before, after = cut(entries[int(e)], float(y))
         print("entry %s: %d of %d triangles above y %s dropped, %d positions left" %
               (e, before - after, before, y, len(G.positions(entries[int(e)]))))
+    for spec in a.compact:
+        e = int(spec)
+        before = len(G.positions(entries[e]))
+        entries[e] = rebuild(entries[e], [t for _, t in part_lists(entries[e])])
+        print("entry %d: %d -> %d positions" % (e, before, len(G.positions(entries[e]))))
     for spec in a.prune:
         t = int(spec)
         before, after, n, kept = prune(entries, t, U.PLAYER_TPL_USERS.get(t, (t - 1,)))
