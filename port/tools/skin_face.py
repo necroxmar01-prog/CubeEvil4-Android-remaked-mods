@@ -126,32 +126,59 @@ def smoothstep(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
-def stubble_weight(pos):
+# Where the face's features lie (bind pose, model space), per head: re4 the original game's Leon, remake the head of
+# the Resident Evil 4 Remake mod (DevJunior, 09.11.2026: its eyes 1722, its mouth 1652, its nose's base 1678, its chin
+# 1615, its lips 6..10 further forward)
+PROFILES = {
+    "re4": dict(top=1667, slope=0.5, chin=(1594, 1608), lips_x=(20, 27), lips_y=(1636, 1641, 1657, 1662),
+                lips_z=(78, 84), cheek=(1650, 1700), edge=0.0, side=0.0, fade=6, neck=None),
+    "remake": dict(top=1676, slope=0.18, side=1.3, chin=(1604, 1617), lips_x=(21, 27), lips_y=(1639, 1643, 1659, 1663),
+                   lips_z=(83, 88), cheek=(1662, 1690), edge=2.0, soft=True, fade=14,
+                   neck=(1590, 1603)),
+}
+
+
+def stubble_weight(pos, prof=None):
     """0..1 per texel: where the beard grows (from the model position)."""
+    q = PROFILES["re4"] if prof is None else prof
     x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
     ax = np.abs(x)
-    top = 1667 + 0.5 * ax  # under the nostrils, rising over the cheeks to the sideburns
-    w = 1 - smoothstep(top - 6, top + 4, y)
+    top = q["top"] + q["slope"] * ax  # under the nostrils, rising over the cheeks to the sideburns
+    top = top + q["side"] * np.maximum(ax - 55, 0)  # (remake: low over the cheeks, up to the sideburns at the ears)
+    if q["edge"]:  # a ragged edge, not a drawn line
+        rng = np.random.default_rng(9)
+        n = blur1d(blur1d(rng.standard_normal(x.shape), 2.0, 0), 2.0, 1)
+        top = top + q["edge"] * n / (n.std() + 1e-6)
+    w = 1 - smoothstep(top - q["fade"], top + 4, y)
     w *= smoothstep(-10, 15, z + 0.35 * (1700 - y) * (ax > 40))  # not behind the jaw's angle (the neck's back)
-    w *= smoothstep(1594, 1608, y) * 0.55 + 0.45 * (y > 1605)  # thinner under the chin, down to the neck
-    lips = (1 - smoothstep(20, 27, ax)) * smoothstep(1636, 1641, y) * (1 - smoothstep(1657, 1662, y)) * \
-        smoothstep(78, 84, z)
+    c0, c1 = q["chin"]
+    w *= smoothstep(c0, c1, y) * 0.55 + 0.45 * (y > c1 - 3)  # thinner under the chin, down to the neck
+    if q["neck"]:  # (remake: none where the head's model meets the body's neck, no edge there)
+        w *= smoothstep(q["neck"][0], q["neck"][1], y)
+    lx, (l0, l1, l2, l3), (z0, z1) = q["lips_x"], q["lips_y"], q["lips_z"]
+    lips = (1 - smoothstep(lx[0], lx[1], ax)) * smoothstep(l0, l1, y) * (1 - smoothstep(l2, l3, y)) * \
+        smoothstep(z0, z1, z)
     w *= 1 - lips
-    w *= 1 - 0.35 * smoothstep(1650, 1700, y) * smoothstep(30, 60, ax)  # sparser up on the cheeks
+    w *= 1 - 0.35 * smoothstep(q["cheek"][0], q["cheek"][1], y) * smoothstep(30, 60, ax)  # sparser up on the cheeks
     return np.nan_to_num(w)
 
 
-def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35)):
+def add_stubble(rgba, pos, strength, seed=4, colour=(52, 43, 35), prof=None, grey=0.0):
+    """Short beard; grey: the share of grey hairs among the dark (0 none .. 1 all; salt and pepper)."""
     a = rgba.astype(np.float32)
-    w = stubble_weight(pos) * strength
+    w = stubble_weight(pos, prof) * strength
     rng = np.random.default_rng(seed)
     noise = rng.random(w.shape)
     # dots a texel wide, a little blurred into the skin
     dots = np.asarray(Image.fromarray((noise * 255).astype(np.uint8)).filter(
         __import__("PIL.ImageFilter", fromlist=["GaussianBlur"]).GaussianBlur(0.6)), dtype=np.float32) / 255.0
     dots = np.clip((dots - 0.35) * 2.2, 0, 1)
-    hair = np.array(colour, dtype=np.float32)  # the stubble's colour (ash brown; greyer with age)
-    k = (w * (0.25 + 0.75 * dots))[..., None]
+    hair = np.broadcast_to(np.array(colour, dtype=np.float32), a[..., :3].shape).copy()  # ash brown; greyer with age
+    if grey > 0:
+        salt = (rng.random(w.shape) < grey)[..., None]
+        hair = np.where(salt, np.array((112, 106, 100), dtype=np.float32), hair)
+    soft = prof is not None and prof.get("soft")  # (remake: an even shadow of beard, the single hairs fainter)
+    k = (w * ((0.5 + 0.5 * dots) if soft else (0.25 + 0.75 * dots)))[..., None]
     shade = 1 - 0.22 * w[..., None]  # the skin under it a little darker
     out = a.copy()
     out[..., :3] = (a[..., :3] * shade) * (1 - k * 0.8) + hair * (k * 0.8)
@@ -314,22 +341,44 @@ def seg_dist(px, py, pts):
 
 
 # Leon's creases of age (the references: Resident Evil Requiem, Infinite Darkness), in the front view (x, y) of the
-# bind pose; each line mirrored to both sides: (points, depth)
-AGE_LINES = [
-    ([(-36, 1761), (-12, 1763), (12, 1763), (36, 1761)], 0.16),  # the forehead
-    ([(-30, 1771), (0, 1773), (30, 1771)], 0.13),
-    ([(-24, 1781), (0, 1782), (24, 1781)], 0.10),
-    ([(5, 1736), (6, 1749)], 0.10),  # between the brows (faint: deeper reads as a scar)
-    ([(44, 1725), (57, 1733)], 0.18),  # crow's feet
-    ([(45, 1722), (60, 1722)], 0.18),
-    ([(44, 1718), (57, 1710)], 0.16),
-    ([(16, 1709), (28, 1703), (41, 1709)], 0.22),  # under the eyes
-    ([(15, 1681), (24, 1668), (29, 1656), (31, 1645)], 0.26),  # nose to mouth
-    ([(28, 1640), (30, 1628)], 0.12),  # down from the mouth's corners
-]
+# bind pose; each line mirrored to both sides: (points, depth[, width])
+AGE_LINES = {
+    "re4": [
+        ([(-36, 1761), (-12, 1763), (12, 1763), (36, 1761)], 0.16),  # the forehead
+        ([(-30, 1771), (0, 1773), (30, 1771)], 0.13),
+        ([(-24, 1781), (0, 1782), (24, 1781)], 0.10),
+        ([(5, 1736), (6, 1749)], 0.10),  # between the brows (faint: deeper reads as a scar)
+        ([(44, 1725), (57, 1733)], 0.18),  # crow's feet
+        ([(45, 1722), (60, 1722)], 0.18),
+        ([(44, 1718), (57, 1710)], 0.16),
+        ([(16, 1709), (28, 1703), (41, 1709)], 0.22),  # under the eyes
+        ([(15, 1681), (24, 1668), (29, 1656), (31, 1645)], 0.26),  # nose to mouth
+        ([(28, 1640), (30, 1628)], 0.12),  # down from the mouth's corners
+    ],
+    # the Remake's head: eyes x 12..44 / y 1712..1732 (pupil 28/1722), brows 1740, nose's wings 16/1682,
+    # mouth's corners 24/1652; softer and wider lines (its texture is finer)
+    "remake": [
+        ([(-36, 1756), (-12, 1758), (12, 1758), (36, 1756)], 0.13, 1.7),  # the forehead
+        ([(-31, 1765), (0, 1767), (31, 1765)], 0.11, 1.6),
+        ([(-25, 1774), (0, 1775), (25, 1774)], 0.08, 1.5),
+        ([(5, 1735), (6, 1746)], 0.09, 1.0),  # between the brows
+        ([(46, 1725), (55, 1730)], 0.13, 0.9),  # crow's feet
+        ([(47, 1721), (57, 1721)], 0.13, 0.9),
+        ([(46, 1717), (54, 1712)], 0.12, 0.9),
+        ([(14, 1711), (21, 1706), (29, 1704), (37, 1706), (44, 1711)], 0.17, 1.4),  # the bags' lower edge
+        ([(18, 1700), (29, 1696), (40, 1700)], 0.07, 2.0),  # below them, faint
+        ([(17, 1683), (22, 1673), (27, 1662), (29, 1652), (30, 1642)], 0.22, 2.0),  # nose to mouth
+        ([(27, 1644), (29, 1632)], 0.09, 1.4),  # down from the mouth's corners
+    ],
+}
+# the shadows of the bags under the eyes and the hollows of the cheeks: (centre, radius, depth)
+AGE_SHADOWS = {
+    "re4": [((28, 1703), 9, 0.10), ((44, 1668), 14, 0.07)],
+    "remake": [((29, 1708), 8, 0.12), ((42, 1672), 13, 0.07)],
+}
 
 
-def add_age(rgba, pos, strength=1.0):
+def add_age(rgba, pos, strength=1.0, profile="re4"):
     """Creases of age, shadows under the eyes and a weathered skin on the face's texture (front texels only)."""
     a = rgba.astype(np.float32)
     x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
@@ -337,16 +386,18 @@ def add_age(rgba, pos, strength=1.0):
     x, y, z = np.nan_to_num(x), np.nan_to_num(y), np.nan_to_num(z)
     front = smoothstep(40, 62, z) * ok
     dark = np.zeros(x.shape)
-    for pts, depth in AGE_LINES:
+    for line in AGE_LINES[profile]:
+        pts, depth = line[0], line[1]
+        width = line[2] if len(line) > 2 else 1.3
         for s in (1, -1):
             if s == -1 and all(px == 0 for px, _ in pts):
                 continue
             d = seg_dist(x, y, [(s * px, py) for px, py in pts])
-            dark = np.maximum(dark, depth * np.exp(-(d / 1.3) ** 2))
+            dark = np.maximum(dark, depth * np.exp(-(d / width) ** 2))
     # the shadow under the eyes and in the hollows of the cheeks
-    for s in (1, -1):
-        dark = np.maximum(dark, 0.10 * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * 28, 1703, 0), 9))
-        dark = np.maximum(dark, 0.07 * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * 44, 1668, 0), 14))
+    for (cx, cy), r, depth in AGE_SHADOWS[profile]:
+        for s in (1, -1):
+            dark = np.maximum(dark, depth * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * cx, cy, 0), r))
     rng = np.random.default_rng(11)
     blotch = blur1d(blur1d(rng.standard_normal(x.shape), 3.0, 0), 3.0, 1)
     blotch /= blotch.std() + 1e-6
@@ -383,6 +434,11 @@ def main(argv=None):
     ap.add_argument("--stubble-colour", default="52,43,35", help="R,G,B of the stubble (greyer: older)")
     ap.add_argument("--age", type=float, default=0.0, help="creases of age on the face (0 none .. 1 full)")
     ap.add_argument("--face-size", type=int, default=512, help="the face texture's size (power of two, <= 1024)")
+    ap.add_argument("--face-model", choices=sorted(PROFILES), default="re4",
+                    help="whose head the archive carries (where the stubble and the creases go): re4 the game's "
+                         "Leon, remake the head of the Resident Evil 4 Remake mod")
+    ap.add_argument("--stubble-grey", type=float, default=0.0,
+                    help="the share of grey hairs in the stubble (0 none .. 1 all; salt and pepper)")
     a = ap.parse_args(argv)
     arc = U.Archive(Path(a.inp).read_bytes(), ">")
     entries = [arc.entry(i) for i in range(len(arc.offsets))]
@@ -436,10 +492,11 @@ def main(argv=None):
         img = hair_colour(img, stops, painted)
         print("face texture %d: %d hair texels recoloured" % (face, int(painted.sum())))
     if a.age > 0:
-        img = add_age(img, pos, a.age)
+        img = add_age(img, pos, a.age, a.face_model)
         print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
-        img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")])
+        img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
+                          prof=PROFILES[a.face_model], grey=a.stubble_grey)
         print("face texture %d: stubble %.2f" % (face, a.stubble))
     imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
