@@ -535,7 +535,7 @@ def fill_folds(rgba, pos, amount=1.0, profile="re4"):
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0, nose=1.0):
+def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0, nose=1.0, cheeks=1.0):
     """Creases of age, shadows under the eyes and a weathered skin on the face's texture (front texels only)."""
     a = rgba.astype(np.float32)
     x, y, z = pos[..., 0], pos[..., 1], pos[..., 2]
@@ -559,8 +559,8 @@ def add_age(rgba, pos, strength=1.0, profile="re4", mouth=1.0, nose=1.0):
             dark = np.maximum(dark, depth * np.exp(-(d / width) ** 2))
     # the shadow under the eyes and in the hollows of the cheeks
     for (cx, cy), r, depth in AGE_SHADOWS[profile]:
-        if cy < 1690:  # the hollows of the cheeks, beside the folds from the nose to the mouth
-            depth *= nose
+        if cy < 1690:  # the hollows of the cheeks (DevJunior: they stay without the folds)
+            depth *= cheeks
         for s in (1, -1):
             dark = np.maximum(dark, depth * bump(np.stack([x, y, np.zeros_like(x)], -1), (s * cx, cy, 0), r))
     rng = np.random.default_rng(11)
@@ -615,6 +615,8 @@ def main(argv=None):
                     help="the creases at the mouth's corners (1 as the age gives them .. 0 none)")
     ap.add_argument("--nose-lines", type=float, default=1.0,
                     help="the folds from the nose to the mouth (1 as the age gives them .. 0 none)")
+    ap.add_argument("--cheek-hollows", type=float, default=1.0,
+                    help="the shadows in the hollows of the cheeks (1 as the age gives them .. 0 none)")
     ap.add_argument("--pale", type=float, default=0.0, help="the skin paler and cooler (0 as it is .. 1)")
     ap.add_argument("--sockets", type=float, default=0.0, help="deeper eye sockets (0 none .. 1)")
     ap.add_argument("--pores", type=float, default=0.0, help="a fine grain of pores over the face (0 none .. 1)")
@@ -682,7 +684,7 @@ def main(argv=None):
         img = fill_folds(img, pos, 1 - a.nose_lines, a.face_model)
         print("face texture %d: folds from the nose to the mouth filled %.2f" % (face, 1 - a.nose_lines))
     if a.age > 0:
-        img = add_age(img, pos, a.age, a.face_model, a.mouth_lines, a.nose_lines)
+        img = add_age(img, pos, a.age, a.face_model, a.mouth_lines, a.nose_lines, a.cheek_hollows)
         print("face texture %d: creases of age %.2f" % (face, a.age))
     if a.stubble > 0:
         img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
