@@ -1,0 +1,23 @@
+# Patch 0908 (device test of DevJunior, 10.11.2026, Poco F7, ARM64: a crash 0.3 s into r100 with Leon Black Coat v28,
+# signal 11 in blkPolyLineCk, a collision piece's block pointer 0x00f00119642dfefe). Latent in the game, shown by the
+# mods: trans.cpp commonScreenMatSub takes a model's position buffer from the room's primitive buffer at 6 bytes per
+# vertex (the skinned positions), but for a model with shapes (be_flag 2) shape.cpp ResetShape first copies the whole
+# vertex records into it, 8 bytes each, and the shapes are added there. The disc's faces have few vertices: the
+# extra quarter lands in the normal buffer taken right after, which is written later anyway. A skin's head with the
+# cutscene shapes (port/tools/skin_shapes.py, patch 0907; 10 488 vertices, 21 KB over) runs past that, and at the
+# end of the room's buffer into what the room set up behind it (cSatMgr's array of collision pieces, game.cpp
+# allocates it right after primInit): the next collision check followed a garbage pointer. The buffer of a model
+# with shapes is now 8 bytes per vertex.
+--- a/src/game/trans.cpp
++++ b/src/game/trans.cpp
+@@ -713,7 +713,9 @@
+         if (m->be_flag & 0x4000) {
+             continue;
+         }
+-        size = d->nVtx * 6;
++        /* port (patch 0908): a model with shapes is set up in this buffer as its whole vertex records (ResetShape
++           copies nVtx * 8 bytes), not as the 6-byte positions skinned into it afterwards */
++        size = d->nVtx * ((info->be_flag & 2) ? 8 : 6);
+         asize = size + 31;
+         asize = asize >> 5 << 5;
+         // The original keeps `size` live past the `+ 31` at one of the three alloc sites, so
