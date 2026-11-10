@@ -821,14 +821,16 @@ def disc_textures(gc_tpl):
     return out
 
 
-def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None, colour_only=()):
+def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None, colour_only=(), colour_size=None, other_size=None):
     """A PC texture palette (references to imagePackHD) -> a GameCube TPL with the images,
     scaled to at most `size` pixels a side. A missing texture (one of the PC game's own,
     BIO4/imagePackHD/07000000.pack, which a mod expects on the player's PC): a colour texture
     is painted from the disc palette's largest colour image (the face) through the disc model
     (bake_texture: the PC lays it out differently), else that image itself; an intensity one white.
     colour_only: slots the models draw only as their colour (material) texture; one declared I4/I8 there
-    is CMPR (the PC draws its DDS in colour whatever the slot says; a grey face otherwise)."""
+    is CMPR (the PC draws its DDS in colour whatever the slot says; a grey face otherwise).
+    colour_size / other_size: the largest side of the CMPR (colour) textures and of the others (bump, specular,
+    alpha), `size` where not given: a heavy model's colour stays sharp within the player's place."""
     n = struct.unpack_from("<I", blob, 4)[0]
     disc = disc_textures(gc_tpl)
     disc_colour = max((t for t in disc if t[2] == 0xE), key=lambda t: t[0] * t[1], default=None)
@@ -862,7 +864,8 @@ def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None, colour_only=()
         else:
             missing = False
         # a painted texture keeps its size (it is made at most 512, a face needs the detail)
-        scale = 1.0 if baked else min(1.0, size / float(max(img.size)))
+        limit = (colour_size if gx == 0xE else other_size) or size
+        scale = 1.0 if baked else min(1.0, limit / float(max(img.size)))
         tw = max(8, 1 << int(round(math.log2(max(1, img.size[0] * scale)))))
         th = max(8, 1 << int(round(math.log2(max(1, img.size[1] * scale)))))
         img = img.resize((tw, th))
@@ -934,6 +937,8 @@ def main(argv=None):
     ap.add_argument("out")
     ap.add_argument("--packs", help="the mod's BIO4/imagePackHD folder")
     ap.add_argument("--tex", type=int, default=128, help="largest texture side (default 128)")
+    ap.add_argument("--tex-colour", type=int, help="largest side of the colour (CMPR) textures (default --tex)")
+    ap.add_argument("--tex-other", type=int, help="largest side of the bump, specular and alpha textures (default --tex)")
     ap.add_argument("--palette", type=int, default=2048,
                     help="most skinning matrices per model (default 2048: the port's locked cache holds "
                          "RE4_LOCKED_CACHE_SIZE / 0x30; the GameCube's held 341; above 255 the normals are s16)")
@@ -985,7 +990,8 @@ def main(argv=None):
                              len(gc.entry(k)) >= 0x48 and struct.unpack_from(">I", gc.entry(k), 0x24)[0] == count]
                 pc_model = Model(pc.entry(i - 1))
                 bake = lambda t, gt, image: bake_texture(pc_model, t, gc_models, gt, image, min(512, 2 * a.tex))
-            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i), bake, colour_slots(pc, i))
+            blob = convert_tpl(blob_pc, packs, a.tex, stats, gc.entry(i), bake, colour_slots(pc, i), a.tex_colour,
+                               a.tex_other)
             print("entry %3d TPL: %d textures, %d bytes" % (i, len(stats), len(blob)))
             for s in stats:
                 print(s)
