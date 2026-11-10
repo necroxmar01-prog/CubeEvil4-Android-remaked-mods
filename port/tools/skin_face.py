@@ -344,6 +344,73 @@ def restyle_re9(P, head_P):
     return out
 
 
+def pc_slot_image(pc_tpl, slot, packs):
+    """The DDS a PC palette's slot names (imagePackHD), as a PIL image; None when the packs lack it."""
+    ho = struct.unpack_from("<I", pc_tpl, 12 + slot * 8)[0]
+    data = struct.unpack_from("<I", pc_tpl, ho + 8)[0]
+    if data + 8 > len(pc_tpl):
+        return None
+    ref, idx = struct.unpack_from("<II", pc_tpl, data)
+    return packs.image(ref, idx)
+
+
+def i8_image(alpha, hdr):
+    """A GX I8 image (intensity = the mask) with a header of its size."""
+    w, h = alpha.size
+    rgba = Image.merge("RGBA", (alpha, alpha, alpha, alpha))
+    raw = rgba.tobytes()
+    px = [tuple(raw[k:k + 4]) for k in range(0, len(raw), 4)]
+    hdr = bytearray(hdr)
+    struct.pack_into(">HHI", hdr, 0, h, w, 0x1)
+    return bytes(hdr), U.enc_i8(px, w, h)
+
+
+def hair_textures(entries, imgs, pc_tpl, packs, size, alpha_ref, dark):
+    """The card hair's colour and alpha textures anew from the PC palette's DDS (DevJunior, 10.11.2026, device test of
+    Leon Remake Lite: blotchy, dark patches, no strands): the converter had made the alpha masks 64 pixels (blobs
+    instead of strands) and one colour layer is near black (the Remake's dark under-layer, which shows through where
+    cards were thinned out). All parts take the main colour (the most triangles) and its alpha mask at `size`
+    (largest side); a near-black layer becomes the main colour times `dark`; the alpha compare reference
+    `alpha_ref` (clean strand tips, no dotted edges). Returns lines for the log."""
+    hair = bytearray(entries[HAIR])
+    use = {}
+    for p in G.parts(hair):
+        if G.is_empty(hair, p) or not hair[p + 0xB] & 4:
+            continue
+        n = len(U.gc_triangles(bytes(hair), hair[p + 0xC])[0])
+        use[p] = (hair[p + 0xC], hair[p + 0xE], n)
+    if not use:
+        return ["hair: no alpha-textured parts"]
+    main_p = max(use, key=lambda q: use[q][2])
+    mc, ma, _ = use[main_p]
+    col = pc_slot_image(pc_tpl, mc, packs)
+    msk = pc_slot_image(pc_tpl, ma, packs)
+    if col is None or msk is None:
+        return ["hair: the PC palette's slots %d / %d are not in the packs" % (mc, ma)]
+    sc = min(1.0, size / float(max(col.size)))
+    cw, ch = max(8, int(col.size[0] * sc)), max(8, int(col.size[1] * sc))
+    col = col.convert("RGBA").resize((cw, ch), Image.LANCZOS)
+    alpha = msk.convert("RGBA").split()[3].resize((cw, ch), Image.LANCZOS)
+    imgs[mc] = G.encode_image(col, imgs[mc][0])
+    imgs[ma] = i8_image(alpha, imgs[ma][0])
+    log = ["hair: colour %d and alpha %d anew %dx%d (main layer, %d triangles)" % (mc, ma, cw, ch, use[main_p][2])]
+    for p, (c, a_, n) in use.items():
+        own = pc_slot_image(pc_tpl, c, packs)
+        mean = float(np.asarray(own.convert("RGB")).mean()) if own is not None else 255.0
+        if c != mc and mean < 20:  # the dark under-layer: the main colour, darker
+            arr = np.asarray(col).astype(np.float32)
+            arr[..., :3] *= dark
+            imgs[c] = G.encode_image(Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA"), imgs[c][0])
+            log.append("hair: layer %d (%d triangles, mean %.0f) as the main colour x %.2f" % (c, n, mean, dark))
+        elif c != mc:
+            hair[p + 0xC] = mc
+            log.append("hair: layer %d (%d triangles) takes colour %d" % (c, n, mc))
+        hair[p + 0xE] = ma
+        hair[p + 0x14] = max(0, min(254, alpha_ref))
+    entries[HAIR] = bytes(hair)
+    return log
+
+
 def set_positions(blob, P):
     blob = bytearray(blob)
     for i, q in enumerate(P):
@@ -599,6 +666,13 @@ def main(argv=None):
     ap.add_argument("--stubble-colour", default="52,43,35", help="R,G,B of the stubble (greyer: older)")
     ap.add_argument("--age", type=float, default=0.0, help="creases of age on the face (0 none .. 1 full)")
     ap.add_argument("--face-size", type=int, default=512, help="the face texture's size (power of two, <= 1024)")
+    ap.add_argument("--hair-pc", metavar="PC.udas", help="the PC archive whose palette 3 this one's is (the Remake's): "
+                    "the card hair's colour and alpha textures anew from its DDS (--packs), sharp strands")
+    ap.add_argument("--packs", help="the mod's BIO4/imagePackHD folder (with --hair-pc)")
+    ap.add_argument("--hair-tex", type=int, default=512, help="with --hair-pc: the largest side of the hair textures")
+    ap.add_argument("--hair-alpha-ref", type=int, default=64, help="with --hair-pc: the alpha compare reference")
+    ap.add_argument("--hair-dark", type=float, default=0.6, help="with --hair-pc: a near-black hair layer as the main "
+                    "colour times this")
     ap.add_argument("--face-model", choices=sorted(PROFILES), default="re4",
                     help="whose head the archive carries (where the stubble and the creases go): re4 the game's "
                          "Leon, remake the head of the Resident Evil 4 Remake mod")
@@ -639,6 +713,11 @@ def main(argv=None):
     face = max(mats, key=lambda m: len(U.gc_triangles(head, m)[0]) + len(U.gc_triangles(entries[4], m)[0]))
     hair_mats = sorted({entries[HAIR][p + 0xC] for p in G.parts(entries[HAIR]) if not G.is_empty(entries[HAIR], p)})
     stops = [[float(v) for v in c.split(",")] for c in a.hair.split(":")] if a.hair else None
+    if a.hair_pc:
+        pc = U.Archive(Path(a.hair_pc).read_bytes(), "<")
+        for line in hair_textures(entries, imgs, pc.entry(HEAD_TPL), U.Packs(a.packs), a.hair_tex,
+                                  a.hair_alpha_ref, a.hair_dark):
+            print(line)
     if stops:
         for m in hair_mats:
             src = strands(decode(m), a.hair_size, equalize=a.equalize) if a.hair_size else decode(m)
@@ -664,35 +743,38 @@ def main(argv=None):
         entries[HAIR] = set_positions(entries[HAIR], P2)
         print("hair shaped: %d positions, at most %.1f" % (int((np.abs(P2 - P).max(1) > 0.05).sum()),
                                                           float(np.abs(P2 - P).max())))
-    img = decode(face)
-    if a.face_size and a.face_size != img.shape[1]:
-        img = np.asarray(Image.fromarray(img, "RGBA").resize((a.face_size, a.face_size), Image.LANCZOS))
-    pos = uv_positions([head, entries[4]], face, img.shape[1], img.shape[0])
-    if stops:
-        lum = img[..., 0] * 0.3 + img[..., 1] * 0.59 + img[..., 2] * 0.11
-        y, z = pos[..., 1], pos[..., 2]
-        painted = np.nan_to_num((y > 1752) | ((y > 1690) & (z < 40)), nan=False).astype(bool) & (lum < 60)
-        img = hair_colour(img, stops, painted)
-        print("face texture %d: %d hair texels recoloured" % (face, int(painted.sum())))
-    if a.pale > 0 or a.sockets > 0 or a.pores > 0:
-        img = add_skin(img, pos, a.pale, a.sockets, a.pores, a.face_model)
-        print("face texture %d: pale %.2f, sockets %.2f, pores %.2f" % (face, a.pale, a.sockets, a.pores))
-    if a.nose_lines < 1:  # the head's shape and normals, and the texture's own folds
-        entries[HEAD], npos, nnrm = fill_folds_model(entries[HEAD], 1 - a.nose_lines, a.face_model)
-        head = entries[HEAD]
-        print("head: folds from the nose to the mouth filled (%d positions, %d normals)" % (npos, nnrm))
-        img = fill_folds(img, pos, 1 - a.nose_lines, a.face_model)
-        print("face texture %d: folds from the nose to the mouth filled %.2f" % (face, 1 - a.nose_lines))
-    if a.age > 0:
-        img = add_age(img, pos, a.age, a.face_model, a.mouth_lines, a.nose_lines, a.cheek_hollows)
-        print("face texture %d: creases of age %.2f" % (face, a.age))
-    if a.stubble > 0:
-        img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
-                          prof=PROFILES[a.face_model], grey=a.stubble_grey,
-                          cheeks=a.stubble_cheeks, patchy=a.stubble_patchy,
-                          under_lip=a.stubble_under_lip, lip_margin=a.stubble_lip_margin)
-        print("face texture %d: stubble %.2f" % (face, a.stubble))
-    imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
+    face_work = bool(stops) or a.pale > 0 or a.sockets > 0 or a.pores > 0 or a.nose_lines < 1 or a.age > 0 or \
+        a.stubble > 0
+    if face_work:  # (only the hair's textures: the face's stays as it is, not compressed once more)
+        img = decode(face)
+        if a.face_size and a.face_size != img.shape[1]:
+            img = np.asarray(Image.fromarray(img, "RGBA").resize((a.face_size, a.face_size), Image.LANCZOS))
+        pos = uv_positions([head, entries[4]], face, img.shape[1], img.shape[0])
+        if stops:
+            lum = img[..., 0] * 0.3 + img[..., 1] * 0.59 + img[..., 2] * 0.11
+            y, z = pos[..., 1], pos[..., 2]
+            painted = np.nan_to_num((y > 1752) | ((y > 1690) & (z < 40)), nan=False).astype(bool) & (lum < 60)
+            img = hair_colour(img, stops, painted)
+            print("face texture %d: %d hair texels recoloured" % (face, int(painted.sum())))
+        if a.pale > 0 or a.sockets > 0 or a.pores > 0:
+            img = add_skin(img, pos, a.pale, a.sockets, a.pores, a.face_model)
+            print("face texture %d: pale %.2f, sockets %.2f, pores %.2f" % (face, a.pale, a.sockets, a.pores))
+        if a.nose_lines < 1:  # the head's shape and normals, and the texture's own folds
+            entries[HEAD], npos, nnrm = fill_folds_model(entries[HEAD], 1 - a.nose_lines, a.face_model)
+            head = entries[HEAD]
+            print("head: folds from the nose to the mouth filled (%d positions, %d normals)" % (npos, nnrm))
+            img = fill_folds(img, pos, 1 - a.nose_lines, a.face_model)
+            print("face texture %d: folds from the nose to the mouth filled %.2f" % (face, 1 - a.nose_lines))
+        if a.age > 0:
+            img = add_age(img, pos, a.age, a.face_model, a.mouth_lines, a.nose_lines, a.cheek_hollows)
+            print("face texture %d: creases of age %.2f" % (face, a.age))
+        if a.stubble > 0:
+            img = add_stubble(img, pos, a.stubble, colour=[float(v) for v in a.stubble_colour.split(",")],
+                              prof=PROFILES[a.face_model], grey=a.stubble_grey,
+                              cheeks=a.stubble_cheeks, patchy=a.stubble_patchy,
+                              under_lip=a.stubble_under_lip, lip_margin=a.stubble_lip_margin)
+            print("face texture %d: stubble %.2f" % (face, a.stubble))
+        imgs[face] = G.encode_image(Image.fromarray(img, "RGBA"), imgs[face][0])
     entries[HEAD_TPL] = G.build_tpl(imgs)
     data = U.build_archive(arc, U.build_body(entries, arc.types))
     Path(a.out).write_bytes(data)

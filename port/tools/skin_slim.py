@@ -27,7 +27,8 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
 --hide ENTRY[@MATS]:COVER  drops ENTRY's triangles that model COVER hides (a body under a jacket): a position is
                      hidden when COVER lies in front of it, out from the skeleton within 60. With @MATS only the parts
                      with these colour textures, and COVER = ENTRY: the model's other parts cover them (a shirt inside
-                     its jacket's model).
+                     its jacket's model). Options after a third colon: front=X keeps the positions in front within
+                     |x| < X (an open jacket's front), minx=X hides only at |x| >= X (e.g. 0@3:6:minx=500).
 --inside ENTRY:COVER pushes ENTRY's positions above y 1150 that poke out through COVER (within 25 of it, outside
                      it) 5 under it (a shirt through a jacket's shoulders); the jacket's open front, further away,
                      and the legs stay.
@@ -362,11 +363,16 @@ def tuck(head, body, top=1660.0, inset=4.0, axis=(0.0, -30.0)):
     return bytes(out), n
 
 
-def hide(model, cover, reach=60.0, mats=None):
+def hide(model, cover, reach=60.0, mats=None, front=0.0, minx=0.0, hem=0.0):
     """Drops the triangles of `model` that `cover` hides (a body under a jacket): a position is hidden when the cover
     lies in front of it, out along `outward` within `reach` and about that way; a triangle goes when all three
     positions are hidden. `mats`: only the parts with these colour textures, and `cover` None: the model's other
-    parts cover them (a shirt inside the same model as its jacket). Returns (model, triangles before, after)."""
+    parts cover them (a shirt inside the same model as its jacket). `front`: positions in front (z > 0) within
+    |x| < front stay (an open jacket's front: the shirt and the buckle seen through it); `minx`: only positions at
+    |x| >= minx go (wristbands under the sleeves, not the boots). `hem`: also hidden is what the cover hangs over
+    (belt pouches poking out at a jacket's sides; DevJunior, 10.11.2026): around the body's axis, within 8 degrees,
+    the cover reaches lower than the position by `hem` and higher, whatever its distance. Returns (model, triangles
+    before, after)."""
     from scipy.spatial import cKDTree
     P = G.positions(model)
     lists = part_lists(model)
@@ -378,7 +384,17 @@ def hide(model, cover, reach=60.0, mats=None):
     tree = cKDTree(C)
     dirs, _ = outward(P)
     hidden = np.zeros(len(P), bool)
+    if hem:
+        ca = np.degrees(np.arctan2(C[:, 0], C[:, 2] + 10.0))
     for i in range(len(P)):
+        if (front and abs(P[i][0]) < front and P[i][2] > 0) or abs(P[i][0]) < minx:
+            continue
+        if hem:
+            a = np.degrees(np.arctan2(P[i][0], P[i][2] + 10.0))
+            band = np.abs((ca - a + 180.0) % 360.0 - 180.0) < 8.0
+            if band.any() and C[band, 1].min() < P[i][1] - hem and C[band, 1].max() > P[i][1] + hem:
+                hidden[i] = True
+                continue
         near = tree.query_ball_point(P[i], reach)
         if not near:
             continue
@@ -542,7 +558,7 @@ def main(argv=None):
     ap.add_argument("--tuck", action="append", default=[], metavar="HEAD:BODY",
                     help="keep the base of head HEAD's neck under the collar of model BODY")
     ap.add_argument("--carry", action="append", default=[], metavar="ENTRY:LIST")
-    ap.add_argument("--hide", action="append", default=[], metavar="ENTRY[@MATS]:COVER",
+    ap.add_argument("--hide", action="append", default=[], metavar="ENTRY[@MATS]:COVER[:front=X,minx=X]",
                     help="drop ENTRY's triangles (with @MATS: of these parts) that model COVER hides")
     ap.add_argument("--inside", action="append", default=[], metavar="ENTRY:COVER",
                     help="push ENTRY's positions that poke out through model COVER back under it")
@@ -611,11 +627,12 @@ def main(argv=None):
             entries[k], n = carry(entries[k], P, push)
             print("entry %d carried along with entry %s: %d positions moved" % (k, e, n))
     for spec in a.hide:
-        left, c = spec.split(":")
+        left, c, *opts = spec.split(":")
         e, _, ms = left.partition("@")
         e, c = int(e), int(c)
         mats = {int(x) for x in ms.split(",")} if ms else None
-        entries[e], before, after = hide(entries[e], None if c == e else entries[c], mats=mats)
+        kw = {k: float(v) for k, v in (o.split("=") for o in (opts[0].split(",") if opts else []))}
+        entries[e], before, after = hide(entries[e], None if c == e else entries[c], mats=mats, **kw)
         print("entry %d: %d of %d triangles hidden under entry %d dropped, %d positions left" %
               (e, before - after, before, c, len(G.positions(entries[e]))))
     for spec in a.cover:
