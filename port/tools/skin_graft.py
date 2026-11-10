@@ -13,6 +13,10 @@ colour textures (material_tex) of the grafted model only: the hue set, saturatio
 parts, --drop ENTRY:MATS empties parts of the target (a jacket); emptied parts hold GX NOPs, offsets unchanged.
 --colorize R,G,B tints by brightness in a mean colour, --source-image takes a grafted texture from the mod's own
 larger image (less blocky once tinted), --inflate ENTRY:DIST makes the torso, arms and legs bulkier.
+--hair-weights ENTRY=REF.drs gives a model the skinning of REF's same entry (wish of DevJunior, 09.11.2026: hair
+physics on a skin): each position takes the bone weights of the nearest positions of REF's model (Leon's hair on the
+disc: the head, bone 4, and the hair chains 65..85 that pl_cloth.cpp swings, leonHair), so a skin's hair that sits
+where the disc's does swings with it instead of staying stiff on the head.
 """
 import argparse
 import colorsys
@@ -316,6 +320,91 @@ def lower_collar(blob, factor, edge=None, margin=8.0):
     return moved
 
 
+def model_weights(blob):
+    """The weight entries of a GameCube model: tuples of (bone, percent)."""
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    wgt, wpal, wext = u(0x14), blob[0x18], struct.unpack_from(">H", blob, 0x2A)[0]
+    n = wext if wext > 0xFF else wpal
+    out = []
+    for i in range(n):
+        if n > 0xFF:
+            ids = struct.unpack_from(">3H", blob, wgt + i * 12)
+            cnt = struct.unpack_from(">H", blob, wgt + i * 12 + 6)[0]
+            rates = blob[wgt + i * 12 + 8:wgt + i * 12 + 11]
+        else:
+            w = blob[wgt + i * 8:wgt + i * 8 + 8]
+            ids, cnt, rates = w[0:3], w[3], w[4:7]
+        out.append(tuple((ids[j], rates[j]) for j in range(min(cnt, 3))))
+    return out
+
+
+def transfer_weights(blob, ref, k=4):
+    """`blob` (bytearray, a GameCube model) skinned as `ref`: every position's weights from the k nearest of ref's
+    (inverse squared distance), at most three bones, 5 % steps, the entries appended behind the model; each normal
+    takes the weight of the first position drawn with it. Returns (positions, entries, bones)."""
+    import numpy as np
+    if struct.unpack_from(">I", blob, 0x20)[0] & 0x20000000 == 0:
+        raise ValueError("the model's normals are not s8 (more than 255 weights): not handled")
+    P, Q = positions(blob), positions(ref)
+    rw = model_weights(ref)
+    nq = struct.unpack_from(">H", ref, 0x38)[0]
+    vo = struct.unpack_from(">I", ref, 0x30)[0]
+    qw = [rw[struct.unpack_from(">H", ref, vo + i * 8 + 6)[0]] for i in range(nq)]
+    entries, index, pw = [], {}, []
+    for q in P:
+        d2 = ((Q - q) ** 2).sum(1)
+        near = np.argsort(d2)[:k]
+        acc = {}
+        for j in near:
+            f = 1.0 / (d2[j] + 1.0)
+            for b, r in qw[j]:
+                acc[b] = acc.get(b, 0.0) + f * r
+        top = sorted(acc.items(), key=lambda x: -x[1])[:3]
+        total = sum(v for _, v in top)
+        rates = [int(round(v * 20.0 / total)) * 5 for _, v in top]
+        infl = [(b, r) for (b, _), r in zip(top, rates) if r > 0] or [(top[0][0], 100)]
+        rs = [r for _, r in infl]
+        rs[0] += 100 - sum(rs)
+        key = tuple(sorted((b, r) for (b, _), r in zip(infl, rs)))
+        if key not in index:
+            index[key] = len(entries)
+            entries.append(key)
+        pw.append(index[key])
+    if len(entries) > 0xFF:
+        raise ValueError("%d weight entries: more than the s8 normals allow" % len(entries))
+    nv = struct.unpack_from(">H", blob, 0x38)[0]
+    vo = struct.unpack_from(">I", blob, 0x30)[0]
+    no = struct.unpack_from(">I", blob, 0x34)[0]
+    for i in range(nv):
+        struct.pack_into(">H", blob, vo + i * 8 + 6, pw[i])
+    per = 4 if struct.unpack_from(">I", blob, 0x20)[0] & 0x80000000 else 3
+    done = set()
+    for p in parts(blob):
+        size = struct.unpack_from(">I", blob, p + 0x18)[0]
+        s, e = p + 0x20, p + 0x20 + size
+        while s < e and blob[s] != 0:
+            cnt = struct.unpack_from(">H", blob, s + 1)[0]
+            for c in range(cnt):
+                pi, ni = struct.unpack_from(">HH", blob, s + 3 + c * per * 2)
+                if ni not in done:
+                    done.add(ni)
+                    blob[no + ni * 4 + 3] = pw[pi]
+            s += 3 + cnt * per * 2
+    wb = bytearray()
+    for e in entries:
+        ids = [b for b, _ in e] + [0] * (3 - len(e))
+        rates = [r for _, r in e] + [0] * (3 - len(e))
+        wb += struct.pack(">4B4B", ids[0], ids[1], ids[2], len(e), rates[0], rates[1], rates[2], 0)
+    blob.extend(bytes(U.align(len(blob)) - len(blob)))
+    struct.pack_into(">I", blob, 0x14, len(blob))
+    blob[0x18] = len(entries)
+    struct.pack_into(">H", blob, 0x2A, len(entries))
+    blob.extend(wb)
+    blob.extend(bytes(U.align(len(blob)) - len(blob)))
+    bones = sorted({b for e in entries for b, _ in e})
+    return nv, len(entries), bones
+
+
 def tint(hdr, data, hue, sat, value):
     h, w, f = struct.unpack_from(">HHI", hdr)
     if f != 0xE:
@@ -374,6 +463,9 @@ def main(argv=None):
                          "PNG) at WxH, before --recolor (more detail: 1024x512 instead of 512x256)")
     ap.add_argument("--smooth", type=float, default=0.0, metavar="RADIUS",
                     help="with --recolor: plain cloth, the fabric's blotches blurred away (radius in texels, e.g. 6)")
+    ap.add_argument("--hair-weights", action="append", default=[], metavar="ENTRY=REF.drs",
+                    help="skin model ENTRY as REF's same entry is (Leon's hair, 5, from the disc's pl00/pl08: its "
+                         "swinging hair chains)")
     ap.add_argument("--tint-mats", help="comma-separated colour textures of the source to tint (default: all)")
     ap.add_argument("--alpha-ref", type=int, help="alpha compare reference of the model's alpha-textured parts "
                     "(trans.cpp alphaSetup: alpha > ref is drawn; 0 on the disc, higher: no faint texels at the edges)")
@@ -494,6 +586,12 @@ def main(argv=None):
             imgs_t[k] = encode_image(recolor(img, [float(v) for v in rgb.split(",")], a.smooth), hdr)
         entries[int(t)] = build_tpl(imgs_t)
         print("palette %s: textures %s recoloured to %s" % (t, slots, rgb))
+    for spec in a.hair_weights:
+        e, ref = spec.split("=", 1)
+        blob = bytearray(entries[int(e)])
+        nv, ne, bones = transfer_weights(blob, U.Archive(open(ref, "rb").read(), ">").entry(int(e)))
+        entries[int(e)] = bytes(blob)
+        print("entry %s: %d positions skinned as %s's, %d weight entries, bones %s" % (e, nv, ref, ne, bones))
     data = U.build_archive(tgt, U.build_body(entries, tgt.types))
     open(a.out, "wb").write(data)
     if graft:
