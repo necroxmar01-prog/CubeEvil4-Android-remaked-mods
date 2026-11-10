@@ -113,6 +113,9 @@ void* re4_melee_motion(int kind, void* game);
 int re4_melee_neck(int special);
 /* The routine of Leon's move on a kneeling stunned Ganado: `game` (plem10Kick), or the axe strike's (patch 0904). */
 void* re4_melee_kneel(void* game);
+/* Patch 0905 (title.cpp titleWait; runtime/aim_options.cpp, declared here so title.cpp keeps its line numbers): 1
+ * when the app's "Skip intro logos" is on: the title starts at its main menu at once, as when it was shown before. */
+int re4_skip_intro(void);
 /* Patch 0212 (the gore checks of em10, em25, em2c, em2d, em31, em32, emwep, obj16, r100, r101, r103): the country
  * they see, pSys->eff_country, but the US release's 1 with the Japanese discs and the Korean translation built on
  * them (runtime/game_language.cpp; declared here so the game files keep their line numbers). */

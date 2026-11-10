@@ -402,6 +402,8 @@
     <string name="ingame_melee_neck">Quebrar o pescoço</string>
     <string name="ingame_melee_axe">Machadada (ajoelhado)</string>
     <string name="ingame_melee_random">Mistura aleatória</string>
+    <string name="ingame_skip_intro">Pular logos iniciais</string>
+    <string name="ingame_skip_intro_help">Pular logos iniciais: o jogo começa no menu do título, sem os logos da Nintendo, Capcom e outros (a partir do próximo início).</string>
     <string name="ingame_melee_help">Corpo a corpo: um mod com melee/melee.dat substitui as animações de chute em inimigos atordoados. Quebrar o pescoço: Leon finaliza um Ganado atordoado de pé como o HUNK (requer o arquivo em/em60.drs dos Mercenários no disco); inimigos com parasita continuam levando chute. Machadada: num inimigo atordoado ajoelhado, Leon usa o ataque de machado dos Ganados, com a faca, em vez do chute (se uma skin a trocou por um machado, aparece o machado). Mistura aleatória: cada finalização é sorteada entre a do jogo e as ativadas; desligada, sai sempre a sua escolha.</string>
     <string name="ingame_outfit_help">A roupa que a história dá ao Leon, ou sempre a primeira (com a jaqueta) ou a segunda (sem ela); muda na hora e a sala recomeça onde ele está. Arma nas costas: a última arma longa que ele empunhou (espingarda, rifle, metralhadora, lança-foguetes) fica pendurada nas costas enquanto estiver na maleta e não nas mãos. A inclinação, a altura, a distância das costas e o ombro ajustam-se a gosto; «Nas cinemáticas» também a mostra nas cenas.</string>
 </resources>

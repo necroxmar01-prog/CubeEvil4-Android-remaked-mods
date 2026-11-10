@@ -2240,6 +2240,26 @@ static void testMelee()
     report("melee", bad == 0);
 }
 
+// "Skip intro logos" (patch 0905; runtime/aim_options.cpp): the second settings word's bit 28 switches it, the other
+// bits of that word leave it alone
+extern "C" void re4_aim_set(int bits);
+extern "C" int re4_skip_intro(void);
+static void testSkipIntro()
+{
+    int bad = 0;
+    const int second = (int) 0x80000000u;
+    if (re4_skip_intro() != 0) bad |= 1;  // nothing sent: the game's logos
+    re4_aim_set(second | (1 << 28));
+    if (re4_skip_intro() != 1) bad |= 2;
+    re4_aim_set(second | (1 << 24) | (1 << 27));
+    if (re4_skip_intro() != 0) bad |= 4;
+    re4_aim_set(second);
+    if (bad) {
+        re4_log("  skipintro: failed checks 0x%x", bad);
+    }
+    report("skipintro", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2687,6 +2707,7 @@ int re4_runtime_tests()
     testParry();
     testWardrobe();
     testMelee();
+    testSkipIntro();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

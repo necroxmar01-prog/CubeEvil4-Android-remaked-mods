@@ -39,6 +39,7 @@ std::atomic<bool> gAimMove(false);  // the app's "Move while aiming" (patch 0900
 std::atomic<bool> gQuickSlots(false); // the app's "D-pad quick slots" (runtime/quick_slots.cpp)
 std::atomic<int> gRecenterBit(-1);
 std::atomic<int> gReloadBit(-1);    // bit 20 as last sent; each change is one press of the touch RLOAD button
+std::atomic<bool> gSkipIntro(false); // the app's "Skip intro logos" (the second word's bit 28, patch 0905)
 std::atomic<bool> gParry(false);    // the app's "Knife parry" (bit 21, runtime/parry.cpp)  // bit 6 as last sent (-1: nothing yet); each change is one press of R3
 
 // The field of view from the aim bits: bits 24..29 hold degrees + 32 (0: an app without it, as the game).
@@ -137,12 +138,24 @@ extern "C" void re4_reload_request(void);   // runtime/free_move.cpp
 extern "C" void re4_wardrobe_set(int outfit, int back);  // runtime/wardrobe.cpp
 extern "C" void re4_melee_set(int bits);                  // runtime/melee.cpp
 extern "C" void re4_back_adjust_set(int word);           // runtime/wardrobe.cpp
+// Patch 0905 (title.cpp titleWait): 1 = the title starts at its main menu (the app's "Skip intro logos"; on the PC
+// RE4_SKIP_INTRO=1).
+int re4_skip_intro(void)
+{
+    static const bool env = getenv("RE4_SKIP_INTRO") != 0 && atoi(getenv("RE4_SKIP_INTRO")) != 0;
+    return env || gSkipIntro.load();
+}
+
 void re4_aim_set(int bits)
 {
     if (bits < 0) {  // bit 31: the second word
         re4_back_adjust_set(bits & 0x00FFFFFF);
         re4_melee_set((bits >> 24) & 15);  // bit 24 "Neck break", bit 25 the mods' melee motions off, bit 26 "Axe strike",
                                            // bit 27 the random mix off
+        const bool skip = (bits >> 28) & 1;  // bit 28 "Skip intro logos" (patch 0905)
+        if (gSkipIntro.exchange(skip) != skip) {
+            re4_log("title: intro logos %s", skip ? "skipped" : "shown");
+        }
         return;
     }
     // bits 22..23 "Leon's outfit" (0 the story's, 1 the first, 2 the second), bit 30 "Weapon on the back"

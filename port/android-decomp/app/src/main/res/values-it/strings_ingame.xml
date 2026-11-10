@@ -401,6 +401,8 @@
     <string name="ingame_melee_neck">Spezzare il collo</string>
     <string name="ingame_melee_axe">Colpo d\'ascia (in ginocchio)</string>
     <string name="ingame_melee_random">Mix casuale</string>
+    <string name="ingame_skip_intro">Salta i loghi iniziali</string>
+    <string name="ingame_skip_intro_help">Salta i loghi iniziali: il gioco parte dal menu del titolo, senza i loghi di Nintendo, Capcom e altri (dal prossimo avvio).</string>
     <string name="ingame_melee_help">Corpo a corpo: una mod con melee/melee.dat sostituisce le animazioni dei calci sui nemici storditi. Spezzare il collo: Leon finisce un Ganado stordito in piedi come HUNK (serve il file em/em60.drs dei Mercenari sul disco); i nemici con parassita vengono ancora presi a calci. Colpo d\'ascia: su un nemico stordito in ginocchio Leon usa l\'attacco con l\'ascia dei Ganados, con il coltello, invece del calcio (se una skin lo ha sostituito con un\'ascia, si vede l\'ascia). Mix casuale: ogni colpo di grazia viene scelto a caso tra quello del gioco e quelli attivi; disattivato, esce sempre la tua scelta.</string>
     <string name="ingame_outfit_help">L\'abito che la storia dà a Leon, oppure sempre il primo (con la giacca) o il secondo (senza); cambia subito e la stanza ricomincia dove si trova. Arma sulla schiena: l\'ultima arma lunga che ha impugnato (fucile a pompa, fucile, mitra, lanciarazzi) pende sulla sua schiena finché è nella valigetta e non nelle sue mani. Inclinazione, altezza, distanza dalla schiena e spalla si regolano a piacere; «Nei filmati» la mostra anche nelle scene.</string>
 </resources>

@@ -1,0 +1,17 @@
+# Patch 0905 (wish of DevJunior, 10.11.2026: "skip the logos at the start and take me to the menu at once"). Not a
+# bug of the prototype: a port feature.
+# title.cpp titleWait: with the app's "Skip intro logos" (Mods page, on by default; runtime/aim_options.cpp
+# re4_skip_intro, the second settings word's bit 28) the title takes the path it takes when it was already shown
+# once (pRK->logo_skip_enable): no Nintendo logo, health warning, Capcom, CRI and Dolby logos; the main menu at
+# once, its music as after a second controller's skip. Off: the game's sequence as before.
+--- a/src/game/title.cpp
++++ b/src/game/title.cpp
+@@ -184,7 +184,7 @@
+                 w->counter = 0;
+                 w->dbg_mode = 0;
+             }
+-            if (pRK->logo_skip_enable != 0) {
++            if (pRK->logo_skip_enable != 0 || re4_skip_intro()) {
+                 w->Rno0 = 5;
+                 w->counter = TTL_START_BIO4;
+                 titleSet(w, TTL_START_BIO4);
