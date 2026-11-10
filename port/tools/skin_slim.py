@@ -24,6 +24,13 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
 --tuck HEAD:BODY     keeps the base of head HEAD's neck under the collar of model BODY (after --fit and --collar):
                      a head position below y 1660 further from the neck's axis than the body's inner side around it
                      goes 4 inside it (skin made for a lower neckline showed through at the trapezius).
+--hide ENTRY[@MATS]:COVER  drops ENTRY's triangles that model COVER hides (a body under a jacket): a position is
+                     hidden when COVER lies in front of it, out from the skeleton within 60. With @MATS only the parts
+                     with these colour textures, and COVER = ENTRY: the model's other parts cover them (a shirt inside
+                     its jacket's model).
+--cut ENTRY:Y        drops ENTRY's triangles that reach above y Y (the body's upper half under a jacket model that
+                     brings its own shirt).
+--prune TPL          keeps only the textures of palette TPL its models draw (after a graft or a hide).
 --carry ENTRY:LIST   moves the models LIST (straps, a harness) as the nearest positions of ENTRY moved in --fit.
 """
 import argparse
@@ -349,6 +356,82 @@ def tuck(head, body, top=1660.0, inset=4.0, axis=(0.0, -30.0)):
     return bytes(out), n
 
 
+def hide(model, cover, reach=60.0, mats=None):
+    """Drops the triangles of `model` that `cover` hides (a body under a jacket): a position is hidden when the cover
+    lies in front of it, out along `outward` within `reach` and about that way; a triangle goes when all three
+    positions are hidden. `mats`: only the parts with these colour textures, and `cover` None: the model's other
+    parts cover them (a shirt inside the same model as its jacket). Returns (model, triangles before, after)."""
+    from scipy.spatial import cKDTree
+    P = G.positions(model)
+    lists = part_lists(model)
+    if cover is None:
+        idx = sorted({r[0] for p, tris in lists if model[p + 0xC] not in mats for t in tris for r in t})
+        C = P[idx]
+    else:
+        C = G.positions(cover)
+    tree = cKDTree(C)
+    dirs, _ = outward(P)
+    hidden = np.zeros(len(P), bool)
+    for i in range(len(P)):
+        near = tree.query_ball_point(P[i], reach)
+        if not near:
+            continue
+        d = C[near] - P[i]
+        along = d @ dirs[i]
+        side = np.linalg.norm(d - along[:, None] * dirs[i], axis=1)
+        hidden[i] = bool(((along > 0) & (side < 0.35 * along + 10.0)).any())
+    kept = [[t for t in tris if (mats is not None and model[p + 0xC] not in mats) or not all(hidden[r[0]] for r in t)]
+            for p, tris in lists]
+    before = sum(len(t) for _, t in lists)
+    after = sum(len(t) for t in kept)
+    return (rebuild(model, kept) if after < before else model), before, after
+
+
+def cut(model, top):
+    """Drops the triangles of `model` that reach above y `top` (the body's upper half under a jacket model that brings
+    its own shirt). Returns (model, triangles before, after)."""
+    P = G.positions(model)
+    lists = part_lists(model)
+    kept = [[t for t in tris if max(P[r[0]][1] for r in t) <= top] for _, tris in lists]
+    before = sum(len(t) for _, t in lists)
+    after = sum(len(t) for t in kept)
+    return (rebuild(model, kept) if after < before else model), before, after
+
+
+def prune(entries, tpl, users):
+    """Palette `tpl` with only the textures its models `users` draw; the parts renumbered. Returns (bytes before,
+    after)."""
+    imgs = G.tpl_images(entries[tpl])
+    used = set()
+    for e in users:
+        b = entries[e]
+        if not b or len(b) < 0x60:
+            continue
+        for p in G.parts(b):
+            if G.is_empty(b, p):
+                continue
+            fields = [0xC, 0xD, 0xE] + ([0x17] if b[p + 0xB] & 0x10 else [])
+            used.update(b[p + f] for f in fields if b[p + f] != 0xFF)
+    order = sorted(t for t in used if t < len(imgs))
+    remap = {old: new for new, old in enumerate(order)}
+    for e in users:
+        b = bytearray(entries[e]) if entries[e] else None
+        if not b or len(b) < 0x60:
+            continue
+        for p in G.parts(b):
+            if G.is_empty(b, p):
+                continue
+            fields = [0xC, 0xD, 0xE] + ([0x17] if b[p + 0xB] & 0x10 else [])
+            for f in fields:
+                if b[p + f] != 0xFF and b[p + f] in remap:
+                    b[p + f] = remap[b[p + f]]
+        struct.pack_into(">I", b, 0x24, len(order))
+        entries[e] = bytes(b)
+    before = len(entries[tpl])
+    entries[tpl] = G.build_tpl([imgs[t] for t in order])
+    return before, len(entries[tpl]), len(imgs), len(order)
+
+
 def carry(model, P, moves, radius=40.0):
     """Moves model's positions as the nearest of P moved (moves: the push per position of P), by the pushes within
     `radius` of the nearest, averaged."""
@@ -392,6 +475,12 @@ def main(argv=None):
     ap.add_argument("--tuck", action="append", default=[], metavar="HEAD:BODY",
                     help="keep the base of head HEAD's neck under the collar of model BODY")
     ap.add_argument("--carry", action="append", default=[], metavar="ENTRY:LIST")
+    ap.add_argument("--hide", action="append", default=[], metavar="ENTRY[@MATS]:COVER",
+                    help="drop ENTRY's triangles (with @MATS: of these parts) that model COVER hides")
+    ap.add_argument("--cut", action="append", default=[], metavar="ENTRY:Y",
+                    help="drop ENTRY's triangles that reach above y Y")
+    ap.add_argument("--prune", action="append", default=[], metavar="TPL",
+                    help="keep only the textures of palette TPL that its models draw (Leon's 1: 0, 6, 9, 12; 3: 2, 4, 5)")
     ap.add_argument("--most", type=float, default=70.0, help="--fit's largest push (default 70)")
     ap.add_argument("--passes", type=int, default=2, help="--fit's rounds (default 2: the smoothing leaves some of the "
                     "way after the first)")
@@ -447,6 +536,23 @@ def main(argv=None):
         for k in entries_of(which):
             entries[k], n = carry(entries[k], P, push)
             print("entry %d carried along with entry %s: %d positions moved" % (k, e, n))
+    for spec in a.hide:
+        left, c = spec.split(":")
+        e, _, ms = left.partition("@")
+        e, c = int(e), int(c)
+        mats = {int(x) for x in ms.split(",")} if ms else None
+        entries[e], before, after = hide(entries[e], None if c == e else entries[c], mats=mats)
+        print("entry %d: %d of %d triangles hidden under entry %d dropped, %d positions left" %
+              (e, before - after, before, c, len(G.positions(entries[e]))))
+    for spec in a.cut:
+        e, y = spec.split(":")
+        entries[int(e)], before, after = cut(entries[int(e)], float(y))
+        print("entry %s: %d of %d triangles above y %s dropped, %d positions left" %
+              (e, before - after, before, y, len(G.positions(entries[int(e)]))))
+    for spec in a.prune:
+        t = int(spec)
+        before, after, n, kept = prune(entries, t, U.PLAYER_TPL_USERS.get(t, (t - 1,)))
+        print("palette %d: %d of %d textures kept, %d -> %d bytes" % (t, kept, n, before, after))
     data = U.build_archive(base, U.build_body(entries, base.types))
     Path(a.out).write_bytes(data)
     print("%s: %d bytes, data part %d bytes (the player's place holds %d)" %
