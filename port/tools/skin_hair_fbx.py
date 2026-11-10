@@ -21,7 +21,7 @@ material, "...__Hair00_Mat" and so on):
   texture's strand mask (--alpha, the red channel of an RE Engine "ACOT" texture, or --alpha-channel), 1024 x 512
   I8; the colour one colour (--colour, default the skin's old hair colour) shaded by the strands' brightness in
   --albedo (an RE Engine "ALBS": its colours are strand ids, only the brightness is used), 512 x 256 CMPR.
-  The part's alpha compare reference --alpha-ref (default 64: clean strand tips). The head's dark scalp takes the
+  The part's alpha compare reference --alpha-ref (default 64: clean strand tips). The head's scalp takes the
   hair's colour, darker (a thinned card hair has gaps).
 
 Every other entry stays as it was. Skins, FBX files and textures never go into the repository; this tool only reads
@@ -419,11 +419,12 @@ def textures(albedo, alpha, channel, colour, alpha_size=(1024, 512), colour_size
     return col, mask
 
 
-def scalp(imgs, head, face, colour, depth=0.7, dark=40.0):
+def scalp(imgs, head, face, colour, depth=0.6, dark=40.0):
     """The head's scalp in the hair's colour (darker by `depth`): a card hair has gaps, and a head made for a hair
     of its own (the Remake mod's) is painted near black there. The head's colour textures' texels that lie above
     y 1700 on the model (at the back, z < -20, above 1630: the nape), not on the brow (in front, z > 60, below
-    y 1765), and are dark (brightness under `dark`, faded in over 20). Returns (texture, texels changed) pairs."""
+    y 1765), and are dark (brightness under `dark`, faded in over 20); and, whatever their brightness, the ones
+    under the hair: above y 1800, and above 1700 behind z 30 (not the ears). Returns (texture, texels changed) pairs."""
     out = []
     for p in G.parts(head):
         mc = head[p + 0xC]
@@ -436,9 +437,13 @@ def scalp(imgs, head, face, colour, depth=0.7, dark=40.0):
         img = np.asarray(U.decode_gx(h, w, f, imgs[mc][1]).convert("RGBA"), dtype=np.float64)
         lum = img[..., 0] * 0.3 + img[..., 1] * 0.59 + img[..., 2] * 0.11
         y, z = pos[..., 1], pos[..., 2]
+        x = pos[..., 0]
         with np.errstate(invalid="ignore"):
             where = ((y > 1700) | ((z < -20) & (y > 1630))) & ~((z > 60) & (y < 1765))
+            # under the hair whatever its brightness: the crown and the back and sides of the skull (not the ears)
+            under = ((y > 1800) | ((y > 1700) & (z < 30))) & ~((np.abs(x) > 62) & (y < 1745) & (z > -35))
         wgt = np.where(where, np.clip((dark + 20.0 - lum) / 20.0, 0, 1), 0.0)
+        wgt = np.where(under, 1.0, wgt)
         if (wgt > 0.5).sum() < 50:
             continue
         rng = np.random.default_rng(5)
