@@ -20,7 +20,9 @@ material, "...__Hair00_Mat" and so on):
 - Textures: the hair's colour and alpha textures (the ones its part draws with) anew: the alpha from the FBX
   texture's strand mask (--alpha, the red channel of an RE Engine "ACOT" texture, or --alpha-channel), 1024 x 512
   I8; the colour one colour (--colour, default the skin's old hair colour) shaded by the strands' brightness in
-  --albedo (an RE Engine "ALBS": its colours are strand ids, only the brightness is used), 512 x 256 CMPR.
+  --albedo (an RE Engine "ALBS": its colours are strand ids, only the brightness is used), 512 x 256 CMPR. Both
+  with a full mipmap chain, the alpha's keeping the hair covered when it is seen small (coverage_mips, --thicken,
+  --fill; DevJunior's device test of v28: without them only thin sheets of hair, the head showing through).
   The part's alpha compare reference --alpha-ref (default 64: clean strand tips). The head's scalp takes the
   hair's colour, darker (a thinned card hair has gaps).
 
@@ -401,22 +403,105 @@ def hair_colour(imgs, mc, ma):
     return tuple(int(round((col[..., c] * w).sum() / w.sum())) for c in range(3))
 
 
-def textures(albedo, alpha, channel, colour, alpha_size=(1024, 512), colour_size=(512, 256)):
-    """(colour image RGBA, alpha image L)."""
+def mip_sizes(w, h):
+    """The sizes of a full GX mipmap chain from w x h down to 1 x 1."""
+    out = [(w, h)]
+    while out[-1] != (1, 1):
+        w, h = max(1, w // 2), max(1, h // 2)
+        out.append((w, h))
+    return out
+
+
+def coverage_mips(base, ref, fill=0.5):
+    """An alpha mask's mipmap chain that keeps the hair covered as it is seen smaller (DevJunior, 10.11.2026, device
+    test of the RE9 hair: "only thin sheets of hair, his whole head shows"): averaged alone, single strands fade to a
+    grey under the alpha compare reference and the cards vanish; without mipmaps the few texels a pixel picks are
+    mostly gaps. Each level is the coverage averaged over boxes and scaled so that as many texels pass `ref` as at
+    the base, plus `fill` of the rest the further down (a card hair seen small stands for many layers).
+    `base`: floats 0..1. Returns float levels."""
+    f0 = float((base * 255 >= ref).mean())
+    out = [base]
+    for k, (w, h) in enumerate(mip_sizes(base.shape[1], base.shape[0])[1:], 1):
+        avg = np.asarray(Image.fromarray(out[0].astype(np.float32), "F").resize((w, h), Image.BOX), dtype=np.float64)
+        target = min(0.97, f0 + (1 - f0) * fill * (1 - 0.5 ** k))
+        lo, hi = 0.5, 64.0
+        for _ in range(30):
+            g = (lo * hi) ** 0.5
+            if (np.clip(avg * g, 0, 1) * 255 >= ref).mean() < target:
+                lo = g
+            else:
+                hi = g
+        out.append(np.clip(avg * hi, 0, 1))
+    return out
+
+
+def encode_levels(levels, fmt, hdr, encode):
+    """A TPL image (header, data) from mipmap levels (PIL images, base first): each level padded to whole tiles,
+    the header's size, format, trilinear filtering and LOD range set (texture.cpp / trans.cpp take a mipmapped
+    texture where minLOD differs from maxLOD)."""
+    data = bytearray()
+    tw, th = G.GX_TILE[fmt]
+    for im in levels:
+        w, h = im.size
+        pw, ph = -(-w // tw) * tw, -(-h // th) * th
+        if (pw, ph) != (w, h):
+            pad = Image.new(im.mode, (pw, ph))
+            pad.paste(im, (0, 0))
+            for x in range(w, pw):  # repeat the edge (no seams when filtered)
+                pad.paste(im.crop((w - 1, 0, w, h)), (x, 0))
+            for y in range(h, ph):
+                pad.paste(pad.crop((0, h - 1, pw, h)), (0, y))
+            im = pad
+        data += encode(im)
+    hdr = bytearray(hdr)
+    w, h = levels[0].size
+    struct.pack_into(">HHI", hdr, 0, h, w, fmt)
+    struct.pack_into(">II", hdr, 0x14, 5 if len(levels) > 1 else 1, 1)  # LIN_MIP_LIN, linear
+    hdr[0x21], hdr[0x22] = 0, len(levels) - 1
+    return bytes(hdr), bytes(data)
+
+
+def _px(im):
+    raw = im.convert("RGBA").tobytes()
+    return [tuple(raw[k:k + 4]) for k in range(0, len(raw), 4)], im.size[0], im.size[1]
+
+
+def enc_i8(im):
+    px, w, h = _px(Image.merge("RGBA", (im, im, im, im)))
+    return U.enc_i8(px, w, h)
+
+
+def enc_cmpr(im):
+    return U.enc_cmpr(*_px(im))
+
+
+def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour_size=(512, 256), thicken=0.5,
+             fill=0.5):
+    """(colour levels RGBA, alpha levels L), each a full mipmap chain. The alpha: the strand mask (`channel` of
+    `alpha`) at `alpha_size`, its strands `thicken`ed (a share of the mask spread one texel: the few cards of a
+    GameCube hair stand for many layers), then coverage_mips. The colour: one `colour`, shaded by the brightness of
+    `albedo` on the strands, plain around them (no dark fringes when filtered)."""
+    from PIL import ImageFilter
     a_img = Image.open(alpha).convert("RGBA").split()["RGBA".index(channel)]
-    mask = a_img.resize(alpha_size, Image.LANCZOS)
-    base = np.array(colour, dtype=np.float64)
+    m0 = a_img.resize(alpha_size, Image.LANCZOS)
+    base = np.asarray(m0, dtype=np.float64) / 255.0
+    if thicken > 0:
+        grown = np.asarray(m0.filter(ImageFilter.MaxFilter(3)), dtype=np.float64) / 255.0
+        base = np.maximum(base, grown * thicken)
+    alpha_levels = [Image.fromarray((lv * 255 + 0.5).astype(np.uint8), "L") for lv in coverage_mips(base, ref, fill)]
+    c = np.array(colour, dtype=np.float64)
     if albedo:
         lum = np.asarray(Image.open(albedo).convert("L").resize(colour_size, Image.LANCZOS), dtype=np.float64)
         m = np.asarray(a_img.resize(colour_size, Image.LANCZOS), dtype=np.float64) / 255.0
-        ref = np.median(lum[m > 0.5]) if (m > 0.5).sum() > 100 else lum.mean()
-        shade = np.clip(lum / max(ref, 1.0), 0.65, 1.35)
-        shade = shade * m + 1.0 * (1 - m)  # around the strands the plain colour (no dark fringes when filtered)
+        mid = np.median(lum[m > 0.5]) if (m > 0.5).sum() > 100 else lum.mean()
+        shade = np.clip(lum / max(mid, 1.0), 0.65, 1.35)
+        shade = shade * m + 1.0 * (1 - m)
     else:
         shade = np.ones(colour_size[::-1])
-    rgb = np.clip(base[None, None, :] * shade[..., None], 0, 255).astype(np.uint8)
+    rgb = np.clip(c[None, None, :] * shade[..., None], 0, 255).astype(np.uint8)
     col = Image.fromarray(np.dstack([rgb, np.full(rgb.shape[:2], 255, np.uint8)]), "RGBA")
-    return col, mask
+    colour_levels = [col] + [col.resize(sz, Image.BOX) for sz in mip_sizes(*col.size)[1:]]
+    return colour_levels, alpha_levels
 
 
 def scalp(imgs, head, face, colour, depth=0.6, dark=40.0):
@@ -470,6 +555,11 @@ def main(argv=None):
                     help="FBX hair meshes (material names without _Mat) and the share of their cards to keep")
     ap.add_argument("--colour", help="R,G,B of the hair (default: the skin's old hair colour)")
     ap.add_argument("--alpha-ref", type=int, default=64)
+    ap.add_argument("--alpha-size", default="1024x512", help="the alpha texture's size (WxH, default 1024x512)")
+    ap.add_argument("--thicken", type=float, default=0.5, help="spread this share of the strand mask one texel")
+    ap.add_argument("--fill", type=float, default=0.5,
+                    help="the smaller mipmap levels cover this share of the gaps more (see coverage_mips)")
+    ap.add_argument("--scalp-depth", type=float, default=0.6, help="the scalp in the hair's colour times this")
     ap.add_argument("--cover", type=float, default=1.0, metavar="GAP",
                     help="lift the hair positions inside the head's skull GAP over it (default 1; negative: "
                          "leave them)")
@@ -515,18 +605,22 @@ def main(argv=None):
     mc, ma = hair[p0 + 0xC], hair[p0 + 0xE]
     imgs = G.tpl_images(entries[HEAD_TPL])
     colour = tuple(int(x) for x in a.colour.split(",")) if a.colour else hair_colour(imgs, mc, ma)
-    col, mask = textures(a.albedo, a.alpha, a.alpha_channel, colour)
-    imgs[mc] = G.encode_image(col, imgs[mc][0])
-    imgs[ma] = F.i8_image(mask, imgs[ma][0])
+    aw, ah = (int(v) for v in a.alpha_size.lower().split("x"))
+    ref = max(0, min(254, a.alpha_ref))
+    cols, masks = textures(a.albedo, a.alpha, a.alpha_channel, colour, ref, alpha_size=(aw, ah), thicken=a.thicken,
+                           fill=a.fill)
+    imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
+    imgs[ma] = encode_levels(masks, 0x1, imgs[ma][0], enc_i8)
     if not a.no_scalp:
-        for mc_, n in scalp(imgs, head, entries[4], colour):
+        for mc_, n in scalp(imgs, head, entries[4], colour, depth=a.scalp_depth):
             print("scalp: texture %d, %d texels in the hair's colour" % (mc_, n))
     hair = bytearray(hair)
     hair[p0 + 0xB] |= 4
-    hair[p0 + 0x14] = max(0, min(254, a.alpha_ref))
+    hair[p0 + 0x14] = ref
     entries[HAIR] = bytes(hair)
     entries[HEAD_TPL] = G.build_tpl(imgs)
-    print("textures: colour %d (%d,%d,%d) %dx%d, alpha %d %dx%d" % (mc, *colour, *col.size, ma, *mask.size))
+    print("textures: colour %d (%d,%d,%d) %dx%d, alpha %d %dx%d, %d mipmap levels each" %
+          (mc, *colour, *cols[0].size, ma, *masks[0].size, len(masks)))
     body = U.build_body(entries, arc.types)
     data = U.build_archive(arc, body)
     Path(a.out).write_bytes(data)

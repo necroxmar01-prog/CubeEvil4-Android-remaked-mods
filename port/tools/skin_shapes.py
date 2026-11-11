@@ -12,13 +12,15 @@ Each shape is carried over from the event's head to the skin's by the nearest po
 other first (heights piecewise by chin, mouth, nose tip, eyes and brow; depth by the front profile at that height, so
 a Remake head with its lips further forward takes the lips' movement and not the teeth's), near the mouth an upper
 lip point takes only upper lip points and a lower one only lower ones (else an open mouth would pull both lips
-alike); the four nearest, weighted by inverse squared distance, faded out from 5 to 12 units away. The table holds
+alike); the four nearest, weighted by inverse squared distance, faded out from 5 to 12 units away. The blink (slot 9)
+is made for the skin's own lids instead (synth_blink; --blink event carries the event's over too). The table holds
 the event's 29 slots (slot 0 empty, as in ev0001), deltas in the head's own shift; the head's model gets its shape
 table (header 0x2C) appended. A head that already had shapes loses them (the game's expressions in play are the
 face's, entry 4, not the head's). The event file may be the PC release's (little-endian, floats) or the disc's.
 
 Disc and mod files never go into the repository; this tool only reads and writes the paths given."""
 import argparse
+import collections
 import struct
 import sys
 from pathlib import Path
@@ -28,6 +30,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import uhd_skin_convert as U  # noqa: E402
 import skin_graft as G  # noqa: E402
+import skin_slim as SL  # noqa: E402
 
 EVENT_HEAD = b"event/model/ev0000/ev0001.bin\x00"
 VERSIONS = (0x20030818, 0x20030817, 0x20010801)
@@ -207,6 +210,135 @@ def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.
     return out, ls, le
 
 
+def _sphere(Q):
+    """Least-squares sphere through Q: (centre, radius, mean distance off it)."""
+    A = np.c_[2 * Q, np.ones(len(Q))]
+    c = np.linalg.lstsq(A, (Q ** 2).sum(1), rcond=None)[0]
+    r = float(np.sqrt(c[3] + (c[:3] ** 2).sum()))
+    return c[:3], r, float(np.abs(np.linalg.norm(Q - c[:3], axis=1) - r).mean())
+
+
+def _pieces(T, n):
+    """Per position its connected piece (by the triangles T)."""
+    parent = np.arange(n)
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for t in T:
+        a = find(t[0])
+        for q in t[1:]:
+            b = find(q)
+            if b != a:
+                parent[b] = a
+    return np.array([find(i) for i in range(n)])
+
+
+def synth_blink(head, eyes_y=1722.0, close=0.8, up=9.0, low=6.0, overshoot=1.2):
+    """A blink made for the skin's own lids (the event's blink, carried over, tore lids shaped otherwise; DevJunior,
+    10.11.2026: "a blink, so his face looks natural when he talks"). The eyeballs: the head's part whose positions on
+    each side lie on a sphere. The lid rims: the skin's positions just outside that sphere (within 0.3..3 of it), in
+    front, from the inner to the outer corner; per 1.5 units across, the upper rim's lowest and the lower rim's
+    highest point. The lids then turn about the eyeball's centre (they slide over it, nothing goes into it): the upper
+    lid's rim to `close` of the way down (and `overshoot` further, so no gap stays), the skin above it less and less up
+    to `up` above the rim, the lower lid's rim the rest of the way up, fading out `low` below it; nothing at the
+    corners. Lash cards (small pieces) turn as one, as their root does. Returns ({position: (dx, dy, dz)}, log)."""
+    P = G.positions(head)
+    parts = [np.array([[r[0] for r in t] for t in tris]).reshape(-1, 3) for _, tris in SL.part_lists(head)]
+    best = None
+    for k, t in enumerate(parts):
+        if not len(t):
+            continue
+        u = np.unique(t)
+        fits = []
+        for side in (1, -1):
+            Q = P[u]
+            Q = Q[(Q[:, 0] * side > 5) & (np.abs(Q[:, 1] - eyes_y) < 35) & (Q[:, 2] > 30)]
+            if len(Q) < 50:
+                break
+            c, r, e = _sphere(Q)
+            if not 8 < r < 25 or e > 0.1 * r:
+                break
+            fits.append((c, r))
+        if len(fits) == 2 and (best is None or len(u) > best[0]):
+            best = (len(u), k, fits)
+    if best is None:
+        return {}, "blink: no eyeballs found (two spheres in one part)"
+    _, ek, fits = best
+    ball = set(np.unique(parts[ek]).tolist())
+    T = np.concatenate([t for k, t in enumerate(parts) if k != ek and len(t)])
+    used = np.array([v for v in np.unique(T) if v not in ball])
+    root = _pieces(T, len(P))
+    size = collections.Counter(root[used].tolist())
+    out, log = {}, []
+    for c, R in fits:
+        q = P - c
+        r = np.linalg.norm(q, axis=1)
+        near = used[(np.abs(q[used, 0]) < 26) & (np.abs(q[used, 1]) < 20) & (q[used, 2] > 0)]
+        rim = near[(r[near] > R + 0.3) & (r[near] < R + 3.0) & (q[near, 2] > 4)]
+        rim = np.array([v for v in rim if size[root[v]] > 200])  # the skin, not the lash cards
+        if len(rim) < 10:
+            log.append("blink: the eye at x %.0f has no lid rim" % c[0])
+            continue
+        xs, ys = q[rim, 0], q[rim, 1]
+        x0, x1 = xs.min(), xs.max()
+        y0, y1 = ys[xs.argmin()], ys[xs.argmax()]
+
+        def mid(x):
+            return y0 + (y1 - y0) * (x - x0) / max(x1 - x0, 1e-6)
+
+        bx, yu, yl = [], [], []
+        for b in np.arange(np.floor(x0), np.ceil(x1) + 1, 1.5):
+            sel = (xs >= b - 1.5) & (xs < b + 1.5)
+            above, below = ys[sel & (ys > mid(xs))], ys[sel & (ys < mid(xs))]
+            if len(above) and len(below):
+                bx.append(b)
+                yu.append(above.min())
+                yl.append(below.max())
+        if len(bx) < 3:
+            log.append("blink: the eye at x %.0f: no opening found" % c[0])
+            continue
+        bx, yu, yl = np.array(bx), np.array(yu), np.array(yl)
+        rho = R + 1.5
+
+        def ang(y):
+            return np.arcsin(np.clip(y / rho, -0.99, 0.99))
+
+        near = near[(q[near, 0] > x0 - 2) & (q[near, 0] < x1 + 2)]
+        x = np.clip(q[near, 0], bx.min(), bx.max())
+        yu_, yl_ = np.interp(x, bx, yu), np.interp(x, bx, yl)
+        meet = yl_ + (1 - close) * (yu_ - yl_)
+        upper = q[near, 1] > mid(q[near, 0])
+        wu = np.clip(1 - (q[near, 1] - yu_) / up, 0, 1)
+        wl = np.clip(1 - (yl_ - q[near, 1]) / low, 0, 1)
+        corner = np.clip(np.minimum(q[near, 0] - x0, x1 - q[near, 0]) / 1.5, 0, 1)
+        th = np.zeros(len(P))
+        th[near] = np.where(upper, (ang(meet - overshoot) - ang(yu_)) * wu, (ang(meet) - ang(yl_)) * wl) * corner
+        moved = set(near.tolist())
+        lashes = collections.defaultdict(list)
+        for v in near:
+            if size[root[v]] <= 200:
+                lashes[root[v]].append(v)
+        for pc, vs in lashes.items():
+            vs = np.array(vs)
+            allv = np.where(root == pc)[0]
+            th[allv] = th[vs[r[vs].argmin()]]
+            moved.update(allv.tolist())
+        idx = np.array(sorted(moved))
+        t_ = th[idx]
+        dy = q[idx, 1] * np.cos(t_) + q[idx, 2] * np.sin(t_) - q[idx, 1]
+        dz = -q[idx, 1] * np.sin(t_) + q[idx, 2] * np.cos(t_) - q[idx, 2]
+        for v, a_, b_ in zip(idx, dy, dz):
+            if max(abs(a_), abs(b_)) > 0.05:
+                out[int(v)] = (0.0, float(a_), float(b_))
+        log.append("blink: eye at (%.0f, %.0f, %.0f), radius %.1f, opening up to %.1f, %d positions" %
+                   (c[0], c[1], c[2], R, (yu - yl).max(), len(idx)))
+    return out, "; ".join(log)
+
+
 def shape_table(shapes, shift):
     """The GC shape table (game/shape.cpp): u32 count, count x (u32 offset from the table + 4, s32 entries), then the
     entries u16 vertex, s16 dx, dy, dz in 1 / (1 << shift)."""
@@ -248,9 +380,11 @@ def main(argv=None):
     ap.add_argument("--entry", type=int, default=2, help="the skin's head (Leon: 2, archive part 6)")
     ap.add_argument("--mouth", type=float, help="the height of the skin's lips' parting (default: 36 under its nose tip)")
     ap.add_argument("--mouth-gain", type=float, default=1.0, help="the mouth shapes (1..8) times this")
-    ap.add_argument("--slots", default="1-8,10,11,13-28", help="the shape slots to carry (the others stay empty; "
-                    "fewer bytes); default all but the blinks 9 and 12, which tear a head whose lids differ from the "
-                    "event's (the eyes stay open)")
+    ap.add_argument("--slots", default="1-28", help="the shape slots to fill (the others stay empty; fewer bytes); "
+                    "default all")
+    ap.add_argument("--blink", choices=("own", "event"), default="own", help="slot 9, the blink: made for the skin's "
+                    "own lids (synth_blink, default) or carried over from the event's head like the others (tears "
+                    "lids shaped otherwise)")
     ap.add_argument("--threshold", type=float, default=0.2, help="smaller movements are left out (model units)")
     ap.add_argument("--preview", metavar="DIR", help="also write one archive per shape at full weight (for renders)")
     a = ap.parse_args(argv)
@@ -269,15 +403,24 @@ def main(argv=None):
             slots.update(range(int(lo), int(hi or lo) + 1))
     shapes, ls, le = carry_shapes(S, E, ev_shapes, skin_mouth=a.mouth, mouth_gain=a.mouth_gain,
                                   threshold=a.threshold, slots=slots)
+    if a.blink == "own" and (slots is None or 9 in slots) and len(shapes) > 9:
+        blink, line = synth_blink(head)
+        print(line)
+        if blink:
+            shapes[9] = {v: d for v, d in blink.items() if max(abs(c) for c in d) > a.threshold}
     print("landmarks (event -> skin): " + ", ".join("%s %.0f -> %.0f" % (q, le[q], ls[q])
                                                    for q in ("chin", "mouth", "nose", "eyes")))
     table, counts = shape_table(shapes, head[0x28])
     print("shapes: %s positions moved (of %d)" % ("/".join(str(c) for c in counts), len(S)))
     old = struct.unpack_from(">I", head, 0x2C)[0]
     if old:
-        print("entry %d had a shape table of its own: replaced" % a.entry)
         head = bytearray(head)
         struct.pack_into(">I", head, 0x2C, 0)
+        # a table this tool appended (behind every other section) goes; one inside the model stays, unused
+        later = [o for o in SL.sections(bytes(head)).values() if o[0] > old]
+        if not later:
+            del head[old:]
+        print("entry %d had a shape table of its own: replaced%s" % (a.entry, "" if later else " (its bytes dropped)"))
         head = bytes(head)
     entries[a.entry] = with_shapes(head, table)
     data = U.build_archive(arc, U.build_body(entries, arc.types))

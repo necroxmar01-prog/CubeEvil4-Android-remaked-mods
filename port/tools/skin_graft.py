@@ -30,14 +30,37 @@ import uhd_skin_convert as U  # noqa: E402
 TPL_MAGIC = 0x0020AF30
 
 
+# GX texture tiles (width, height) per format: a mipmap level takes whole tiles
+GX_TILE = {0x0: (8, 8), 0x1: (8, 4), 0x2: (8, 4), 0x3: (4, 4), 0x4: (4, 4), 0x5: (4, 4), 0x6: (4, 4), 0xE: (8, 8)}
+
+
+def level_bytes(w, h, f):
+    """Bytes of one GX texture level of w x h (whole tiles)."""
+    tw, th = GX_TILE[f]
+    return (-(-w // tw) * tw) * (-(-h // th) * th) * U.GX_SIZE[f] // 8
+
+
+def image_bytes(hdr):
+    """Bytes of a TPL image with its header: the base level, and with a mipmap chain (maxLOD above minLOD; the
+    discs' model textures have none, skin_hair_fbx.py makes them) every level down to maxLOD."""
+    h, w, f = struct.unpack_from(">HHI", hdr)
+    levels = hdr[0x22] + 1 if hdr[0x22] > hdr[0x21] else 1
+    n = 0
+    for _ in range(levels):
+        n += level_bytes(w, h, f)
+        w, h = max(1, w // 2), max(1, h // 2)
+    return n
+
+
 def tpl_images(tpl):
-    """(header 0x24 bytes, data) per image of a GameCube TPL."""
+    """(header 0x24 bytes, data) per image of a GameCube TPL (with its mipmap levels, if any)."""
     out = []
     n = struct.unpack_from(">I", tpl, 4)[0]
     for i in range(n):
         ho = struct.unpack_from(">I", tpl, 12 + i * 8)[0]
-        h, w, f, data = struct.unpack_from(">HHII", tpl, ho)
-        out.append((bytes(tpl[ho:ho + 0x24]), tpl[data:data + w * h * U.GX_SIZE[f] // 8]))
+        hdr = bytes(tpl[ho:ho + 0x24])
+        data = struct.unpack_from(">I", hdr, 8)[0]
+        out.append((hdr, tpl[data:data + image_bytes(hdr)]))
     return out
 
 
