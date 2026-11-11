@@ -335,10 +335,12 @@ def build_hair(template, P, N, T, tris, colour=0):
     return out
 
 
-def skin_weights(blob, ref, k=4, cap=0xFF):
+def skin_weights(blob, ref, k=4, cap=0xFF, physics=1.0):
     """`blob` (bytearray, the new hair) skinned as `ref` (the skin's old hair), as skin_graft.transfer_weights but
-    merged to `cap` entries (uhd_skin_convert.merge_weights: coarser steps until they fit). Returns (entries, step,
-    bones)."""
+    merged to `cap` entries (uhd_skin_convert.merge_weights: coarser steps until they fit). `physics` scales the
+    shares of the hair's swinging bones (65..85, pl_cloth.cpp leonHair): 0 = the hair moves with the head alone
+    (DevJunior, 11.11.2026, device test: "the bald head still shows": a card close to the skull, swung by its
+    chain, sinks into it; the renders show the rest pose). Returns (entries, step, bones)."""
     from scipy.spatial import cKDTree
     P, Q = G.positions(blob), G.positions(ref)
     rw = G.model_weights(ref)
@@ -346,13 +348,17 @@ def skin_weights(blob, ref, k=4, cap=0xFF):
     qw = [rw[struct.unpack_from(">H", ref, vo + i * 8 + 6)[0]] for i in range(len(Q))]
     d, j = cKDTree(Q).query(P, k=min(k, len(Q)))
     d, j = d.reshape(len(P), -1), j.reshape(len(P), -1)
+    swing = lambda b: 64 < b <= 85
+    still = collections.Counter(b for w in qw for b, r in w if not swing(b))
+    main = still.most_common(1)[0][0] if still else 4
     per = []
     for dd, jj in zip(d, j):
         acc = {}
         for dist, q in zip(dd, jj):
             f = 1.0 / (dist * dist + 1.0)
             for b, r in qw[q]:
-                acc[b] = acc.get(b, 0.0) + f * r
+                acc[b] = acc.get(b, 0.0) + f * r * (physics if swing(b) else 1.0)
+        acc = {b: v for b, v in acc.items() if v > 1e-9} or {main: 1.0}
         top = sorted(acc.items(), key=lambda x: -x[1])[:3]
         total = sum(v for _, v in top)
         per.append(tuple((b, 100.0 * v / total) for b, v in top))
@@ -517,12 +523,17 @@ def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour
     return colour_levels, alpha_levels
 
 
-def scalp(imgs, head, face, colour, depth=0.6, dark=40.0):
+def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, brow=1770.0, hairline=None):
     """The head's scalp in the hair's colour (darker by `depth`): a card hair has gaps, and a head made for a hair
     of its own (the Remake mod's) is painted near black there. The head's colour textures' texels that lie above
     y 1700 on the model (at the back, z < -20, above 1630: the nape), not on the brow (in front, z > 60, below
     y 1765), and are dark (brightness under `dark`, faded in over 20); and, whatever their brightness, the ones
-    under the hair: above y 1800, and above 1700 behind z 30 (not the ears). Returns (texture, texels changed) pairs."""
+    under the hair: above y 1800, and above 1700 behind z 30 (not the ears). With `hair` (its positions) and `reach`
+    also every texel above y `brow` with a hair position within `reach` of it, faded out over the last third
+    (DevJunior, 11.11.2026, device test: "the bald head still shows": the brow and temples under the fringe).
+    With `hairline` (a height): everything above a hairline at that height over the brow's middle, 0.3 lower per unit
+    to the side (the temples), faded in over 8 units: no skin above it shows between the cards.
+    Returns (texture, texels changed) pairs."""
     out = []
     for p in G.parts(head):
         mc = head[p + 0xC]
@@ -542,6 +553,20 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0):
             under = ((y > 1800) | ((y > 1700) & (z < 30))) & ~((np.abs(x) > 62) & (y < 1745) & (z > -35))
         wgt = np.where(where, np.clip((dark + 20.0 - lum) / 20.0, 0, 1), 0.0)
         wgt = np.where(under, 1.0, wgt)
+        if hair is not None and reach > 0:
+            from scipy.spatial import cKDTree
+            ok = np.isfinite(y) & (y > brow)
+            d = np.full(y.shape, np.inf)
+            if ok.any():
+                d[ok] = cKDTree(hair).query(pos[ok], k=1)[0]
+            near = np.clip((reach - d) / (reach / 3.0), 0, 1)
+            wgt = np.maximum(wgt, near)
+        if hairline is not None:
+            with np.errstate(invalid="ignore"):
+                line = hairline - 0.3 * np.abs(x)
+                top = np.where(np.isfinite(y), np.clip((y - line) / 8.0, 0, 1), 0.0)
+                top = np.where((np.abs(x) > 62) & (y < 1745) & (z > -35), 0.0, top)  # not the ears
+            wgt = np.maximum(wgt, top)
         if (wgt > 0.5).sum() < 50:
             continue
         rng = np.random.default_rng(5)
@@ -581,6 +606,17 @@ def main(argv=None):
     ap.add_argument("--cover", type=float, default=1.0, metavar="GAP",
                     help="lift the hair positions inside the head's skull GAP over it (default 1; negative: "
                          "leave them)")
+    ap.add_argument("--cover-low", type=float, default=1700.0, metavar="Y",
+                    help="lift only hair positions above this height (default 1700; the temples and the fringe over "
+                         "the brow lie lower)")
+    ap.add_argument("--scalp-reach", type=float, default=0.0, metavar="UNITS",
+                    help="also paint the head under the hair wherever a hair position lies within this distance, "
+                         "above the brow (see scalp; default 0: off)")
+    ap.add_argument("--hairline", type=float, metavar="Y",
+                    help="paint the head above a hairline at this height (brow middle; lower to the sides) in the "
+                         "hair's colour (see scalp)")
+    ap.add_argument("--physics", type=float, default=1.0,
+                    help="the swinging hair bones' shares times this (0: the hair is fixed to the head)")
     ap.add_argument("--no-scalp", action="store_true", help="keep the head's scalp as it is (see scalp())")
     a = ap.parse_args(argv)
 
@@ -610,13 +646,13 @@ def main(argv=None):
     P, N, T = np.concatenate(allP), np.concatenate(allN), np.concatenate(allT)
     tris = np.concatenate(allTris)
     hair = build_hair(template, P, N, T, tris)
-    ne, step, bones = skin_weights(hair, template)
+    ne, step, bones = skin_weights(hair, template, physics=a.physics)
     print("hair: %d positions, %d normals, %d triangles; weights from the skin's hair: %d entries (%d%% steps), "
           "bones %s" % (struct.unpack_from(">H", hair, 0x38)[0], struct.unpack_from(">H", hair, 0x3A)[0], len(tris),
                         ne, step, bones))
     hair = bytes(hair)
     if a.cover >= 0:
-        hair, n, most = S.cover(hair, head, gap=a.cover, cone=4.0)
+        hair, n, most = S.cover(hair, head, gap=a.cover, cone=4.0, low=a.cover_low)
         print("hair: %d positions lifted over the skull, at most %.0f" % (n, most))
     # the part's textures anew
     p0 = list(G.parts(hair))[0]
@@ -630,7 +666,8 @@ def main(argv=None):
     imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
     imgs[ma] = encode_levels(masks, 0x1, imgs[ma][0], enc_i8)
     if not a.no_scalp:
-        for mc_, n in scalp(imgs, head, entries[4], colour, depth=a.scalp_depth):
+        for mc_, n in scalp(imgs, head, entries[4], colour, depth=a.scalp_depth, hair=G.positions(hair),
+                            reach=a.scalp_reach, hairline=a.hairline):
             print("scalp: texture %d, %d texels in the hair's colour" % (mc_, n))
     hair = bytearray(hair)
     hair[p0 + 0xB] |= 4
