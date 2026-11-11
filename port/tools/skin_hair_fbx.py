@@ -482,7 +482,7 @@ def enc_cmpr(im):
 
 
 def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour_size=(512, 256), thicken=0.5,
-             fill=0.5, solid=0.0, harden=1.0):
+             fill=0.5, solid=0.0, harden=1.0, contrast=1.0):
     """(colour levels RGBA, alpha levels L), each a full mipmap chain. The alpha: the strand mask (`channel` of
     `alpha`) at `alpha_size`, its strands `thicken`ed (a share of the mask spread one texel: the few cards of a
     GameCube hair stand for many layers), then coverage_mips. The colour: one `colour`, shaded by the brightness of
@@ -514,7 +514,17 @@ def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour
         m = np.asarray(a_img.resize(colour_size, Image.LANCZOS), dtype=np.float64) / 255.0
         mid = np.median(lum[m > 0.5]) if (m > 0.5).sum() > 100 else lum.mean()
         shade = np.clip(lum / max(mid, 1.0), 0.65, 1.35)
-        shade = shade * m + 1.0 * (1 - m)
+        if contrast != 1.0:
+            # softer strands, and the filled surroundings (solid) take the strands' shading blurred instead of the
+            # plain colour (DevJunior, 11.11.2026: "the texture looks odd": flat patches between sharp strands)
+            from scipy.ndimage import gaussian_filter
+            shade = 1.0 + (shade - 1.0) * contrast
+            sm = gaussian_filter(shade * m, 4.0)
+            mm = gaussian_filter(m, 4.0)
+            around = np.where(mm > 0.02, sm / np.maximum(mm, 0.02), 1.0)
+            shade = shade * m + around * (1 - m)
+        else:
+            shade = shade * m + 1.0 * (1 - m)
     else:
         shade = np.ones(colour_size[::-1])
     rgb = np.clip(c[None, None, :] * shade[..., None], 0, 255).astype(np.uint8)
@@ -602,6 +612,9 @@ def main(argv=None):
     ap.add_argument("--harden", type=float, default=1.0,
                     help="the alpha over the compare reference rises this many times as fast to opaque (the game "
                          "blends the hair by its alpha)")
+    ap.add_argument("--shade-contrast", type=float, default=1.0,
+                    help="the strands' shading from the albedo times this; other than 1 the surroundings take it "
+                         "blurred (see textures)")
     ap.add_argument("--scalp-depth", type=float, default=0.6, help="the scalp in the hair's colour times this")
     ap.add_argument("--cover", type=float, default=1.0, metavar="GAP",
                     help="lift the hair positions inside the head's skull GAP over it (default 1; negative: "
@@ -662,7 +675,7 @@ def main(argv=None):
     aw, ah = (int(v) for v in a.alpha_size.lower().split("x"))
     ref = max(0, min(254, a.alpha_ref))
     cols, masks = textures(a.albedo, a.alpha, a.alpha_channel, colour, ref, alpha_size=(aw, ah), thicken=a.thicken,
-                           fill=a.fill, solid=a.solid, harden=a.harden)
+                           fill=a.fill, solid=a.solid, harden=a.harden, contrast=a.shade_contrast)
     imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
     imgs[ma] = encode_levels(masks, 0x1, imgs[ma][0], enc_i8)
     if not a.no_scalp:

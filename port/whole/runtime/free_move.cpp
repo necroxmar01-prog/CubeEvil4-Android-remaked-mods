@@ -60,6 +60,7 @@
 #include "pl_wep.h"
 #include "model.h"
 #include "motion.h"
+#include "item.h"
 
 #include <atomic>
 #include <math.h>
@@ -78,6 +79,7 @@ const f32 kPi = 3.14159265f;
 const f32 kMainRange = 56.0f;     // the main stick's reach after PADClamp
 const f32 kCRange = 59.0f;        // the C stick's (CameraQuasiFPS::calcDepressionRatio's C_RANGE)
 const f32 kMoveDead = 0.28f;      // below this share of the main stick Leon stands (the game's own: 30 of 56)
+const int kQuickEnd = 4;          // frames a reload without aiming goes on after the weapon is full (patch 0909)
 const f32 kOrbitDead = 0.2f;
 const f32 kOrbitSpeed = 0.085f;   // the camera's turn per game frame (30 a second) at full C stick, ~146 degrees/s
 const f32 kTurnStand = 0.42f;     // Leon's turn per game frame toward the stick: standing,
@@ -631,6 +633,20 @@ void re4_player_after_routine(cPlayer* pl)
         return;
     }
     legs(pl);
+}
+
+// Patch 0909 (the shotgun, rifle and machine gun reload steps, the game thread): 1 when a reload without aiming
+// may end now, kQuickEnd frames after the weapon is full (ItemMgr.reloadable() 0: the weapon object loads the rounds
+// on its motion's frame); the rest of the reload motion brings the gun back up to aim (DevJunior, 11.11.2026: "with
+// the long guns, it still aims for an instant at the end"). Aiming, or infinite ammo (reloadable stays 1): 0.
+int re4_reload_quick_end(void)
+{
+    static int loaded;
+    if (PlReloadDirect != 1 || joyKamae() != 0 || ItemMgr.reloadable() != 0) {
+        loaded = 0;
+        return 0;
+    }
+    return ++loaded > kQuickEnd ? (loaded = 0, 1) : 0;
 }
 
 // The app (the touch RLOAD button, the aim bits' toggling bit 20 through re4_aim_set; any thread): reload

@@ -5,9 +5,45 @@
 # (5 frames before the end) puts the scope back on, whichever comes first; in the prototype's own direct reload
 # (reload key type 1) the same. Without aiming they now leave there as at the end frame (footwork, the down
 # state, crouching); with the aim key held, or the reload started from aiming (PlReloadDirect 0), unchanged.
+# Nachtrag (device test of DevJunior, 11.11.2026: "it still aims for an instant at the end"): the reload motion
+# brings the gun back up to aim after the rounds are in, before PlReloadEndTbl's frame. Without aiming the reload
+# now also ends 4 frames after the weapon is full (re4_reload_quick_end, runtime/free_move.cpp: ItemMgr.reloadable()
+# 0; the weapon object loads on its motion's frame).
 --- a/src/wep/pl_shotgun.cpp
 +++ b/src/wep/pl_shotgun.cpp
-@@ -553,7 +553,27 @@
+@@ -488,6 +488,7 @@
+ 
+ // r_no_2 == 4: the reload state. The weapon object (mode 4) loads the shells on its motion, and
+ // aiming can take over from PlReloadEndTbl's frame on.
++extern "C" int re4_reload_quick_end(void); /* port (patch 0909): runtime/free_move.cpp */
+ static void wep07_r2_reload(cPlayer* pl)
+ {
+     switch (pl->r_no_3) {
+@@ -518,6 +519,23 @@
+     }
+     case 1:
+         pl->motionMove();
++        if (re4_reload_quick_end()) {
++            /* port (patch 0909): a reload without aiming ends once the shells are in, as at the end frame */
++            if (pl->stat.check(cPlayer::F_CROUCH)) {
++                pl->r_no_0 = 0;
++                pl->r_no_2 = 0;
++                pl->r_no_1 = 0x11;
++                pl->r_no_3 = 0;
++            } else {
++                pl->m_Hokan = 9;
++                pl->m_Frame = 0;
++                pl->r_no_0 = 0;
++                pl->r_no_1 = 0;
++                pl->r_no_2 = 0;
++                pl->r_no_3 = 2;
++            }
++            break;
++        }
+         if (m3r < -0.1f || m3r > 0.1f) {
+             if (pl->Motion.Seq_frame >= PlReloadEndTbl[pG->weapon_no][pG->weapon_lv_reload]) {
+                 if (joyKamae()) {
+@@ -553,7 +571,27 @@
                  }
              }
              if (pl->Motion.Seq_frame >= (f32) (pl->Motion.Seq_frame_num - 1)) {
@@ -38,7 +74,25 @@
          break;
 --- a/src/wep/pl_rifle.cpp
 +++ b/src/wep/pl_rifle.cpp
-@@ -434,7 +434,20 @@
+@@ -391,6 +391,7 @@
+ // reload-speed level (0x17/0x1D/0x1E), knifeStance = 1, weapon object mode 4. Step 1: aim released
+ // past PlReloadEndTbl's frame -> down state (m_Work0 = 1) or crouch 0x11; 5 frames before the end
+ // the scope comes back on (bolt SE 2/9) and the set state finishes the motion in its step 2.
++extern "C" int re4_reload_quick_end(void); /* port (patch 0909): runtime/free_move.cpp */
+ static void wep09_r2_reload(cPlayer* pl)
+ {
+     switch (pl->r_no_3) {
+@@ -421,7 +422,8 @@
+         break;
+     }
+     case 1:
+-        if (joyKamae() == 0 && pl->Motion.Mot_frame >= PlReloadEndTbl[pG->weapon_no][pG->weapon_lv_reload]) {
++        if (joyKamae() == 0 && (pl->Motion.Mot_frame >= PlReloadEndTbl[pG->weapon_no][pG->weapon_lv_reload]
++                                || re4_reload_quick_end() /* port (patch 0909): the rounds are in */)) {
+             if (pl->stat.check(cPlayer::F_CROUCH)) {
+                 pl->r_no_0 = 0;
+                 pl->r_no_2 = 0;
+@@ -434,7 +436,20 @@
                  pl->m_Work0 = 1;
              }
          }
@@ -62,7 +116,25 @@
              scopeOn(pl);
 --- a/src/wep/pl_machine.cpp
 +++ b/src/wep/pl_machine.cpp
-@@ -426,8 +426,21 @@
+@@ -388,6 +388,7 @@
+ // (0x1E/0x23/0x24), knifeStance = 1, weapon object mode 4 (the magazine refills on its motion).
+ // Step 1: aim released past PlReloadEndTbl's frame -> step 3 (or crouch 0x11); the motion's end
+ // -> set state step 0. Step 3 finishes the motion and leaves to footwork idle.
++extern "C" int re4_reload_quick_end(void); /* port (patch 0909): runtime/free_move.cpp */
+ static void wep11_r2_reload(cPlayer* pl)
+ {
+     switch (pl->r_no_3) {
+@@ -416,7 +417,8 @@
+         break;
+     }
+     case 1:
+-        if (MotionCheckCrossFrame(&pl->Motion, PlReloadEndTbl[pG->weapon_no][pG->weapon_lv_reload]) && joyKamae() == 0) {
++        if ((MotionCheckCrossFrame(&pl->Motion, PlReloadEndTbl[pG->weapon_no][pG->weapon_lv_reload])
++             || re4_reload_quick_end() /* port (patch 0909): the magazine is in */) && joyKamae() == 0) {
+             if (pl->stat.check(cPlayer::F_CROUCH)) {
+                 pl->r_no_0 = 0;
+                 pl->r_no_2 = 0;
+@@ -426,8 +428,21 @@
                  pl->r_no_2 = 3;
              }
          } else if (MotionMove(pl, 0)) {
