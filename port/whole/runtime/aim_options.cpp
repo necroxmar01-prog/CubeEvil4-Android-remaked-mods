@@ -147,6 +147,7 @@ extern "C" void re4_reload_request(void);   // runtime/free_move.cpp
 extern "C" void re4_wardrobe_set(int outfit, int back);  // runtime/wardrobe.cpp
 extern "C" void re4_melee_set(int bits);                  // runtime/melee.cpp
 extern "C" void re4_back_adjust_set(int word);           // runtime/wardrobe.cpp
+extern "C" void re4_ashley_gun_set(int on);             // runtime/ashley_gun.cpp
 // Patch 0905 (title.cpp titleWait): 1 = the title starts at its main menu (the app's "Skip intro logos"; on the PC
 // RE4_SKIP_INTRO=1).
 int re4_skip_intro(void)
@@ -169,6 +170,7 @@ void re4_aim_set(int bits)
         re4_back_adjust_set(bits & 0x00FFFFFF);
         re4_melee_set((bits >> 24) & 15);  // bit 24 "Neck break", bit 25 the mods' melee motions off, bit 26 "Axe strike",
                                            // bit 27 the random mix off
+        re4_ashley_gun_set((bits >> 29) & 1);  // bit 29 "Ashley's pistol" (patch 0911)
         const bool skip = (bits >> 28) & 1;  // bit 28 "Skip intro logos" (patch 0905)
         if (gSkipIntro.exchange(skip) != skip) {
             re4_log("title: intro logos %s", skip ? "skipped" : "shown");

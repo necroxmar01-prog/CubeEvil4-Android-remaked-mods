@@ -1559,6 +1559,11 @@ final class CoreMenu extends Dialog {
         on -> { input.edit().putBoolean(CoreActivity.SKIP_INTRO, on).apply();
                 CoreBridge.setBackPlacement(CoreActivity.backPlacement(input)); });
     help(R.string.ingame_skip_intro_help);
+    // "Ashley's pistol" (patch 0911): she shoots the enemies near her while she follows or waits
+    toggle(buttonsRow(body), R.string.ingame_ashley_gun, input.getBoolean(CoreActivity.ASHLEY_GUN, false),
+        on -> { input.edit().putBoolean(CoreActivity.ASHLEY_GUN, on).apply();
+                CoreBridge.setBackPlacement(CoreActivity.backPlacement(input)); });
+    help(R.string.ingame_ashley_gun_help);
     melee();
     wardrobe();
     // mods: files that replace the disc's (character skins; wish of the project owner, 08.11.2026)

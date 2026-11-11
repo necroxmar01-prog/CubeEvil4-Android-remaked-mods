@@ -2305,6 +2305,30 @@ static void testKnifeSpeed()
     report("knifespeed", bad == 0);
 }
 
+// Ashley's pistol (runtime/ashley_gun.cpp, patch 0911): the second aim word's bit 29 switches it (logged), the other
+// bits of that word stay theirs; her rounds come back one every 90 frames up to 10.
+extern "C" int re4_ashley_ammo_after(int left, int frames);
+static void testAshleyGun()
+{
+    int bad = 0;
+    const int second = (int) 0x80000000u;
+    re4_aim_set(second | (1 << 29) | (1 << 28));
+    static char tail[48 * 160];
+    re4_log_tail(tail, sizeof tail);
+    if (!strstr(tail, "ashley: her pistol on")) bad |= 1;
+    if (re4_skip_intro() != 1) bad |= 2;
+    re4_aim_set(second | (1 << 28));
+    re4_log_tail(tail, sizeof tail);
+    if (!strstr(tail, "ashley: her pistol off")) bad |= 4;
+    if (re4_ashley_ammo_after(0, 89) != 0 || re4_ashley_ammo_after(0, 90) != 1 || re4_ashley_ammo_after(9, 900) != 10 ||
+        re4_ashley_ammo_after(3, 450) != 8) bad |= 8;
+    re4_aim_set(second);
+    if (bad) {
+        re4_log("  ashleygun: failed checks 0x%x", bad);
+    }
+    report("ashleygun", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2754,6 +2778,7 @@ int re4_runtime_tests()
     testMelee();
     testSkipIntro();
     testKnifeSpeed();
+    testAshleyGun();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

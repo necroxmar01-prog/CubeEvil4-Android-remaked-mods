@@ -1,0 +1,23 @@
+# Patch 0911 (wish of DevJunior, 11.11.2026: "Ashley self-defence: a pistol as the partner"). Not a bug of the
+# prototype: a port feature of the mods (the app's Mods page, "Ashley's pistol").
+# game/pl_npc.cpp cSubChar::move (Ashley as the partner, every frame): after her routine, the motion base and her
+# shadow, before her parts' world matrices, re4_ashley_gun_move (runtime/ashley_gun.cpp) picks her target, turns
+# her right arm towards it and fires; with the switch off it does nothing.
+--- a/src/game/pl_npc.cpp
++++ b/src/game/pl_npc.cpp
+@@ -135,6 +135,7 @@
+ // areas are checked, then r_no_0 (0 core, 1 damage, 2 die, 3 bulldozer, 4 custom m_pFunc, 5
+ // event, 6 dijection); afterwards the neck, face, motion base, shadow, collision, sequence SEs,
+ // cloth, bust, face morph, water effects. Kaiouken (Debug_flg[2] 0x10000) runs the routine again.
++extern "C" void re4_ashley_gun_move(cSubChar* a); /* port (patch 0911): runtime/ashley_gun.cpp */
+ void cSubChar::move()
+ {
+     static void (cSubChar::*NpcFuncTbl[])() = {
+@@ -183,6 +184,7 @@
+     moveFace();
+     SUB_MOTBASE(this)->move();
+     shadowCtrl();
++    re4_ashley_gun_move(this); /* port (patch 0911, mods): Ashley's pistol, her arm aimed and her shots */
+     partsWorldCalc();
+     EmAtCheck(this);
+     SatMgr.check(this, 0);
