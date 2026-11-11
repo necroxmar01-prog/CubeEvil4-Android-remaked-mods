@@ -101,9 +101,11 @@
     <string name="ingame_latch_help">Verrouiller\u00A0: un appui (bouton ou écran) maintient L, R ou B jusqu’à l’appui suivant (B verrouillé\u00A0: Leon court en permanence).</string>
     <string name="ingame_aim_invert_v">Inverser la verticale</string>
     <string name="ingame_aim_speed">Vitesse de visée</string>
+    <string name="ingame_knife_speed">Vitesse de visée du couteau</string>
     <string name="ingame_motion">Commandes de mouvement</string>
     <string name="ingame_controller_section">Manette, clavier et souris</string>
     <string name="ingame_aim_help">Inverser la verticale et Vitesse de visée\u00A0: pour viser avec le couteau et les armes au toucher ou à la manette, pas au gyroscope. Inverser la verticale change l’option du jeu lui-même.</string>
+    <string name="ingame_knife_speed_help">Vitesse de visée du couteau\u00A0: la vitesse du stick pendant que le couteau est prêt, à part de la Vitesse de visée des armes. Tant que vous ne la réglez pas, le couteau suit la Vitesse de visée.</string>
     <string name="ingame_update">Mettre à jour</string>
     <string name="ingame_up_to_date">À jour</string>
     <string name="ingame_update_page">La dernière version s\'ouvre sur GitHub\u00A0: téléchargez-y l\'APK et installez-le.</string>

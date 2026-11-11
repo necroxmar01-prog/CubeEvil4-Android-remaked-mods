@@ -109,9 +109,11 @@
     <string name="ingame_latch_help">Latch: one press (button or touch) holds L, R or B until the next press (B latched: Leon keeps running).</string>
     <string name="ingame_aim_invert_v">Invert vertical</string>
     <string name="ingame_aim_speed">Aim speed</string>
+    <string name="ingame_knife_speed">Knife aim speed</string>
     <string name="ingame_motion">Motion Controls</string>
     <string name="ingame_controller_section">Controller, Keyboard and Mouse</string>
     <string name="ingame_aim_help">Invert vertical and Aim speed: for aiming the knife and the weapons by touch or with a controller, not with the gyro. Invert vertical sets the game\'s own option.</string>
+    <string name="ingame_knife_speed_help">Knife aim speed: the stick\'s aim speed while the knife is ready, apart from the weapons\' Aim speed. Until you move it, the knife follows the Aim speed.</string>
     <string name="ingame_update">Update</string>
     <string name="ingame_up_to_date">Up to date</string>
     <string name="ingame_update_page">The newest release opens on GitHub: download the APK there and install it.</string>

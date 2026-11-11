@@ -89,6 +89,10 @@ final class CoreMenu extends Dialog {
     void aimInvertChanged(boolean on);
     /** The slider "Aim speed" of aiming by touch and controllers (the preferences hold it). */
     void aimSpeedChanged(float value);
+    /** The knife's own aim speed (wish of DevJunior, 11.11.2026; until it is moved: the "Aim speed"). */
+    float knifeSpeed();
+    /** The slider "Knife aim speed" (the preferences hold it). */
+    void knifeSpeedChanged(float value);
     /** The sliders "Stick dead zone" and "Stick range" of the controller sticks in percent (CoreInput.setStickShape;
      *  the host keeps them). */
     void stickShapeChanged(int deadZone, int range);
@@ -848,8 +852,12 @@ final class CoreMenu extends Dialog {
         on -> host.aimInvertChanged(on), R.string.ingame_aim_speed, CoreActivity.AIM_SPEED_MIN,
         CoreActivity.AIM_SPEED_MAX, CoreActivity.AIM_SPEED_STEP,
         CoreActivity.clampAimSpeed(input.getFloat(CoreActivity.AIM_SPEED, 1f)), value -> host.aimSpeedChanged(value));
+    // the knife's own (wish of DevJunior, 11.11.2026: "the knife's sensitivity apart from the gun's")
+    sliderRow(R.string.ingame_knife_speed, CoreActivity.AIM_SPEED_MIN, CoreActivity.AIM_SPEED_MAX,
+        CoreActivity.AIM_SPEED_STEP, host == null ? 1f : host.knifeSpeed(), value -> host.knifeSpeedChanged(value));
     help(R.string.ingame_alternate_help); help(R.string.ingame_latch_help); help(R.string.ingame_auto_aim_help);
-    help(R.string.ingame_always_run_help); help(R.string.ingame_aim_help); help(R.string.ingame_knife_swipe_help);
+    help(R.string.ingame_always_run_help); help(R.string.ingame_aim_help); help(R.string.ingame_knife_speed_help);
+    help(R.string.ingame_knife_swipe_help);
     // touch aiming (wish of the project owner, 28.10.2026): what aims while L or R is held; since 05.11.2026 a section
     // of its own, a third of the row each
     heading(R.string.ingame_touch_aim);
@@ -1071,9 +1079,15 @@ final class CoreMenu extends Dialog {
 
   /** The mouse's sensitivity (wish of the project owner, 29.10.2026), as the gyro's slider. */
   private void mouseSlider() {
-    float min = CoreActivity.MOUSE_MIN, step = CoreActivity.MOUSE_STEP;
+    sliderRow(R.string.ingame_mouse_sensitivity, CoreActivity.MOUSE_MIN, CoreActivity.MOUSE_MAX, CoreActivity.MOUSE_STEP,
+        host == null ? 1f : host.mouseSensitivity(), v -> { if (host != null) host.mouseSensitivityChanged(v); });
+    help(R.string.ingame_mouse_help);
+  }
+
+  /** A row of its own: the title, a slider of `min` + n × `step` up to `max`, its value as "1.25×". */
+  private void sliderRow(int title, float min, float max, float step, float now, Changed<Float> moved) {
     LinearLayout line = new MenuLayout.Columns(getContext(), 170, 520, false);
-    line.addView(rowLabel(s(R.string.ingame_mouse_sensitivity)));
+    line.addView(rowLabel(s(title)));
     LinearLayout slider = row();
     SeekBar bar = new SeekBar(getContext());
     TextView value = text("", 15, false);
@@ -1081,23 +1095,21 @@ final class CoreMenu extends Dialog {
     slider.addView(value);
     slider.setPaddingRelative(0, 0, dp(MenuLayout.GAP), 0);  // the value ends where the buttons end
     line.addView(slider);
-    float now = host == null ? 1f : host.mouseSensitivity();
-    bar.setMax(Math.round((CoreActivity.MOUSE_MAX - min) / step));
+    bar.setMax(Math.round((max - min) / step));
     bar.setProgress(Math.round((now - min) / step));
-    bar.setContentDescription(s(R.string.ingame_mouse_sensitivity));
+    bar.setContentDescription(s(title));
     bar.setProgressTintList(ColorStateList.valueOf(GOLD)); bar.setThumbTintList(ColorStateList.valueOf(GOLD));
     value.setText(times(now));
     bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
       @Override public void onProgressChanged(SeekBar b, int progress, boolean fromUser) {
         float v = min + progress * step;
         value.setText(times(v));
-        if (fromUser && host != null) host.mouseSensitivityChanged(v);
+        if (fromUser) moved.accept(v);
       }
       @Override public void onStartTrackingTouch(SeekBar b) {}
       @Override public void onStopTrackingTouch(SeekBar b) {}
     });
     body.addView(line);
-    help(R.string.ingame_mouse_help);
   }
 
   /** Waits for the key of `action` (a second press on its button: no change); after 8 s it gives up. */

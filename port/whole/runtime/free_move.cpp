@@ -47,7 +47,9 @@
 //    then), so Leon does not aim; also while he runs. Meanwhile the main stick moves him at the speed he walks
 //    or, while the run key stays held (or "Always run"), runs (gWalkSpeed / gRunSpeed: measured from his own
 //    walk and run, 0.99.4-mods), his legs walking or running as above, seen from the camera with "Free
-//    movement", else relative to where he faces; the right stick keeps turning the free camera.
+//    movement", else relative to where he faces; the right stick keeps turning the free camera. Started while he
+//    walks or runs, his legs take the walk at once (no fade in), from the step he was in (his walk / run motion's
+//    frame), and all of it (no aiming stance to keep; device report 11.11.2026: he still stopped for a moment).
 //
 // For tests on the PC: RE4_TEST_AIM with bits 0x10 / 0x20 (runtime/aim_options.cpp).
 #include "types.h"
@@ -112,6 +114,12 @@ std::atomic<bool> gReloadAsked(false);    // the touch RLOAD button (any thread)
 f32 gWalkSpeed = kWalkDefault;            // his walk and run as measured (units per game frame)
 f32 gRunSpeed = kRunDefault;
 bool gLegRun = false;                     // the legs run (the direct reload while he runs)
+// a direct reload started while he walked or ran (DevJunior, 11.11.2026, device test: "when he reloads walking or
+// running he still stops for a moment as if he were going to aim"): the legs take the walk at once, from the step
+// he was in, instead of fading in from the reload motion's standing legs and starting a new step
+bool gReloadFromMove = false;
+bool gReloadFromRun = false;
+f32 gReloadFrame = 0.0f;                  // his walk / run motion's sequence frame then
 
 // this frame's move while aiming (aimMove), for the legs (re4_player_after_routine)
 bool gAimMoving = false;
@@ -294,6 +302,12 @@ void reloadInput(cPlayer* pl)
     if ((!together && !asked) || !walkRoutine(pl) || !pl->Wep || !pl->Wep->m_pWep || !pl->Wep->m_pWep->reloadable()) {
         return;
     }
+    gReloadFromMove = pl->r_no_1 == 1 || pl->r_no_1 == 3;
+    gReloadFromRun = pl->r_no_1 == 3;
+    gReloadFrame = pl->Motion.Seq_frame;
+    if (gReloadFromMove) {
+        gWalkMot = 0;  // the legs' walk anew, from that frame
+    }
     pl->setRno(0, 6, 4, 0);
     pl->m_Work0 = 1;
     PlReloadDirect = 1;
@@ -441,8 +455,12 @@ void findLegs(cPlayer* pl, int n)
 
 void legs(cPlayer* pl)
 {
-    const bool want = gAimMoving && weaponRoutine(pl) && (pl->isKamae() || directReload(pl));
+    const bool reload = directReload(pl);
+    const bool want = gAimMoving && weaponRoutine(pl) && (pl->isKamae() || reload);
     gLegW = want ? (gLegW + kLegFade > 1.0f ? 1.0f : gLegW + kLegFade) : (gLegW - kLegFade < 0.0f ? 0.0f : gLegW - kLegFade);
+    if (want && reload && gReloadFromMove) {
+        gLegW = 1.0f;  // he was walking or running: no fade in (see gReloadFromMove)
+    }
     if (gLegW <= 0.0f || !weaponRoutine(pl) || !pl->pList || !pl->m_MotTbl) {
         gLegW = 0.0f;
         gWalkMot = 0;
@@ -477,7 +495,9 @@ void legs(cPlayer* pl)
         memset(&gWalk, 0, sizeof gWalk);
         // keep the model's blend motion (cMot3's pitch blend); IKInit below, on the copy only
         gWalk.Mot_flag = 0x20000000 | 0x10000000;
-        MotionSetCore(pl, &gWalk, mot, seq, 0, 4, 0);
+        // a reload started on the move: the step he was in (his walk / run motion's frame), else the first
+        const bool cont = gReloadFromMove && reload && run == gReloadFromRun && !back;
+        MotionSetCore(pl, &gWalk, mot, seq, 0, 4, cont ? (int) gReloadFrame : 0);
         gWalk.Mot_flag |= 0x40000000;  // MotionMoveCore: leave the model's matrix alone
         memset(gWalkHist, 0, sizeof gWalkHist);
         gWalkMot = mot;
@@ -561,8 +581,9 @@ void legs(cPlayer* pl)
             PSMTXConcat(hips->pParent->mat, hips->l_mat, hipsWorld);
         }
     }
-    // the legs: the aiming pose's turn toward the walk pose's, the bones' offsets kept
-    const f32 w = gLegW * kLegMax;
+    // the legs: the aiming pose's turn toward the walk pose's, the bones' offsets kept (all of the walk's while
+    // reloading: no aiming stance to keep)
+    const f32 w = gLegW * (reload ? 1.0f : kLegMax);
     i = 0;
     for (cParts* p = pl->pList; p; p = p->pList, i++) {
         if (!gLeg[i]) {
@@ -601,6 +622,9 @@ extern "C" {
 // moves aiming.
 void re4_player_after_routine(cPlayer* pl)
 {
+    if (pl && !directReload(pl)) {
+        gReloadFromMove = false;
+    }
     if (!pl || !re4_aim_move_on()) {
         gLegW = 0.0f;
         gWalkMot = 0;

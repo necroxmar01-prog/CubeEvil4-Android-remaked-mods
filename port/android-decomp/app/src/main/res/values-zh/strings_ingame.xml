@@ -100,9 +100,11 @@
     <string name="ingame_latch_help">锁定：按一次（按键或轻触）即保持按住 L、R 或 B，再按一次松开（锁定 B 时里昂一直奔跑）。</string>
     <string name="ingame_aim_invert_v">反转垂直方向</string>
     <string name="ingame_aim_speed">瞄准速度</string>
+    <string name="ingame_knife_speed">小刀瞄准速度</string>
     <string name="ingame_motion">体感操作</string>
     <string name="ingame_controller_section">手柄、键盘和鼠标</string>
     <string name="ingame_aim_help">反转垂直方向和瞄准速度：用于通过触控或手柄以小刀和武器瞄准，不用于陀螺仪瞄准。反转垂直方向会同时更改游戏自身的选项。</string>
+    <string name="ingame_knife_speed_help">小刀瞄准速度：持刀准备时摇杆的瞄准速度，与武器的瞄准速度分开。在你调整之前，小刀沿用瞄准速度。</string>
     <string name="ingame_update">更新</string>
     <string name="ingame_up_to_date">已是最新</string>
     <string name="ingame_update_page">最新版本将在 GitHub 上打开：请在那里下载 APK 并安装。</string>

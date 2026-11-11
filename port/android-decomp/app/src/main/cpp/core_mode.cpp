@@ -780,6 +780,10 @@ LevelBench levelBench;
 constexpr double kBenchLimit = 360.0;  // seconds for the whole benchmark at most (the way there and back included)
 int aimSent = -1;  // what the core was told last (-1: nothing yet)
 int backPlaceSent = -1;  // the weapon on the back's placement the core was told last (-1: nothing yet)
+// the menu's "Knife aim speed" in percent (CoreBridge.setKnifeSpeed; 0 as the "Aim speed"), sent as a third aim word
+// (bits 31 and 30 set; the core's runtime/aim_options.cpp)
+std::atomic<int> optKnifeSpeed{0};
+int knifeSpeedSent = -1;
 // The menu's AUDIO page (CoreBridge.setSoundVolume, wish of the project owner, 30.10.2026): music | effects << 8 in
 // percent (the core's runtime/sound_volume.cpp).
 std::atomic<int> optSound{100 | 100 << 8};
@@ -2182,6 +2186,11 @@ bool drawGx() {
       api.setAim(static_cast<int>(0x80000000u | static_cast<unsigned>(backPlace)));  // the second aim word
       backPlaceSent = backPlace;
     }
+    const int knife = optKnifeSpeed.load();
+    if (api.setAim && knife != knifeSpeedSent) {
+      api.setAim(static_cast<int>(0xC0000000u | static_cast<unsigned>(knife)));  // the third aim word
+      knifeSpeedSent = knife;
+    }
     const int sound = optSound.load();
     if (api.setSoundVolume && sound != soundSent) {
       api.setSoundVolume(sound);
@@ -2932,6 +2941,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_surfaceCreat
   viewDistanceSent = -1;
   aimSent = -1;
   backPlaceSent = -1;
+  knifeSpeedSent = -1;
   soundSent = -1;
   // a new GL context: the renderer's objects are gone; the core starts over
   // (full state, every texture again) once chunks are taken again
@@ -3111,6 +3121,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setWardrobe(
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setBackPlacement(JNIEnv *, jclass, jint word) {
   const int want = word & 0x7FFFFFFF;
   if (optBackPlace.exchange(want) != want) LOG("wardrobe: the weapon on the back's placement 0x%x", want);
+}
+
+// The menu's "Knife aim speed" (wish of DevJunior, 11.11.2026): percent of the stick's turn while the knife is ready,
+// 0 as the "Aim speed".
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setKnifeSpeed(JNIEnv *, jclass, jfloat speed) {
+  int percent = static_cast<int>(speed * 100.0f + 0.5f);
+  if (!(speed == speed) || percent < 50 || percent > 300) percent = 0;
+  if (optKnifeSpeed.exchange(percent) != percent)
+    LOG("aim: knife aim speed %d %% (0: as the aim speed)", percent);
 }
 
 // R3 (the right stick pressed): the free camera back behind Leon (patch 0900), a toggle of bit 6 of the aim bits.

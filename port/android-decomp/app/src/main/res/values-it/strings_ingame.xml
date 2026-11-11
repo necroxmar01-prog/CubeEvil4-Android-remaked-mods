@@ -99,9 +99,11 @@
     <string name="ingame_latch_help">Blocca: una pressione (tasto o tocco) tiene premuto L, R o B fino alla successiva (con B bloccato Leon corre sempre).</string>
     <string name="ingame_aim_invert_v">Inverti verticale</string>
     <string name="ingame_aim_speed">Velocità di mira</string>
+    <string name="ingame_knife_speed">Velocità di mira del coltello</string>
     <string name="ingame_motion">Comandi di movimento</string>
     <string name="ingame_controller_section">Controller, tastiera e mouse</string>
     <string name="ingame_aim_help">Inverti verticale e Velocità di mira: per mirare con il coltello e le armi al tocco o con un controller, non con il giroscopio. Inverti verticale cambia l’opzione del gioco stesso.</string>
+    <string name="ingame_knife_speed_help">Velocità di mira del coltello: la velocità dello stick mentre il coltello è pronto, separata dalla Velocità di mira delle armi. Finché non la sposti, il coltello segue la Velocità di mira.</string>
     <string name="ingame_update">Aggiorna</string>
     <string name="ingame_up_to_date">Aggiornato</string>
     <string name="ingame_update_page">L\'ultima versione si apre su GitHub: scarica lì l\'APK e installalo.</string>

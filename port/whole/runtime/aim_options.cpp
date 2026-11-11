@@ -17,9 +17,17 @@
 //  - "Always run" (wish of the project owner, 30.10.2026): Leon runs without the run key and walks while
 //    it is held (patch 0156: the four run checks of player.cpp ask re4_run_held). Only there: the key
 //    keeps its other uses (cancel, quick turn, menus).
+//  - "Knife aim speed" (wish of DevJunior, 11.11.2026: "the knife's sensitivity apart from the gun's"): the
+//    "Aim speed" while the knife is ready (its routine, or the knife as the weapon in hand), from a third aim
+//    word (bits 31 and 30 set, bits 0..11 percent, 0 as the "Aim speed"). The gyro and the swipes do not aim
+//    the knife (runtime/gyro.cpp), so the sticks' turn is all it changes.
 #include "types.h"
 #include "global.h"
 #include "main.h"
+#include "player.h"
+#include "pl_sub.h"
+
+extern cPlayer* pPL;
 
 #include <atomic>
 #include <cstdlib>
@@ -53,6 +61,7 @@ int fovOf(int bits)
     return fov < -15 ? -15 : fov > 15 ? 15 : fov;
 }
 std::atomic<int> gSpeed(100);       // the app's "Aim speed" in percent
+std::atomic<int> gKnifeSpeed(0);    // the app's "Knife aim speed" in percent, 0 as the "Aim speed"
 std::atomic<bool> gPending(false);  // the game's option to be set at the next game frame
 std::atomic<bool> gHooked(false);
 std::atomic<int> gFromGame(-1);     // the game's own options changed "reverse" (patch 0188): 0 / 1 for the app
@@ -148,6 +157,14 @@ int re4_skip_intro(void)
 
 void re4_aim_set(int bits)
 {
+    if (bits < 0 && (bits & 0x40000000)) {  // bits 31 and 30: the third word, the knife's aim speed
+        int knife = bits & 0xFFF;
+        knife = knife == 0 ? 0 : knife < 50 ? 50 : knife > 300 ? 300 : knife;
+        if (gKnifeSpeed.exchange(knife) != knife) {
+            re4_log("aim: knife aim speed %d %% (0: as the aim speed)", knife);
+        }
+        return;
+    }
     if (bits < 0) {  // bit 31: the second word
         re4_back_adjust_set(bits & 0x00FFFFFF);
         re4_melee_set((bits >> 24) & 15);  // bit 24 "Neck break", bit 25 the mods' melee motions off, bit 26 "Axe strike",
@@ -243,9 +260,14 @@ f32 re4_fov_offset(void)
     return (f32) gFov.load(std::memory_order_relaxed);
 }
 
-// Patch 0151: the factor of the stick's turn while aiming (1: as the game).
+// Patch 0151: the factor of the stick's turn while aiming (1: as the game); while the knife is ready the "Knife aim
+// speed", if the app set one.
 f32 re4_aim_speed(void)
 {
+    const int knife = gKnifeSpeed.load(std::memory_order_relaxed);
+    if (knife > 0 && pPL && pPL->r_no_0 == 0 && (pPL->r_no_1 == 0xB || (pPL->r_no_1 == 6 && PlGetWeaponNo() == 0x10))) {
+        return (f32) knife / 100.0f;
+    }
     return (f32) gSpeed.load(std::memory_order_relaxed) / 100.0f;
 }
 

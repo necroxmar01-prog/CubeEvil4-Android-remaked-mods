@@ -100,9 +100,11 @@
     <string name="ingame_latch_help">Kunci: satu tekanan (tombol atau sentuh) menahan L, R atau B sampai tekanan berikutnya (B terkunci: Leon terus berlari).</string>
     <string name="ingame_aim_invert_v">Balik vertikal</string>
     <string name="ingame_aim_speed">Kecepatan bidik</string>
+    <string name="ingame_knife_speed">Kecepatan bidik pisau</string>
     <string name="ingame_motion">Kontrol Gerak</string>
     <string name="ingame_controller_section">Controller, Keyboard dan Mouse</string>
     <string name="ingame_aim_help">Balik vertikal dan Kecepatan bidik: untuk membidik pisau dan senjata dengan sentuhan atau controller, bukan dengan giroskop. Balik vertikal mengatur opsi bawaan game.</string>
+    <string name="ingame_knife_speed_help">Kecepatan bidik pisau: kecepatan stik saat pisau siap, terpisah dari Kecepatan bidik senjata. Sampai Anda mengubahnya, pisau mengikuti Kecepatan bidik.</string>
     <string name="ingame_update">Perbarui</string>
     <string name="ingame_up_to_date">Sudah terbaru</string>
     <string name="ingame_update_page">Rilis terbaru terbuka di GitHub: unduh APK di sana lalu pasang.</string>

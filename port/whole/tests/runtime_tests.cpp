@@ -2281,6 +2281,28 @@ static void testSkipIntro()
     report("skipintro", bad == 0);
 }
 
+// The third aim word (the app's "Knife aim speed", runtime/aim_options.cpp): taken apart from the second (the weapon
+// on the back, "Skip intro logos" stay as they were) and from the "Aim speed", which holds without Leon or the knife.
+extern "C" float re4_aim_speed(void);
+static void testKnifeSpeed()
+{
+    int bad = 0;
+    const int second = (int) 0x80000000u;
+    re4_aim_set(second | (1 << 28));
+    re4_aim_set(150 << 8);
+    re4_aim_set((int) 0xC0000000u | 250);
+    if (re4_skip_intro() != 1) bad |= 1;           // the third word left the second's bits alone
+    if (fabsf(re4_aim_speed() - 1.5f) > 1e-4f) bad |= 2;  // no knife in hand: the "Aim speed"
+    re4_aim_set((int) 0xC0000000u | 0);
+    re4_aim_set(100 << 8);
+    re4_aim_set(second);
+    if (fabsf(re4_aim_speed() - 1.0f) > 1e-4f) bad |= 4;
+    if (bad) {
+        re4_log("  knifespeed: failed checks 0x%x", bad);
+    }
+    report("knifespeed", bad == 0);
+}
+
 // Quick-time events by a tap (runtime/qte_touch.cpp; game_probe.cpp re4probe_qte_touch): the
 // prompt's buttons for two frames, nothing for doors, in sub screens or without a prompt; the log line
 static void testQteTouch()
@@ -2729,6 +2751,7 @@ int re4_runtime_tests()
     testWardrobe();
     testMelee();
     testSkipIntro();
+    testKnifeSpeed();
     testQteTouch();
     testQteAuto();
     testCheatExtras();

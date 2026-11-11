@@ -128,6 +128,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // project owner, 30.10.2026; CoreBridge.setAim: the game's own "reverse" option and the stick's turn while
   // aiming, the touch area's swipes too; off, 1 = as the game)
   static final String AIM_INVERT_V = "aimInvertVertical", AIM_SPEED = "aimSpeed";
+  // the knife's own aim speed (wish of DevJunior, 11.11.2026); absent: the "Aim speed" (CoreBridge.setKnifeSpeed 0)
+  static final String KNIFE_SPEED = "knifeAimSpeed";
   // the menu's "Stick dead zone" and "Stick range" of the controller sticks in percent (wish of the project owner,
   // 07.11.2026, GitHub issue #168; CoreInput.setStickShape: 0 and 100, the defaults, leave the sticks as they are)
   // and "Vibration" (RumbleTarget: 0 Auto, 1 Device, 2 Controller, 3 Off)
@@ -406,6 +408,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     autoAim = inputPrefs.getBoolean(AUTO_AIM, false);
     alwaysRun = inputPrefs.getBoolean(ALWAYS_RUN, false);
     aimSpeed = clampAimSpeed(inputPrefs.getFloat(AIM_SPEED, 1f));
+    knifeSpeed = inputPrefs.contains(KNIFE_SPEED) ? clampAimSpeed(inputPrefs.getFloat(KNIFE_SPEED, 1f)) : 0f;
+    CoreBridge.setKnifeSpeed(knifeSpeed);
     input.setStickShape(inputPrefs.getInt(STICK_DEAD_ZONE, 0), inputPrefs.getInt(STICK_RANGE, 100));
     stickWatch.setShape(input.deadZone(), input.range());
     if (input.deadZone() != 0 || input.range() != 100) {
@@ -999,6 +1003,14 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       aimSpeed = clampAimSpeed(value);
       getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).edit().putFloat(AIM_SPEED, aimSpeed).apply();
       CoreBridge.setAim(aimInvert, aimSpeed, autoAim, alwaysRun);
+    }
+
+    @Override public float knifeSpeed() { return knifeSpeed > 0f ? knifeSpeed : aimSpeed; }
+
+    @Override public void knifeSpeedChanged(float value) {
+      knifeSpeed = clampAimSpeed(value);
+      getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).edit().putFloat(KNIFE_SPEED, knifeSpeed).apply();
+      CoreBridge.setKnifeSpeed(knifeSpeed);
     }
 
     @Override public boolean gameLanguages() { return retailEu; }
@@ -2108,6 +2120,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   }
   private boolean aimInvert, autoAim, alwaysRun;
   private float aimSpeed = 1f;
+  private float knifeSpeed = 0f;  // 0: as the "Aim speed"
 
   /** The stored aim speed on the slider's steps (1 for anything else). */
   static float clampAimSpeed(float v) {

@@ -127,6 +127,11 @@ public final class CoreBridge {
    * aiming (CoreActivity.AIM_SPEED_MIN .. AIM_SPEED_MAX, 1 as the game).
    */
   public static native void setAim(boolean invert, float speed, boolean autoAim, boolean alwaysRun);
+  /**
+   * The menu's "Knife aim speed" (wish of DevJunior, 11.11.2026): the stick's turn while the knife is ready
+   * (AIM_SPEED_MIN .. AIM_SPEED_MAX), 0 as the "Aim speed" (the core's runtime/aim_options.cpp, a third aim word).
+   */
+  public static native void setKnifeSpeed(float speed);
   /** The game's own options changed "reverse" since the last call (patch 0188): -1, else 0 / 1 for "Invert vertical". */
   public static native int aimFromGame();
   /** The Potato mode bits from the graphics settings ("weatherEffects", "specialEffects", both on by default; since

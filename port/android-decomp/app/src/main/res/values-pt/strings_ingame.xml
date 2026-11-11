@@ -100,9 +100,11 @@
     <string name="ingame_latch_help">Travar: um toque ou um botão mantém L, R ou B pressionado até o próximo (com B travado, Leon corre sempre).</string>
     <string name="ingame_aim_invert_v">Inverter vertical</string>
     <string name="ingame_aim_speed">Velocidade da mira</string>
+    <string name="ingame_knife_speed">Velocidade da mira da faca</string>
     <string name="ingame_motion">Controles de movimento</string>
     <string name="ingame_controller_section">Controle, teclado e mouse</string>
     <string name="ingame_aim_help">Inverter vertical e Velocidade da mira: para mirar com a faca e as armas por toque ou com um controle, não com o giroscópio. Inverter vertical muda a opção do próprio jogo.</string>
+    <string name="ingame_knife_speed_help">Velocidade da mira da faca: a velocidade do analógico enquanto a faca está pronta, separada da Velocidade da mira das armas. Até você mudá-la, a faca segue a Velocidade da mira.</string>
     <string name="ingame_update">Atualizar</string>
     <string name="ingame_up_to_date">Atualizado</string>
     <string name="ingame_update_page">A versão mais recente abre no GitHub: baixe o APK lá e instale-o.</string>

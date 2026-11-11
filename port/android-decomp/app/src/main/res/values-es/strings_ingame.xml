@@ -99,9 +99,11 @@
     <string name="ingame_latch_help">Fijar: una pulsación (botón o toque) mantiene L, R o B hasta la siguiente (con B fijado, Leon corre siempre).</string>
     <string name="ingame_aim_invert_v">Invertir vertical</string>
     <string name="ingame_aim_speed">Velocidad de apuntado</string>
+    <string name="ingame_knife_speed">Velocidad de apuntado del cuchillo</string>
     <string name="ingame_motion">Controles de movimiento</string>
     <string name="ingame_controller_section">Mando, teclado y ratón</string>
     <string name="ingame_aim_help">Invertir vertical y Velocidad de apuntado: para apuntar con el cuchillo y las armas por toque o con un mando, no con el giroscopio. Invertir vertical cambia la opción propia del juego.</string>
+    <string name="ingame_knife_speed_help">Velocidad de apuntado del cuchillo: la velocidad del stick al apuntar con el cuchillo, aparte de la Velocidad de apuntado de las armas. Hasta que la muevas, el cuchillo sigue la Velocidad de apuntado.</string>
     <string name="ingame_update">Actualizar</string>
     <string name="ingame_up_to_date">Actualizado</string>
     <string name="ingame_update_page">La versión más reciente se abre en GitHub: descarga allí el APK e instálalo.</string>
