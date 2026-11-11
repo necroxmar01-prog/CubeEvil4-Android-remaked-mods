@@ -462,6 +462,7 @@ static void testDvdMods()
     CHECK(re4_player_data_place("em/pl10.drs", 0x118000) == 0 && !re4_player_modded());
     CHECK(re4_mod_event_part("ev000e", "b", "t", "pl0000", 0) == 0); // the disc's Leon keeps the jacket
     CHECK(re4_mod_event_head("ev0001", "pl0000") == 0 && re4_mod_event_head("ev0002", "pl0000") == 0); // and his head
+    CHECK(re4_mod_codec_head() == 0); // in the codec too (patch 0910)
     CHECK(re4_player_data_place("em/missing.drs", 0x118000) == 0);
 
     // a larger mod: the place behind the cheats' (and the primitive buffer's overflow, per half)
@@ -476,6 +477,7 @@ static void testDvdMods()
     CHECK(re4_mod_event_head("ev0001", "pl0000") == 6 && re4_mod_event_head("ev0002", "pl0000") == 8);
     CHECK(re4_mod_event_head("ev0003", "pl0000") == 0 && re4_mod_event_head("ev0001", "em1000") == 0 &&
           re4_mod_event_head("ev1001", "pl0000") == 0);
+    CHECK(re4_mod_codec_head() == 1); // the codec's Leon too (patch 0910)
     // the skin's head plays the event head's face animation (patch 0907) while the event head holds its model
     {
         int ev = 0, ev2 = 0, skin = 0, skin2 = 0, model = 0, model2 = 0, other = 0;

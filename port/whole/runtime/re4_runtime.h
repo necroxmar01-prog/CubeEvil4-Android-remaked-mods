@@ -189,6 +189,9 @@ int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const
 /* Patch 0906, event.cpp ExePacket_SetPartsSub: the player archive part (6 head, 8 face) a modded Leon draws instead of
  * the event's head ev0001 / eyes ev0002, 0 none (those stay, drawn at scale 0, for the event's motions and shapes). */
 int re4_mod_event_head(const char* name, const char* oya);
+/* Patch 0910, Sscrn/ss_model.cpp tel00ModelInit: 1 = the codec's Leon draws the skin's head and face (archive 6, 8)
+ * in place of the codec's own head (kept at scale 0 for its face shapes), while the player's file is a mod. */
+int re4_mod_codec_head(void);
 /* Patch 0907, shape.cpp ShapeSet: an event's head (ev0001) and the skin's head drawn in its place (0906) with the event
  * head's face shapes; the skin's head then plays the event head's face animations. Pairs stay while the event head's
  * model info holds the model it held when paired; re4_mod_shape_twin gives the skin's model info and its model then. */

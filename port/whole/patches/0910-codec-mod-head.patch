@@ -1,0 +1,50 @@
+# Patch 0910 (report of DevJunior, 11.11.2026: with a skin the radio calls still showed the disc's face). Not a bug of
+# the prototype: a port feature for the mods of patch 0901, as patch 0906 for the cutscenes.
+# Sscrn/ss_model.cpp tel00ModelInit (the codec's Leon) gives him the codec's own head (ss_term.dat sub-file 12, the
+# part ss_term.cpp termMotionSet sets the call's face animation on) with his archive's hair. While the player's file
+# is a mod (re4_mod_codec_head, runtime/dvd.cpp, logs it) that head stays for its shapes but is drawn at scale 0,
+# and the skin's head (archive 6) and face (archive 8) with their palette (7) are added; when the skin's head carries
+# at least as many face shapes (port/tools/skin_shapes.py) it plays the call's face animation (re4_mod_shape_pair,
+# patch 0907's ShapeSet). The disc's files: as before.
+--- a/src/Sscrn/ss_model.cpp
++++ b/src/Sscrn/ss_model.cpp
+@@ -170,6 +170,9 @@
+ // ss_term.dat (sub-files 10..13).
+ extern "C" int re4_disc_retail(void), re4_disc_retail_eu(void), re4_disc_retail_jp(void); /* port: runtime/dvd.cpp */
+ extern "C" int re4_player_modded(void); /* port: runtime/dvd.cpp (patch 0903) */
++extern "C" int re4_mod_codec_head(void); /* port: runtime/dvd.cpp (patch 0910) */
++extern "C" void re4_mod_shape_pair(void* event_info, void* event_model, void* skin_info, void* skin_model); /* port (patch 0910): runtime/dvd.cpp */
++cModelInfo* GetModelInfoAddr(cModelInfo* info, int no); /* game/model.cpp (patch 0910) */
+ 
+ void tel00ModelInit(cModel* m, u32* arc)
+ {
+@@ -195,6 +198,29 @@
+     if (re4_player_modded() && leon == pG->pPlayer && pG->pl_costume >= 1 && pG->pl_costume <= 3) {
+         m->addModel(ssModInfoMgr.create(PL_ARC_PTR(leon, 0x10), PL_ARC_PTR(leon, 5)));
+     }
++    /* port (patch 0910, mods): a skin's own head in the codec too (DevJunior, 11.11.2026: the radio calls showed
++       the disc's face): the codec's head (sub-file 12, the part its face animation goes to, ss_term.cpp
++       termMotionSet) stays for its shapes but is drawn at scale 0, as in the cutscenes (patch 0906); the skin's
++       head and face (archive 6, 8, palette 7) are drawn instead, the head with the codec's face animation when it
++       carries as many face shapes (patch 0907) */
++    if (pG->pl_type == 0 && leon == pG->pPlayer && re4_mod_codec_head()) {
++        cModelInfo* face = GetModelInfoAddr(m->pModelInfo, 3);
++        cModelInfo* head = ssModInfoMgr.create(PL_ARC_PTR(leon, 6), PL_ARC_PTR(leon, 7));
++        cModelInfo* eyes = ssModInfoMgr.create(PL_ARC_PTR(leon, 8), PL_ARC_PTR(leon, 7));
++
++        if (face != 0 && head != 0 && eyes != 0) {
++            face->mat[0][0] = 0.0f;
++            face->mat[1][1] = 0.0f;
++            face->mat[2][2] = 0.0f;
++            m->addModel(head);
++            m->addModel(eyes);
++            if (head->model_addr->shapeOfs != 0 && face->model_addr->shapeOfs != 0
++                && *(u32*) ((u8*) head->model_addr + head->model_addr->shapeOfs)
++                       >= *(u32*) ((u8*) face->model_addr + face->model_addr->shapeOfs)) {
++                re4_mod_shape_pair(face, face->model_addr, head, head->model_addr);
++            }
++        }
++    }
+     ssModelLight(m);
+ }
+ 

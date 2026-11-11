@@ -935,6 +935,17 @@ int re4_mod_event_head(const char* name, const char* oya)
     return own;
 }
 
+// Patch 0910 (Sscrn/ss_model.cpp tel00ModelInit): 1 = the codec's Leon takes the skin's head and face (archive 6 and
+// 8) in place of the codec's own head (DevJunior, 11.11.2026: the radio calls showed the disc's face), while the
+// player's file is a mod; logged.
+int re4_mod_codec_head(void)
+{
+    if (gPlayerModded) {
+        re4_log("Codec: Leon's head and face are the skin's (archive parts 6, 8)");
+    }
+    return gPlayerModded;
+}
+
 // Patch 0907 (shape.cpp ShapeSet): an event's Leon head (ev0001) and the skin's head patch 0906 draws in its place,
 // when the skin's head carries the event head's face shapes (port/tools/skin_shapes.py): the skin's head then plays
 // each face animation the event sets on its head. A pair counts while both model infos still hold the models they
@@ -963,7 +974,7 @@ void re4_mod_shape_pair(void* event_info, void* event_model, void* skin_info, vo
         }
     }
     *slot = ShapePair{event_info, event_model, skin_info, skin_model};
-    re4_log("Event: the skin's head plays the event head's face animation");
+    re4_log("Mods: the skin's head plays the face animation of the head it stands in for");
 }
 
 // The skin's head paired with an event head that still holds its model, and the model the skin's head held when

@@ -476,7 +476,7 @@ def enc_cmpr(im):
 
 
 def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour_size=(512, 256), thicken=0.5,
-             fill=0.5):
+             fill=0.5, solid=0.0, harden=1.0):
     """(colour levels RGBA, alpha levels L), each a full mipmap chain. The alpha: the strand mask (`channel` of
     `alpha`) at `alpha_size`, its strands `thicken`ed (a share of the mask spread one texel: the few cards of a
     GameCube hair stand for many layers), then coverage_mips. The colour: one `colour`, shaded by the brightness of
@@ -488,7 +488,20 @@ def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour
     if thicken > 0:
         grown = np.asarray(m0.filter(ImageFilter.MaxFilter(3)), dtype=np.float64) / 255.0
         base = np.maximum(base, grown * thicken)
-    alpha_levels = [Image.fromarray((lv * 255 + 0.5).astype(np.uint8), "L") for lv in coverage_mips(base, ref, fill)]
+    if solid > 0:
+        # the strands' surroundings filled (DevJunior, 11.11.2026, device test of v29: "the hair is still see-through,
+        # his scalp shows"): the RE engine lays hundreds of such cards over each other, the few kept here show the
+        # background between their strands where the screen is large enough for the full-size texture (the
+        # emulator's 3x resolution). Where the mask blurred over 3 texels is dense, the card is solid by `solid`.
+        dens = np.asarray(m0.filter(ImageFilter.GaussianBlur(3)), dtype=np.float64) / 255.0
+        base = np.maximum(base, np.clip(dens * 3.0, 0, 1) * solid)
+    levels = coverage_mips(base, ref, fill)
+    if harden > 1:
+        # the game blends a hair part by its alpha (trans.cpp bl[0]: source alpha, after the alpha compare): a texel
+        # just over `ref` shows the scalp through it. Over `ref`, alpha rises `harden` times as fast to opaque.
+        r = ref / 255.0
+        levels = [np.where(lv >= r, np.minimum(1.0, r + (lv - r) * harden), lv) for lv in levels]
+    alpha_levels = [Image.fromarray((lv * 255 + 0.5).astype(np.uint8), "L") for lv in levels]
     c = np.array(colour, dtype=np.float64)
     if albedo:
         lum = np.asarray(Image.open(albedo).convert("L").resize(colour_size, Image.LANCZOS), dtype=np.float64)
@@ -559,6 +572,11 @@ def main(argv=None):
     ap.add_argument("--thicken", type=float, default=0.5, help="spread this share of the strand mask one texel")
     ap.add_argument("--fill", type=float, default=0.5,
                     help="the smaller mipmap levels cover this share of the gaps more (see coverage_mips)")
+    ap.add_argument("--solid", type=float, default=0.0,
+                    help="fill the strands' surroundings on each card by this (0..1, see textures)")
+    ap.add_argument("--harden", type=float, default=1.0,
+                    help="the alpha over the compare reference rises this many times as fast to opaque (the game "
+                         "blends the hair by its alpha)")
     ap.add_argument("--scalp-depth", type=float, default=0.6, help="the scalp in the hair's colour times this")
     ap.add_argument("--cover", type=float, default=1.0, metavar="GAP",
                     help="lift the hair positions inside the head's skull GAP over it (default 1; negative: "
@@ -608,7 +626,7 @@ def main(argv=None):
     aw, ah = (int(v) for v in a.alpha_size.lower().split("x"))
     ref = max(0, min(254, a.alpha_ref))
     cols, masks = textures(a.albedo, a.alpha, a.alpha_channel, colour, ref, alpha_size=(aw, ah), thicken=a.thicken,
-                           fill=a.fill)
+                           fill=a.fill, solid=a.solid, harden=a.harden)
     imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
     imgs[ma] = encode_levels(masks, 0x1, imgs[ma][0], enc_i8)
     if not a.no_scalp:

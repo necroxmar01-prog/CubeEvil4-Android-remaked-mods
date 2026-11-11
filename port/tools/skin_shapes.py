@@ -124,7 +124,7 @@ def landmarks(P, mouth=None, opening=None):
 
 
 def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.0, skin_mouth=None,
-                 eye_r=(18.0, 11.0), mouth_gain=1.0, threshold=0.2, slots=None):
+                 eye_r=(18.0, 11.0), mouth_gain=1.0, threshold=0.2, slots=None, inside=6.0):
     """The event's shapes (on positions E) carried onto the skin's positions S. Returns a list of
     {skin vertex: (dx, dy, dz)} in model units, one per shape slot."""
     from scipy.spatial import cKDTree
@@ -159,14 +159,31 @@ def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.
     ge, gs = group(A), group(S)
     idx = np.zeros((len(S), k), int)
     dist = np.zeros((len(S), k))
-    full = cKDTree(A)
+    # the event head's inside of the mouth (its teeth, tongue and the mouth's bag, more than `inside` behind the face
+    # around them) moves the jaw's inside: the skin's head has none, its lips would take that and hang into the
+    # opening (DevJunior, 11.11.2026: the mouth hardly opened; a larger opening showed it)
+    box = (np.abs(A[:, 0]) < 26) & (np.abs(A[:, 1] - m) < 16)
+    surface = np.full(len(A), -1e9)
+    for i in np.where(box)[0]:
+        near_ = box & (np.abs(A[:, 0] - A[i, 0]) < 2.0) & (np.abs(A[:, 1] - A[i, 1]) < 3.0)
+        surface[i] = A[near_, 2].max()
+    outer = ~(box & (surface - A[:, 2] > inside))
+    outer_idx = np.where(outer)[0]
+    full_ = cKDTree(A[outer_idx])
+
+    class _Full:
+        def query(self, Q, k):
+            d, j = full_.query(Q, k=k)
+            return d, outer_idx[j]
+
+    full = _Full()
     for gi in np.unique(gs):
         sel = gs == gi
         if gi == 0:
             d, j = full.query(S[sel], k=k)
             idx[sel], dist[sel] = j, d
             continue
-        back = np.where(ge == gi)[0]
+        back = np.where((ge == gi) & outer)[0]
         if len(back) < k:
             d, j = full.query(S[sel], k=k)
             idx[sel], dist[sel] = j, d
@@ -208,6 +225,44 @@ def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.
         keep = np.abs(got).max(1) > threshold
         out.append({int(v): tuple(got[v]) for v in np.where(keep)[0]})
     return out, ls, le
+
+
+def mouth_inside(head, mouth, depth=2.0, band=3.0, half=24.0, reach=9.0):
+    """The lips' inner faces turned away from the light (DevJunior, 11.11.2026: "the models hardly open the mouth"):
+    the skin's head has no inside of the mouth, its lips' inner faces are what an opening shows, lit like the lips. Per
+    normal used only by positions that lie more than `depth` behind the face around them (within 1.5 across and `band`
+    up or down, between the mouth's corners, `reach` above or below the parting), the normal leans into the head, all
+    of the way 3 units deeper; the game's light then leaves those faces in the dark, as a mouth's inside. Closed, they
+    lie in the lips' fold and are not seen. Returns (head, normals turned)."""
+    P = G.positions(head)
+    b = bytearray(head)
+    s8 = bool(struct.unpack_from(">I", b, 0x20)[0] & 0x20000000)
+    base = struct.unpack_from(">I", b, 0x34)[0]
+    lip = (np.abs(P[:, 0]) < half) & (np.abs(P[:, 1] - mouth) < reach) & (P[:, 2] > 30)
+    behind = np.zeros(len(P))
+    for i in np.where(lip)[0]:
+        near = lip & (np.abs(P[:, 0] - P[i, 0]) < 1.5) & (np.abs(P[:, 1] - P[i, 1]) < band)
+        behind[i] = P[near, 2].max() - P[i, 2]
+    users = collections.defaultdict(set)
+    for _, tris in SL.part_lists(bytes(b)):
+        for t in tris:
+            for r in t:
+                users[r[1]].add(r[0])
+    inward = np.array([0.0, 0.3, -1.0])
+    inward /= np.linalg.norm(inward)
+    turned = 0
+    for n, ps in users.items():
+        d = min(behind[q] for q in ps)
+        if d <= depth:
+            continue
+        k = min(1.0, (d - depth) / 3.0)
+        fmt, size, scale = (">bbb", 4, 64.0) if s8 else (">hhh", 8, 16384.0)
+        v = np.array(struct.unpack_from(fmt, b, base + n * size), float) / scale
+        v = (1 - k) * v + k * inward
+        v /= np.linalg.norm(v) + 1e-9
+        struct.pack_into(fmt, b, base + n * size, *[int(round(c * (scale - 1))) for c in v])
+        turned += 1
+    return bytes(b), turned
 
 
 def _sphere(Q):
@@ -385,6 +440,8 @@ def main(argv=None):
     ap.add_argument("--blink", choices=("own", "event"), default="own", help="slot 9, the blink: made for the skin's "
                     "own lids (synth_blink, default) or carried over from the event's head like the others (tears "
                     "lids shaped otherwise)")
+    ap.add_argument("--no-mouth-inside", action="store_true", help="leave the lips' inner faces' normals as they are "
+                    "(see mouth_inside; run the tool on a head without them turned, else they turn once more)")
     ap.add_argument("--threshold", type=float, default=0.2, help="smaller movements are left out (model units)")
     ap.add_argument("--preview", metavar="DIR", help="also write one archive per shape at full weight (for renders)")
     a = ap.parse_args(argv)
@@ -410,6 +467,9 @@ def main(argv=None):
             shapes[9] = {v: d for v, d in blink.items() if max(abs(c) for c in d) > a.threshold}
     print("landmarks (event -> skin): " + ", ".join("%s %.0f -> %.0f" % (q, le[q], ls[q])
                                                    for q in ("chin", "mouth", "nose", "eyes")))
+    if not a.no_mouth_inside:
+        head, turned = mouth_inside(head, ls["mouth"])
+        print("mouth: %d normals of the lips' inner faces turned into the head" % turned)
     table, counts = shape_table(shapes, head[0x28])
     print("shapes: %s positions moved (of %d)" % ("/".join(str(c) for c in counts), len(S)))
     old = struct.unpack_from(">I", head, 0x2C)[0]
