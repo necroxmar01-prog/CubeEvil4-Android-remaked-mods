@@ -60,11 +60,15 @@ class Archive:
         self.body = data[off:off + size]
         n = struct.unpack_from(e + "I", self.body, 0)[0]
         self.offsets = list(struct.unpack_from(e + "%dI" % n, self.body, 16))
+        # a character with code (Ada's pl0b, Ashley's partner pl11 ...: the game's readEmData / ReadPlayerData link
+        # the REL at body + this word) keeps its module behind the entries; 0 = none
+        rel = struct.unpack_from(e + "I", self.body, 4)[0]
+        self.rel = rel if 16 + n * 8 <= rel < len(self.body) and rel % 32 == 0 else 0
         self.types = [self.body[16 + n * 4 + i * 4:16 + n * 4 + i * 4 + 4] for i in range(n)]
 
     def entry(self, i):
         start = self.offsets[i]
-        stop = self.offsets[i + 1] if i + 1 < len(self.offsets) else len(self.body)
+        stop = self.offsets[i + 1] if i + 1 < len(self.offsets) else (self.rel or len(self.body))
         if start == 0 or start >= stop:
             return b""  # an empty entry: its offset is where the next one starts
         return self.body[start:stop]
@@ -97,6 +101,13 @@ def build_body(entries, types):
 def build_archive(gc, body):
     """The disc file's frame with the new body: filler, part table, body at 0x400, the other
     parts (Leon's sound bank, part 4) behind it as on the disc."""
+    if getattr(gc, "rel", 0) and struct.unpack_from(">I", body, 4)[0] == 0:
+        # the disc's module behind the new entries, its offset at +4 (without it the game linked garbage)
+        body = bytearray(body)
+        body += bytes(align(len(body)) - len(body))
+        struct.pack_into(">I", body, 4, len(body))
+        body += gc.body[gc.rel:]
+        body = bytes(body)
     out = bytearray(gc.data[:0x20])
     table = bytearray(0x3E0)
     pos = 0x400 + align(len(body))
