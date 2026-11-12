@@ -44,8 +44,8 @@ HEAD, HEAD_TPL, FACE, HAIR = 2, 3, 4, 5
 
 def build_model(template, P, N, T, groups):
     """A GameCube model with the template's header, bones and tables, these positions (game units), normals (unit),
-    texture coordinates (v up) and per part (template part offset, triangles of (position, normal, uv) corners) the
-    template part's header and those triangles as triangle lists. s8 normals; weights set afterwards."""
+    texture coordinates (v up) and per part (template part offset or a 0x18-byte part header, triangles of (position,
+    normal, uv) corners) that header and those triangles as triangle lists. s8 normals; weights set afterwards."""
     sec = S.sections(template)
     flags = struct.unpack_from(">I", template, 0x20)[0] | 0x20000000
     has_clr = bool(flags & 0x80000000)
@@ -102,7 +102,8 @@ def build_model(template, P, N, T, groups):
             for pi, ni, ti in chunk:
                 stream += struct.pack(">4H", pi, ni, 0, ti) if has_clr else struct.pack(">3H", pi, ni, ti)
         stream += bytes(U.align(len(stream)) - len(stream))
-        parts += template[p:p + 0x18] + struct.pack(">II", len(stream), len(tris)) + stream
+        hdr = template[p:p + 0x18] if isinstance(p, int) else bytes(p)  # a part's header: the template's, or given
+        parts += hdr + struct.pack(">II", len(stream), len(tris)) + stream
     put("parts", parts)
     for name in ("blend", "flip"):
         if name in sec:

@@ -362,7 +362,15 @@ def skin_weights(blob, ref, k=4, cap=0xFF, physics=1.0):
         top = sorted(acc.items(), key=lambda x: -x[1])[:3]
         total = sum(v for _, v in top)
         per.append(tuple((b, 100.0 * v / total) for b, v in top))
+    return write_weights(blob, per, cap)
+
+
+def write_weights(blob, per, cap=0xFF):
+    """Per position of `blob` (bytearray) its weights ((bone, percent), at most three) merged to `cap` entries
+    (uhd_skin_convert.merge_weights), set on the positions and on the normals each draws with (the first position a
+    normal is drawn with gives it), the table appended. Returns (entries, step, bones)."""
     entries, remap, step = U.merge_weights(per, cap)
+    P = G.positions(blob)
     flags = struct.unpack_from(">I", blob, 0x20)[0]
     vo, no = struct.unpack_from(">I", blob, 0x30)[0], struct.unpack_from(">I", blob, 0x34)[0]
     for i in range(len(P)):
