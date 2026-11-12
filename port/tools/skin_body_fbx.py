@@ -272,6 +272,72 @@ def users(entries, tpl_users):
     return out
 
 
+def model_corners(blob):
+    """Per non-empty part of a GameCube model: (header offset, positions, normals, texture coordinates (v up, as the
+    FBX's), weights) per corner (n x 3 x ...), the weights as dicts bone -> share."""
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    flags = u(0x20)
+    clr, s8 = bool(flags & 0x80000000), bool(flags & 0x20000000)
+    nv, nn = struct.unpack_from(">HH", blob, 0x38)
+    P = G.positions(blob)
+    if s8:
+        Nm = np.frombuffer(blob, ">i1", nn * 4, u(0x34)).reshape(-1, 4)[:, :3] / 64.0
+    else:
+        Nm = np.frombuffer(blob, ">i2", nn * 4, u(0x34)).reshape(-1, 4)[:, :3] / 16384.0
+    sc = 256.0 if clr else 32768.0
+    fmt = ">hh" if clr else ">HH"
+    W = G.model_weights(blob)
+    vo = u(0x30)
+    pw = [W[struct.unpack_from(">H", blob, vo + i * 8 + 6)[0]] for i in range(nv)]
+    out = []
+    for p, tris in S.part_lists(blob):
+        if not tris:
+            continue
+        r = np.array(tris)  # n x 3 x records
+        uv = np.array([[struct.unpack_from(fmt, blob, u(0x10) + c[-1] * 4) for c in t] for t in tris]) / sc
+        uv[..., 1] = 1.0 - uv[..., 1]
+        w = [{b: x / 100.0 for b, x in pw[c[0]]} or {2: 1.0} for t in tris for c in t]
+        out.append((p, P[r[:, :, 0]], Nm[r[:, :, 1]], uv, w))
+    return out
+
+
+def extend_neck(head, reach, band=12.0, sectors=24, axis=(0.0, -30.0)):
+    """The head's neck longer by `reach` at its lower edge: per direction around the neck (`sectors`), the positions
+    within `band` of the lowest go down, the lowest by `reach`, fading to 0 at `band` above it (a shirt with a lower
+    collar, the V of Resident Evil Requiem's, would show the gap under the neck). Returns (model, how many)."""
+    P = G.positions(head)
+    ang = ((np.arctan2(P[:, 0] - axis[0], P[:, 2] - axis[1]) + np.pi) / (2 * np.pi) * sectors).astype(int) % sectors
+    near = np.hypot(P[:, 0] - axis[0], P[:, 2] - axis[1]) < 120  # the neck, not the hair hanging over the shoulders
+    low = np.full(sectors, np.inf)
+    np.minimum.at(low, ang[near], P[near, 1])
+    out = bytearray(head)
+    n = 0
+    for i in np.nonzero(near)[0]:
+        f = 1.0 - (P[i, 1] - low[ang[i]]) / band
+        if f > 0:
+            G.set_position(out, i, P[i] - np.array([0.0, reach * f, 0.0]))
+            n += 1
+    return bytes(out), n
+
+
+def sample(img, uv):
+    """The image's colours (n x 3) at texture coordinates (v up)."""
+    x = np.asarray(img.convert("RGB"), dtype=np.float64)
+    h, w = x.shape[:2]
+    i = np.clip(((1.0 - uv[:, 1]) % 1.0 * h).astype(int), 0, h - 1)
+    j = np.clip((uv[:, 0] % 1.0 * w).astype(int), 0, w - 1)
+    return x[i, j]
+
+
+def match_colour(img, have, want):
+    """img (RGBA) moved per channel from the colours `have` (mean and spread) to `want`'s (spread ratio 0.5..2)."""
+    x = np.asarray(img.convert("RGBA"), dtype=np.float64).copy()
+    for c in range(3):
+        k = np.clip(want[:, c].std() / max(have[:, c].std(), 1e-3), 0.5, 2.0)
+        x[..., c] = (x[..., c] - have[:, c].mean()) * k + want[:, c].mean()
+    return Image.fromarray(np.clip(x, 0, 255).astype(np.uint8), "RGBA")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("skin")
@@ -285,6 +351,17 @@ def main(argv=None):
     ap.add_argument("--drop", action="append", default=[], metavar="ENTRY:TEX,...")
     ap.add_argument("--gain", action="append", default=[], metavar="KEY=FACTOR[,KEEP]",
                     help="a texture darker (bright details above brightness KEEP, default 70, kept)")
+    ap.add_argument("--merge", action="store_true", help="keep the old model --into's triangles (see --cover)")
+    ap.add_argument("--cover", type=float, default=0.0,
+                    help="with --merge: an old triangle whose middle lies within this of a new position goes")
+    ap.add_argument("--replace-mats", default="", help="with --merge: of the old parts with these textures ...")
+    ap.add_argument("--replace-x", type=float, default=0.0,
+                    help="... the triangles nearer the middle than this (|x|) go: the sleeves stay")
+    ap.add_argument("--match-colour", action="append", default=[], metavar="IMAGE=KEY",
+                    help="with --merge: the palette image IMAGE (an old one) to the colours of texture KEY")
+    ap.add_argument("--neck", type=float, default=0.0, help="the head's neck longer by this at its lower edge")
+    ap.add_argument("--inside", action="append", default=[], metavar="ENTRY:COVER",
+                    help="positions of ENTRY poking out through COVER pushed back under it (skin_slim.inside, from y 950)")
     ap.add_argument("--relief", type=float, default=0.3)
     ap.add_argument("--occlusion", type=float, default=0.5)
     ap.add_argument("--cavity", type=float, default=0.25)
@@ -315,11 +392,11 @@ def main(argv=None):
         freed |= {m for m in mats if set(old_users[m]) <= {e}}
     template = entries[a.into]
     for m, us in old_users.items():
-        if set(us) <= {a.into}:
+        if set(us) <= {a.into} and not a.merge:
             freed.add(m)
     head_part = next(p for p in G.parts(template) if not G.is_empty(template, p))
     # the textures
-    tex_index = {}
+    tex_index, tex_imgs, WT_by_key = {}, {}, collections.defaultdict(list)
     gains = {}
     for spec in a.gain:
         key, _, rest = spec.partition("=")
@@ -340,6 +417,7 @@ def main(argv=None):
             k = len(imgs)
             imgs.append(G.encode_image(img, bytes(hdr)))
         tex_index[key] = k
+        tex_imgs[key] = img
         print("texture %s: palette %d image %d, %dx%d" % (key, a.tpl, k, img.size[0], img.size[1]))
     for k in free:  # images nobody draws with any more: an 8x8 stand-in (one CMPR tile)
         hdr = bytearray(imgs[k][0])
@@ -363,9 +441,46 @@ def main(argv=None):
         corner = np.arange(len(F) * 3).reshape(-1, 3)
         trip = np.stack([F + po, F + po, corner + sum(len(x) for x in Ts)], 2)
         groups.setdefault(key, []).append(trip)
+        WT_by_key[key].append(WT.reshape(-1, 2))
         Ps.append(V), Ns.append(VN), Ts.append(WT.reshape(-1, 2)), Ws.extend(wv)
         po += n
         print("mesh %s: %d -> %d triangles, %d positions, texture %s" % (mat, len(tris), len(F), n, key))
+    extra = []
+    if a.merge:  # the old model's triangles stay, but those the new meshes cover (--cover) go
+        from scipy.spatial import cKDTree
+        newP = np.concatenate(Ps)
+        tree = cKDTree(newP)
+        kept_old = 0
+        replace_mats = {int(x) for x in a.replace_mats.split(",") if x}
+        for p, Pc, Nc, UVc, wc in model_corners(template):
+            cen = Pc.mean(1)
+            d, _ = tree.query(cen)
+            keep = d > a.cover if a.cover > 0 else np.ones(len(cen), bool)
+            if template[p + 0xC] in replace_mats:  # the torso of the old shirt: the new one replaces it
+                keep &= np.abs(cen[:, 0]) >= a.replace_x
+            if not keep.any():
+                continue
+            n = int(keep.sum())
+            base_p, base_t = sum(len(x) for x in Ps), sum(len(x) for x in Ts)
+            Ps.append(Pc[keep].reshape(-1, 3)), Ns.append(Nc[keep].reshape(-1, 3)), Ts.append(UVc[keep].reshape(-1, 2))
+            Ws.extend(w for k, w in zip(np.repeat(keep, 3), wc) if k)
+            idx = np.arange(n * 3).reshape(-1, 3)
+            extra.append((template[p:p + 0x18], np.stack([idx + base_p, idx + base_p, idx + base_t], 2), p))
+            kept_old += n
+            print("merge: old part with texture %d keeps %d of %d triangles" % (template[p + 0xC], n, len(cen)))
+        # the old images matched to the new textures' colours (--match-colour IMAGE=KEY)
+        for spec in a.match_colour:
+            im, _, key = spec.partition("=")
+            im = int(im)
+            want = np.concatenate([sample(tex_imgs[key], WT_by_key[key][k]) for k in range(len(WT_by_key[key]))])
+            olduv = np.concatenate([UVc.reshape(-1, 2) for p, _, _, UVc, _ in model_corners(template)
+                                    if template[p + 0xC] == im])
+            cur = U.decode_gx(*struct.unpack_from(">HHI", imgs[im][0]), imgs[im][1]).convert("RGBA")
+            have = sample(cur, olduv)
+            imgs[im] = G.encode_image(match_colour(cur, have, want), imgs[im][0])
+            print("colour: image %d (mean %s) to %s's (mean %s)" % (im, have.mean(0).round().tolist(), key,
+                                                                    want.mean(0).round().tolist()))
+        entries[a.tpl] = G.build_tpl(imgs)
     P, N, T = np.concatenate(Ps), np.concatenate(Ns), np.concatenate(Ts)
     parts = []
     for key, tl in groups.items():
@@ -373,6 +488,7 @@ def main(argv=None):
         hdr[0xC] = tex_index[key]
         hdr[0xB] &= ~4 & 0xFF  # no alpha texture
         parts.append((bytes(hdr), np.concatenate(tl)))
+    parts += [(hdr, tl) for hdr, tl, _ in extra]
     model = HF.build_model(template, P, N, T, parts)
     per = []
     for wd in Ws:
@@ -386,6 +502,13 @@ def main(argv=None):
         a.into, struct.unpack_from(">H", model, 0x38)[0], struct.unpack_from(">H", model, 0x3A)[0],
         sum(len(tl) for _, tl in parts), ne, step, bones))
     entries[a.into] = bytes(model)
+    if a.neck:
+        entries[HEAD], n = extend_neck(entries[HEAD], a.neck)
+        print("neck: %d positions of the head's lower edge down by up to %.0f" % (n, a.neck))
+    for spec in a.inside:
+        e, c = (int(x) for x in spec.split(":"))
+        entries[e], n = S.inside(entries[e], entries[c], low=950.0)
+        print("inside: %d positions of entry %d pushed back under entry %d" % (n, e, c))
     body = U.build_body(entries, arc.types)
     data = U.build_archive(arc, body)
     Path(a.out).write_bytes(data)
