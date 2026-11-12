@@ -253,9 +253,11 @@ public final class CoreInputTests {
     a = in.pad();
     check(a[1] == 0 && a[2] == 0 && a[3] == Math.round(0.5f * 92) && a[4] == 92);
     in.setTouchAim(0);  // AIM_MOVE_STICK
-    in.touchButton(CoreInput.GC_R, false);  // not aiming: the sticks as they are
+    in.touchButton(CoreInput.GC_R, false);  // not aiming: the sticks as they are (the move stick on its walking curve)
     a = in.pad();
-    check(a[6] == 0 && a[2] == 101 && a[3] == Math.round(0.3f * 92));
+    float[] walk = CoreInput.touchWalk(0.5f, -1);
+    check(a[6] == 0 && a[2] == Math.round(-walk[1] * 101) && a[1] == Math.round(walk[0] * 101)
+        && a[3] == Math.round(0.3f * 92));
     in.setAimMove(false);
     in.touchClear();
     in.motion(1, 0, 0, 0, 0, 0, 0, 0, 0);
