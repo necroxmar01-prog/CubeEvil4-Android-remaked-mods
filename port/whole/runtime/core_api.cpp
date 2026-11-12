@@ -724,7 +724,8 @@ int re4_core_cheat_action(int what)
 {
     // 20..23: the app's benchmark (runtime/benchmark.cpp), queued for the game's next frame or a state, any thread
     if (what >= 20 && what <= 23) return re4_bench_command(what);
-    if (what < 1 || what > 9) return 0;
+    // 1..9 the buttons, 0x1000 | item (| 0x10000) the weapon list (runtime/cheats.cpp)
+    if ((what < 1 || what > 9) && (what & ~0x10FFF) != 0x1000) return 0;
     pthread_mutex_lock(&gPauseLock);
     if (!gPaused || !gPauseWanted || gInstantBusy || gCheatPending) {
         pthread_mutex_unlock(&gPauseLock);

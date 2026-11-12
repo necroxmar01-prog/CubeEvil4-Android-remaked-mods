@@ -426,4 +426,30 @@
     <string name="ingame_ashley_gun_help">مسدس آشلي: أعطِ آشلي مسدسًا من الحقيبة (تجهيز ثم آشلي). كرفيقة تطلق النار على الأعداء القريبين منها، أثناء اتباعك وأثناء الانتظار. ذخيرتها تعود مع الوقت (10 طلقات، واحدة كل 3 ثوانٍ). ما دام معها لا يشغل مكانًا في الحقيبة؛ اضغط مطولًا زر أوامر آشلي (انتظري / اتبعيني) لاسترداده. في فصلها الخاص، اضغط مطولًا زر التصويب واضغط زر إطلاق النار لتطلق به، كما يفعل ليون.</string>
     <string name="ingame_melee_help">القتال القريب: تعديل يحتوي على melee/melee.dat يستبدل حركات الركل على الأعداء المصعوقين. كسر الرقبة: يُجهز ليون على غانادو مصعوق واقف كما يفعل هانك (يتطلب ملف المرتزقة em/em60.drs على القرص)؛ الأعداء ذوو الطفيلي يُركلون كالعادة. ضربة فأس: يوجّه ليون للعدو المصعوق الراكع هجوم الفأس نفسه الذي يستخدمه الغانادو، بسكينه، بدل الركلة (إن استبدل تعديل المظهر السكين بفأس يظهر الفأس). مزج عشوائي: تُختار كل ضربة إنهاء عشوائيًا بين ضربة اللعبة والضربات المفعّلة؛ عند إيقافه يظهر اختيارك دائمًا.</string>
     <string name="ingame_outfit_help">الملابس التي تعطيها القصة لليون، أو دائمًا الأولى (مع السترة) أو الثانية (بدونها)؛ تتغير فورًا وتبدأ الغرفة من جديد حيث يقف. سلاح على الظهر: آخر سلاح طويل حمله (بندقية صيد، بندقية، رشاش، قاذفة صواريخ) يتدلى على ظهره ما دام في الحقيبة وليس في يديه. يمكن ضبط الميل والارتفاع والمسافة عن الظهر والكتف حسب الرغبة؛ «في المشاهد السينمائية» يُظهره في المشاهد أيضًا.</string>
+    <!-- the cheat menu's weapon list (11.11.2026) -->
+    <string name="ingame_wep_handgun">مسدس</string>
+    <string name="ingame_wep_punisher">‏Punisher</string>
+    <string name="ingame_wep_red9">‏Red9</string>
+    <string name="ingame_wep_blacktail">‏Blacktail</string>
+    <string name="ingame_wep_butterfly">‏Broken Butterfly</string>
+    <string name="ingame_wep_riot">‏Riot Gun</string>
+    <string name="ingame_wep_striker">‏Striker</string>
+    <string name="ingame_wep_tmp">‏TMP</string>
+    <string name="ingame_wep_shotgun">بندقية خرطوش</string>
+    <string name="ingame_wep_rifle">بندقية قنص</string>
+    <string name="ingame_wep_rifle_semi">بندقية قنص (نصف آلية)</string>
+    <string name="ingame_wep_rocket_infinite">قاذفة صواريخ لا نهائية</string>
+    <string name="ingame_wep_grenade">قنبلة يدوية</string>
+    <string name="ingame_wep_grenade_fire">قنبلة حارقة</string>
+    <string name="ingame_wep_grenade_flash">قنبلة ضوئية</string>
+    <string name="ingame_wep_stock_red9">أخمص (Red9)</string>
+    <string name="ingame_wep_stock_tmp">أخمص (TMP)</string>
+    <string name="ingame_wep_scope_rifle">منظار (بندقية قنص)</string>
+    <string name="ingame_wep_scope_semi">منظار (بندقية نصف آلية)</string>
+    <string name="ingame_wep_scope_mine">منظار (قاذفة ألغام)</string>
+    <string name="ingame_wep_scope_ir">منظار بالأشعة تحت الحمراء</string>
+    <string name="ingame_cheat_weapon_pick">السلاح: %1$s</string>
+    <string name="ingame_cheat_weapon_max">أعلى المستويات</string>
+    <string name="ingame_cheat_weapon_add">إضافة</string>
+    <string name="ingame_cheat_weapons_help">الأسلحة: اختر أي سلاح من أسلحة ليون أو قنبلة أو قطعة سلاح واضغط إضافة. مع تشغيل «أعلى المستويات» يأتي السلاح مطوّرًا بالكامل (السلاح الذي تملكه يُرفع إليها؛ قاذفة الألغام مع منظارها)، ومع إيقافه كما يبيعه التاجر. فقط أثناء اللعب بليون، لا في الحقيبة أو الخريطة أو الفيلم.</string>
 </resources>

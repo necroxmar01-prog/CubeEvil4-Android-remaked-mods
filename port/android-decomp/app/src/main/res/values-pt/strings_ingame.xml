@@ -410,4 +410,30 @@
     <string name="ingame_ashley_gun_help">Pistola da Ashley: dê uma pistola à Ashley pela maleta (Equipar e depois Ashley). Como parceira ela atira nos inimigos próximos, enquanto te segue e enquanto espera. A munição dela volta com o tempo (10 balas, uma a cada 3 segundos). Enquanto está com ela, não ocupa espaço na maleta; segure o botão de ordens para a Ashley (esperar / seguir) para pegá-la de volta. No capítulo dela, segure o botão de mirar e aperte o de atirar para usá-la, como o Leon.</string>
     <string name="ingame_melee_help">Corpo a corpo: um mod com melee/melee.dat substitui as animações de chute em inimigos atordoados. Quebrar o pescoço: Leon finaliza um Ganado atordoado de pé como o HUNK (requer o arquivo em/em60.drs dos Mercenários no disco); inimigos com parasita continuam levando chute. Machadada: num inimigo atordoado ajoelhado, Leon usa o ataque de machado dos Ganados, com a faca, em vez do chute (se uma skin a trocou por um machado, aparece o machado). Mistura aleatória: cada finalização é sorteada entre a do jogo e as ativadas; desligada, sai sempre a sua escolha.</string>
     <string name="ingame_outfit_help">A roupa que a história dá ao Leon, ou sempre a primeira (com a jaqueta) ou a segunda (sem ela); muda na hora e a sala recomeça onde ele está. Arma nas costas: a última arma longa que ele empunhou (espingarda, rifle, metralhadora, lança-foguetes) fica pendurada nas costas enquanto estiver na maleta e não nas mãos. A inclinação, a altura, a distância das costas e o ombro ajustam-se a gosto; «Nas cinemáticas» também a mostra nas cenas.</string>
+    <!-- the cheat menu's weapon list (11.11.2026) -->
+    <string name="ingame_wep_handgun">Pistola</string>
+    <string name="ingame_wep_punisher">Punisher</string>
+    <string name="ingame_wep_red9">Red9</string>
+    <string name="ingame_wep_blacktail">Blacktail</string>
+    <string name="ingame_wep_butterfly">Broken Butterfly</string>
+    <string name="ingame_wep_riot">Riot Gun</string>
+    <string name="ingame_wep_striker">Striker</string>
+    <string name="ingame_wep_tmp">TMP</string>
+    <string name="ingame_wep_shotgun">Espingarda</string>
+    <string name="ingame_wep_rifle">Rifle</string>
+    <string name="ingame_wep_rifle_semi">Rifle (semiautomático)</string>
+    <string name="ingame_wep_rocket_infinite">Lança-foguetes infinito</string>
+    <string name="ingame_wep_grenade">Granada de mão</string>
+    <string name="ingame_wep_grenade_fire">Granada incendiária</string>
+    <string name="ingame_wep_grenade_flash">Granada de luz</string>
+    <string name="ingame_wep_stock_red9">Coronha (Red9)</string>
+    <string name="ingame_wep_stock_tmp">Coronha (TMP)</string>
+    <string name="ingame_wep_scope_rifle">Mira (rifle)</string>
+    <string name="ingame_wep_scope_semi">Mira (rifle semiautomático)</string>
+    <string name="ingame_wep_scope_mine">Mira (lança-minas)</string>
+    <string name="ingame_wep_scope_ir">Mira infravermelha</string>
+    <string name="ingame_cheat_weapon_pick">Arma: %1$s</string>
+    <string name="ingame_cheat_weapon_max">Níveis máximos</string>
+    <string name="ingame_cheat_weapon_add">Adicionar</string>
+    <string name="ingame_cheat_weapons_help">Armas: escolha qualquer arma, granada ou acessório do Leon e toque em Adicionar. «Níveis máximos» ligado: a arma vem totalmente melhorada (uma arma que você já tem sobe até eles; o lança-minas com sua mira); desligado: como o mercador a vende. Só enquanto você joga com o Leon, não na maleta, no mapa ou num vídeo.</string>
 </resources>

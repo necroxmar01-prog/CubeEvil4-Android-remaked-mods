@@ -31,6 +31,9 @@
 //   3 +1 000 000 pesetas (addMoney: at most 99 999 999; decision 2)
 //   5..9 more weapons at their highest levels (wish of the project owner, 01.11.2026; kGifts): Handcannon,
 //     Chicago Typewriter, the endless rocket launcher, the Mine Thrower with its scope, Matilda
+//   0x1000 | item id (| 0x10000: at its highest levels): any of Leon's weapons, grenades and weapon parts from the
+//     app's list (wish of DevJunior, 11.11.2026: "all of Leon's weapons, a list to choose from"; kArsenal); without
+//     0x10000 a weapon comes as the merchant sells it (levels 1), one already owned stays as it is
 // One button anywhere (pSys only; wish of the project owner, 29.10.2026), the app restarts the game after
 // a question so the title menu shows it:
 //   4 unlock the extra games: what clearing the game sets (r333.cpp, the end of the last room) for
@@ -124,6 +127,49 @@ const Gift kGifts[] = {
     {9, 0x03, "Matilda 6/1/3/7", {6, 1, 3, 7}, 0},
 };
 
+// The list's items (kWeaponPick): Leon's weapons with their highest levels (the merchant's last tables, merchant.cpp
+// level_*, the exclusive tune-ups as kGifts has them), grenades, rocket launchers and the weapon parts.
+const u32 kWeaponPick = 0x1000, kWeaponMax = 0x10000;
+const Gift kArsenal[] = {
+    {0, 0x23, "Handgun", {7, 3, 3, 6}, 0},
+    {0, 0x21, "Punisher", {7, 3, 3, 6}, 0},
+    {0, 0x25, "Red9", {7, 3, 3, 6}, 0},
+    {0, 0x27, "Blacktail", {7, 3, 3, 6}, 0},
+    {0, 0x03, "Matilda", {6, 1, 3, 7}, 0},
+    {0, 0x29, "Broken Butterfly", {7, 1, 3, 4}, 0},
+    {0, 0x2A, "Killer7", {3, 1, 3, 3}, 0},
+    {0, 0x37, "Handcannon", {7, 1, 3, 7}, 0},
+    {0, 0x2C, "Shotgun", {7, 1, 3, 6}, 0},
+    {0, 0x94, "Riot Gun", {7, 1, 3, 6}, 0},
+    {0, 0x2D, "Striker", {6, 1, 3, 7}, 0},
+    {0, 0x2E, "Rifle", {7, 1, 3, 6}, 0},
+    {0, 0x2F, "Rifle (semi-auto)", {6, 2, 3, 6}, 0},
+    {0, 0x30, "TMP", {7, 1, 3, 6}, 0},
+    {0, 0x34, "Chicago Typewriter", {7, 1, 3, 7}, 0},
+    {0, 0x36, "Mine Thrower", {4, 1, 2, 3}, 0xAA},
+    {0, 0x35, "Rocket Launcher", {0, 0, 0, 0}, 0},
+    {0, 0x6D, "Infinite Rocket Launcher", {0, 0, 0, 0}, 0},
+    {0, 0x01, "Hand Grenade", {0, 0, 0, 0}, 0},
+    {0, 0x0E, "Incendiary Grenade", {0, 0, 0, 0}, 0},
+    {0, 0x02, "Flash Grenade", {0, 0, 0, 0}, 0},
+    {0, 0x42, "Stock (Red9)", {0, 0, 0, 0}, 0},
+    {0, 0x43, "Stock (TMP)", {0, 0, 0, 0}, 0},
+    {0, 0x44, "Scope (Rifle)", {0, 0, 0, 0}, 0},
+    {0, 0x45, "Scope (semi-auto rifle)", {0, 0, 0, 0}, 0},
+    {0, 0xAA, "Scope (Mine Thrower)", {0, 0, 0, 0}, 0},
+    {0, 0xC5, "Infrared Scope", {0, 0, 0, 0}, 0},
+};
+
+const Gift* arsenal(int id)
+{
+    for (const Gift& g : kArsenal) {
+        if (g.id == id) {
+            return &g;
+        }
+    }
+    return 0;
+}
+
 const Gift* gift(int what)
 {
     for (const Gift& g : kGifts) {
@@ -136,6 +182,10 @@ const Gift* gift(int what)
 
 const char* actionName(int what)
 {
+    if ((what & 0xF000) == (int) kWeaponPick) {
+        const Gift* g = arsenal(what & 0xFFF);
+        return g ? g->name : "an item not in the list";
+    }
     if (const Gift* g = gift(what)) {
         return g->name;
     }
@@ -986,6 +1036,58 @@ void re4_item_random(SCE_AT_ITEM* w, void* head, SCE_AT_DATA* work)
 int re4_story_ganado;
 }
 
+// A weapon, grenade or part of the app's list (kArsenal; 0x10000: at its highest levels). 1 added, 2 a weapon
+// already owned (raised to its highest levels, or left as it is), -1 no room, 0 not in the list.
+int giveFromList(int what)
+{
+    const Gift* g = arsenal(what & 0xFFF);
+    if (!g) {
+        re4_log("cheat: item 0x%03x is not in the weapon list", what & 0xFFF);
+        return 0;
+    }
+    const bool max = (what & kWeaponMax) != 0;
+    const bool levels = g->level[0] != 0;
+    cItem* p = levels ? ItemMgr.search(g->id) : 0;
+    int result = 1;
+    if (p) {
+        result = 2;
+        if (!max) {
+            re4_log("cheat: %s already owned, left as it is", g->name);
+            return 2;
+        }
+    } else {
+        if (!ItemMgr.get((ITEM_ID) g->id, 0) || !(p = ItemMgr.newbie())) {
+            re4_log("cheat: %s: no free slot in the inventory", g->name);
+            return -1;
+        }
+    }
+    if (levels && max) {
+        if (g->part && ItemMgr.weaponId(p) == g->id) {
+            if (!ItemMgr.get((ITEM_ID) g->part, 0) || !ItemMgr.newbie()) {
+                re4_log("cheat: %s: no free slot for the part 0x%02x", g->name, g->part);
+                return -1;
+            }
+            ItemMgr.partsCombine(p, ItemMgr.newbie());
+        }
+        p->setPowerLevel(g->level[0] - 1);
+        p->setSpeedLevel(g->level[1] - 1);
+        p->setReloadLevel(g->level[2] - 1);
+        p->setBulletLevel(g->level[3] - 1);
+    }
+    if (levels) {
+        const u16 full = WeaponId2ChargeNum(g->id, p->getBulletLevel() + 1);
+        if (full != 0xFF) {
+            p->bullet = (u16) ((p->bullet & 0xE000) | (full & 0x1FFF));
+        }
+        if (ItemMgr.weapon() == p) {
+            ItemMgr.arm(p);
+        }
+    }
+    re4_log("cheat: %s %s (levels 0x%04x, %d rounds)", g->name, result == 2 ? "raised" : max ? "added at its highest levels" : "added",
+            p->lv, p->bullet & 0x1FFF);
+    return result;
+}
+
 int re4CheatPerform(int what)
 {
     // the extra games: the system flags only, at any time (the title, Ada's and HUNK's games too)
@@ -1004,6 +1106,9 @@ int re4CheatPerform(int what)
         re4_log("cheat: %s not now (player type %d, game step %d, sub screen %d)", actionName(what), pG->pl_type,
                 pG->Rno0, StaFlagChk(pG, STA_SUB_SCRN) ? 1 : 0);
         return 0;
+    }
+    if ((what & 0xF000) == (int) kWeaponPick) {
+        return giveFromList(what);
     }
     int result = 1;
     switch (what) {
@@ -1074,6 +1179,33 @@ int re4CheatPerform(int what)
 }
 
 extern "C" {
+
+// For the runtime test: the weapon list on an inventory of eight empty slots (the game's own swapped out
+// meanwhile); a bit per failed check, 0 = all passed.
+int re4_cheat_list_selftest(void)
+{
+    cItem items[8];
+    memset(items, 0, sizeof items);
+    cItem* const keep = ItemMgr.m_pItem;
+    const int keepN = ItemMgr.m_array_num;
+    ItemMgr.m_pItem = items;
+    ItemMgr.m_array_num = 8;
+    int bad = 0;
+    cItem* p;
+    if (giveFromList(kWeaponPick | 0x25) != 1 || !(p = ItemMgr.search(0x25)) || p->lv != 0) bad |= 1;  // as sold
+    if (giveFromList(kWeaponPick | 0x25) != 2 || ItemMgr.search(0x25)->lv != 0) bad |= 2;              // kept
+    if (giveFromList(kWeaponPick | kWeaponMax | 0x25) != 2 || ItemMgr.search(0x25)->lv != 0x6225) bad |= 4;
+    if (giveFromList(kWeaponPick | kWeaponMax | 0x2F) != 1 || ItemMgr.search(0x2F)->getSpeedLevel() != 1) bad |= 8;
+    if (giveFromList(kWeaponPick | 0x01) != 1 || giveFromList(kWeaponPick | 0x01) != 1 || ItemMgr.num(0x01) != 2)
+        bad |= 0x10;                                                                     // a grenade each press
+    if (giveFromList(kWeaponPick | 0x99) != 0) bad |= 0x20;                              // not in the list
+    for (const Gift& g : kArsenal) {
+        if (g.level[0] && (g.level[1] == 0 || g.level[2] == 0 || g.level[3] == 0 || g.level[3] > 7)) bad |= 0x40;
+    }
+    ItemMgr.m_pItem = keep;
+    ItemMgr.m_array_num = keepN;
+    return bad;
+}
 
 // Patch 0204 (em.cpp, em10.cpp): the cheat "Invisibility" (any thread; the game frames read it).
 int re4_invisible(void)

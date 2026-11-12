@@ -405,4 +405,30 @@
     <string name="ingame_ashley_gun_help">Ashleys Pistole: Gib Ashley eine Pistole aus dem Koffer (Ausrüsten, dann Ashley). Als Begleiterin schießt sie auf Gegner in ihrer Nähe, während sie dir folgt und während sie wartet. Ihre Munition kommt mit der Zeit zurück (10 Schuss, einer alle 3 Sekunden). Solange sie sie hat, braucht die Pistole keinen Platz im Koffer; halte die Ashley-Befehlstaste (Warten / Folgen) gedrückt, um sie zurückzubekommen. In ihrem eigenen Kapitel Zieltaste halten und Feuertaste drücken, um damit zu schießen, wie Leon.</string>
     <string name="ingame_melee_help">Nahkampf: Ein Mod mit melee/melee.dat ersetzt die Tritt-Animationen bei betäubten Gegnern. Genickbruch: Leon erledigt einen stehenden, betäubten Ganado wie HUNK (braucht die Söldner-Datei em/em60.drs auf deiner Disc); Gegner mit Parasit werden weiter getreten. Axthieb: Einen knienden, betäubten Gegner trifft Leon mit dem Axtangriff der Ganados, mit seinem Messer, statt mit dem Tritt (hat ein Skin daraus eine Axt gemacht, sieht man die Axt). Zufallsmix: Jeder Finisher wird zufällig aus dem des Spiels und den eingeschalteten gewählt; aus: immer deine Wahl.</string>
     <string name="ingame_outfit_help">Die Kleidung, die die Geschichte Leon gibt, oder immer seine erste (mit Jacke) oder zweite (ohne); sie wechselt sofort, der Raum beginnt neu, wo er steht. Waffe auf dem Rücken: die letzte lange Waffe, die er hielt (Schrotflinte, Gewehr, Maschinenpistole, Raketenwerfer), hängt auf seinem Rücken, solange sie im Koffer und nicht in seinen Händen ist. Neigung, Höhe, Abstand zum Rücken und Schulter lassen sich einstellen; „In Zwischensequenzen“ zeigt sie auch dort.</string>
+    <!-- the cheat menu's weapon list (11.11.2026) -->
+    <string name="ingame_wep_handgun">Pistole</string>
+    <string name="ingame_wep_punisher">Punisher</string>
+    <string name="ingame_wep_red9">Red9</string>
+    <string name="ingame_wep_blacktail">Blacktail</string>
+    <string name="ingame_wep_butterfly">Broken Butterfly</string>
+    <string name="ingame_wep_riot">Riot Gun</string>
+    <string name="ingame_wep_striker">Striker</string>
+    <string name="ingame_wep_tmp">TMP</string>
+    <string name="ingame_wep_shotgun">Schrotflinte</string>
+    <string name="ingame_wep_rifle">Gewehr</string>
+    <string name="ingame_wep_rifle_semi">Gewehr (halbautomatisch)</string>
+    <string name="ingame_wep_rocket_infinite">Unendlicher Raketenwerfer</string>
+    <string name="ingame_wep_grenade">Handgranate</string>
+    <string name="ingame_wep_grenade_fire">Brandgranate</string>
+    <string name="ingame_wep_grenade_flash">Blendgranate</string>
+    <string name="ingame_wep_stock_red9">Schulterstütze (Red9)</string>
+    <string name="ingame_wep_stock_tmp">Schulterstütze (TMP)</string>
+    <string name="ingame_wep_scope_rifle">Zielfernrohr (Gewehr)</string>
+    <string name="ingame_wep_scope_semi">Zielfernrohr (halbautomatisches Gewehr)</string>
+    <string name="ingame_wep_scope_mine">Zielfernrohr (Minenwerfer)</string>
+    <string name="ingame_wep_scope_ir">Infrarot-Zielfernrohr</string>
+    <string name="ingame_cheat_weapon_pick">Waffe: %1$s</string>
+    <string name="ingame_cheat_weapon_max">Höchste Stufen</string>
+    <string name="ingame_cheat_weapon_add">Hinzufügen</string>
+    <string name="ingame_cheat_weapons_help">Waffen: wähle eine von Leons Waffen, Granaten oder Waffenteilen und tippe auf Hinzufügen. „Höchste Stufen“ an: die Waffe kommt voll aufgerüstet (eine Waffe, die du hast, wird darauf gehoben; der Minenwerfer mit Zielfernrohr); aus: so, wie der Händler sie verkauft. Nur während Leon spielt, nicht im Koffer, auf der Karte oder in einem Film.</string>
 </resources>

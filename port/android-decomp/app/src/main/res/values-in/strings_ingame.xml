@@ -400,4 +400,30 @@
     <string name="ingame_ashley_gun_help">Pistol Ashley: berikan pistol kepada Ashley dari koper (Pasang, lalu Ashley). Sebagai rekan ia menembak musuh di dekatnya, saat mengikutimu dan saat menunggu. Amunisinya kembali seiring waktu (10 peluru, satu setiap 3 detik). Selama dipegang Ashley, pistol itu tidak memakai tempat di koper; tahan tombol perintah Ashley (tunggu / ikuti) untuk mengambilnya kembali. Di babnya sendiri, tahan tombol bidik dan tekan tombol tembak untuk menembak dengannya, seperti Leon.</string>
     <string name="ingame_melee_help">Jarak dekat: mod dengan melee/melee.dat mengganti animasi tendangan pada musuh yang terhuyung. Patahkan leher: Leon menghabisi Ganado terhuyung yang berdiri seperti HUNK (perlu berkas Mercenaries em/em60.drs di disc); musuh berparasit tetap ditendang. Tebasan kapak: pada musuh terhuyung yang berlutut, Leon memakai serangan kapak para Ganado dengan pisaunya, bukan menendang (jika skin menggantinya dengan kapak, yang terlihat kapak). Campuran acak: setiap serangan penutup dipilih acak di antara milik game dan yang diaktifkan; jika mati, pilihanmu selalu dipakai.</string>
     <string name="ingame_outfit_help">Pakaian yang diberikan cerita kepada Leon, atau selalu yang pertama (dengan jaket) atau kedua (tanpa jaket); berganti seketika dan ruangan dimulai ulang di tempat ia berdiri. Senjata di punggung: senjata panjang terakhir yang ia pegang (shotgun, senapan, senapan mesin, peluncur roket) tergantung di punggungnya selama ada di koper dan tidak di tangannya. Kemiringan, tinggi, jarak dari punggung, dan bahu bisa diatur sesuka hati; “Di cutscene” juga menampilkannya saat adegan.</string>
+    <!-- the cheat menu's weapon list (11.11.2026) -->
+    <string name="ingame_wep_handgun">Pistol</string>
+    <string name="ingame_wep_punisher">Punisher</string>
+    <string name="ingame_wep_red9">Red9</string>
+    <string name="ingame_wep_blacktail">Blacktail</string>
+    <string name="ingame_wep_butterfly">Broken Butterfly</string>
+    <string name="ingame_wep_riot">Riot Gun</string>
+    <string name="ingame_wep_striker">Striker</string>
+    <string name="ingame_wep_tmp">TMP</string>
+    <string name="ingame_wep_shotgun">Shotgun</string>
+    <string name="ingame_wep_rifle">Senapan</string>
+    <string name="ingame_wep_rifle_semi">Senapan (semi-otomatis)</string>
+    <string name="ingame_wep_rocket_infinite">Peluncur Roket Tak Terbatas</string>
+    <string name="ingame_wep_grenade">Granat Tangan</string>
+    <string name="ingame_wep_grenade_fire">Granat Pembakar</string>
+    <string name="ingame_wep_grenade_flash">Granat Kilat</string>
+    <string name="ingame_wep_stock_red9">Popor (Red9)</string>
+    <string name="ingame_wep_stock_tmp">Popor (TMP)</string>
+    <string name="ingame_wep_scope_rifle">Teropong (senapan)</string>
+    <string name="ingame_wep_scope_semi">Teropong (senapan semi-otomatis)</string>
+    <string name="ingame_wep_scope_mine">Teropong (pelontar ranjau)</string>
+    <string name="ingame_wep_scope_ir">Teropong inframerah</string>
+    <string name="ingame_cheat_weapon_pick">Senjata: %1$s</string>
+    <string name="ingame_cheat_weapon_max">Level tertinggi</string>
+    <string name="ingame_cheat_weapon_add">Tambah</string>
+    <string name="ingame_cheat_weapons_help">Senjata: pilih senjata, granat, atau bagian senjata Leon mana pun lalu tekan Tambah. «Level tertinggi» aktif: senjata datang dengan peningkatan penuh (senjata yang sudah kamu punya dinaikkan ke sana; pelontar ranjau dengan teropongnya); nonaktif: seperti yang dijual pedagang. Hanya saat bermain sebagai Leon, tidak di koper, peta, atau film.</string>
 </resources>

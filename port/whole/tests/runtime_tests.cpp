@@ -2363,6 +2363,17 @@ static void testQteAuto()
     report("qteauto", bad == 0 && logged);
 }
 
+// The cheat menu's weapon list (runtime/cheats.cpp giveFromList)
+extern "C" int re4_cheat_list_selftest(void);
+static void testCheatList()
+{
+    const int bad = re4_cheat_list_selftest();
+    if (bad) {
+        re4_log("  cheatlist: failed checks 0x%x", bad);
+    }
+    report("cheatlist", bad == 0);
+}
+
 // The cheat button "unlock the extra games" (runtime/cheats.cpp; game_probe.cpp re4probe_cheat_extras)
 static void testCheatExtras()
 {
@@ -2788,6 +2799,7 @@ int re4_runtime_tests()
     testQteTouch();
     testQteAuto();
     testCheatExtras();
+    testCheatList();
     testPotato();
     testHandcannon();
     testGyroBoat();

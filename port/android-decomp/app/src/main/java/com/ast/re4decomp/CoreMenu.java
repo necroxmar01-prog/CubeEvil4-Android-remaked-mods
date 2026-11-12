@@ -1472,14 +1472,7 @@ final class CoreMenu extends Dialog {
     cheatButton(inventory, 2, R.string.ingame_cheat_case);
     cheatButton(inventory, 3, R.string.ingame_cheat_money);
     heading(R.string.ingame_cheat_section_weapons);
-    MenuLayout.Buttons weapons = cheatRow(3);
-    cheatButton(weapons, 5, R.string.ingame_cheat_handcannon);
-    cheatButton(weapons, 1, R.string.ingame_cheat_killer7);
-    cheatButton(weapons, 9, R.string.ingame_cheat_matilda);
-    MenuLayout.Buttons launchers = cheatRow(3);
-    cheatButton(launchers, 6, R.string.ingame_cheat_chicago);
-    cheatButton(launchers, 8, R.string.ingame_cheat_mine);
-    cheatButton(launchers, 7, R.string.ingame_cheat_rocket);
+    weaponList();
     // the switch "Automatic QTEs" and the button "Unlock extra games" (Assignment Ada, The Mercenaries), half the
     // row each (wish of the project owner, 29.10.2026)
     heading(R.string.ingame_cheat_section_game);
@@ -1703,6 +1696,55 @@ final class CoreMenu extends Dialog {
     });
     label.run();
   }
+  /** The weapon list (wish of DevJunior, 11.11.2026: all of Leon's weapons, chosen from a list): any weapon, grenade
+   *  or weapon part, at its highest levels or as the merchant sells it; the core's button 0x1000 | item
+   *  (| 0x10000 at its highest levels), runtime/cheats.cpp kArsenal. The choice is kept. */
+  static final int[] WEAPON_IDS = {0x23, 0x21, 0x25, 0x27, 0x03, 0x29, 0x2A, 0x37, 0x2C, 0x94, 0x2D, 0x2E, 0x2F, 0x30,
+      0x34, 0x36, 0x35, 0x6D, 0x01, 0x0E, 0x02, 0x42, 0x43, 0x44, 0x45, 0xAA, 0xC5};
+  static final int[] WEAPON_NAMES = {R.string.ingame_wep_handgun, R.string.ingame_wep_punisher, R.string.ingame_wep_red9,
+      R.string.ingame_wep_blacktail, R.string.ingame_cheat_matilda, R.string.ingame_wep_butterfly,
+      R.string.ingame_cheat_killer7, R.string.ingame_cheat_handcannon, R.string.ingame_wep_shotgun,
+      R.string.ingame_wep_riot, R.string.ingame_wep_striker, R.string.ingame_wep_rifle, R.string.ingame_wep_rifle_semi,
+      R.string.ingame_wep_tmp, R.string.ingame_cheat_chicago, R.string.ingame_cheat_mine, R.string.ingame_cheat_rocket,
+      R.string.ingame_wep_rocket_infinite, R.string.ingame_wep_grenade, R.string.ingame_wep_grenade_fire,
+      R.string.ingame_wep_grenade_flash, R.string.ingame_wep_stock_red9, R.string.ingame_wep_stock_tmp,
+      R.string.ingame_wep_scope_rifle, R.string.ingame_wep_scope_semi, R.string.ingame_wep_scope_mine,
+      R.string.ingame_wep_scope_ir};
+  static final int WEAPON_PICK = 0x1000, WEAPON_MAX = 0x10000;
+  private static final String WEAPON_CHOICE = "cheatWeapon", WEAPON_HIGHEST = "cheatWeaponMax";
+  /** The core's button for the list's entry `index`. */
+  static int weaponButton(int index, boolean highest) {
+    return WEAPON_PICK | WEAPON_IDS[index] | (highest ? WEAPON_MAX : 0);
+  }
+  private void weaponList() {
+    final SharedPreferences prefs = getContext().getSharedPreferences(CoreActivity.GAME_PREFS, Context.MODE_PRIVATE);
+    final int[] chosen = {Math.max(0, Math.min(WEAPON_IDS.length - 1, prefs.getInt(WEAPON_CHOICE, 0)))};
+    final boolean[] highest = {prefs.getBoolean(WEAPON_HIGHEST, true)};
+    MenuLayout.Buttons row = cheatRow(3);
+    final Button pick = cellAction(row, "", null);
+    final Runnable label = () -> pick.setText(getContext().getString(R.string.ingame_cheat_weapon_pick,
+        s(WEAPON_NAMES[chosen[0]])));
+    label.run();
+    pick.setOnClickListener(v -> {
+      String[] names = new String[WEAPON_NAMES.length];
+      for (int i = 0; i < names.length; ++i) names[i] = s(WEAPON_NAMES[i]);
+      AlertDialog dialog = new AlertDialog.Builder(getContext())
+          .setTitle(R.string.ingame_cheat_section_weapons)
+          .setSingleChoiceItems(names, chosen[0], (d, which) -> {
+            chosen[0] = which; prefs.edit().putInt(WEAPON_CHOICE, which).apply(); label.run(); d.dismiss();
+          }).create();
+      dialog.show();
+    });
+    toggle(row, R.string.ingame_cheat_weapon_max, highest[0], on -> {
+      highest[0] = on; prefs.edit().putBoolean(WEAPON_HIGHEST, on).apply();
+    });
+    cellAction(row, s(R.string.ingame_cheat_weapon_add), v -> {
+      v.setSelected(true); main.postDelayed(() -> v.setSelected(false), CHEAT_FLASH_MS);
+      cheatAction(weaponButton(chosen[0], highest[0]), WEAPON_NAMES[chosen[0]]);
+    });
+    help(R.string.ingame_cheat_weapons_help);
+  }
+
   /** The game is held while the menu is open: the core does a button at once and answers. */
   private void cheatAction(int what, int label) {
     if (working) return;
@@ -1726,6 +1768,8 @@ final class CoreMenu extends Dialog {
         }
         String text;
         if (done == 1) text = getContext().getString(R.string.ingame_cheat_done, s(label));
+        else if (done == 2 && (what & WEAPON_PICK) != 0 && (what & WEAPON_MAX) == 0)
+          text = getContext().getString(R.string.ingame_cheat_already, s(label));
         else if (done == 2 && (what == 1 || what >= 5)) text = getContext().getString(R.string.ingame_cheat_raised, s(label));
         else if (done == 2) text = getContext().getString(R.string.ingame_cheat_already, s(label));
         else if (done == 0) text = s(R.string.ingame_cheat_not_now);

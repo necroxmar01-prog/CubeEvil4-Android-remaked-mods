@@ -413,4 +413,30 @@
     <string name="ingame_ashley_gun_help">Пистолет Эшли: дайте Эшли пистолет из кейса (Экипировать, затем Эшли). Как напарница она стреляет во врагов рядом, пока следует за вами и пока ждёт. Её патроны восстанавливаются со временем (10 патронов, по одному каждые 3 секунды). Пока пистолет у неё, он не занимает места в кейсе; удерживайте кнопку команд Эшли (жди / за мной), чтобы забрать его. В её собственной главе удерживайте кнопку прицеливания и нажмите кнопку выстрела, как Леон.</string>
     <string name="ingame_melee_help">Ближний бой: мод с melee/melee.dat заменяет анимации ударов ногой по оглушённым врагам. Свернуть шею: Леон добивает стоящего оглушённого ганадо, как ХАНК (нужен файл em/em60.drs режима «Наёмники» на диске); врагов с паразитом он по-прежнему бьёт ногой. Удар топором: оглушённого врага на коленях Леон бьёт ножом тем же ударом топора, что и ганадо, вместо удара ногой (если скин заменил нож топором, виден топор). Случайный выбор: каждый добивающий приём выбирается случайно из игрового и включённых; если выключено, всегда ваш выбор.</string>
     <string name="ingame_outfit_help">Одежда, которую Леону даёт сюжет, или всегда первая (с курткой) или вторая (без неё); меняется сразу, комната начинается заново там, где он стоит. Оружие за спиной: последнее длинное оружие в его руках (дробовик, винтовка, пистолет-пулемёт, ракетомёт) висит у него за спиной, пока оно в кейсе, а не в руках. Наклон, высоту, расстояние от спины и плечо можно настроить; «В роликах» показывает его и в сценах.</string>
+    <!-- the cheat menu's weapon list (11.11.2026) -->
+    <string name="ingame_wep_handgun">Пистолет</string>
+    <string name="ingame_wep_punisher">Punisher</string>
+    <string name="ingame_wep_red9">Red9</string>
+    <string name="ingame_wep_blacktail">Blacktail</string>
+    <string name="ingame_wep_butterfly">Broken Butterfly</string>
+    <string name="ingame_wep_riot">Riot Gun</string>
+    <string name="ingame_wep_striker">Striker</string>
+    <string name="ingame_wep_tmp">TMP</string>
+    <string name="ingame_wep_shotgun">Дробовик</string>
+    <string name="ingame_wep_rifle">Винтовка</string>
+    <string name="ingame_wep_rifle_semi">Винтовка (полуавтомат)</string>
+    <string name="ingame_wep_rocket_infinite">Бесконечный ракетомёт</string>
+    <string name="ingame_wep_grenade">Ручная граната</string>
+    <string name="ingame_wep_grenade_fire">Зажигательная граната</string>
+    <string name="ingame_wep_grenade_flash">Светошумовая граната</string>
+    <string name="ingame_wep_stock_red9">Приклад (Red9)</string>
+    <string name="ingame_wep_stock_tmp">Приклад (TMP)</string>
+    <string name="ingame_wep_scope_rifle">Прицел (винтовка)</string>
+    <string name="ingame_wep_scope_semi">Прицел (полуавтоматическая винтовка)</string>
+    <string name="ingame_wep_scope_mine">Прицел (миномёт)</string>
+    <string name="ingame_wep_scope_ir">Инфракрасный прицел</string>
+    <string name="ingame_cheat_weapon_pick">Оружие: %1$s</string>
+    <string name="ingame_cheat_weapon_max">Макс. уровни</string>
+    <string name="ingame_cheat_weapon_add">Добавить</string>
+    <string name="ingame_cheat_weapons_help">Оружие: выберите любое оружие, гранату или деталь оружия Леона и нажмите «Добавить». «Макс. уровни» включено: оружие приходит полностью улучшенным (имеющееся оружие поднимается до них; миномёт с прицелом); выключено: как его продаёт торговец. Только пока играет Леон, не в кейсе, на карте или в видео.</string>
 </resources>

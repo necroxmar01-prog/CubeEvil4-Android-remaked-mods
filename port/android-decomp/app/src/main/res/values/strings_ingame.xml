@@ -420,4 +420,30 @@
     <string name="ingame_ashley_gun_help">Ashley\'s pistol: give Ashley a handgun from the case (Equip, then Ashley). As your partner she shoots the enemies near her, while she follows you and while she waits. Her ammunition comes back with time (10 rounds, one every 3 seconds). While she has it, it takes no room in the case; hold the Ashley command button (wait / follow) to get it back. In her own chapter, hold the aim button and press the fire button to shoot with it, as Leon does.</string>
     <string name="ingame_melee_help">Melee: a mod pack with melee/melee.dat replaces the kick animations on stunned enemies. Neck break: Leon finishes a standing stunned Ganado as HUNK does (needs the Mercenaries file em/em60.drs on your disc); enemies with a parasite are still kicked. Axe strike: on a kneeling stunned enemy Leon swings the Ganados\' own axe attack with his knife instead of kicking (a skin\'s axe shows in its place). Random mix: each finisher is drawn at random among the game\'s own and the ones switched on; off, your choice always plays.</string>
     <string name="ingame_outfit_help">The outfit the story gives Leon, or always his first (with the jacket) or second (without it); it changes at once and the room starts again where he stands. Weapon on the back: the last long weapon he held (shotgun, rifle, machine gun, rocket launcher) hangs on his back while it is in the case and not in his hands. Its slant, height, distance from the back and shoulder can be set to taste; “In cutscenes” also shows it while Leon is in a scene.</string>
+    <!-- the cheat menu's weapon list (11.11.2026) -->
+    <string name="ingame_wep_handgun">Handgun</string>
+    <string name="ingame_wep_punisher">Punisher</string>
+    <string name="ingame_wep_red9">Red9</string>
+    <string name="ingame_wep_blacktail">Blacktail</string>
+    <string name="ingame_wep_butterfly">Broken Butterfly</string>
+    <string name="ingame_wep_riot">Riot Gun</string>
+    <string name="ingame_wep_striker">Striker</string>
+    <string name="ingame_wep_tmp">TMP</string>
+    <string name="ingame_wep_shotgun">Shotgun</string>
+    <string name="ingame_wep_rifle">Rifle</string>
+    <string name="ingame_wep_rifle_semi">Rifle (semi-auto)</string>
+    <string name="ingame_wep_rocket_infinite">Infinite Rocket Launcher</string>
+    <string name="ingame_wep_grenade">Hand Grenade</string>
+    <string name="ingame_wep_grenade_fire">Incendiary Grenade</string>
+    <string name="ingame_wep_grenade_flash">Flash Grenade</string>
+    <string name="ingame_wep_stock_red9">Stock (Red9)</string>
+    <string name="ingame_wep_stock_tmp">Stock (TMP)</string>
+    <string name="ingame_wep_scope_rifle">Scope (Rifle)</string>
+    <string name="ingame_wep_scope_semi">Scope (semi-auto rifle)</string>
+    <string name="ingame_wep_scope_mine">Scope (Mine Thrower)</string>
+    <string name="ingame_wep_scope_ir">Infrared Scope</string>
+    <string name="ingame_cheat_weapon_pick">Weapon: %1$s</string>
+    <string name="ingame_cheat_weapon_max">Highest levels</string>
+    <string name="ingame_cheat_weapon_add">Add</string>
+    <string name="ingame_cheat_weapons_help">Weapons: choose any of Leon\'s weapons, grenades or weapon parts and press Add. “Highest levels” on: the weapon comes fully tuned (a weapon you own is raised to them; the Mine Thrower with its scope); off: as the merchant sells it. Only while Leon plays, not in the case, the map or a movie.</string>
 </resources>

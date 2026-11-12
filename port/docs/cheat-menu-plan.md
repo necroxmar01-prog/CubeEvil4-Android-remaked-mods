@@ -221,3 +221,25 @@ Einzelspieler-Spiel. Umgesetzt mit Patch 0195 (`port/whole/patches/0195-story-ch
   in The Mercenaries).
 - Im Koffer hält die Figur Leons Waffen nicht in der Hand.
 - Spielstände merken sich die Figur nicht (Absicht: sie bleiben Leon-Spielstände).
+
+## Erweiterung 11.11.2026: Waffenliste
+
+Wunsch von DevJunior (11.11.2026): „dass das Cheat-Menü mehr Waffen hat“; seine Wahl: alle Waffen Leons, als Liste
+mit Auswahl. Die sechs Waffen-Knöpfe (Killer7, Handcannon, Matilda, Chicago Typewriter, Minenwerfer, endloser
+Raketenwerfer) sind durch eine Zeile ersetzt: „Waffe: …“ (öffnet die Liste), „Höchste Stufen“ (Schalter, an
+vorgegeben) und „Hinzufügen“; Wahl und Schalter bleiben gespeichert.
+
+- Liste (27 Einträge, `CoreMenu.WEAPON_IDS`, im Kern `runtime/cheats.cpp` `kArsenal`): Handgun, Punisher, Red9,
+  Blacktail, Matilda, Broken Butterfly, Killer7, Handcannon, Shotgun, Riot Gun, Striker, Rifle, Rifle (semi-auto),
+  TMP, Chicago Typewriter, Minenwerfer (mit Zielfernrohr), Raketenwerfer, endloser Raketenwerfer, drei Granaten,
+  Schulterstützen (Red9, TMP), Zielfernrohre (Gewehr, halbautomatisches Gewehr, Minenwerfer), Infrarot-Zielfernrohr.
+  Nicht in der Liste: die Waffen anderer Figuren (Weskers Pistole, HUNKs TMP, Krausers Bogen) und der Schalldämpfer
+  des Prototyps.
+- Kern: Knopf `0x1000 | Gegenstand` (`| 0x10000` höchste Stufen; `core_api.cpp` lässt sie durch). Höchste Stufen =
+  die Höchstwerte der letzten Händlertabellen (`merchant.cpp` `level_*`), die Exklusiv-Stufen wie bei `kGifts`
+  (Handcannon und Chicago Typewriter Kapazität 7 = endlos). Eine Waffe, die Leon schon hat: mit höchsten Stufen
+  darauf gehoben (Antwort 2, „schon vorhanden: jetzt auf den höchsten Stufen“), sonst unverändert („schon
+  vorhanden“). Granaten, Raketenwerfer und Teile: jeder Druck einer mehr. Magazin voll.
+- Test: `runtime-test cheatlist` (acht leere Plätze: wie verkauft, behalten, gehoben, halbautomatisches Gewehr
+  Tempo 2, zwei Granaten, unbekannter Gegenstand, Tabelle); i686, armhf, x86_64. Im Spiel und in der App nicht
+  geprüft (kein Android-SDK in der Cloud: der App-Bau läuft in der CI).
