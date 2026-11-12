@@ -36,6 +36,7 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
                      y 1700, every hair position at least 4 further out from the skull's centre than the head there.
 --cut ENTRY:Y        drops ENTRY's triangles that reach above y Y (the body's upper half under a jacket model that
                      brings its own shirt).
+--back ENTRY:Z:Y     drops ENTRY's triangles wholly behind z Z and below y Y (a shirt's back under a closed coat).
 --compact ENTRY      drops what nothing in ENTRY draws any more (after skin_graft.py --drop).
 --prune TPL          keeps only the textures of palette TPL its models draw (after a graft or a hide).
 --carry ENTRY:LIST   moves the models LIST (straps, a harness) as the nearest positions of ENTRY moved in --fit.
@@ -481,6 +482,18 @@ def cut(model, top):
     return (rebuild(model, kept) if after < before else model), before, after
 
 
+def back(model, z, top):
+    """Drops the triangles of `model` lying wholly behind z `z` and below y `top`: a shirt's back under a jacket whose
+    back is closed (DevJunior, 12.11.2026: "the blue spot of the shirt on the back": it poked through the coat as he
+    moved, where --hide and --inside leave it). Returns (model, triangles before, after)."""
+    P = G.positions(model)
+    lists = part_lists(model)
+    kept = [[t for t in tris if not all(P[r[0]][2] < z and P[r[0]][1] < top for r in t)] for _, tris in lists]
+    before = sum(len(t) for _, t in lists)
+    after = sum(len(t) for t in kept)
+    return (rebuild(model, kept) if after < before else model), before, after
+
+
 def prune(entries, tpl, users):
     """Palette `tpl` with only the textures its models `users` draw; the parts renumbered. Returns (bytes before,
     after)."""
@@ -566,6 +579,8 @@ def main(argv=None):
                     help="lift hair model HAIR over the skull of head model HEAD (a hair made for another head)")
     ap.add_argument("--cut", action="append", default=[], metavar="ENTRY:Y",
                     help="drop ENTRY's triangles that reach above y Y")
+    ap.add_argument("--back", action="append", default=[], metavar="ENTRY:Z:Y",
+                    help="drop ENTRY's triangles wholly behind z Z and below y Y (a shirt's back under a closed coat)")
     ap.add_argument("--compact", action="append", default=[], metavar="ENTRY",
                     help="drop the positions, normals, colours and texture coordinates nothing in ENTRY draws (after "
                          "skin_graft.py --drop emptied parts)")
@@ -648,6 +663,10 @@ def main(argv=None):
         entries[int(e)], before, after = cut(entries[int(e)], float(y))
         print("entry %s: %d of %d triangles above y %s dropped, %d positions left" %
               (e, before - after, before, y, len(G.positions(entries[int(e)]))))
+    for spec in a.back:
+        e, z, y = spec.split(":")
+        entries[int(e)], before, after = back(entries[int(e)], float(z), float(y))
+        print("entry %s: %d of %d triangles behind z %s below y %s dropped" % (e, before - after, before, z, y))
     for spec in a.compact:
         e = int(spec)
         before = len(G.positions(entries[e]))

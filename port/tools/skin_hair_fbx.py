@@ -399,7 +399,72 @@ def write_weights(blob, per, cap=0xFF):
     struct.pack_into(">H", blob, 0x2A, len(entries))
     blob.extend(wb)
     blob.extend(bytes(U.align(len(blob)) - len(blob)))
+    split_shared_normals(blob)
     return len(entries), step, sorted({b for e in entries for b, _ in e})
+
+
+def split_shared_normals(blob):
+    """A normal drawn with positions of different weight entries gets a copy per entry (in place; DevJunior,
+    12.11.2026, device test of the RE9 head: dark dots across the forehead and cheeks, the eyes a mosaic when they
+    move). The game skins a normal with the weight entry in its own fourth byte (the first position it is drawn with,
+    write_weights); the s8 normals are deduplicated by direction over the whole model, so a face normal could carry
+    an eye's or the jaw's entry and turned the wrong way when that bone moved. The copies go behind the normal array,
+    the sections after it move by a multiple of 32 and the header's offsets with them; positions, shapes and weights
+    stay; a normal whose own entry is not its first position's takes that one. Returns the number of normals
+    copied or mended."""
+    flags = struct.unpack_from(">I", blob, 0x20)[0]
+    if not flags & 0x20000000:
+        return 0  # s16 normals (8 bytes): not written by these tools
+    vo, no = struct.unpack_from(">II", blob, 0x30)
+    nv, nn = struct.unpack_from(">HH", blob, 0x38)
+    rec = 4 if flags & 0x80000000 else 3
+    pw = [struct.unpack_from(">H", blob, vo + i * 8 + 6)[0] for i in range(nv)]
+    owner = {}
+    extra = {}
+    corners = []  # (byte offset of the corner's normal index, new index)
+    for p in G.parts(blob):
+        size = struct.unpack_from(">I", blob, p + 0x18)[0]
+        s, e = p + 0x20, p + 0x20 + size
+        while s < e and blob[s] != 0:
+            cnt = struct.unpack_from(">H", blob, s + 1)[0]
+            for c in range(cnt):
+                at = s + 3 + c * rec * 2
+                pi, ni = struct.unpack_from(">HH", blob, at)
+                w = pw[pi] if pi < nv else 0
+                o = owner.setdefault(ni, w)
+                if o != w:
+                    key = (ni, w)
+                    if key not in extra:
+                        extra[key] = nn + len(extra)
+                    corners.append((at + 2, extra[key]))
+            s += 3 + cnt * rec * 2
+    mended = 0
+    for ni, w in owner.items():
+        if ni < nn and w <= 0xFF and blob[no + ni * 4 + 3] != w:
+            blob[no + ni * 4 + 3] = w  # its first position's entry (a converted model's could differ)
+            mended += 1
+    if not extra:
+        return mended
+    if nn + len(extra) > 0xFFFF or max(w for _, w in extra) > 0xFF:
+        raise ValueError("too many normals after splitting them by weight")
+    end = no + nn * 4
+    fields = [o for o in (0x00, 0x0C, 0x10, 0x14, 0x1C, 0x2C, 0x30, 0x34) if struct.unpack_from(">I", blob, o)[0]]
+    if struct.unpack_from(">I", blob, 0x3C)[0] == 0x20030818:
+        fields += [o for o in (0x40, 0x44) if struct.unpack_from(">I", blob, o)[0]]
+    after = [struct.unpack_from(">I", blob, o)[0] for o in fields]
+    nxt = min([x for x in after if x >= end] + [len(blob)])
+    new_next = U.align(end + 4 * len(extra))
+    shift = max(0, new_next - nxt)
+    blob[nxt:nxt] = bytes(shift)
+    for (ni, w), k in extra.items():
+        blob[no + k * 4:no + k * 4 + 4] = blob[no + ni * 4:no + ni * 4 + 3] + bytes([w])
+    for at, k in corners:
+        struct.pack_into(">H", blob, at + (shift if at >= nxt else 0), k)
+    for o, x in zip(fields, after):
+        if x >= nxt:
+            struct.pack_into(">I", blob, o, x + shift)
+    struct.pack_into(">H", blob, 0x3A, nn + len(extra))
+    return len(extra) + mended
 
 
 # ---- textures --------------------------------------------------------------------------------------------------------
