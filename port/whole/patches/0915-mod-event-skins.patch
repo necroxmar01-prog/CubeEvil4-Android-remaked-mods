@@ -1,0 +1,28 @@
+# Patch 0915 (wish of DevJunior, 12.11.2026: "the skins of Ada and Ashley do not show in the cutscenes"). Not a bug of
+# the prototype: a port feature of the mods.
+# game/event.cpp EventMgr::SetEvd: an event brings its own copies of the characters' models and palettes (its bin
+# table: "em/pl01/pl010a.bin" ...); only Leon's are taken from his loaded archive (ExeBeginEvt). Each bin is
+# registered as re4_mod_event_bin (runtime/dvd.cpp) gives it: the same entry of a skin when the bin is a copy of an
+# entry of a character archive a mod pack replaces (found by its bytes against the disc's archive, as converted),
+# else the event's own.
+--- a/src/game/event.cpp
++++ b/src/game/event.cpp
+@@ -2754,6 +2754,8 @@
+     return 1;
+ }
+ 
++extern "C" void* re4_mod_event_bin(const void* header, int index, const char* name, void* data); /* port (patch 0915) */
++
+ // Registers an event data block and every bin listed in its header table.
+ int EventMgr::SetEvd(char* nm, void* data, void* dat2, int flag)
+ {
+@@ -2778,7 +2780,8 @@
+     }
+     for (i = 0; i < hdr->nBin; i++) {
+         e = (EvtBinEntry*) (i * sizeof(EvtBinEntry) + (hdr->binOfs + (u32) hdr));
+-        if (SetBin(e->name, (u8*) (e->ofs + (u32) hdr), 0, flag) == 0) {
++        /* port (patch 0915, mods): a copy of a character's model or palette a skin replaces is drawn from the skin */
++        if (SetBin(e->name, (u8*) re4_mod_event_bin(hdr, i, e->name, (u8*) (e->ofs + (u32) hdr)), 0, flag) == 0) {
+             pLog->err(0, 0, "EventMgr::SetEvd : failed");
+             return 0;
+         }

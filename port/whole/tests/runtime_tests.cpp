@@ -523,6 +523,84 @@ static void testDvdMods()
     report("dvd mods", ok);
 }
 
+// The skins in the cutscenes (runtime/dvd.cpp re4_mod_event_bin, patch 0915): an event's copy of an entry of a
+// character archive a mod replaces is drawn from the skin's same entry; any other bin stays the event's.
+extern "C" void* re4_mod_event_bin(const void* header, int index, const char* name, void* data);
+static std::vector<unsigned char> testArchive(const unsigned char* e0, const unsigned char* e1)
+{
+    std::vector<unsigned char> f(0x440 + 0x80, 0);
+    auto put = [&](size_t at, unsigned v) { f[at] = v >> 24; f[at + 1] = v >> 16; f[at + 2] = v >> 8; f[at + 3] = v; };
+    put(0x20, 0);           // part 0: the data archive
+    put(0x24, 0x80);        // its size
+    put(0x2C, 0x440);       // its place in the file
+    put(0x40, 0xFFFFFFFFu); // the end of the table
+    unsigned char* b = &f[0x440];
+    b[3] = 2;                                           // two entries
+    b[16 + 3] = 0x20, b[20 + 3] = 0x50;                 // at 0x20 and 0x50
+    memcpy(b + 24, "DUM\0DUM\0", 8);
+    memcpy(b + 0x20, e0, 0x30);
+    memcpy(b + 0x50, e1, 0x30);
+    return f;
+}
+
+static void testEventSkins()
+{
+    bool ok = true;
+    char tmpl[] = "/tmp/re4-evskin-test-XXXXXX";
+    const char* root = mkdtemp(tmpl);
+    CHECK(root != 0);
+    if (!root) {
+        report("event skins", false);
+        return;
+    }
+    std::string base = root;
+    unsigned char disc0[0x30], disc1[0x30], skin0[0x30], skin1[0x30];
+    for (int i = 0; i < 0x30; i++) {
+        disc0[i] = (unsigned char) (i * 7 + 1), disc1[i] = (unsigned char) (i * 13 + 5);
+        skin0[i] = (unsigned char) (0xA0 + i), skin1[i] = (unsigned char) (0x50 + i);
+    }
+    std::vector<unsigned char> discArc = testArchive(disc0, disc1), skinArc = testArchive(skin0, skin1);
+    std::vector<FstEntry> fst0 = {
+        {true, "em", 0, 3},
+        {false, "pl01.drs", 0x1000, (unsigned) discArc.size()},
+    };
+    std::vector<unsigned char> f0 = buildFst(fst0);
+    unsigned char boot0[0x40] = "G4BE08";
+    CHECK(makeDirs(base + "/disc1/sys") && makeDirs(base + "/disc1/files/em") && makeDirs(base + "/mods/x/em"));
+    CHECK(writeFile(base + "/disc1/sys/fst.bin", f0.data(), f0.size()));
+    CHECK(writeFile(base + "/disc1/sys/boot.bin", boot0, sizeof(boot0)));
+    CHECK(writeFile(base + "/disc1/files/em/pl01.drs", discArc.data(), discArc.size()));
+    CHECK(writeFile(base + "/mods/x/em/pl01.drs", skinArc.data(), skinArc.size()));
+    char saved[1024];
+    snprintf(saved, sizeof(saved), "%s", re4_data_dir());
+    re4_set_data_dir(root);
+    // an event of three bins, as the game holds it (native words): a copy of the disc's entry 1, a model of its own,
+    // and a copy of entry 0 under a name of another character
+    std::vector<unsigned char> ev(0x200, 0);
+    auto w = [&](size_t at, unsigned v) { memcpy(&ev[at], &v, 4); };
+    w(0x48, 3);
+    w(0x4C, 0x60);
+    snprintf((char*) &ev[0x60], 0x30, "em/pl01/pl010b.bin"), w(0x60 + 0x30, 0x140);
+    snprintf((char*) &ev[0xA0], 0x30, "em/pl01/ev0101.bin"), w(0xA0 + 0x30, 0x170);
+    snprintf((char*) &ev[0xE0], 0x30, "em/pl02/pl020a.bin"), w(0xE0 + 0x30, 0x1A0);
+    memcpy(&ev[0x140], disc1, 0x30);
+    memset(&ev[0x170], 0x33, 0x30);
+    memcpy(&ev[0x1A0], disc0, 0x30);
+    unsigned char* got = (unsigned char*) re4_mod_event_bin(ev.data(), 0, "em/pl01/pl010b.bin", &ev[0x140]);
+    CHECK(got != &ev[0x140] && got && memcmp(got, skin1, 0x30) == 0);
+    CHECK(re4_mod_event_bin(ev.data(), 1, "em/pl01/ev0101.bin", &ev[0x170]) == &ev[0x170]);
+    got = (unsigned char*) re4_mod_event_bin(ev.data(), 2, "em/pl02/pl020a.bin", &ev[0x1A0]);
+    CHECK(got && memcmp(got, skin0, 0x30) == 0);  // by its bytes, whatever its name
+    CHECK(re4_mod_event_bin(ev.data(), 0, "obj/objmodel/obm0300.bin", &ev[0x140]) == &ev[0x140]);
+    // without the mod: the event's own
+    CHECK(system(("rm -rf '" + base + "/mods'").c_str()) == 0);
+    re4_set_data_dir(root);
+    CHECK(re4_mod_event_bin(ev.data(), 0, "em/pl01/pl010b.bin", &ev[0x140]) == &ev[0x140]);
+    re4_set_data_dir(saved);
+    CHECK(system(("rm -rf '" + base + "'").c_str()) == 0);
+    report("event skins", ok);
+}
+
 // The release from each disc header (port/docs/retail-eu-plan.md): debug build, European and US
 // release, a header without the table's place (the test above), another game.
 extern "C" void re4_core_debug_menu(void);    // runtime/core_api.cpp
@@ -2813,6 +2891,7 @@ int re4_runtime_tests()
     testCheatExtras();
     testCheatList();
     testModPlace();
+    testEventSkins();
     testPotato();
     testHandcannon();
     testGyroBoat();

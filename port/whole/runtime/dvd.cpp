@@ -34,6 +34,8 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -119,6 +121,7 @@ struct Disc {
 
 void applyMods(Disc& d, int no);
 void freeDisc(Disc& d);
+int gModsGeneration;  // counts applyMods: the skins of the cutscenes look again (patch 0915)
 
 Disc gDiscs[2];
 int gCurrent = -1;
@@ -573,6 +576,7 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
 
 void applyMods(Disc& d, int no)
 {
+    gModsGeneration++;
     char mods[1200];
     snprintf(mods, sizeof(mods), "%s/mods", gDataDir);
     int count = 0;
@@ -1318,6 +1322,257 @@ int DVDCloseDir(DVDDir* dir)
 {
     (void) dir;
     return 1;
+}
+
+}  // extern "C"
+
+// ---- the skins in the cutscenes (patch 0915) ------------------------------------------------------------------
+//
+// Wish of DevJunior, 12.11.2026: "the skins of Ada and Ashley do not show in the cutscenes". An event brings its own
+// copies of the characters' models (the bin table of its evd: "em/pl01/pl010a.bin" ...); only Leon's are taken from
+// his archive (event.cpp ExeBeginEvt). Patch 0915 asks for each bin of an evd whether a mod replaces the character
+// archive that bin is a copy of: every character archive a mod pack replaces (em/pl??.drs / .das) is looked at on the
+// disc once (read, converted as the game's read converts it, its entries' sizes and fingerprints kept, the copy
+// given back); a bin whose bytes are those of one of its entries is drawn from the skin's archive (its body read
+// once into the mods' place, runtime/mod_place.cpp, and converted) at the same entry. A bin no skin has (the
+// event's own models, an expression head) stays the event's.
+namespace {
+
+struct SkinEntry {
+    u32 len;                  // 0: empty
+    unsigned long long head;  // fingerprint of the first 64 bytes (as converted)
+    unsigned long long full;  // of all of them
+};
+
+struct SkinFile {
+    char name[32];             // "em/pl01.drs"
+    bool unusable;             // a packed body, no part table, no room ...
+    std::vector<SkinEntry> entries;
+    std::vector<u32> skinStart;  // the skin's entries (0: empty)
+    unsigned char* skin;       // the mod's body in the mods' place, 0 until a bin matched
+    bool skinTried;
+};
+
+std::vector<SkinFile> gSkins;
+int gSkinsScanned = -2;        // gCurrent the list was made for
+int gSkinsGeneration = -1;     // gModsGeneration it was made for
+
+unsigned long long fnv(const unsigned char* p, u32 n)
+{
+    unsigned long long h = 1469598103934665603ull;
+    for (u32 i = 0; i < n; i++) {
+        h = (h ^ p[i]) * 1099511628211ull;
+    }
+    return h;
+}
+
+// The DAT body of an archive file read whole: part 0 of its part table (not packed); 0 when none.
+const unsigned char* archiveBody(const unsigned char* file, u32 size, u32* bodyLen)
+{
+    if (size < 0x440 || be32(file + 0x20) != 0) {
+        return 0;
+    }
+    const u32 len = be32(file + 0x24), off = be32(file + 0x2C);
+    if (off > size || len > size - off || len < 16) {
+        return 0;
+    }
+    char text[0x40];
+    memcpy(text, file + off, sizeof(text) - 1);
+    text[sizeof(text) - 1] = 0;
+    if (isxdigit((unsigned char) text[0]) && strchr(text, '\t') && strchr(text, '\n')) {
+        return 0;  // a yz2 body
+    }
+    *bodyLen = len;
+    return file + off;
+}
+
+// The entries of a DAT body as the disc has it (big-endian): [start, length) each (an empty one: 0, 0); the REL
+// behind them is no entry.
+void bodyEntries(const unsigned char* body, u32 len, std::vector<std::pair<u32, u32>>& out)
+{
+    out.clear();
+    const u32 n = be32(body);
+    if (n == 0 || n > 4096 || 16 + n * 8 > len) {
+        return;
+    }
+    u32 rel = be32(body + 4);
+    if (rel < 16 + n * 8 || rel >= len || rel % 32) {
+        rel = len;
+    }
+    for (u32 i = 0; i < n; i++) {
+        const u32 start = be32(body + 16 + i * 4);
+        const u32 stop = i + 1 < n ? be32(body + 16 + (i + 1) * 4) : rel;
+        out.push_back(start && start < stop && stop <= len ? std::make_pair(start, stop - start)
+                                                           : std::make_pair(0u, 0u));
+    }
+}
+
+// A body copied to the mods' place and converted as the game's read of `name` converts it; 0 when no room.
+unsigned char* placeConverted(const char* name, const unsigned char* body, u32 len, const char* what)
+{
+    unsigned char* place = (unsigned char*) re4_mod_place_alloc(len, what);
+    if (!place) {
+        return 0;
+    }
+    memcpy(place, body, len);
+    struct {
+        u32 type, size, dest, ofs, sndType, sndArg, sndNo, x1C;
+    } h = {0 /* TRANS_MRAM */, len, (u32) (unsigned long) place, 0, 0, 0, 0, 0};
+    re4_formats_part_loaded(name, 0, 0, &h, (unsigned) (unsigned long) place);
+    return place;
+}
+
+void scanSkins(Disc& d)
+{
+    for (SkinFile& f : gSkins) {
+        if (f.skin) {
+            re4_mod_em_release(f.skin);  // the mods changed: the place's blocks back
+        }
+    }
+    gSkins.clear();
+    gSkinsScanned = gCurrent;
+    gSkinsGeneration = gModsGeneration;
+    if (!d.mod) {
+        return;
+    }
+    for (u32 i = 1; i < d.count; i++) {
+        if (!d.mod[i] || isDir(d, i)) {
+            continue;
+        }
+        char path[1400];
+        entryPath(d, i, path, sizeof(path));  // the disc's own file
+        const char* rel = strstr(path, "/files/");
+        if (!rel || strncmp(rel + 7, "em/pl", 5) != 0 || strchr(rel + 7 + 3, '/') || strlen(rel + 7) >= 32) {
+            continue;
+        }
+        SkinFile f;
+        snprintf(f.name, sizeof(f.name), "%s", rel + 7);
+        f.unusable = true;
+        f.skin = 0;
+        f.skinTried = false;
+        u32 size = 0;
+        unsigned char* file = readWhole(path, &size);
+        u32 len = 0;
+        const unsigned char* body = file ? archiveBody(file, size, &len) : 0;
+        std::vector<std::pair<u32, u32>> ent;
+        if (body) {
+            bodyEntries(body, len, ent);
+        }
+        unsigned char* conv = ent.empty() ? 0 : placeConverted(f.name, body, len, "the disc's archive, looked at");
+        if (conv) {
+            for (auto& e : ent) {
+                SkinEntry s = {e.second, 0, 0};
+                if (e.second) {
+                    s.head = fnv(conv + e.first, e.second < 64 ? e.second : 64);
+                    s.full = fnv(conv + e.first, e.second);
+                }
+                f.entries.push_back(s);
+            }
+            f.unusable = false;
+            re4_mod_em_release(conv);
+        } else {
+            re4_log("mods: %s: the disc's file could not be looked at, its skin stays out of the cutscenes", f.name);
+        }
+        free(file);
+        gSkins.push_back(f);
+    }
+    if (!gSkins.empty()) {
+        re4_log("mods: %u character archives with a skin: their models in the cutscenes too",
+                (unsigned) gSkins.size());
+    }
+}
+
+// The skin's entry `index` of f (its body read into the mods' place and converted on first use); 0 when none.
+void* skinEntry(Disc& d, SkinFile& f, u32 index)
+{
+    if (!f.skin && !f.skinTried) {
+        f.skinTried = true;
+        s32 entry = lookup(d, f.name);
+        u32 size = 0;
+        unsigned char* file = entry > 0 && d.mod[entry] ? readWhole(d.mod[entry], &size) : 0;
+        u32 len = 0;
+        const unsigned char* body = file ? archiveBody(file, size, &len) : 0;
+        std::vector<std::pair<u32, u32>> ent;
+        if (body) {
+            bodyEntries(body, len, ent);
+        }
+        if (!ent.empty()) {
+            char what[64];
+            snprintf(what, sizeof(what), "the skin %s for the cutscenes", f.name);
+            f.skin = placeConverted(f.name, body, len, what);
+            for (auto& e : ent) {
+                f.skinStart.push_back(e.first);
+            }
+        }
+        free(file);
+    }
+    return f.skin && index < f.skinStart.size() && f.skinStart[index] ? f.skin + f.skinStart[index] : 0;
+}
+
+u32 native32(const unsigned char* p)
+{
+    u32 v;
+    memcpy(&v, p, 4);
+    return v;
+}
+
+}  // namespace
+
+extern "C" {
+
+// Patch 0915 (event.cpp EventMgr::SetEvd, the game thread): the bin `index` of the evd at `header` (as converted) is
+// `data`; what the event draws for it: the skin's same model or palette when the bin is a copy of an entry of a
+// character archive a mod replaces, else `data`.
+void* re4_mod_event_bin(const void* header, int index, const char* name, void* data)
+{
+    Disc* d = current();
+    if (!d || !d->mods || !name || !data || strncmp(name, "em/pl", 5) != 0) {
+        return data;
+    }
+    if (gSkinsScanned != gCurrent || gSkinsGeneration != gModsGeneration) {
+        scanSkins(*d);
+    }
+    if (gSkins.empty()) {
+        return data;
+    }
+    // the bin's room: up to the next bin's data in the table (the last one: the fingerprints alone decide)
+    const unsigned char* hdr = (const unsigned char*) header;
+    const u32 nBin = native32(hdr + 0x48), binOfs = native32(hdr + 0x4C);
+    const u32 own = native32(hdr + binOfs + (u32) index * 0x40 + 0x30);
+    u32 room = 0;
+    for (u32 i = 0; i < nBin && i < 4096; i++) {
+        const u32 o = native32(hdr + binOfs + i * 0x40 + 0x30);
+        if (o > own && (!room || o - own < room)) {
+            room = o - own;
+        }
+    }
+    const unsigned char* p = (const unsigned char*) data;
+    static int told;
+    for (SkinFile& f : gSkins) {
+        if (f.unusable) {
+            continue;
+        }
+        for (u32 i = 0; i < f.entries.size(); i++) {
+            const SkinEntry& e = f.entries[i];
+            if (!e.len || (room && (e.len > room || room - e.len >= 64))) {
+                continue;
+            }
+            if (fnv(p, e.len < 64 ? e.len : 64) != e.head || fnv(p, e.len) != e.full) {
+                continue;
+            }
+            void* skin = skinEntry(*d, f, i);
+            if (told++ < 64) {
+                re4_log("mods: event bin %s = %s entry %u: %s", name, f.name, (unsigned) i,
+                        skin ? "the skin's" : "the event's (the skin has none)");
+            }
+            return skin ? skin : data;
+        }
+    }
+    if (told++ < 64) {
+        re4_log("mods: event bin %s (%u bytes) is no entry of a skinned character archive: the event's own", name,
+                (unsigned) room);
+    }
+    return data;
 }
 
 }  // extern "C"

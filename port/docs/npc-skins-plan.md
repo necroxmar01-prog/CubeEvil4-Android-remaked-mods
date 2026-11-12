@@ -56,6 +56,8 @@ des Prototyps: eine Port-Funktion der Mods.
 - **N2 – Umwandeln (Cloud, mit den Dateien von DevJunior):** ein PC-Skin für Ashley (`pl11.udas`, und `pl01` für ihr
   Kapitel) und einer für Luis (`pl14.udas`); Vergleich mit `re4_format_compare` wie bei Leon.
 - **N3 – Gerät:** Ashley als Begleiterin, in ihrem Kapitel, Luis in der Hütte; Speicher, Bildrate, Zwischensequenzen.
-- **N4 – Gesichter in Zwischensequenzen** (wie 0906/0907), falls N3 es zeigt.
+- **N4 – Zwischensequenzen:** Patch 0915 (12.11.2026): die Kopien der Figurenmodelle in den evd-Dateien werden an
+  ihren Bytes erkannt und aus dem Archiv des Skins gezeichnet; Gesichter mit Ereignis-Formen (wie 0906/0907 bei Leon)
+  folgen, falls die Prüfung es zeigt.
 
 Jeder Schritt gilt erst als erreicht, wenn sein Test gelaufen ist (N3/N4 nur auf dem Gerät).

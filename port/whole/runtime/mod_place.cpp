@@ -145,6 +145,34 @@ void* re4_mod_em_place(const char* name, unsigned int need)
     return result;
 }
 
+// A block of `size` bytes of the place for the port's own use (runtime/dvd.cpp: the skins of the event bodies,
+// patch 0915), 0 when none is left; given back with re4_mod_em_release.
+void* re4_mod_place_alloc(unsigned long size, const char* what)
+{
+    size = (size + 31) & ~31ul;
+    pthread_mutex_lock(&gLock);
+    void* result = 0;
+    for (Block& b : gBlock) {
+        if (!b.at) {
+            if (take()) {
+                if (const unsigned long at = firstFit(size)) {
+                    b.at = at;
+                    b.size = size;
+                    result = (void*) at;
+                }
+            }
+            break;
+        }
+    }
+    pthread_mutex_unlock(&gLock);
+    if (result) {
+        re4_log("mods: %s (%lu bytes) at %p", what, size, result);
+    } else {
+        re4_log("mods: %s (%lu bytes): no room left in the place for the mods' character archives", what, size);
+    }
+    return result;
+}
+
 // Patch 0914 (read.cpp InitModule): the game frees a module; its archive's block is free again. 1 = it was one.
 int re4_mod_em_release(const void* p)
 {

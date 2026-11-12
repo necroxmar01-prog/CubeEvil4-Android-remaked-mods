@@ -207,6 +207,7 @@ void* re4_mod_shape_twin(void* info, void* model, void** skin_model);
 #define RE4_MOD_PLACE_SIZE 0x01000000u
 #define RE4_MOD_PLACE_PHYSICAL 0x04000000u
 void* re4_mod_em_place(const char* name, unsigned int need);
+void* re4_mod_place_alloc(unsigned long size, const char* what);
 int re4_mod_em_release(const void* p);
 int re4_mod_place_holds(const void* p, unsigned long size);
 unsigned int re4_mod_place_physical(const void* p);
