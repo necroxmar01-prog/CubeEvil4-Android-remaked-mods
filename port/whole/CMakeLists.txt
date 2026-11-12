@@ -215,6 +215,7 @@ add_library(re4_platform_obj OBJECT
     runtime/log.cpp
     runtime/mem1.cpp
     runtime/mod_place.cpp
+    runtime/mod_sound.cpp
     runtime/module_loader.cpp
     runtime/newlib_ctype.c
     runtime/os_link.cpp

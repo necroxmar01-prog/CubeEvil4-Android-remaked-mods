@@ -89,7 +89,7 @@
     <string name="ingame_quick_slots">十字键快捷武器</string>
     <string name="ingame_quick_slots_help">十字键快捷武器：游戏中按十字键即可立即装备武器，与重制版相同：上为手枪和马格南，右为霰弹枪、TMP和发射器，下为步枪，左为手榴弹。再次按同一方向可切换到随身携带的下一把同类武器。此时十字键不再移动里昂。按住任意方向半秒可收起武器，空手行走。</string>
     <string name="ingame_parry">小刀格挡</string>
-    <string name="ingame_parry_help">小刀格挡：在敌人的攻击即将命中时按下小刀键（L）即可将其格开，里昂随即挥刀反击，与重制版相同。抓取无法格挡。</string>
+    <string name="ingame_parry_help">小刀格挡：在敌人的攻击即将命中时按下小刀键（L）即可将其格开，里昂随即挥刀反击，与重制版相同。被村民抓住时，在一秒内按下小刀键即可挣脱。</string>
     <string name="ingame_touch_aim">触控瞄准</string>
     <string name="ingame_aim_move_stick">移动摇杆</string>
     <string name="ingame_aim_touch_area">触控区域</string>

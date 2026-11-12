@@ -98,7 +98,7 @@
     <string name="ingame_quick_slots">D-pad quick slots</string>
     <string name="ingame_quick_slots_help">D-pad quick slots: in the field the D-pad equips a weapon at once, as in the remake: up handguns and magnums, right shotguns, the TMP and launchers, down rifles, left grenades. Press the same direction again for the next one of that kind you carry. The D-pad no longer walks then. Hold any direction for half a second to put the weapon away and walk without one.</string>
     <string name="ingame_parry">Knife parry</string>
-    <string name="ingame_parry_help">Knife parry: press the knife key (L) just as an enemy\'s blow lands to turn it aside; Leon answers with a knife slash, as in the remake. Grabs cannot be parried.</string>
+    <string name="ingame_parry_help">Knife parry: press the knife key (L) just as an enemy\'s blow lands to turn it aside; Leon answers with a knife slash, as in the remake. If a Ganado grabs you, press the knife key within a second to break free.</string>
     <string name="ingame_touch_aim">Touch Aiming</string>
     <string name="ingame_aim_move_stick">Move Stick</string>
     <string name="ingame_aim_touch_area">Touch Area</string>

@@ -90,7 +90,7 @@
     <string name="ingame_quick_slots">Raccourcis de la croix</string>
     <string name="ingame_quick_slots_help">Raccourcis de la croix : en jeu, la croix directionnelle équipe une arme aussitôt, comme dans le remake : haut pistolets et magnums, droite fusils à pompe, TMP et lanceurs, bas fusils, gauche grenades. Appuyez à nouveau sur la même direction pour passer à la suivante de ce type que vous portez. La croix ne déplace alors plus Leon. Maintenez une direction une demi-seconde pour ranger l\'arme et marcher sans elle.</string>
     <string name="ingame_parry">Parade au couteau</string>
-    <string name="ingame_parry_help">Parade au couteau : appuyez sur la touche du couteau (L) juste quand un coup ennemi arrive pour le dévier ; Leon riposte d\'un coup de couteau, comme dans le remake. Les saisies ne peuvent pas être parées.</string>
+    <string name="ingame_parry_help">Parade au couteau : appuyez sur la touche du couteau (L) juste quand un coup ennemi arrive pour le dévier ; Leon riposte d\'un coup de couteau, comme dans le remake. Si un Ganado vous saisit, appuyez sur la touche du couteau dans la seconde pour vous libérer.</string>
     <string name="ingame_touch_aim">Visée tactile</string>
     <string name="ingame_aim_move_stick">Stick de déplacement</string>
     <string name="ingame_aim_touch_area">Zone tactile</string>

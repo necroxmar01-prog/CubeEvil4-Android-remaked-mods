@@ -2024,6 +2024,8 @@ extern "C" int re4probe_quick_slots(void)
 // the next frames, Leon slashes (the knife routine's slash step); without the key, after the window or with the
 // switch off no blow misses. 0: all right, else the failed checks' bits.
 extern "C" int re4_parry_hit(Vec* pos);
+extern "C" void re4_grab_start(void* em);
+extern "C" int re4_grab_escape(void* em);
 extern "C" int re4probe_parry(void)
 {
     if (!pSys) {
@@ -2080,6 +2082,26 @@ extern "C" int re4probe_parry(void)
     re4_player_input(pl);
     Joy[0].trg = 0;
     bad |= re4_parry_hit(0) != 0 ? 0x40 : 0;
+    // a Ganado's hold (patch 0917): the knife key within a second of the grab breaks it, once
+    int stand = 0;
+    re4_aim_set(100 << 8 | 1 << 21);
+    re4_grab_start(&stand);
+    bad |= re4_grab_escape(&stand) != 0 ? 0x80 : 0;  // no key
+    Joy[0].trg = 0x40;
+    bad |= re4_grab_escape(&stand) != 1 ? 0x100 : 0;
+    bad |= re4_grab_escape(&stand) != 0 ? 0x200 : 0;  // once per hold
+    bad |= re4_grab_escape(&pl) != 0 ? 0x400 : 0;     // another enemy's hold did not start
+    Joy[0].trg = 0;
+    re4_grab_start(&stand);
+    for (int i = 0; i < 31; i++) {
+        re4_grab_escape(&stand);
+    }
+    Joy[0].trg = 0x40;
+    bad |= re4_grab_escape(&stand) != 0 ? 0x800 : 0;  // too late: only the mash
+    re4_grab_start(&stand);
+    re4_aim_set(100 << 8);
+    bad |= re4_grab_escape(&stand) != 0 ? 0x1000 : 0;  // off
+    Joy[0].trg = 0;
     Key = keepKey;
     Joy[0] = keepJoy;
     pPL = keepPl;

@@ -124,6 +124,10 @@ void* re4_melee_execute(void);
  * faces (the app's "Box strike", the knife's reach), and the prompt's routine for it. */
 int re4_box_strike(void* em);
 void* re4_box_strike_func(void);
+/* Patch 0917 (em10.cpp NeckHang / Backhold / Bombhold; runtime/parry.cpp): a Ganado's hold on Leon starts, and 1 when
+ * the knife key breaks it now (the app's "Knife parry", within a second of the grab). */
+void re4_grab_start(void* em);
+int re4_grab_escape(void* em);
 /* Patch 0905 (title.cpp titleWait; runtime/aim_options.cpp, declared here so title.cpp keeps its line numbers): 1
  * when the app's "Skip intro logos" is on: the title starts at its main menu at once, as when it was shown before. */
 int re4_skip_intro(void);

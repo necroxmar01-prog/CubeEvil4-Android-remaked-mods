@@ -540,6 +540,13 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
             free(names[k]);
             continue;
         }
+        if (strcmp(name, "sound/quickslot.wav") == 0) {
+            // the D-pad quick slots' sound (runtime/mod_sound.cpp), no file of the disc either
+            re4_mod_sound_path_set(path);
+            re4_log("DVD: mod %s: %s is the sound of the D-pad quick slots", pack, name);
+            free(names[k]);
+            continue;
+        }
         s32 entry = lookup(d, name);
         errno = 0;
         FILE* f = fopen(path, "rb");
@@ -577,6 +584,7 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
 void applyMods(Disc& d, int no)
 {
     gModsGeneration++;
+    re4_mod_sound_path_set("");  // a pack switched off takes its sound along
     char mods[1200];
     snprintf(mods, sizeof(mods), "%s/mods", gDataDir);
     int count = 0;

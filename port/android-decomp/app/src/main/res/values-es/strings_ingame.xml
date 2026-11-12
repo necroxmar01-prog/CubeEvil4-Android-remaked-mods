@@ -88,7 +88,7 @@
     <string name="ingame_quick_slots">Accesos rápidos en la cruceta</string>
     <string name="ingame_quick_slots_help">Accesos rápidos en la cruceta: durante el juego la cruceta equipa un arma al instante, como en el remake: arriba pistolas y magnums, derecha escopetas, TMP y lanzadores, abajo rifles, izquierda granadas. Pulsa otra vez la misma dirección para pasar a la siguiente de ese tipo que lleves. La cruceta deja de mover a Leon. Mantén pulsada cualquier dirección medio segundo para guardar el arma y andar sin ella.</string>
     <string name="ingame_parry">Parry con cuchillo</string>
-    <string name="ingame_parry_help">Parry con cuchillo: pulsa el botón del cuchillo (L) justo cuando un golpe enemigo va a dar para desviarlo; Leon responde con un tajo de cuchillo, como en el remake. Los agarres no se pueden desviar.</string>
+    <string name="ingame_parry_help">Parry con cuchillo: pulsa el botón del cuchillo (L) justo cuando un golpe enemigo va a dar para desviarlo; Leon responde con un tajo de cuchillo, como en el remake. Si un Ganado te agarra, pulsa el botón del cuchillo en menos de un segundo para soltarte.</string>
     <string name="ingame_touch_aim">Apuntar táctil</string>
     <string name="ingame_aim_move_stick">Stick de movimiento</string>
     <string name="ingame_aim_touch_area">Zona táctil</string>

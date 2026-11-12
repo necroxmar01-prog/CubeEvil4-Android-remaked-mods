@@ -183,6 +183,12 @@ int re4_player_modded(void);
 #define RE4_MEM1_MELEE_AXE_MAX 0x00006000u
 const char* re4_mod_melee_path(void);
 void re4_mod_melee_path_set(const char* path);
+/* A mod's sound for the D-pad quick slots (mods/<pack>/sound/quickslot.wav, runtime/mod_sound.cpp): its path ("" none),
+ * a press (volume: the effects' percent; 1 = it plays) and the mixer of ai.cpp (stereo frames L, R). */
+void re4_mod_sound_path_set(const char* path);
+const char* re4_mod_sound_path(void);
+int re4_mod_sound_play(int volume);
+void re4_mod_sound_mix(short* lr, unsigned frames);
 /* Patch 0901, event.cpp ExePacket_SetParts: 1 = a jacket part of costume 0 takes the skin's pl000e
  * (the PC mods replace pl08, Leon without the jacket); logs each part while the player's file is a mod. */
 int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume);

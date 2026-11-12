@@ -435,6 +435,8 @@ static void testDvdMods()
     CHECK(writeFile(base + "/mods/b/files/em/pl09.das", "B-09!", 5));  // pack b after a: b wins
     CHECK(writeFile(base + "/mods/a/notes.txt", "x", 1));              // not on the disc
     CHECK(writeFile(base + "/mods/.hidden/etc.dat", "NO", 2));         // hidden: not a pack
+    CHECK(makeDirs(base + "/mods/b/files/sound") &&
+          writeFile(base + "/mods/b/files/sound/quickslot.wav", "RIFF", 4));  // the quick slots' sound, no disc file
     // a player archive: the disc's with a body of 0x1000 bytes, the mod's of 0x200000 (patch 0901)
     std::vector<unsigned char> small(0x440), large(0x440);
     small[0x26] = 0x10;  // part 0 (type 0): 0x1000 bytes
@@ -453,6 +455,7 @@ static void testDvdMods()
           memcmp(buf, skin, sizeof(skin) - 1) == 0 && buf[sizeof(skin) - 1] == 0);
     CHECK(DVDOpen("em/pl09.das", &fi) == 1 && fi.length == 5);
     CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "B-09!", 5) == 0);
+    CHECK(strcmp(re4_mod_sound_path(), (base + "/mods/b/files/sound/quickslot.wav").c_str()) == 0);
     CHECK(DVDOpen("etc.dat", &fi) == 1 && fi.length == 3);
     CHECK(DVDReadAsyncPrio(&fi, buf, 32, 0, onRead, 2) == 1 && gReadResult == 32 && memcmp(buf, "ETC", 3) == 0);
     // the FST in MEM1 carries the new size too
@@ -2339,6 +2342,78 @@ static void testQuickSlots()
     report("quickslots", bad == 0);
 }
 
+// A mod's sound for the D-pad quick slots (runtime/mod_sound.cpp): a 16 kHz mono WAV resampled to 32 kHz stereo,
+// scaled by the effects volume, added to the AI's frames and done after its length; other WAVs left out.
+static void wavFile(const std::string& path, unsigned format, unsigned channels, unsigned rate, unsigned bits,
+                    const std::vector<short>& samples)
+{
+    std::vector<unsigned char> w(44 + samples.size() * 2);
+    auto put32 = [&](size_t at, unsigned v) { for (int i = 0; i < 4; i++) w[at + i] = (unsigned char) (v >> (8 * i)); };
+    auto put16 = [&](size_t at, unsigned v) { w[at] = (unsigned char) v; w[at + 1] = (unsigned char) (v >> 8); };
+    memcpy(&w[0], "RIFF", 4);
+    put32(4, (unsigned) w.size() - 8);
+    memcpy(&w[8], "WAVEfmt ", 8);
+    put32(16, 16);
+    put16(20, format);
+    put16(22, channels);
+    put32(24, rate);
+    put32(28, rate * channels * bits / 8);
+    put16(32, channels * bits / 8);
+    put16(34, bits);
+    memcpy(&w[36], "data", 4);
+    put32(40, (unsigned) samples.size() * 2);
+    memcpy(&w[44], samples.data(), samples.size() * 2);
+    writeFile(path, w.data(), w.size());
+}
+
+static void testModSound()
+{
+    bool ok = true;
+    char tmpl[] = "/tmp/re4-sound-test-XXXXXX";
+    const char* root = mkdtemp(tmpl);
+    CHECK(root != 0);
+    if (!root) {
+        report("mod sound", false);
+        return;
+    }
+    const std::string base = root;
+    std::vector<short> mono(1600, 8000);  // 0.1 s at 16 kHz
+    wavFile(base + "/a.wav", 1, 1, 16000, 16, mono);
+    wavFile(base + "/float.wav", 3, 1, 16000, 16, mono);
+    short lr[160 * 2];
+
+    re4_mod_sound_path_set("");
+    CHECK(re4_mod_sound_play(100) == 0);  // no pack's sound: nothing
+    re4_mod_sound_path_set((base + "/float.wav").c_str());
+    CHECK(re4_mod_sound_play(100) == 0);  // not 16-bit PCM
+    re4_mod_sound_path_set((base + "/a.wav").c_str());
+    CHECK(re4_mod_sound_play(0) == 0);    // effects at 0 %
+    CHECK(re4_mod_sound_play(50) == 1);
+    unsigned heard = 0;
+    for (int block = 0; block < 40; block++) {
+        for (int i = 0; i < 320; i++) {
+            lr[i] = 100;
+        }
+        re4_mod_sound_mix(lr, 160);
+        for (int i = 0; i < 160; i++) {
+            if (lr[i * 2] != 100) {
+                heard++;
+                CHECK(lr[i * 2] == 100 + 4000 && lr[i * 2 + 1] == 100 + 4000);  // half of 8000 on both sides
+            }
+        }
+    }
+    CHECK(heard == 3200);  // 0.1 s at 32 kHz, then silent
+    CHECK(re4_mod_sound_play(100) == 1);  // again from the start
+    lr[0] = 32000;
+    re4_mod_sound_mix(lr, 1);
+    CHECK(lr[0] == 32767);  // clamped
+    re4_mod_sound_path_set("");
+    remove((base + "/a.wav").c_str());
+    remove((base + "/float.wav").c_str());
+    rmdir(root);
+    report("mod sound", ok);
+}
+
 // "Knife parry" (runtime/parry.cpp; game_probe.cpp re4probe_parry): the window, the guard, the slash
 static void testParry()
 {
@@ -2924,6 +2999,7 @@ int re4_runtime_tests()
     testKnifeSwipe();
     testFreeMove();
     testQuickSlots();
+    testModSound();
     testParry();
     testWardrobe();
     testMelee();

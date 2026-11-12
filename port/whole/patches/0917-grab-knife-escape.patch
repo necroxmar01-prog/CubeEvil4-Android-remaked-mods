@@ -1,0 +1,62 @@
+# Patch 0917 (wish of DevJunior, 12.11.2026: "if the enemies grab us, a kind of parry to avoid it", the 2023 remake's
+# knife escape). Not a bug of the prototype: a port feature of the mods.
+# em10.cpp, the Ganados' holds on Leon: the front choke (R1 0x34 NeckHang), the hold from behind (0x37 Backhold) and
+# the dynamite hold (0x38 Bombhold). With the app's "Knife parry" on, the knife key within one second of the grab
+# (runtime/parry.cpp re4_grab_start / re4_grab_escape) sends the Ganado at once into the game's own break-free step,
+# the one a won button mash leads to: NeckHang 4 (Leon's kick, damage on the Ganado, down), Backhold 2 (the elbow,
+# damage), Bombhold 4 (break free before the fuse). Leon's routines follow their Ganado's step as before. Declared
+# in re4_whole_prelude.h.
+--- a/src/em10/em10.cpp
++++ b/src/em10/em10.cpp
+@@ -11951,11 +11951,17 @@
+         em->r_no_3 = 0;
+         PlGachaInit();
+         GameAddPoint(LVADD_PL_DAMAGE);
++        re4_grab_start(em); /* port (patch 0917, mods): the knife breaks the hold (runtime/parry.cpp) */
+         em->r_no_2++;
+     case 1:
+         Ctrl12Set(w->pCtrlGroup, CTRL12_ID_EM10_NOT_NEAR, 5);
+         em10CamMove(em, em->r_no_3, 0.1f, 0);
+         PlGachaMove();
++        if (re4_grab_escape(em)) { /* port (patch 0917): Leon kicks him off at once */
++            em->dmg.m_Timer = 2;
++            em->r_no_2 = 4;
++            break;
++        }
+         if (em->Motion.Seq_frame > 43.7f && em->Motion.Seq_frame < 44.3f) {
+             SndStop(w->TmpU32, 0);
+             w->TmpU32 = SndCall(8, 0x85, &em->pos, em->id, 0, em);
+@@ -12595,6 +12601,7 @@
+         PlGachaInit();
+         StaFlagOn(pG, STA_PL_CATCHHOLD);
+         w->Timer2 = 0x2D;
++        re4_grab_start(em); /* port (patch 0917, mods) */
+         em->r_no_2++;
+     case 1:
+         em10CamMove(em, em->r_no_3, 0.1f, 0);
+@@ -12602,7 +12609,7 @@
+         if (w->Timer2) {
+             w->Timer2--;
+         }
+-        if (EmCatchMotionMove(em, 0.3f, 0.2f) || w->Timer2 == 0) {
++        if (EmCatchMotionMove(em, 0.3f, 0.2f) || w->Timer2 == 0 || re4_grab_escape(em)) { /* port (0917): elbow now */
+             em->dmg.m_Timer = 2;
+             em->r_no_2 = 2;
+         } else if (!StaFlagChk(pG, STA_PL_CATCHHOLD)) {
+@@ -12771,6 +12778,7 @@
+         PlGachaInit();
+         StaFlagOn(pG, STA_PL_CATCHHOLD);
+         w->Timer2 = 0x50;
++        re4_grab_start(em); /* port (patch 0917, mods) */
+         em->r_no_2++;
+     case 1:
+         em10CamMove(em, em->r_no_3, 0.1f, 0);
+@@ -12820,7 +12828,7 @@
+             }
+         }
+         EmCatchMotionMove(em, 0.3f, 0.2f);
+-        if ((u32) PlGachaGet() > 0xF) {
++        if ((u32) PlGachaGet() > 0xF || re4_grab_escape(em)) { /* port (patch 0917): the knife frees him at once */
+             em->r_no_2 = 4;
+         }
+         break;

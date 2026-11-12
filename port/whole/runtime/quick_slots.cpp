@@ -17,6 +17,8 @@
 // does (ReadWepData: TaskSleep), so the change runs in a task of its own (slot 1, as the inventory; not while
 // that slot is busy) with the game's main task suspended for those frames, as the inventory suspends it.
 //
+// A mod pack's sound/quickslot.wav plays at each change (runtime/mod_sound.cpp; wish of DevJunior, 12.11.2026).
+//
 // The D-pad no longer walks or turns meanwhile, and its fixed aiming steps are off: re4_quick_slots_input takes
 // its bits out of Key (the stick's stay) and out of Joy[0].on for the rest of the frame. Its presses are found
 // from the raw D-pad of each frame (gDpadPrev), not from Joy[0].trg, which would fire again every frame after the
@@ -34,6 +36,8 @@ extern cPlayer* pPL;
 extern u32 Key_type_tbl[2][64];          // game/pad.cpp
 extern "C" int re4_quick_slots_on(void);  // runtime/aim_options.cpp
 extern "C" void re4_log(const char* fmt, ...);
+extern "C" int re4_mod_sound_play(int volume);  // runtime/mod_sound.cpp: a mod pack's sound/quickslot.wav
+extern "C" int re4_sound_volume(int music);     // runtime/sound_volume.cpp
 
 namespace {
 
@@ -156,6 +160,8 @@ void request(cItem* p, bool bare, const char* name)
     if (!TaskExec(1, (TaskFunc) swapTask, 0)) {
         gSwapItem = 0;
         gSwapBare = false;
+    } else {
+        re4_mod_sound_play(re4_sound_volume(0));  // at the press, not after the weapon's module is read
     }
 }
 

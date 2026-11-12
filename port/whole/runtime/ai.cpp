@@ -109,6 +109,11 @@ void wavHeader(FILE* f, u32 frames)
     fseek(f, 0, SEEK_END);
 }
 
+int16_t clamp16(int v)
+{
+    return (int16_t) (v < -32768 ? -32768 : v > 32767 ? 32767 : v);
+}
+
 // The block the AI starts playing: into the ring (and the WAV file). The DSP
 // leaves right before left in each frame (runtime/dsp.cpp, as the AI reads it).
 void play(u32 addr, u32 length)
@@ -142,10 +147,20 @@ void play(u32 addr, u32 length)
         gOverruns++;  // the app does not read (paused): this block is lost
         return;
     }
+    // a mod's sound (runtime/mod_sound.cpp, the D-pad quick slots) on top of the game's, front left and right
+    static int16_t lr[kBlockFrames * 2];
+    const bool own = frames <= kBlockFrames;
+    if (own) {
+        for (u32 i = 0; i < frames; i++) {
+            lr[i * 2] = block[i * 2 + 1];
+            lr[i * 2 + 1] = block[i * 2];
+        }
+        re4_mod_sound_mix(lr, frames);
+    }
     for (u32 i = 0; i < frames; i++) {
         const u32 at = (w + i) & (kRing - 1);
-        gRing[at * 2] = block[i * 2 + 1];
-        gRing[at * 2 + 1] = block[i * 2];
+        gRing[at * 2] = own ? lr[i * 2] : block[i * 2 + 1];
+        gRing[at * 2 + 1] = own ? lr[i * 2 + 1] : block[i * 2];
     }
     static int16_t four[kBlockFrames * 4];
     const bool surround = frames == kBlockFrames && re4_dsp_surround(addr, four);
@@ -153,9 +168,13 @@ void play(u32 addr, u32 length)
         const u32 at = (w + i) & (kRing - 1);
         if (surround) {
             memcpy(&gRing4[at * 4], &four[i * 4], 4 * sizeof(int16_t));
+            if (own) {  // the mod's share of the front: what the mixer added to the game's frame
+                gRing4[at * 4] = clamp16(gRing4[at * 4] + lr[i * 2] - block[i * 2 + 1]);
+                gRing4[at * 4 + 1] = clamp16(gRing4[at * 4 + 1] + lr[i * 2 + 1] - block[i * 2]);
+            }
         } else {
-            gRing4[at * 4] = block[i * 2 + 1];
-            gRing4[at * 4 + 1] = block[i * 2];
+            gRing4[at * 4] = gRing[at * 2];
+            gRing4[at * 4 + 1] = gRing[at * 2 + 1];
             gRing4[at * 4 + 2] = 0;
             gRing4[at * 4 + 3] = 0;
         }

@@ -89,7 +89,7 @@
     <string name="ingame_quick_slots">Slot cepat D-pad</string>
     <string name="ingame_quick_slots_help">Slot cepat D-pad: saat bermain, D-pad langsung memasang senjata, seperti di remake: atas pistol dan magnum, kanan shotgun, TMP, dan peluncur, bawah senapan, kiri granat. Tekan arah yang sama lagi untuk senjata berikutnya dari jenis itu yang kamu bawa. D-pad tidak lagi menggerakkan Leon. Tahan arah mana pun setengah detik untuk menyimpan senjata dan berjalan tanpa senjata.</string>
     <string name="ingame_parry">Tangkis pisau</string>
-    <string name="ingame_parry_help">Tangkis pisau: tekan tombol pisau (L) tepat saat pukulan musuh akan mengenai untuk menangkisnya; Leon membalas dengan tebasan pisau, seperti di remake. Cengkeraman tidak bisa ditangkis.</string>
+    <string name="ingame_parry_help">Tangkis pisau: tekan tombol pisau (L) tepat saat pukulan musuh akan mengenai untuk menangkisnya; Leon membalas dengan tebasan pisau, seperti di remake. Jika Ganado mencengkerammu, tekan tombol pisau dalam satu detik untuk melepaskan diri.</string>
     <string name="ingame_touch_aim">Bidik Sentuh</string>
     <string name="ingame_aim_move_stick">Stik Gerak</string>
     <string name="ingame_aim_touch_area">Area Sentuh</string>

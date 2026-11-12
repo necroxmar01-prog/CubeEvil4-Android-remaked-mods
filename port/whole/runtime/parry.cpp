@@ -7,7 +7,12 @@
 // (the rest of that swing). Leon answers with his own knife slash: the knife routine's slash step (r_no_1 0xB,
 // r_no_2 2, as the routine sets it on the fire key), the knife key kept down until his stance is up; the slash
 // hits the attacker as any knife slash does (he is at arm's length), so it staggers him by the game's own rules.
-// Grabs and the like (SetPlDamage, PlSetDamage called straight) are not attack spheres and are not parried.
+// Grabs and the like (SetPlDamage, PlSetDamage called straight) are not attack spheres and are not parried; but a
+// Ganado's hold (em10: the front choke NeckHang, the hold from behind Backhold, the dynamite hold Bombhold; patch
+// 0917; wish of DevJunior, 12.11.2026, the remake's knife escape) breaks with the knife key within kGrabWindow game
+// frames of the grab: the Ganado goes at once into the game's own break-free move, as after a won button mash (Leon
+// kicks or elbows him off, the Ganado takes the damage of that move and goes down). Later in the hold only the
+// game's mash frees him.
 // The clash rings as metal: the villagers' own "weapon knocked away" SE, 0x3F of the attacker's block (em10
 // gives every axe, sickle and knife it throws setSeDamage(8, 0x3F, em->id): the clink when Leon shoots it out
 // of the air), else their armour hit 0xD (em10 / em25 / em2c / em2d / em32 when a hit strikes armour); the
@@ -31,11 +36,15 @@ namespace {
 const int kWindow = 8;   // game frames after the key's press in which a blow is parried (about a quarter second)
 const int kGuard = 24;   // game frames after a parry in which no blow lands
 const int kSlash = 10;   // game frames the slash may wait for his knife stance
+const int kGrabWindow = 30;  // game frames after a grab in which the knife key breaks it (one second)
 
 int gWindow = 0;
 int gGuard = 0;
 int gSlash = 0;
 int gParries = 0;
+const void* gGrabEm = 0;  // the enemy whose hold started last (patch 0917)
+int gGrabFrames = 0;      // game frames of that hold so far
+int gEscapes = 0;
 
 // The villagers' family (em10, em_dm_val.cpp's Dmg_tbl_em10 ids): SE 0xD of their block is the armour hit.
 bool villager(int id)
@@ -128,6 +137,33 @@ int re4_parry_hit(Vec* pos)
         if (pos) {
             clash(pos);
         }
+        return 1;
+    }
+    return 0;
+}
+
+// Patch 0917 (em10.cpp, the first frame of a Ganado's hold on Leon: NeckHang, Backhold, Bombhold).
+void re4_grab_start(void* em)
+{
+    gGrabEm = em;
+    gGrabFrames = 0;
+}
+
+// Patch 0917 (the same holds, each frame Leon is held): 1 = the knife key broke the hold now; the enemy's routine then
+// goes into its break-free step.
+int re4_grab_escape(void* em)
+{
+    if (!re4_parry_on() || pG->pl_type == 1 || em != gGrabEm) {
+        return 0;
+    }
+    if (gGrabFrames > kGrabWindow) {
+        return 0;
+    }
+    gGrabFrames++;
+    if ((Key.trg & 0x800) || (Joy[0].trg & 0x40)) {
+        gGrabFrames = kGrabWindow + 1;  // once per hold
+        gEscapes++;
+        re4_log("parry: a hold broken with the knife (%d so far)", gEscapes);
         return 1;
     }
     return 0;
