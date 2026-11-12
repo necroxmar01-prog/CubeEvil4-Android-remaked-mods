@@ -166,6 +166,63 @@ def skin_mean(img, texel_pos):
     return img[..., :3][m].mean(0) if m.sum() > 20 else None
 
 
+def forehead_lines(img, texel_pos, strength, eye_y, sharp=1.6):
+    """Light creases on the forehead and between the brows (DevJunior, 12.11.2026: a reference of Resident Evil
+    Requiem's Leon "with slight expressions on his forehead"): three shallow arcs above the brows (16, 27 and 38 over
+    the eyes, rising 0.004 per unit squared to the sides, fading out past |x| 42), each a thin shadow with a faint
+    light edge above it, and two short upright lines between the brows; on the face's front (z > 55) only."""
+    x, y, z = texel_pos[..., 0], texel_pos[..., 1], texel_pos[..., 2]
+    ok = np.isfinite(x)
+    x, y, z = (np.nan_to_num(v) for v in (x, y, z))
+    front = np.clip((z - 55.0) / 10.0, 0, 1) * ok
+    dark = np.zeros(x.shape)
+    light = np.zeros(x.shape)
+    for k, (dy, depth) in enumerate(((16.0, 0.7), (27.0, 1.0), (38.0, 0.75))):
+        line = eye_y + dy + 0.004 * x * x
+        d = y - line
+        reach = np.clip((42.0 + 4 * k - np.abs(x)) / 12.0, 0, 1)
+        dark = np.maximum(dark, depth * reach * np.exp(-(d / sharp) ** 2))
+        light = np.maximum(light, depth * reach * np.exp(-((d - 2.2 * sharp) / (1.5 * sharp)) ** 2))
+    for sx in (-5.5, 5.5):  # between the brows
+        d = np.abs(x - sx - 0.08 * (y - eye_y - 12.0) * np.sign(sx))
+        on = np.clip((y - (eye_y + 8.0)) / 3.0, 0, 1) * np.clip((eye_y + 24.0 - y) / 4.0, 0, 1)
+        dark = np.maximum(dark, 0.6 * on * np.exp(-(d / sharp) ** 2))
+    # uneven along their length, as skin folds are (not engraved lines)
+    vary = 0.55 + 0.45 * np.clip(F.smooth_noise(np.stack([x, y * 0.2, z], -1), 1.0) * 0.5 + 0.5, 0, 1)
+    dark, light = dark * vary, light * vary
+    k = 1.0 - 0.16 * strength * dark * front + 0.05 * strength * light * front
+    img[..., :3] *= k[..., None]
+    return int(((dark * front) > 0.3).sum())
+
+
+def tint(img, colour, amount):
+    """An RGBA image (PIL) towards a colour at its own brightness (the iris)."""
+    x = np.asarray(img.convert("RGBA"), dtype=np.float64)
+    lum = x[..., :3] @ np.array([0.3, 0.59, 0.11])
+    c = np.array(colour, dtype=np.float64)
+    target = c[None, None, :] * (lum / max(float(c @ np.array([0.3, 0.59, 0.11])), 1.0))[..., None]
+    x[..., :3] = x[..., :3] * (1 - amount) + target * amount
+    return Image.fromarray(np.clip(x, 0, 255).astype(np.uint8), "RGBA")
+
+
+def hair_levels(albedo, alpha, size, stops, streaks, contrast=0.5, seed=3):
+    """The hair's colour texture as a mipmap chain: the strands' shading (the RE Engine hair's albedo brightness on
+    its strands, as skin_hair_fbx.textures) through a colour ramp shadow:middle:highlight (skin_face.ramp), with
+    lighter streaks along the strands (random columns, smoothed: `streaks` of the highlight)."""
+    from scipy.ndimage import gaussian_filter1d
+    levels, _ = H.textures(albedo, alpha, "R", (128, 128, 128), 40, colour_size=size, contrast=contrast)
+    shade = np.asarray(levels[0].convert("L"), dtype=np.float64) / 128.0
+    t = np.clip((shade - 0.65) / 0.7, 0, 1)
+    rng = np.random.default_rng(seed)
+    cols = gaussian_filter1d(rng.standard_normal(size[0]), 2.0)
+    cols = np.clip((cols - 0.6) / 0.8, 0, 1)  # about a quarter of the columns
+    t = np.clip(t + streaks * cols[None, :], 0, 1)
+    rgb = F.ramp(t, stops)
+    col = Image.fromarray(np.dstack([np.clip(rgb, 0, 255).astype(np.uint8),
+                                     np.full(t.shape, 255, np.uint8)]), "RGBA")
+    return [col] + [col.resize(sz, Image.BOX) for sz in H.mip_sizes(*col.size)[1:]]
+
+
 def face_texture(a, size, texel_pos, cards, brow_colour, beard_colour, tone=None):
     """The face's colour texture (RGBA, size x size) from the FBX face's textures, see the module text."""
     load = lambda p: Image.open(p).convert("RGBA").resize((size, size), Image.LANCZOS)
@@ -199,6 +256,8 @@ def face_texture(a, size, texel_pos, cards, brow_colour, beard_colour, tone=None
         w = np.clip(d / cap, 0, 1) * amount
         img[..., :3] = img[..., :3] * (1 - w[..., None]) + np.array(colour)[None, None, :] * w[..., None]
         print("face: %s painted on %d texels" % (key, int((w > 0.2).sum())))
+    if a.forehead > 0:
+        print("face: forehead creases on %d texels" % forehead_lines(img, texel_pos, a.forehead, a.eye_y))
     img[..., 3] = 255
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGBA")
 
@@ -215,6 +274,15 @@ def main(argv=None):
     ap.add_argument("--tex", type=int, default=1024, help="the face texture's size (power of two, default 1024)")
     ap.add_argument("--keep-mats", default="2", help="the old head's parts (texture indices) to keep: its eyes")
     ap.add_argument("--eyes-follow", type=int, default=1, help="1: the kept eyes moved onto the FBX's eyeballs")
+    ap.add_argument("--tone", help="the cheeks' colour R,G,B the skin moves to (--match; default the old face's)")
+    ap.add_argument("--forehead", type=float, default=0.0, help="light forehead creases this strong (0..2)")
+    ap.add_argument("--eye-y", type=float, default=1732.0, help="the eyes' height (where the creases are counted from)")
+    ap.add_argument("--iris", help="the iris (palette image 2) towards R,G,B[,AMOUNT] (default amount 0.6)")
+    ap.add_argument("--hair-albedo", help="the RE Engine hair's ALBS: the hair's colour texture anew (with --hair-ramp)")
+    ap.add_argument("--hair-alpha", help="the hair's ACOT (its red channel: the strands)")
+    ap.add_argument("--hair-ramp", default="35,31,27:82,72,61:152,138,118", help="shadow:middle:highlight colours")
+    ap.add_argument("--hair-streaks", type=float, default=0.35, help="lighter streaks along the strands (0..1)")
+    ap.add_argument("--hair-image", type=int, default=0, help="the hair's colour image in palette 3")
     ap.add_argument("--drop-mats", default="", help="the old head's parts (texture indices) to leave out (DevJunior, "
                     "12.11.2026, device test: the old head's dark eye cards (3) floated in front of the new lids)")
     ap.add_argument("--neck", type=float, help="cut the neck below this height (default: the old head's lowest)")
@@ -326,6 +394,8 @@ def main(argv=None):
     old_img = np.asarray(U.decode_gx(*struct.unpack_from(">HHI", imgs[skin_mat][0]), imgs[skin_mat][1])
                          .convert("RGBA"), dtype=np.float64)
     tone = skin_mean(old_img, old_pos)
+    if a.tone:  # a skin tone of its own (a reference's) instead of the old face's
+        tone = np.array([float(x) for x in a.tone.split(",")])
     brow_colour = tuple(int(x) for x in a.brow_colour.split(","))
     face = face_texture(a, a.tex, texel_pos, cards, brow_colour, beard_colour, tone)
     imgs[skin_mat] = G.encode_image(face, bytes(hdr))
@@ -335,6 +405,20 @@ def main(argv=None):
                          reach=a.scalp_reach, hairline=a.hairline,
                          rules=a.scalp_rules):
         print("scalp: texture %d, %d texels in the hair's colour" % (mc, n))
+    if a.iris:
+        v = [float(x) for x in a.iris.split(",")]
+        k = 2
+        hdr_i = imgs[k][0]
+        cur = U.decode_gx(*struct.unpack_from(">HHI", hdr_i), imgs[k][1]).convert("RGBA")
+        imgs[k] = G.encode_image(tint(cur, v[:3], v[3] if len(v) > 3 else 0.6), hdr_i)
+        print("iris: towards %s" % (v[:3],))
+    if a.hair_albedo and a.hair_alpha:
+        k = a.hair_image
+        w, h = struct.unpack_from(">HH", imgs[k][0])[::-1]
+        stops = [tuple(float(c) for c in x.split(",")) for x in a.hair_ramp.split(":")]
+        levels = hair_levels(a.hair_albedo, a.hair_alpha, (w, h), stops, a.hair_streaks)
+        imgs[k] = H.encode_levels(levels, 0xE, imgs[k][0], H.enc_cmpr)
+        print("hair: colour image %d anew, %dx%d, %d levels, ramp %s" % (k, w, h, len(levels), a.hair_ramp))
     entries[HEAD_TPL] = G.build_tpl(imgs)
     print("face texture: %d, %dx%d (beard colour %s)" % (skin_mat, a.tex, a.tex, beard_colour))
     body = U.build_body(entries, arc.types)
