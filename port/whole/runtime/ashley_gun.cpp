@@ -2,7 +2,15 @@
 // follows us and backs us up"; his choices: a switch in the Mods page, the arm aimed by code, she shoots while she
 // follows and while she waits, ammunition that comes back with time). Compiled with the game's flags into
 // libre4_main (re4_gamehooks_obj); the switch arrives with the second aim word (bit 29, runtime/aim_options.cpp).
-// Ashley's own chapter comes later.
+//
+//  - Stage 3, patch 0913 (pl_ashley.cpp cPlAshley::moveMatCalcBefore; patch 0900's cPlayer::keyConfig hook): in
+//    Ashley's own chapter (pl_type 1) the player shoots with the pistol she holds (DevJunior, 11.11.2026: "also when
+//    playing as her"). The aim key held (R, Key 0x10; the game gives her none) in her walk routines: she stands
+//    (the stick and the run key taken from the game), the stick turns her (with "Free movement" she faces the
+//    camera, its C stick turns her), her arm rises over kAimIn frames to the nearest enemy she sees within
+//    kLockCone of where she faces, else straight ahead; A (Key 0x80, her action key, taken from the game meanwhile)
+//    fires, kFireGap frames apart: the same shot, the same rounds that come back with time; none left, the case's
+//    "no" sound.
 //
 //  - Stage 2, patch 0912 (Sscrn/ss_pzzl.cpp): with the switch on and Ashley the partner, "Equip" on a handgun or a
 //    magnum (the D-pad quick slots' up list) opens the case's own "use on" choice, Leon or Ashley. Ashley: she
@@ -47,6 +55,7 @@
 #include "model.h"
 #include "dvd.h"
 #include "item.h"
+#include "joy.h"
 #include "pl_sub.h"
 #include <dolphin/dvd.h>
 
@@ -77,6 +86,8 @@ const int kRegen = 90;         // frames for one round (3 s)
 const int kFireGap = 14;       // frames between shots
 const int kAimIn = 6;          // frames to raise the arm
 const f32 kPi = 3.14159265f;
+const f32 kLockCone = 0.6f;    // radians either side of where she faces: her own aim locks on (stage 3)
+const f32 kAimTurn = 0.06f;    // radians a frame at full stick while she aims (stage 3)
 
 std::atomic<bool> gOn(false);
 std::atomic<bool> gHooked(false);
@@ -88,7 +99,7 @@ f32 gW = 0.0f;           // the arm's share of the aim, 0..1
 cEm* gTarget = 0;
 cSubChar* gAshley = 0;   // she, as cSubChar::move last ran (frame gSeen)
 u32 gSeen = 0;
-cSubChar* gArmOf = 0;    // whose arm gUpper / gFore / gHand are
+cEm* gArmOf = 0;         // whose arm gUpper / gFore / gHand are
 int gUpper = -1, gFore = -1, gHand = -1;
 f32 gArmLen = 0.0f;
 int gShots = 0;
@@ -97,7 +108,11 @@ bool gLoaded = false;
 bool gLoadFailed = false;
 cObj* gObj = 0;
 void* gObjModel = 0;
-cSubChar* gCarrier = 0;
+cEm* gCarrier = 0;
+cPlayer* gPlayer = 0;    // she as the player (stage 3), as cPlAshley::moveMatCalcBefore last ran (frame gPlSeen)
+u32 gPlSeen = 0;
+bool gAiming = false;    // stage 3: the aim key held this frame (re4_ashley_gun_input)
+bool gFireAsked = false; // stage 3: A pressed while aiming
 cObj* gOld = 0;
 void* gOldModel = 0;
 int gOldWait = 0;
@@ -200,12 +215,12 @@ int partIndex(cModel* m, const cCoord* c)
 }
 
 // Her right arm by her bind pose (once per Ashley)
-void findArm(cSubChar* a)
+void findArm(cEm* a)
 {
     gArmOf = a;
     gUpper = gFore = gHand = -1;
     f32 side = -1.0f;  // Leon's right is -x (runtime/wardrobe.cpp)
-    if (pPL && pPL->pList) {
+    if (pG && pG->pl_type == 0 && pPL && pPL->pList) {
         cParts* h = pPL->getPartsPtr(10);
         if (h) {
             side = bindPos(h).x < 0.0f ? -1.0f : 1.0f;
@@ -301,7 +316,7 @@ bool sees(const Vec& from, const Vec& to)
     return SatMgr.hitCheck(&a, &b, &cross, &nrm, 0, 0) == 0;
 }
 
-bool valid(cSubChar* a, cEm* em, const Vec& eye, bool turn, f32* dist)
+bool valid(cEm* a, cEm* em, const Vec& eye, f32 turn, f32* dist)
 {
     if (!em || (cEm*) em == (cEm*) a || !em->isAlive() || em->hp <= 0 || em->hp_max <= 20 || em->id < 0x10 ||
         em->id > 0x3F || em->checkStatus(EM_STATUS_LOCKOFF)) {
@@ -312,7 +327,7 @@ bool valid(cSubChar* a, cEm* em, const Vec& eye, bool turn, f32* dist)
     if (d > kRange || fabsf(em->pos.y - a->pos.y) > 3000.0f) {
         return false;
     }
-    if (!turn && fabsf(wrap(atan2f(dx, dz) - a->ang.y)) > kCone) {
+    if (turn < kPi && fabsf(wrap(atan2f(dx, dz) - a->ang.y)) > turn) {
         return false;
     }
     Vec tp;
@@ -324,7 +339,7 @@ bool valid(cSubChar* a, cEm* em, const Vec& eye, bool turn, f32* dist)
     return true;
 }
 
-cEm* pickTarget(cSubChar* a, const Vec& eye, bool turn)
+cEm* pickTarget(cEm* a, const Vec& eye, f32 turn)
 {
     cEm* best = 0;
     f32 bestD = 1e9f;
@@ -363,7 +378,7 @@ void turnLocal(cParts* p, const Quaternion& q, f32 w)
     ScaleMatrix(p->l_mat, &p->scale);
 }
 
-void aimArm(cSubChar* a, const Vec& target)
+void aimArm(cEm* a, const Vec& target)
 {
     cParts* u = a->getPartsPtr(gUpper);
     cParts* f = a->getPartsPtr(gFore);
@@ -407,10 +422,8 @@ void aimArm(cSubChar* a, const Vec& target)
     turnLocal(h, none, gW);  // the hand in line
 }
 
-void fire(cSubChar* a, cEm* em)
+void fire(cEm* a, const Vec& tp, cEm* em)
 {
-    Vec tp;
-    aimPoint(em, &tp);
     cParts* u = a->getPartsPtr(gUpper);
     Vec d = {tp.x - u->world.x, tp.y - u->world.y, tp.z - u->world.z};
     const f32 dl = sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
@@ -419,16 +432,21 @@ void fire(cSubChar* a, cEm* em)
     }
     const f32 reach = gArmLen + 150.0f;
     Vec muzzle = {u->world.x + d.x / dl * reach, u->world.y + d.y / dl * reach, u->world.z + d.z / dl * reach};
+    Vec to = tp;
     const s16 hp = a->hp;
     a->hp = 0;
-    const u32 hits = PlWepHitCheck2(0, &muzzle, &tp, 3, 2, 6000.0f);
+    const u32 hits = PlWepHitCheck2(0, &muzzle, &to, 3, 2, 6000.0f);
     a->hp = hp;
     SndCall(2, 0, &muzzle, 0, 0, 0);
     gAmmo--;
     gShots++;
     if (gShots <= 20 || gShots % 50 == 0) {
-        re4_log("ashley: shot %d at s%d (id 0x%x, hp %d) from %.1f m, %u hit, %d rounds left", gShots,
-                slotOf(em), (unsigned) em->id, (int) em->hp, dl / 1000.0f, (unsigned) hits, gAmmo);
+        if (em) {
+            re4_log("ashley: shot %d at s%d (id 0x%x, hp %d) from %.1f m, %u hit, %d rounds left", gShots,
+                    slotOf(em), (unsigned) em->id, (int) em->hp, dl / 1000.0f, (unsigned) hits, gAmmo);
+        } else {
+            re4_log("ashley: shot %d straight ahead, %u hit, %d rounds left", gShots, (unsigned) hits, gAmmo);
+        }
     }
 }
 
@@ -536,8 +554,11 @@ void gunFrame(unsigned)
             askBack();
         }
     }
-    cSubChar* a = gAshley && pG && pG->Frame_cnt - gSeen <= 2 && pSUB == (cEm*) gAshley ? gAshley : 0;
-    if (!armed() || !a || pG->pl_type != 0 || gHand < 0 || gArmOf != a) {
+    cEm* a = !pG                ? 0
+             : pG->pl_type == 0 ? (gAshley && pG->Frame_cnt - gSeen <= 2 && pSUB == (cEm*) gAshley ? (cEm*) gAshley : 0)
+             : pG->pl_type == 1 ? (gPlayer && pG->Frame_cnt - gPlSeen <= 2 && pPL == gPlayer ? (cEm*) gPlayer : 0)
+                                : 0;
+    if (!armed() || !a || gHand < 0 || gArmOf != a) {
         if (gObj) {
             dropGun(!gOn.load() ? "switched off" : !givenItem() ? "no pistol hers" : "no Ashley");
         }
@@ -629,9 +650,10 @@ void re4_ashley_gun_move(cSubChar* a)
     Vec eye = a->pList->world;
     eye.y += 400.0f;
     const bool standing = a->r_no_1 == 0;
+    const f32 turn = standing ? 2 * kPi : kCone;
     f32 d;
-    if (!gTarget || !valid(a, gTarget, eye, standing, &d)) {
-        cEm* t = pickTarget(a, eye, standing);
+    if (!gTarget || !valid(a, gTarget, eye, turn, &d)) {
+        cEm* t = pickTarget(a, eye, turn);
         if (t != gTarget && t) {
             re4_log("ashley: target s%d (id 0x%x, hp %d)", slotOf(t), (unsigned) t->id, (int) t->hp);
         }
@@ -655,8 +677,115 @@ void re4_ashley_gun_move(cSubChar* a)
     gW = gW + 1.0f / kAimIn > 1.0f ? 1.0f : gW + 1.0f / kAimIn;
     aimArm(a, tp);
     if (gW >= 0.99f && gGap == 0 && gAmmo > 0) {
-        fire(a, gTarget);
+        fire(a, tp, gTarget);
         gGap = kFireGap;
+    }
+}
+
+// Patch 0900's cPlayer::keyConfig hook (runtime/free_move.cpp re4_player_input, the game thread, before the
+// routines read the keys; stage 3): 1 = Ashley the player aims her pistol this frame. Her stick, run and action
+// keys are then out of the game's keys; A asks for a shot; the stick turns her (unless `freeCam`: the free camera's
+// yaw, which the caller gives her after the camera moved).
+int re4_ashley_gun_input(cPlayer* pl, int freeCam)
+{
+    gAiming = false;
+    if (!pl || !pG || pG->pl_type != 1 || pG->Rno0 != 3 || !armed() || StaFlagChk(pG, STA_EVENT) ||
+        StaFlagChk(pG, STA_SUB_SCRN) || StaFlagChk(pG, STA_MOVIE_ON) || !(Key.on & 0x10) || pl->r_no_0 != 0 ||
+        pl->r_no_1 > 4 || pl->stat.check(cPlayer::F_EVENT)) {
+        gFireAsked = false;
+        return 0;
+    }
+    gAiming = true;
+    if (Key.trg & 0x80) {
+        gFireAsked = true;
+    }
+    if (!freeCam) {
+        const int sx = Key.stickX;
+        if (sx > 20 || sx < -20) {
+            pl->ang.y = wrap(pl->ang.y - (f32) sx / 127.0f * kAimTurn);
+        }
+    }
+    Key.stickX = 0;
+    Key.stickY = 0;
+    Key.on &= ~(u64) (0xF | 0x80 | 0x40000000);
+    Key.trg &= ~(u64) (0xF | 0x80 | 0x40000000);
+    Joy[0].on &= ~0x100u;  // A, for what reads the pad itself
+    Joy[0].trg &= ~0x100u;
+    return 1;
+}
+
+// Patch 0913 (pl_ashley.cpp cPlAshley::moveMatCalcBefore: her motion on her parts, before their world matrices;
+// the game thread; stage 3): the pistol in her hand, her arm while she aims, her shots.
+void re4_ashley_gun_player(cPlayer* a)
+{
+    if (!a || !pG) {
+        return;
+    }
+    gPlayer = a;
+    gPlSeen = pG->Frame_cnt;
+    if (!gHooked.exchange(true)) {
+        re4_add_frame_hook(gunFrame);
+    }
+    if (!armed()) {
+        gW = 0.0f;
+        gTarget = 0;
+        gFireAsked = false;
+        return;
+    }
+    if (gArmOf != a) {
+        findArm(a);
+    }
+    if (gAmmo < kMag && ++gRegenT >= kRegen) {
+        gRegenT = 0;
+        gAmmo++;
+    }
+    if (gGap > 0) {
+        gGap--;
+    }
+    if (gHand < 0 || !gAiming) {
+        gW = gW - 1.0f / kAimIn < 0.0f ? 0.0f : gW - 1.0f / kAimIn;
+        gTarget = 0;
+        gFireAsked = false;
+        if (gW > 0.0f && gHand >= 0) {
+            a->partsWorldCalc();
+            Vec ahead = a->pos;
+            ahead.x += sinf(a->ang.y) * 5000.0f;
+            ahead.z += cosf(a->ang.y) * 5000.0f;
+            ahead.y = a->getPartsPtr(gUpper)->world.y;
+            aimArm(a, ahead);  // the arm back down
+        }
+        return;
+    }
+    a->partsWorldCalc();  // this frame's pose (the game computes it again after us)
+    Vec eye = a->pList->world;
+    eye.y += 400.0f;
+    f32 d;
+    if (!gTarget || !valid(a, gTarget, eye, kLockCone, &d)) {
+        cEm* t = pickTarget(a, eye, kLockCone);
+        if (t != gTarget && t) {
+            re4_log("ashley: she aims at s%d (id 0x%x, hp %d)", slotOf(t), (unsigned) t->id, (int) t->hp);
+        }
+        gTarget = t;
+    }
+    Vec tp;
+    if (gTarget) {
+        aimPoint(gTarget, &tp);
+    } else {
+        tp = a->pos;
+        tp.x += sinf(a->ang.y) * kRange;
+        tp.z += cosf(a->ang.y) * kRange;
+        tp.y = a->getPartsPtr(gUpper)->world.y;
+    }
+    gW = gW + 1.0f / kAimIn > 1.0f ? 1.0f : gW + 1.0f / kAimIn;
+    aimArm(a, tp);
+    if (gFireAsked && gW >= 0.99f && gGap == 0) {
+        gFireAsked = false;
+        if (gAmmo > 0) {
+            fire(a, tp, gTarget);
+            gGap = kFireGap;
+        } else {
+            SndCall(0, 7, 0, 0, 0, 0);
+        }
     }
 }
 

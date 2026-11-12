@@ -1,0 +1,22 @@
+# Patch 0913 (wish of DevJunior, 11.11.2026: Ashley's pistol "also when playing as her"). Not a bug of the
+# prototype: a port feature of the mods (stage 3 of patch 0911, the app's Mods page, "Ashley's pistol").
+# game/pl_ashley.cpp cPlAshley::moveMatCalcBefore (Ashley as the player, every frame of cPlayer::move: after her
+# routine, the motion base and the body, before her parts' world matrices; the original leaves it empty) calls
+# re4_ashley_gun_player (runtime/ashley_gun.cpp): with the pistol hers and the aim key held, her right arm turns
+# to the target and A fires; with the switch off or no pistol hers it does nothing. Her keys while she aims:
+# runtime/free_move.cpp re4_player_input (patch 0900) asks re4_ashley_gun_input.
+--- a/src/game/pl_ashley.cpp
++++ b/src/game/pl_ashley.cpp
+@@ -43,9 +43,12 @@
+     moveBust();
+ }
+ 
++extern "C" void re4_ashley_gun_player(cPlayer* a); /* port (patch 0913): runtime/ashley_gun.cpp */
++
+ // Nothing to fix up before the matrix pass (Leon uses it for the head).
+ void cPlAshley::moveMatCalcBefore()
+ {
++    re4_ashley_gun_player(this); /* port (patch 0913, mods): her pistol, her arm aimed and her shots */
+ }
+ 
+ // Loads the body (archive 4/5) and adds the face (7/9, also Body->pShape for the face morphs), hair

@@ -72,6 +72,7 @@ extern "C" int re4_aim_move_on(void);
 extern "C" void re4_quick_slots_input(cPlayer* pl);  // runtime/quick_slots.cpp
 extern "C" int re4_run_held(int held);               // runtime/aim_options.cpp (patch 0156)
 extern "C" void re4_parry_input(cPlayer* pl);         // runtime/parry.cpp
+extern "C" int re4_ashley_gun_input(cPlayer* pl, int freeCam);  // runtime/ashley_gun.cpp (patch 0913)
 
 namespace {
 
@@ -679,6 +680,8 @@ void re4_player_input(cPlayer* pl)
     }
     measure(pl);
     gLegRun = false;
+    // Ashley's own chapter: her pistol aimed (her keys out of the game's first)
+    const int ashleyAims = re4_ashley_gun_input(pl, re4_free_move_on() && gCamValid && pl == gLastPl);
     re4_quick_slots_input(pl);  // first: the D-pad's bits out of the keys when it equips weapons
     re4_parry_input(pl);
     reloadInput(pl);  // before the camera: a reload started now keeps the free camera
@@ -686,6 +689,9 @@ void re4_player_input(cPlayer* pl)
         freeMove(pl);
     } else {
         gCamValid = false;
+    }
+    if (ashleyAims && re4_free_move_on() && gCamValid) {
+        pl->ang.y = gCamYaw;  // she aims where the camera looks, as Leon
     }
     if (re4_aim_move_on()) {
         aimMove(pl);
