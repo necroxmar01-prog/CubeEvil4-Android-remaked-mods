@@ -233,6 +233,13 @@ const int kHitFrame = 8;         // frame of its chop (0x86) that hits: the blad
 const int kCancel = 18;          // frames of its chop before an aim or fire key may end it
 bool gAxeLive = false;           // the knife is out for the axe strike (the gun hidden)
 
+// Bytes of a key in a curve's layout (motion.cpp Fcc_next_axis_addr), 0 for the layouts the game does not read
+int keyBytes(int fmt)
+{
+    static const int kBytes[16] = {12, 8, 6, 0, 10, 6, 4, 0, 9, 5, 3, 0, 0, 0, 0, 4};
+    return kBytes[fmt & 15];
+}
+
 // Leon's skeleton takes these parts of a Ganado's motion: the body 0..25 and 32 (an eye, his own motions move it)
 bool leonPart(int part)
 {
@@ -278,23 +285,49 @@ void* axeMotion(PlArc* arc)
         part[m] = src[3 + n * 2 + i];
         m++;
     }
+    // every curve checked against the copy (motion.cpp HermiteInterpolation: per axis a key count, the keys' frames,
+    // the keys in the curve's layout, Fcc_next_axis_addr): a curve that reaches past the motion, has more keys than
+    // the motion has frames, or (float layouts) a value that is no number goes, rather than move Leon to nowhere
+    // (DevJunior, 12.11.2026, device report: the step forward read 7.9e33 and the game hung in EmAtCheck)
+    unsigned kept = 0;
+    for (unsigned j = 0; j < m; j++) {
+        const int fmt = kind[j] >> 12;
+        const int stride = keyBytes(fmt);
+        const u8* p = dst + off[j];
+        bool fits = stride > 0;
+        for (int a = 0; a < 3 && fits; a++) {
+            const unsigned cnt = p + 2 <= dst + size ? get16(p) : 0xFFFFu;
+            fits = cnt >= 1 && cnt <= (unsigned) get16(src) + 1u && p + 2 + cnt * 2 + cnt * stride <= dst + size;
+            for (unsigned c = 0; fits && fmt <= 2 && c < cnt; c++) {
+                f32 v;
+                memcpy(&v, p + 2 + cnt * 2 + c * stride, 4);
+                fits = v == v && fabsf(v) < 1.0e5f;
+            }
+            p += 2 + (fits ? cnt * 2 + cnt * stride : 0);
+        }
+        if (!fits) {
+            re4_log("melee: the axe attack's curve %u (part %u, kind 0x%04x) does not read as a curve: left out", j,
+                    (unsigned) part[j], (unsigned) kind[j]);
+            continue;
+        }
+        off[kept] = off[j];
+        kind[kept] = kind[j];
+        part[kept] = part[j];
+        kept++;
+    }
+    m = kept;
     // the root's step forward (kind 1, the model's travel; float keys of value and two slopes): at most kRootMax
     for (unsigned j = 0; j < m; j++) {
-        if ((kind[j] & 0xFF) != 1 || (kind[j] >> 12) != 0 || part[j] != 0) {
+        if ((kind[j] & 0xFF) != 1 || (kind[j] >> 12) != 0) {
             continue;
         }
         u8* axes[3];
         unsigned counts[3];
         u8* p = dst + off[j];
-        bool fits = true;
-        for (int a = 0; a < 3 && fits; a++) {
+        for (int a = 0; a < 3; a++) {
             counts[a] = get16(p);
             axes[a] = p;
             p += 2 + counts[a] * 2 + counts[a] * 12;
-            fits = p <= dst + size;
-        }
-        if (!fits) {
-            continue;
         }
         f32 most = 0.0f;
         for (int a = 0; a < 3; a += 2) {
