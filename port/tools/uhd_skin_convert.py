@@ -231,7 +231,32 @@ def quant(v, scale, lo=-32768, hi=32767):
     return max(lo, min(hi, int(round(v * scale))))
 
 
-def convert_model(blob, cap, stats):
+def gc_bone_records(gc_model):
+    """The disc model's parts records (id, parent, flags ...; position), big-endian as they are."""
+    return [gc_model[0x60 + i * 16:0x70 + i * 16] for i in range(gc_model[0x19])]
+
+
+def rebind_map(gc_model, pc_model):
+    """Per PC part: the disc's part it is drawn with. A part both skeletons have alike (id, parent, position within
+    0.5) keeps its number; any other goes to its nearest ancestor that does (Separate Ways' extra parts of Ada:
+    holsters, coat tails ...: they move rigidly with it)."""
+    gb = {}
+    for r in gc_bone_records(gc_model):
+        gb[r[0]] = (r[1], struct.unpack_from(">3f", r, 4))
+    pc = {raw[0]: (raw[1], xyz) for raw, xyz in Model(pc_model).bones()}
+    same = {b for b, (par, xyz) in pc.items()
+            if b in gb and gb[b][0] == par and max(abs(x - y) for x, y in zip(gb[b][1], xyz)) <= 0.5}
+    out = {}
+    for b in pc:
+        a, hops = b, 0
+        while a not in same and a in pc and hops < 256:
+            a, hops = pc[a][0], hops + 1
+        out[b] = a if a in same else min(same)
+    return out, sorted(b for b in pc if b not in same)
+
+
+def convert_model(blob, cap, stats, rebind=None):
+    """rebind: the disc's model whose skeleton this one is drawn with (rebind_map), or None."""
     m = Model(blob)
     nv = m.nvtx
     pos = m.floats(m.vtx, nv, 3)
@@ -246,6 +271,15 @@ def convert_model(blob, cap, stats):
         uv_scale, uv_lo, uv_hi = 32768.0, 0, 65535  # u16, 15 fraction bits
     vw = struct.unpack_from("<%dH" % nv, blob, m.vidx) if m.vidx else (0,) * nv
     weights = m.weights()
+    if rebind is not None:
+        bmap, _ = rebind_map(rebind, blob)
+        moved = []
+        for e in weights:
+            acc = {}
+            for b, w in e:
+                acc[bmap.get(b, b)] = acc.get(bmap.get(b, b), 0) + w
+            moved.append(tuple(sorted(acc.items(), key=lambda x: -x[1])))
+        weights = moved
     skinned = len(weights) > 1 or m.nparts > 1
     if weights:
         merged, remap, step = merge_weights(weights, cap)
@@ -298,8 +332,11 @@ def convert_model(blob, cap, stats):
 
     # parts records: the bytes x0 as they are, the position big-endian
     head = bytearray()
-    for raw, (x, y, z) in m.bones():
-        head += raw + struct.pack(">3f", x, y, z)
+    if rebind is not None:
+        head = bytearray(b"".join(gc_bone_records(rebind)))
+    else:
+        for raw, (x, y, z) in m.bones():
+            head += raw + struct.pack(">3f", x, y, z)
     put("head", head, 16)
     put("vtx", b"".join(struct.pack(">3hH", *p) for p in P))
     if s8:
@@ -348,7 +385,13 @@ def convert_model(blob, cap, stats):
     if first != nv:
         raise ValueError("the runs use %d of %d vertices" % (first, nv))
     put("parts", parts)
-    if m.blend:
+    gu = (lambda o: struct.unpack_from(">I", rebind, o)[0]) if rebind is not None else None
+    if rebind is not None and gu(0x3C) == 0x20030818 and gu(0x40):
+        n = gu(gu(0x40))
+        put("blend", rebind[gu(0x40):gu(0x40) + 4 + n * 8], 4)  # the disc's, for its parts
+    elif rebind is not None:
+        pass
+    elif m.blend:
         n = struct.unpack_from("<I", blob, m.blend)[0]
         put("blend", struct.pack(">I", n) + struct.pack(">%dH" % (n * 4), *struct.unpack_from("<%dH" % (n * 4), blob, m.blend + 4)), 4)
     if m.shapes:
@@ -380,14 +423,18 @@ def convert_model(blob, cap, stats):
             raise ValueError("shape deltas do not survive the merge (%d vertices)" % bad)
     else:
         shape_note = ""
-    if m.flip:
+    if rebind is not None:
+        if gu(0x3C) == 0x20030818 and gu(0x44):
+            n = gu(gu(0x44))
+            put("flip", rebind[gu(0x44):gu(0x44) + 4 + n * 2], 4)
+    elif m.flip:
         # the PC keeps the x-flip table big-endian, as on the disc
         n = struct.unpack_from(">I", blob, m.flip)[0]
         put("flip", blob[m.flip:m.flip + 4 + n * 2], 4)
     out.extend(bytes(align(len(out)) - len(out)))
     hdr = struct.pack(">3I3I", sec["head"], m.x04, 0x50 if m.version == 0x20030818 else m.x08,
                       sec.get("clr", 0), sec["tex"], sec["wgt"])
-    hdr += struct.pack(">BBH", len(merged) & 0xFF, m.nparts, m.nlist)
+    hdr += struct.pack(">BBH", len(merged) & 0xFF, rebind[0x19] if rebind is not None else m.nparts, m.nlist)
     hdr += struct.pack(">III", sec["parts"], flags, m.ntex)
     hdr += struct.pack(">BBH", shift, m.x29, len(merged))
     hdr += struct.pack(">III", sec.get("shape", 0), sec["vtx"], sec["nrm"])
@@ -913,6 +960,9 @@ CHARACTER_TPL_USERS = {
     "pl05": {1: (0, 4, 6, 13, 16, 17), 5: (3,), 7: (2,)},
     "pl11": {1: (0, 5, 6, 8, 9, 10, 11, 12), 4: (2,), 7: (3,)},
     "pl15": {1: (0, 5, 6, 8, 9, 10, 11, 12), 4: (2,), 7: (3,)},
+    # Ada as the player (pl02.cpp cPlAda::setModel / setHead / setRightHand / setLeftHand): pl0b, pl0c
+    "pl0b": {1: (0, 13, 14, 15, 16, 17), 3: (2, 4, 7), 6: (5,), 9: (8,), 103: (102,), 119: (118,), 122: (121,)},
+    "pl0c": {1: (0, 13, 14, 15, 16, 17), 3: (2, 4, 7), 6: (5,), 9: (8,), 103: (102,), 119: (118,), 122: (121,)},
 }
 TPL_USERS = PLAYER_TPL_USERS  # main() sets the character's
 
@@ -929,6 +979,15 @@ class Aligned:
         gk = [gc.kind(i) for i in range(len(gc.offsets))]
         pk = [pc.kind(i) for i in range(len(pc.offsets))]
         self.map = [None] * len(gk)
+        if len(pk) >= len(gk) and all(g == p or not g or not p for g, p in zip(gk, pk)):
+            # the same layout with more behind (Separate Ways' pl16 over pl0b): entry by entry; an entry the disc
+            # leaves empty stays empty
+            self.map = [i if gk[i] and pk[i] else None for i in range(len(gk))]
+            self.offsets = gc.offsets
+            self.types = gc.types
+            used = set(m for m in self.map if m is not None)
+            self.dropped = [j for j in range(len(pk)) if j not in used and pk[j]]
+            return
         for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, gk, pk, autojunk=False).get_opcodes():
             if tag == "equal" or (tag == "replace" and i2 - i1 == j2 - j1):
                 for k in range(i2 - i1):
@@ -1002,6 +1061,10 @@ def main(argv=None):
     ap.add_argument("--bones-free", default="",
                     help="parts (e.g. 93-125, Ashley's skirt chains, which pl_cloth swings) that may lie elsewhere in "
                          "the PC skeleton than on the disc, same parent")
+    ap.add_argument("--rebind", action="store_true",
+                    help="when the PC skeleton differs (Separate Ways' Ada, pl16, over the disc's pl0b): draw the main "
+                         "model with the disc's skeleton, the parts the disc lacks or has elsewhere moving with their "
+                         "nearest common ancestor")
     a = ap.parse_args(argv)
     free = set()
     for r in a.bones_free.split(","):
@@ -1030,9 +1093,16 @@ def main(argv=None):
     packs = Packs(a.packs)
     if gc.kind(0) == "BIN" and pc.kind(0) == "BIN":
         why = check_skeleton(gc.entry(0), pc.entry(0), free)
-        if why:
+        if why and a.rebind:
+            bmap, moved = rebind_map(gc.entry(0), pc.entry(0))
+            rebind0 = gc.entry(0)
+            print("the skeletons differ (%s): drawn with the disc's %d parts; PC parts %s move with %s" %
+                  (why, gc.entry(0)[0x19], moved, [bmap[b] for b in moved]))
+        elif why:
             sys.exit("the skeletons differ: %s; the disc's motions would not fit this model" % why)
     entries = []
+    if "rebind0" not in dir():
+        rebind0 = None
     for i in range(len(gc.offsets)):
         kind_gc, kind_pc = gc.kind(i), pc.kind(i)
         blob_pc = pc.entry(i)
@@ -1046,7 +1116,7 @@ def main(argv=None):
             continue
         stats = []
         if kind_pc == "BIN":
-            blob, model = convert_model(blob_pc, a.palette, stats)
+            blob, model = convert_model(blob_pc, a.palette, stats, rebind0 if i == 0 else None)
             print("entry %3d BIN: %s" % (i, stats[0]))
             if a.verify:
                 pe, ne, te, wb = verify_model(blob, model)
