@@ -128,6 +128,10 @@ void* re4_box_strike_func(void);
  * the knife key breaks it now (the app's "Knife parry", within a second of the grab). */
 void re4_grab_start(void* em);
 int re4_grab_escape(void* em);
+/* Patch 0918 (pl_wep.cpp SearchLockEm, lockInit, lockNext; runtime/lock_on.cpp): the player's lock-on target for the
+ * app's "Auto aim" (a Vec* position, the cEm* locked now; 0 none) and the lock's frames. */
+void* re4_lock_search(void* pos, void* now);
+int re4_lock_frames(int game);
 /* Patch 0905 (title.cpp titleWait; runtime/aim_options.cpp, declared here so title.cpp keeps its line numbers): 1
  * when the app's "Skip intro logos" is on: the title starts at its main menu at once, as when it was shown before. */
 int re4_skip_intro(void);

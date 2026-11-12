@@ -96,10 +96,13 @@ const f32 kSwayAim = 0.5f;        // share of the walk's hip turn while aiming (
 const f32 kSwayMean = 0.08f;      // the hips' running mean per frame (a walk step lasts about 15 frames)
 const f32 kRecenter = 0.35f;      // share per frame the camera turns back behind him after R3
 const int kFollowDelay = 15;      // frames the right stick rests before the camera follows his way (half a second)
-const f32 kFollowWalk = 0.025f;   // share of the difference to his facing per frame, walking
-const f32 kFollowRun = 0.04f;     // running
-const f32 kFollowStep = 0.035f;   // at most this turn per frame (about 60 degrees a second)
-const f32 kFollowAngle = 2.35f;   // no following beyond this (135 degrees: he walks toward the camera)
+const f32 kFollowWalk = 0.05f;    // share of the difference to his facing per frame, walking (0.025 until 12.11.2026)
+const f32 kFollowRun = 0.09f;     // running (0.04)
+const f32 kFollowStep = 0.08f;    // at most this turn per frame (about 140 degrees a second; 0.035, 60, until 12.11.2026)
+const f32 kFollowAngle = 2.35f;   // walking: no following beyond this (135 degrees: he walks toward the camera);
+                                  // running, the camera swings round behind him at any angle (12.11.2026: "when I run
+                                  // backwards"), the way it started kept near 180 degrees (kFollowFlip)
+const f32 kFollowFlip = 2.8f;
 const int kMaxParts = 160;
 const f32 kTeleport = 1500.0f;    // a jump of his position this far (a door, a new room, an event): camera reset
 const f32 kWalkDefault = 42.0f;   // his walk and run per game frame until measured (gWalkSpeed, gRunSpeed)
@@ -113,6 +116,7 @@ Vec gLastPos = {0.0f, 0.0f, 0.0f};
 std::atomic<bool> gRecenterAsked(false);  // R3 pressed (any thread)
 bool gRecentering = false;
 int gStickRest = 0;                       // frames since the right stick last turned the camera
+int gFollowSign = 0;                      // the way the camera last followed (-1, +1; 0 none)
 std::atomic<bool> gReloadAsked(false);    // the touch RLOAD button (any thread)
 f32 gWalkSpeed = kWalkDefault;            // his walk and run as measured (units per game frame)
 f32 gRunSpeed = kRunDefault;
@@ -270,13 +274,20 @@ void freeMove(cPlayer* pl)
     }
     // the camera follows his way by itself (as the remake's) once the right stick rested
     if (moving && !gRecentering && gStickRest >= kFollowDelay) {
-        const f32 d = wrap(pl->ang.y - gCamYaw);
-        if (fabsf(d) < kFollowAngle) {
+        f32 d = wrap(pl->ang.y - gCamYaw);
+        const bool running = pl->r_no_1 == 3;
+        if (running && fabsf(d) > kFollowFlip && gFollowSign != 0 && (d > 0) != (gFollowSign > 0)) {
+            d += gFollowSign > 0 ? 2.0f * kPi : -2.0f * kPi;  // near 180 degrees: keep swinging the same way
+        }
+        if (fabsf(d) < kFollowAngle || running) {
             const f32 mag = sqrtf(sx * sx + sy * sy);
-            f32 turn = d * (pl->r_no_1 == 3 ? kFollowRun : kFollowWalk) * (mag > 1.0f ? 1.0f : mag);
+            f32 turn = d * (running ? kFollowRun : kFollowWalk) * (mag > 1.0f ? 1.0f : mag);
             turn = turn > kFollowStep ? kFollowStep : turn < -kFollowStep ? -kFollowStep : turn;
             gCamYaw = wrap(gCamYaw + turn);
+            gFollowSign = turn > 0.0f ? 1 : turn < 0.0f ? -1 : gFollowSign;
         }
+    } else {
+        gFollowSign = 0;
     }
 }
 

@@ -1827,8 +1827,8 @@ extern "C" int re4probe_free_move(void)
         Key.substickX = 0;
         re4_player_input(pl);
         pl->r_no_1 = 1;
-        Key.stickX = 56;  // right, held
-        for (int i = 0; i < 90; i++) {
+        Key.stickX = 56;  // right, held (he walks a circle: within a second, before the camera went round once)
+        for (int i = 0; i < 30; i++) {
             Key.on = 4;
             re4_player_input(pl);
         }
@@ -1847,6 +1847,13 @@ extern "C" int re4probe_free_move(void)
             re4_player_input(pl);
         }
         bad |= fabsf(camYaw() - before) > 0.01f ? 0x100000 : 0;
+        // running toward the camera (12.11.2026): it swings round behind him
+        pl->r_no_1 = 3;
+        for (int i = 0; i < 40; i++) {
+            Key.on = 2;
+            re4_player_input(pl);
+        }
+        bad |= fabsf(camYaw() - before) < 0.3f ? 0x200000 : 0;
         Key.stickY = 0;
         Key.on = 0;
         pl->r_no_1 = 0;
@@ -2106,6 +2113,59 @@ extern "C" int re4probe_parry(void)
     Joy[0] = keepJoy;
     pPL = keepPl;
     pG->pl_type = keepType;
+    return bad;
+}
+
+// The app's "Auto aim" target (runtime/lock_on.cpp, patch 0918): fake Ganados (one part, its matrix at the place),
+// scored from Leon's position: the standing one in front first, a trap and anything beyond 25 m never, the lying one
+// and the one behind him only after the standing one in front.
+extern "C" float re4_lock_score(void* character, void* at, int checkWalls);
+extern "C" int re4_lock_frames(int game);
+extern "C" int re4probe_lock_on(void)
+{
+    cPlayer* keepPl = pPL;
+    cPlayer* pl = (cPlayer*) (unsigned long) 0x82E40000ul;
+    memset((void*) pl, 0, sizeof(cPlayer));
+    pPL = pl;
+    pl->ang.y = 0.0f;  // facing +z (forward is (sin, cos))
+    static u64 works[4][sizeof(cEm) / 8 + 1];
+    static u64 parts[4][sizeof(cParts) / 8 + 1];
+    cEm* em[4];
+    const int ids[4] = {0x10, 0x2A, 0x10, 0x10};
+    const f32 z[4] = {3000.0f, 1500.0f, 2000.0f, -1500.0f};
+    const f32 head[4] = {1500.0f, 50.0f, 200.0f, 1500.0f};
+    for (int i = 0; i < 4; i++) {
+        memset(works[i], 0, sizeof(works[i]));
+        memset(parts[i], 0, sizeof(parts[i]));
+        em[i] = (cEm*) (void*) works[i];
+        cParts* p = (cParts*) (void*) parts[i];
+        PSMTXTrans(p->mat, 0.0f, 0.0f, z[i]);
+        em[i]->pList = p;
+        em[i]->be_flag = 0x2000 | 0x20;
+        em[i]->id = (u8) ids[i];
+        em[i]->lockParts = 0;
+        em[i]->lockOfs.x = 0.0f;
+        em[i]->lockOfs.y = head[i];
+        em[i]->lockOfs.z = 0.0f;
+        em[i]->pos.x = 0.0f;
+        em[i]->pos.y = 0.0f;
+        em[i]->pos.z = z[i];
+    }
+    Vec at = {0.0f, 1500.0f, 0.0f};
+    int bad = 0;
+    const float front = re4_lock_score(em[0], &at, 0);
+    bad |= front < 0.0f ? 1 : 0;
+    bad |= re4_lock_score(em[1], &at, 0) >= 0.0f ? 2 : 0;  // the trap: never
+    const float lying = re4_lock_score(em[2], &at, 0);
+    bad |= lying < 0.0f || lying <= front ? 4 : 0;           // lying, nearer: after the standing one
+    const float behind = re4_lock_score(em[3], &at, 0);
+    bad |= behind < 0.0f || behind <= front ? 8 : 0;         // behind, nearer: after the one in front
+    PSMTXTrans(((cParts*) (void*) parts[0])->mat, 0.0f, 0.0f, 26000.0f);
+    bad |= re4_lock_score(em[0], &at, 0) >= 0.0f ? 0x10 : 0;  // beyond 25 m
+    PSMTXTrans(((cParts*) (void*) parts[0])->mat, 0.0f, 0.0f, 20000.0f);
+    bad |= re4_lock_score(em[0], &at, 0) < 0.0f ? 0x20 : 0;   // 20 m: the game's 10 m would not
+    bad |= re4_lock_frames(10) != 20 ? 0x40 : 0;
+    pPL = keepPl;
     return bad;
 }
 

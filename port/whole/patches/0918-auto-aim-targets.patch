@@ -1,0 +1,41 @@
+# Patch 0918 (wish of DevJunior, 12.11.2026: "improve the port's auto aim: with an enemy near it sometimes prefers the
+# ones lying on the ground to the standing ones, sometimes goes for the traps first, and it does not reach far").
+# Not a bug of the prototype: a port feature of the mods, for the app's "Auto aim" (the game's lock-on, CFG_LOCK_ON).
+# pl_wep.cpp SearchLockEm (the player's lock-on: lockInit at aim start, lockNext) asks runtime/lock_on.cpp
+# re4_lock_search first: the game's own checks (lockEmCk: alive, lockable, not behind a wall), without traps, animals
+# and objects (ids 0x21 dog, 0x23 crow, 0x26 cow, 0x27 fish, 0x28 chicken, 0x2A trap, 0x3B and up: vehicles, armour,
+# doors, boxes, barrels ...), up to 25 m (the game: 10 m), scored by distance times the turn away from Leon's facing,
+# an enemy whose lock point is under 70 cm above its feet (lying) only when no standing one is in reach; none: no lock
+# (the game's search would take a trap then). The lock holds 20 frames instead of 10 (re4_lock_frames). SearchTargetEm
+# (enemies, scenarios) stays the game's. Declared in re4_whole_prelude.h.
+--- a/src/game/pl_wep.cpp
++++ b/src/game/pl_wep.cpp
+@@ -596,7 +596,7 @@
+         PSMTXMultVec(em->getPartsPtr(em->lockParts)->mat, &pl->m_pEm->lockOfs, &v);
+         ang = GetXZAngleLocal(&pl->pos, &v, pl->ang.y);
+         if (ang <= PI && ang >= -PI) {
+-            m_LockTime = 10;
++            m_LockTime = re4_lock_frames(10); /* port (patch 0918, mods): the app's auto aim holds longer */
+         } else {
+             m_LockTime = 0;
+         }
+@@ -727,7 +727,7 @@
+     cPlayer* pl = pPL;
+ 
+     if ((pl->m_pEm = SearchLockEm(&pl->getPartsPtr(3)->world, pl->m_pEm)) != 0) {
+-        m_LockTime = 10;
++        m_LockTime = re4_lock_frames(10); /* port (patch 0918) */
+     }
+     return pl->m_pEm;
+ }
+@@ -736,7 +736,9 @@
+ cEm* SearchLockEm(Vec* pPos, cEm* pEm_now)
+ {
+     if (CfgFlagChk(pSys, CFG_LOCK_ON)) {
+-        return searchLockEm(pPos, pEm_now, 0.0f);
++        /* port (patch 0918, mods): the player's lock-on picks standing enemies in front, further away, never a
++           trap, an animal or an object (runtime/lock_on.cpp) */
++        return (cEm*) re4_lock_search(pPos, pEm_now);
+     }
+     return 0;
+ }

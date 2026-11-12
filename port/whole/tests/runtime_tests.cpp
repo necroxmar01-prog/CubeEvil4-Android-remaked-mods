@@ -1456,6 +1456,7 @@ int re4probe_picture_still(void);
 int re4probe_knife_swipe(void);
 int re4probe_free_move(void);
 int re4probe_quick_slots(void);
+int re4probe_lock_on(void);
 int re4probe_parry(void);
 int re4probe_wardrobe(void);
 int re4probe_melee(const char* file);
@@ -2414,6 +2415,16 @@ static void testModSound()
     report("mod sound", ok);
 }
 
+// The app's "Auto aim" target (runtime/lock_on.cpp, patch 0918; game_probe.cpp re4probe_lock_on)
+static void testLockOn()
+{
+    const int bad = re4probe_lock_on();
+    if (bad) {
+        re4_log("  lockon: failed checks 0x%x", bad);
+    }
+    report("lockon", bad == 0);
+}
+
 // "Knife parry" (runtime/parry.cpp; game_probe.cpp re4probe_parry): the window, the guard, the slash
 static void testParry()
 {
@@ -3000,6 +3011,7 @@ int re4_runtime_tests()
     testFreeMove();
     testQuickSlots();
     testModSound();
+    testLockOn();
     testParry();
     testWardrobe();
     testMelee();
