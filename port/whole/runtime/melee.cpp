@@ -233,6 +233,26 @@ const int kHitFrame = 8;         // frame of its chop (0x86) that hits: the blad
 const int kCancel = 18;          // frames of its chop before an aim or fire key may end it
 bool gAxeLive = false;           // the knife is out for the axe strike (the gun hidden)
 
+// A key value of a motion curve: they stay big-endian in memory (formats_model.cpp; motion.cpp reads them byte-wise,
+// FccF32 of patch 0018), counts and frame numbers are host order
+f32 keyF32(const u8* p)
+{
+    const u32 u = be32At(p);
+    f32 v;
+    memcpy(&v, &u, 4);
+    return v;
+}
+
+void putKeyF32(u8* p, f32 v)
+{
+    u32 u;
+    memcpy(&u, &v, 4);
+    p[0] = (u8) (u >> 24);
+    p[1] = (u8) (u >> 16);
+    p[2] = (u8) (u >> 8);
+    p[3] = (u8) u;
+}
+
 // Bytes of a key in a curve's layout (motion.cpp Fcc_next_axis_addr), 0 for the layouts the game does not read
 int keyBytes(int fmt)
 {
@@ -299,8 +319,7 @@ void* axeMotion(PlArc* arc)
             const unsigned cnt = p + 2 <= dst + size ? get16(p) : 0xFFFFu;
             fits = cnt >= 1 && cnt <= (unsigned) get16(src) + 1u && p + 2 + cnt * 2 + cnt * stride <= dst + size;
             for (unsigned c = 0; fits && fmt <= 2 && c < cnt; c++) {
-                f32 v;
-                memcpy(&v, p + 2 + cnt * 2 + c * stride, 4);
+                const f32 v = keyF32(p + 2 + cnt * 2 + c * stride);
                 fits = v == v && fabsf(v) < 1.0e5f;
             }
             p += 2 + (fits ? cnt * 2 + cnt * stride : 0);
@@ -332,8 +351,7 @@ void* axeMotion(PlArc* arc)
         f32 most = 0.0f;
         for (int a = 0; a < 3; a += 2) {
             for (unsigned c = 0; c < counts[a]; c++) {
-                f32 v;
-                memcpy(&v, axes[a] + 2 + counts[a] * 2 + c * 12, 4);
+                const f32 v = keyF32(axes[a] + 2 + counts[a] * 2 + c * 12);
                 most = fabsf(v) > most ? fabsf(v) : most;
             }
         }
@@ -342,10 +360,7 @@ void* axeMotion(PlArc* arc)
             for (unsigned c = 0; c < counts[a]; c++) {
                 for (int w = 0; w < 3; w++) {
                     u8* at = axes[a] + 2 + counts[a] * 2 + c * 12 + w * 4;
-                    f32 v;
-                    memcpy(&v, at, 4);
-                    v *= scale;
-                    memcpy(at, &v, 4);
+                    putKeyF32(at, keyF32(at) * scale);
                 }
             }
         }
