@@ -151,6 +151,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // (bit 26); the random mix among them and the game's own (on unless bit 27)
   static final String MELEE_NECK = "meleeNeck", MELEE_MODS = "meleeMods", MELEE_AXE = "meleeAxe",
       MELEE_RANDOM = "meleeRandom";
+  // "Box strike" (wish of DevJunior, 12.11.2026; patch 0916): the action button breaks the box, barrel or vase Leon
+  // faces with his knife (CoreBridge.setBoxStrike, bit 12 of the third aim word; on by default)
+  static final String BOX_STRIKE = "boxStrike";
   // "Skip intro logos" (wish of DevJunior, 10.11.2026; patch 0905): the title starts at its main menu (bit 28 of the
   // placement word, on by default)
   static final String SKIP_INTRO = "skipIntro";
@@ -415,6 +418,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     aimSpeed = clampAimSpeed(inputPrefs.getFloat(AIM_SPEED, 1f));
     knifeSpeed = inputPrefs.contains(KNIFE_SPEED) ? clampAimSpeed(inputPrefs.getFloat(KNIFE_SPEED, 1f)) : 0f;
     CoreBridge.setKnifeSpeed(knifeSpeed);
+    CoreBridge.setBoxStrike(inputPrefs.getBoolean(BOX_STRIKE, true));
     input.setStickShape(inputPrefs.getInt(STICK_DEAD_ZONE, 0), inputPrefs.getInt(STICK_RANGE, 100));
     stickWatch.setShape(input.deadZone(), input.range());
     if (input.deadZone() != 0 || input.range() != 100) {

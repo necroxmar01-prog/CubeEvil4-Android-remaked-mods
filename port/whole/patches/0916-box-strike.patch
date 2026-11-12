@@ -1,0 +1,19 @@
+# Patch 0916 (wish of DevJunior, 12.11.2026: "break the barrels with one hit as in the Remake, with a button like the
+# strike's, but not as long"). Not a bug of the prototype: a port feature of the mods.
+# game/embox.cpp emBoxActEvtCk offers the action button at an intact box, barrel or vase Leon faces with nothing
+# between them, but only in the village's tutorial rooms (a hint to shoot it). With the app's "Box strike" (runtime/
+# melee.cpp re4_box_strike: on, Leon, within the knife's reach) the button shows "Kick" in every room and Leon
+# slashes the box with his knife, which breaks it as a shot does (emBoxSetBreak). Declared in re4_whole_prelude.h.
+--- a/src/game/embox.cpp
++++ b/src/game/embox.cpp
+@@ -634,7 +634,9 @@
+     if (EatMgr.hitCheck(&a, &b, 0, 0, 0, 0)) {
+         return;
+     }
+-    if (pG->room_id == 0x100 || pG->room_id == 0x101 || pG->room_id == 0x103 || pG->room_id == 0x106) {
++    if (re4_box_strike(em)) { /* port (patch 0916, mods): the action button strikes the box (runtime/melee.cpp) */
++        ActBtn.set(ACT_KICK, 5, re4_box_strike_func(), em, ACTCTR_NONE, DISP_A_NORMAL, ACT_FUNC_NORMAL, 0);
++    } else if (pG->room_id == 0x100 || pG->room_id == 0x101 || pG->room_id == 0x103 || pG->room_id == 0x106) {
+         ActBtn.set(ACT_CHECK, 5, (void*) emBoxAction, em, ACTCTR_NONE, DISP_A_NORMAL, ACT_FUNC_NORMAL, 0);
+     }
+ }

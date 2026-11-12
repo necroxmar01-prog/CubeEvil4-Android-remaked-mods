@@ -822,6 +822,7 @@ int backPlaceSent = -1;  // the weapon on the back's placement the core was told
 // the menu's "Knife aim speed" in percent (CoreBridge.setKnifeSpeed; 0 as the "Aim speed"), sent as a third aim word
 // (bits 31 and 30 set; the core's runtime/aim_options.cpp)
 std::atomic<int> optKnifeSpeed{0};
+std::atomic<int> optBoxStrike{1};  // the menu's "Box strike" (bit 12 of the third aim word)
 int knifeSpeedSent = -1;
 // The menu's AUDIO page (CoreBridge.setSoundVolume, wish of the project owner, 30.10.2026): music | effects << 8 in
 // percent (the core's runtime/sound_volume.cpp).
@@ -2298,7 +2299,7 @@ bool drawGx() {
       api.setAim(static_cast<int>(0x80000000u | static_cast<unsigned>(backPlace)));  // the second aim word
       backPlaceSent = backPlace;
     }
-    const int knife = optKnifeSpeed.load();
+    const int knife = optKnifeSpeed.load() | (optBoxStrike.load() & 1) << 12;  // bit 12 "Box strike" (patch 0916)
     if (api.setAim && knife != knifeSpeedSent) {
       api.setAim(static_cast<int>(0xC0000000u | static_cast<unsigned>(knife)));  // the third aim word
       knifeSpeedSent = knife;
@@ -3257,6 +3258,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setKnifeSpee
   if (!(speed == speed) || percent < 50 || percent > 300) percent = 0;
   if (optKnifeSpeed.exchange(percent) != percent)
     LOG("aim: knife aim speed %d %% (0: as the aim speed)", percent);
+}
+
+// The menu's "Box strike" (wish of DevJunior, 12.11.2026: break boxes and barrels with one strike, patch 0916).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setBoxStrike(JNIEnv *, jclass, jboolean on) {
+  if (optBoxStrike.exchange(on ? 1 : 0) != (on ? 1 : 0)) LOG("melee: box strike %s", on ? "on" : "off");
 }
 
 // R3 (the right stick pressed): the free camera back behind Leon (patch 0900), a toggle of bit 6 of the aim bits.

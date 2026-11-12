@@ -146,6 +146,7 @@ extern "C" void re4_camera_recenter(void);  // runtime/free_move.cpp
 extern "C" void re4_reload_request(void);   // runtime/free_move.cpp
 extern "C" void re4_wardrobe_set(int outfit, int back);  // runtime/wardrobe.cpp
 extern "C" void re4_melee_set(int bits);                  // runtime/melee.cpp
+extern "C" void re4_box_strike_set(int on);               // runtime/melee.cpp
 extern "C" void re4_back_adjust_set(int word);           // runtime/wardrobe.cpp
 extern "C" void re4_ashley_gun_set(int on);             // runtime/ashley_gun.cpp
 // Patch 0905 (title.cpp titleWait): 1 = the title starts at its main menu (the app's "Skip intro logos"; on the PC
@@ -158,7 +159,8 @@ int re4_skip_intro(void)
 
 void re4_aim_set(int bits)
 {
-    if (bits < 0 && (bits & 0x40000000)) {  // bits 31 and 30: the third word, the knife's aim speed
+    if (bits < 0 && (bits & 0x40000000)) {  // bits 31 and 30: the third word, the knife's aim speed (bits 0..11)
+        re4_box_strike_set((bits >> 12) & 1);  // bit 12 "Box strike" (patch 0916, runtime/melee.cpp)
         int knife = bits & 0xFFF;
         knife = knife == 0 ? 0 : knife < 50 ? 50 : knife > 300 ? 300 : knife;
         if (gKnifeSpeed.exchange(knife) != knife) {

@@ -1779,6 +1779,9 @@ final class CoreMenu extends Dialog {
         on -> { input.edit().putBoolean(CoreActivity.MELEE_AXE, on).apply(); send.run(); });
     toggle(second, R.string.ingame_melee_random, input.getBoolean(CoreActivity.MELEE_RANDOM, true),
         on -> { input.edit().putBoolean(CoreActivity.MELEE_RANDOM, on).apply(); send.run(); });
+    MenuLayout.Buttons third = buttonsRow(body);
+    toggle(third, R.string.ingame_melee_box, input.getBoolean(CoreActivity.BOX_STRIKE, true),
+        on -> { input.edit().putBoolean(CoreActivity.BOX_STRIKE, on).apply(); CoreBridge.setBoxStrike(on); });
     help(R.string.ingame_melee_help);
   }
   /** The weapon on the back to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it

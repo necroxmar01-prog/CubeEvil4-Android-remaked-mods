@@ -44,6 +44,7 @@
 #include "pl_wep.h"
 #include "snd_drv.h"
 #include "act_btn.h"
+#include "embox.h"
 #include "cockpit.h"
 
 #include <new>
@@ -2747,6 +2748,28 @@ extern "C" int re4probe_melee(const char* file)
         bad |= re4_melee_kneel(&game) == &game || !re4_melee_kneel(&game) ? 0x200 : 0;
         // the axe execution of a standing stunned Ganado: drawn (the mix off: the app's choice), not with a parasite
         bad |= re4_melee_neck(0) != 2 || re4_melee_neck(1) != 0 || !re4_melee_execute() ? 0x800 : 0;
+        // the box strike (patch 0916): an intact box within the knife's reach, the switch on (third word bit 12)
+        static u64 store[sizeof(cEmBox) / 8 + 1];
+        memset(store, 0, sizeof(store));
+        cEmBox* box = (cEmBox*) (void*) store;
+        box->hp = 1000;
+        box->pos = pPL->pos;
+        box->pos.x += 600.0f;
+        EMBOX_WK(box)->size.x = EMBOX_WK(box)->size.z = 300.0f;
+        re4_aim_set((int) (0xC0000000u | 1u << 12));
+        bad |= re4_box_strike(box) != 1 || !re4_box_strike_func() ? 0x1000 : 0;
+        box->pos.x += 2000.0f;
+        bad |= re4_box_strike(box) != 0 ? 0x2000 : 0;  // out of reach
+        box->pos.x -= 2000.0f;
+        box->hp = 0;
+        bad |= re4_box_strike(box) != 0 ? 0x2000 : 0;  // broken already
+        box->hp = 1000;
+        pG->pl_type = 3;
+        bad |= re4_box_strike(box) != 0 ? 0x2000 : 0;  // not for HUNK
+        pG->pl_type = 0;
+        re4_aim_set((int) 0xC0000000u);
+        bad |= re4_box_strike(box) != 0 ? 0x2000 : 0;  // switched off
+        re4_aim_set((int) (0xC0000000u | 1u << 12));
     }
     pG->pl_type = 3;
     bad |= re4_melee_kneel(&game) != &game ? 0x400 : 0;

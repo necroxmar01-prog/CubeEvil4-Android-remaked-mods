@@ -132,6 +132,8 @@ public final class CoreBridge {
    * (AIM_SPEED_MIN .. AIM_SPEED_MAX), 0 as the "Aim speed" (the core's runtime/aim_options.cpp, a third aim word).
    */
   public static native void setKnifeSpeed(float speed);
+  /** The menu's "Box strike" (patch 0916): the action button breaks the box or barrel Leon faces with his knife. */
+  public static native void setBoxStrike(boolean on);
   /** The game's own options changed "reverse" since the last call (patch 0188): -1, else 0 / 1 for "Invert vertical". */
   public static native int aimFromGame();
   /** The Potato mode bits from the graphics settings ("weatherEffects", "specialEffects", both on by default; since

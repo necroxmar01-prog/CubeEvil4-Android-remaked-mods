@@ -120,6 +120,10 @@ void* re4_melee_kneel(void* game);
 /* Patch 0904: re4_melee_neck gives 2 for the axe execution of a standing stunned Ganado (it kneels, then the axe
  * strike); this is Leon's routine for it. */
 void* re4_melee_execute(void);
+/* Patch 0916 (embox.cpp emBoxActEvtCk; runtime/melee.cpp): 1 when the action button makes Leon strike the box he
+ * faces (the app's "Box strike", the knife's reach), and the prompt's routine for it. */
+int re4_box_strike(void* em);
+void* re4_box_strike_func(void);
 /* Patch 0905 (title.cpp titleWait; runtime/aim_options.cpp, declared here so title.cpp keeps its line numbers): 1
  * when the app's "Skip intro logos" is on: the title starts at its main menu at once, as when it was shown before. */
 int re4_skip_intro(void);

@@ -30,6 +30,12 @@
 //    Ganado is drawn among the game's own and every one switched on (the mods' variants, the neck break, the axe
 //    strike), not the same twice in a row; with the mix off the app's choice always plays (the neck break, the
 //    axe, the mod's first, in that order).
+//  - Box strike (wish of DevJunior, 12.11.2026: "break the barrels with one hit as in the Remake, with a button like
+//    the strike's, but not as long"): near an intact box, barrel or vase (game/embox.cpp, cEmBox) that Leon faces,
+//    the action button (patch 0916, emBoxActEvtCk: the prompt the game shows there only in its tutorial rooms, now
+//    as "Kick" in every room) makes him slash it with his knife (or a skin's axe): the low slash 0x86, its blade at
+//    the box on frame kBoxHit, which breaks it as a shot does (emBoxSetBreak: debris, sound, the item); kBoxEnd
+//    frames in all, an aim or fire key ends it after the hit. Switched with the third aim word's bit 12.
 // Only Leon (pl_type 0); the other characters keep their moves.
 #include "types.h"
 #include "global.h"
@@ -47,10 +53,12 @@
 #include "game.h"
 #include "em.h"
 #include "em_sub.h"
+#include "embox.h"
 
 #include <atomic>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 extern "C" void re4_log(const char* fmt, ...);
@@ -570,10 +578,69 @@ void plAxeExec(cPlayer* pl)
     }
 }
 
+// ---- The box strike (see the head) ----
+
+const int kBoxMot = 0x86;        // the knife's low slash (Leon's archive; the root sinks to 746: down to a box)
+const int kBoxHit = 7;           // its frame that breaks the box (the blade low, a frame before the chop's)
+const int kBoxEnd = 16;          // frames in all (the slash's recovery cut short: "not as long")
+const f32 kBoxReach = 700.0f;    // Leon this near the box's side (its size) for the prompt: the knife reaches
+std::atomic<int> gBoxOn(-1);     // the app's switch; -1 none sent yet (the PC: RE4_BOX_STRIKE, else on)
+
+bool boxOn()
+{
+    int on = gBoxOn.load();
+    if (on < 0) {
+        const char* env = getenv("RE4_BOX_STRIKE");
+        on = env ? atoi(env) != 0 : 1;
+    }
+    return on != 0;
+}
+
+void plBoxStrike(cPlayer* pl)
+{
+    cEmBox* box = (cEmBox*) pl->pEmCatch;
+    switch (pl->r_no_2) {
+    case 0:
+        setWepTrans(pl, 0);
+        pl->Body->setKnife(true);
+        gAxeLive = true;
+        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pG->pPlayer, kBoxMot), 0, 3, 1, 0);
+        axeSwing(pl);
+        pl->m_Work0 = kBoxHit;
+        pl->m_Work1 = 6;
+        pl->m_Work2 = kBoxEnd;
+        pl->r_no_2 = 1;
+        break;
+    case 1:
+        MotionMove(pl, 0);
+        if (pl->m_Work0 && --pl->m_Work0 == 0 && box && box->hp > 0) {
+            emBoxSetBreak(box, 0);
+            say(10, "Leon's box strike broke a box (the knife's low slash)");
+        }
+        if (!pl->m_Work2 || --pl->m_Work2 == 0 || (!pl->m_Work0 && (joyKamae() || (Key.on & 0x10F)))) {
+            axeEnd(pl);
+            EndPlDamage();
+            return;
+        }
+        break;
+    }
+    if (pl->m_Work1 > 0 && box) {
+        pl->m_Work1--;
+        pl->ang.y += Muku(&pl->pos, &box->pos, pl->ang.y, 0.19634955f);
+        pl->ang.y = LIMIT_ANGLE(pl->ang.y);
+    }
+}
+
+void boxStrikeAction(cEmBox* box)
+{
+    SetPlDamage(box, plBoxStrike);
+}
+
 // A grab or a hit that cut the axe strike short: the knife away and the gun back
 void axeWatch(unsigned)
 {
-    if (gAxeLive && pPL && (pPL->r_no_0 != 4 || (Pl_func_tbl[4] != plAxeStrike && Pl_func_tbl[4] != plAxeExec))) {
+    if (gAxeLive && pPL && (pPL->r_no_0 != 4 || (Pl_func_tbl[4] != plAxeStrike && Pl_func_tbl[4] != plAxeExec &&
+                                                 Pl_func_tbl[4] != plBoxStrike))) {
         re4_log("melee: the axe strike was cut short (routine %d): knife away, gun shown", (int) pPL->r_no_0);
         axeEnd(pPL);
     }
@@ -599,6 +666,39 @@ void* re4_melee_kneel(void* game)
     }
     say(6, "Leon's axe strike on a kneeling enemy (the Ganados' axe attack, motion 0x80)");
     return (void*) plAxeStrike;
+}
+
+// Patch 0916 (embox.cpp emBoxActEvtCk, the box Leon faces and nothing between them): 1 when the action button
+// strikes it (the switch on, Leon, the knife's reach), and the prompt's routine
+int re4_box_strike(void* em)
+{
+    cEmBox* box = (cEmBox*) em;
+    if (!box || !boxOn() || !leon() || !pPL || !pPL->Body || box->hp <= 0) {
+        return 0;
+    }
+    const FREE_EMBOX* w = EMBOX_WK(box);
+    const f32 dx = pPL->pos.x - box->pos.x;
+    const f32 dz = pPL->pos.z - box->pos.z;
+    const f32 r = (w->size.x > w->size.z ? w->size.x : w->size.z) + kBoxReach;
+    return dx * dx + dz * dz <= r * r;
+}
+
+void* re4_box_strike_func(void)
+{
+    static bool hooked = false;
+    if (!hooked) {
+        hooked = true;
+        re4_add_frame_hook(axeWatch);
+    }
+    return (void*) boxStrikeAction;
+}
+
+void re4_box_strike_set(int on)
+{
+    on = on ? 1 : 0;
+    if (gBoxOn.exchange(on) != on) {
+        re4_log("melee: box strike %s (the action button breaks a box, barrel or vase Leon faces)", on ? "on" : "off");
+    }
 }
 
 void re4_melee_set(int bits)
