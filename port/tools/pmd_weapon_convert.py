@@ -21,14 +21,17 @@ table):
   environment settings) and that texture's index.
 - Textures: the disc's palette stays as it is (the weapon's other models, the muzzle flash, the second texture an
   environment-mapped part names); the PMD's textures are added behind it, CMPR with mipmaps down to 8 pixels, at most
-  --size a side (default 256), opaque. The model's texture count (header 0x24) is set to the palette's.
+  --size a side (default 256), opaque. The model's texture count (header 0x24, a u32) is set to the palette's.
 
 The sizes go down until the data part fits --budget (default 0x70000 - 0x1000): first the triangles (--tris, default
 4000 per model, then 20 % less per round), the textures halved from the largest once a model is under 1500.
 
 Everything else in the archive (the motions, the effects, the module, the sound) stays. Weapon packs and disc files
 never go into the repository; this tool only reads and writes the paths given. --preview DIR draws each new model
-(textured, from the built archive) next to the disc's.
+(textured, from the built archive) next to the disc's. Check the result with the core's own converters:
+re4_format_compare --data DIR (DIR/disc0/files/em/wepNN.drs): every archive must be "OK" (the first device test,
+12.11.2026, drew no weapon: the texture count was written into the u32's high byte, and the x-flip table's offset
+pointed into the new normals; both found by that check).
 """
 import argparse
 import re
@@ -337,7 +340,7 @@ def build_weapon_model(template, pieces, tex_index, tex_count):
         parts.append((bytes(h), np.concatenate(groups[ti])))
     blob = HF.build_model(bytes(tmpl), P, N, T, parts)
     blob = bytearray(blob)
-    blob[0x24] = tex_count
+    struct.pack_into(">I", blob, 0x24, tex_count)  # u32 (cModelData::nTex; trans: at most 0xF7)
     # each position rigidly on its part (the first vertex at that quantised place names it)
     ps = float(1 << blob[0x28])
     where = {}

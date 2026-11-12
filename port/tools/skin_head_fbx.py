@@ -117,8 +117,9 @@ def build_model(template, P, N, T, groups):
     struct.pack_into(">I", out, 0x20, flags)
     struct.pack_into(">I", out, 0x2C, 0)  # no shapes (skin_shapes.py)
     struct.pack_into(">H", out, 0x1A, len(groups))
-    if "blend" in where:
-        struct.pack_into(">II", out, 0x40, where["blend"], where["flip"])
+    if "blend" in where or "flip" in where:
+        # both tables' offsets (a weapon has the x-flip table alone: its old offset pointed into the new normals)
+        struct.pack_into(">II", out, 0x40, where.get("blend", 0), where.get("flip", 0))
     struct.pack_into(">HH", out, 0x38, len(Pq), len(Nq))
     return out
 
