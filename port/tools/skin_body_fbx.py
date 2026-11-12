@@ -248,6 +248,17 @@ def outfit_texture(spec, relief=0.3, occlusion=0.5, cavity=0.25):
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGBA")
 
 
+def darken(img, gain, keep=70.0):
+    """The texture times `gain` (DevJunior, 12.11.2026: "the jacket is rather black, not grey"; the RE Engine's
+    albedo comes out lighter in the game's light), its bright details (metal, buttons: brightness above `keep`,
+    faded in over 40) kept."""
+    x = np.asarray(img, dtype=np.float64)
+    lum = x[..., :3] @ np.array([0.3, 0.59, 0.11])
+    w = np.clip((lum - keep) / 40.0, 0, 1)
+    x[..., :3] *= (gain * (1 - w) + w)[..., None]
+    return Image.fromarray(np.clip(x, 0, 255).astype(np.uint8), "RGBA")
+
+
 def users(entries, tpl_users):
     """Palette image -> the (entry, part) pairs drawing with it, over the models of that palette."""
     out = collections.defaultdict(list)
@@ -272,6 +283,8 @@ def main(argv=None):
     ap.add_argument("--tpl", type=int, default=1, help="its palette (Leon: 1, for models 0, 6, 9, 12)")
     ap.add_argument("--tpl-users", default="0,6,9,12", help="the models drawing with that palette")
     ap.add_argument("--drop", action="append", default=[], metavar="ENTRY:TEX,...")
+    ap.add_argument("--gain", action="append", default=[], metavar="KEY=FACTOR[,KEEP]",
+                    help="a texture darker (bright details above brightness KEEP, default 70, kept)")
     ap.add_argument("--relief", type=float, default=0.3)
     ap.add_argument("--occlusion", type=float, default=0.5)
     ap.add_argument("--cavity", type=float, default=0.25)
@@ -307,10 +320,18 @@ def main(argv=None):
     head_part = next(p for p in G.parts(template) if not G.is_empty(template, p))
     # the textures
     tex_index = {}
+    gains = {}
+    for spec in a.gain:
+        key, _, rest = spec.partition("=")
+        v = [float(x) for x in rest.split(",")]
+        gains[key] = (v[0], v[1] if len(v) > 1 else 70.0)
     free = sorted(freed)
     for spec in a.tex:
         key, _, rest = spec.partition("=")
         img = outfit_texture(rest, a.relief, a.occlusion, a.cavity)
+        if key in gains:
+            img = darken(img, *gains[key])
+            print("texture %s: times %.2f (above brightness %.0f kept)" % (key, *gains[key]))
         hdr = bytearray(imgs[free[0] if free else 0][0])  # the replaced image's header (size and format set anew)
         if free:
             k = free.pop(0)
