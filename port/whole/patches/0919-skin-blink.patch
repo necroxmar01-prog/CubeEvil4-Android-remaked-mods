@@ -1,0 +1,18 @@
+# Patch 0919 (wish of DevJunior, 12.11.2026: "the eyes do not blink correctly", the RE9 head of a skin). Not a bug of
+# the prototype: a port feature for the mods of patch 0901.
+# pl_class.cpp cPlayer::moveEyeNormal blinks by turning the eyelid part (0x1C) about x, up to 0.349 rad (20 degrees):
+# enough for Leon's own lids, not for a skin's head whose eyes open wider. runtime/blink.cpp re4_blink_angle scales the
+# angle the step set by the factor the skin's head carries (its model byte 0x29, the unused pad after the vertex
+# shift, in tenths; written by port/tools/skin_blink.py), only while the player's file is a mod's and the player is
+# Leon; 0 there (every disc model) leaves the angle as it is. The scaled value is remembered, so a step that sets
+# nothing (the timer's waits) does not scale it again. Declared in re4_whole_prelude.h.
+--- a/src/game/pl_class.cpp
++++ b/src/game/pl_class.cpp
+@@ -1372,6 +1372,7 @@
+         timer = 10;
+         break;
+     }
++    p->ang.x = re4_blink_angle(p->ang.x); /* port (patch 0919, mods): a skin's lids sweep further */
+     p->matUpdate();
+     {
+         static int eyetime = 0;

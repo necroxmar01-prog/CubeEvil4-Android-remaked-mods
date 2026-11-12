@@ -2121,6 +2121,7 @@ extern "C" int re4probe_parry(void)
 // and the one behind him only after the standing one in front.
 extern "C" float re4_lock_score(void* character, void* at, int checkWalls);
 extern "C" int re4_lock_frames(int game);
+extern "C" float re4_blink_angle(float set);
 extern "C" int re4probe_lock_on(void)
 {
     cPlayer* keepPl = pPL;
@@ -2165,6 +2166,10 @@ extern "C" int re4probe_lock_on(void)
     PSMTXTrans(((cParts*) (void*) parts[0])->mat, 0.0f, 0.0f, 20000.0f);
     bad |= re4_lock_score(em[0], &at, 0) < 0.0f ? 0x20 : 0;   // 20 m: the game's 10 m would not
     bad |= re4_lock_frames(10) != 20 ? 0x40 : 0;
+    // patch 0919 (runtime/blink.cpp): the disc's player (no skin): the eyelid's angle as the game set it, also when a
+    // step sets nothing and the angle comes back
+    bad |= re4_blink_angle(0.349f) != 0.349f || re4_blink_angle(0.349f) != 0.349f || re4_blink_angle(0.0f) != 0.0f
+               ? 0x80 : 0;
     pPL = keepPl;
     return bad;
 }

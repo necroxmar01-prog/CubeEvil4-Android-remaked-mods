@@ -258,6 +258,7 @@ const int kAxeSeq = 0x81;
 const int kAxeEnd = 50;          // Leon's last frame of it: the swing is over, the Ganado's recovery follows
 const int kAxeCancel = 34;       // from this frame an aim or fire key ends it
 const int kAxeHitAt = 3;         // the hit on the third of the sequence's hit frames
+const int kAxeHitLead = 7;       // and at most this many before its first hit mark (Free 1)
 const int kAxeLead = 8;          // frames of the Ganado's wind-up Leon keeps before the swing (its swing mark, Free 0x20:
                                  // the sequence's first; DevJunior, 12.11.2026: "it pauses at the start of the axe
                                  // animation": the Ganados hold the axe up a while, a warning to the player)
@@ -486,17 +487,27 @@ void plAxeStrike(cPlayer* pl)
         if (mot) {
             MotionSetCore(pl, &pl->Motion, mot, PL_ARC_PTR(em->subArc, kAxeSeq), 8, 1, 0);
             // from kAxeLead frames before the swing: the Ganado's wait with the axe up left out
+            // (12.11.2026, second device test: "it still pauses with the axe up": the swing mark alone did not cut it;
+            // the first hit mark, Free 1, is surely there, the hit counts on it)
             const SEQUENCE_DATA* seq = pl->Motion.pSeq_top;
-            int swing = -1;
+            int swing = -1, hit = -1;
             for (int f = 0; seq && f < (int) pl->Motion.Seq_frame_num && f < kAxeCancel; f++) {
-                if (seq[f].Free & 0x20) {
+                if (swing < 0 && (seq[f].Free & 0x20)) {
                     swing = f;
-                    break;
+                }
+                if (hit < 0 && (seq[f].Free & 1)) {
+                    hit = f;
                 }
             }
-            if (swing > kAxeLead) {
-                MotionSetCore(pl, &pl->Motion, mot, PL_ARC_PTR(em->subArc, kAxeSeq), 8, 1, swing - kAxeLead);
+            int start = swing > kAxeLead ? swing - kAxeLead : 0;
+            if (hit > kAxeHitLead && hit - kAxeHitLead > start) {
+                start = hit - kAxeHitLead;
             }
+            if (start > 0) {
+                MotionSetCore(pl, &pl->Motion, mot, PL_ARC_PTR(em->subArc, kAxeSeq), 4, 1, start);
+            }
+            re4_log("melee: the axe strike from frame %d (swing mark %d, first hit mark %d, %u frames)", start, swing,
+                    hit, (unsigned) pl->Motion.Seq_frame_num);
             pl->r_no_2 = 1;
         } else {
             MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(arc, 0x83), 0, 6, 1, 0);

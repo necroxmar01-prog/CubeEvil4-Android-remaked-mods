@@ -132,6 +132,9 @@ int re4_grab_escape(void* em);
  * app's "Auto aim" (a Vec* position, the cEm* locked now; 0 none) and the lock's frames. */
 void* re4_lock_search(void* pos, void* now);
 int re4_lock_frames(int game);
+/* Patch 0919 (pl_class.cpp cPlayer::moveEyeNormal; runtime/blink.cpp): the eyelid part's angle, scaled by a skin's
+ * head (its model byte 0x29, tenths) while the player's file is a mod's. */
+float re4_blink_angle(float set);
 /* Patch 0905 (title.cpp titleWait; runtime/aim_options.cpp, declared here so title.cpp keeps its line numbers): 1
  * when the app's "Skip intro logos" is on: the title starts at its main menu at once, as when it was shown before. */
 int re4_skip_intro(void);
