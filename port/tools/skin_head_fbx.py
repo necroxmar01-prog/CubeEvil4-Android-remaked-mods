@@ -166,7 +166,7 @@ def skin_mean(img, texel_pos):
     return img[..., :3][m].mean(0) if m.sum() > 20 else None
 
 
-def forehead_lines(img, texel_pos, strength, eye_y, sharp=1.6):
+def forehead_lines(img, texel_pos, strength, eye_y, sharp=2.0):
     """Light creases on the forehead and between the brows (DevJunior, 12.11.2026: a reference of Resident Evil
     Requiem's Leon "with slight expressions on his forehead"): three shallow arcs above the brows (16, 27 and 38 over
     the eyes, rising 0.004 per unit squared to the sides, fading out past |x| 42), each a thin shadow with a faint
@@ -188,7 +188,7 @@ def forehead_lines(img, texel_pos, strength, eye_y, sharp=1.6):
         on = np.clip((y - (eye_y + 8.0)) / 3.0, 0, 1) * np.clip((eye_y + 24.0 - y) / 4.0, 0, 1)
         dark = np.maximum(dark, 0.6 * on * np.exp(-(d / sharp) ** 2))
     # uneven along their length, as skin folds are (not engraved lines)
-    vary = 0.55 + 0.45 * np.clip(F.smooth_noise(np.stack([x, y * 0.2, z], -1), 1.0) * 0.5 + 0.5, 0, 1)
+    vary = 0.75 + 0.25 * np.clip(F.smooth_noise(np.stack([x, y * 0.2, z], -1), 1.0) * 0.5 + 0.5, 0, 1)
     dark, light = dark * vary, light * vary
     k = 1.0 - 0.16 * strength * dark * front + 0.05 * strength * light * front
     img[..., :3] *= k[..., None]
@@ -283,6 +283,10 @@ def main(argv=None):
     ap.add_argument("--hair-ramp", default="35,31,27:82,72,61:152,138,118", help="shadow:middle:highlight colours")
     ap.add_argument("--hair-streaks", type=float, default=0.35, help="lighter streaks along the strands (0..1)")
     ap.add_argument("--hair-image", type=int, default=0, help="the hair's colour image in palette 3")
+    ap.add_argument("--eye-clear", type=float, default=0.2,
+                    help="the face's triangles within the eyeballs' radius + this go (the RE Engine's eye sockets)")
+    ap.add_argument("--eye-scale", type=float, default=0.97, help="the kept eyeballs scaled about their middles")
+    ap.add_argument("--face-mips", type=int, default=1, help="1: the face texture with a mipmap chain (less shimmer)")
     ap.add_argument("--drop-mats", default="", help="the old head's parts (texture indices) to leave out (DevJunior, "
                     "12.11.2026, device test: the old head's dark eye cards (3) floated in front of the new lids)")
     ap.add_argument("--neck", type=float, help="cut the neck below this height (default: the old head's lowest)")
@@ -356,6 +360,13 @@ def main(argv=None):
             continue
         Pc, Nc, Tc = U.gc_triangles(head, head[p + 0xC])
         Pc = Pc + np.where((Pc.mean(1)[:, 0] > 0)[:, None, None], shift[1], shift[-1])
+        if head[p + 0xC] == keep[0] and a.eye_scale != 1.0:  # the eyeballs a little smaller, about their middles
+            for side in (1, -1):
+                m = Pc.mean(1)[:, 0] * side > 0
+                if m.any():
+                    q = Pc[m].reshape(-1, 3)
+                    c = (q.min(0) + q.max(0)) / 2
+                    Pc[m] = c + (Pc[m] - c) * a.eye_scale
         Tc = Tc.copy()
         Tc[..., 1] = 1.0 - Tc[..., 1]  # build_model takes v up, as the FBX
         P2, t2, N2, T2 = corner_mesh(Pc, Nc, Tc)
@@ -363,6 +374,23 @@ def main(argv=None):
         Ps.append(P2), Ns.append(N2), Ts.append(T2)
         po, no, to = po + len(P2), no + len(N2), to + len(T2)
         print("kept: the old head's part with texture %d, %d triangles" % (head[p + 0xC], len(Pc)))
+    if a.eye_clear is not None and keep:
+        # the RE Engine face's own eye sockets (lid linings, the inside of the lids) lie on and inside its eyeballs;
+        # around the old eyeballs they cut through them, and the game's depth test shows both in turns (DevJunior,
+        # 12.11.2026, device test: the eyes "glitter" in a pattern of triangles): the face's triangles within the
+        # eyeballs' radius + eye_clear of their middles go
+        iris = U.gc_triangles(head, keep[0])[0].reshape(-1, 3)
+        drop = np.zeros(len(trisf), bool)
+        for side in (1, -1):
+            q = iris[iris[:, 0] * side > 0] + shift[side]
+            if not len(q):
+                continue
+            c = (q.min(0) + q.max(0)) / 2
+            r = float(np.median(np.linalg.norm(q - c, axis=1))) * a.eye_scale
+            d = np.linalg.norm(Pf[trisf[:, :, 0]] - c, axis=2).max(1)
+            drop |= d < r + a.eye_clear
+        trisf = trisf[~drop]
+        print("eyes: %d face triangles inside the eyeballs left out" % int(drop.sum()))
     groups.insert(0, (skin_part, trisf))
     P, N, T = np.concatenate(Ps), np.concatenate(Ns), np.concatenate(Ts)
     model = build_model(head, P, N, T, groups)
@@ -419,6 +447,12 @@ def main(argv=None):
         levels = hair_levels(a.hair_albedo, a.hair_alpha, (w, h), stops, a.hair_streaks)
         imgs[k] = H.encode_levels(levels, 0xE, imgs[k][0], H.enc_cmpr)
         print("hair: colour image %d anew, %dx%d, %d levels, ramp %s" % (k, w, h, len(levels), a.hair_ramp))
+    if a.face_mips:  # a mipmap chain: seen small, beard, brows and creases no longer shimmer into blotches
+        hdr_f = imgs[skin_mat][0]
+        base = U.decode_gx(*struct.unpack_from(">HHI", hdr_f), imgs[skin_mat][1]).convert("RGBA")
+        levels = [base] + [base.resize(sz, Image.BOX) for sz in H.mip_sizes(*base.size)[1:]]
+        imgs[skin_mat] = H.encode_levels(levels, 0xE, hdr_f, H.enc_cmpr)
+        print("face texture: %d mipmap levels" % len(levels))
     entries[HEAD_TPL] = G.build_tpl(imgs)
     print("face texture: %d, %dx%d (beard colour %s)" % (skin_mat, a.tex, a.tex, beard_colour))
     body = U.build_body(entries, arc.types)
