@@ -70,7 +70,7 @@ int gSaid;                    // what the log told already (bits by kind)
 
 // What the last prompt drew (re4_melee_neck / re4_melee_kneel), for the routine that plays it: -1 the game's own,
 // 0..kVariants-1 a mod's, kNeck / kAxe; gDrawn the prompt's (cleared when taken)
-enum { kGame = -1, kNeck = 100, kAxe = 101 };
+enum { kGame = -1, kNeck = 100, kAxe = 101, kExec = 102 };
 int gPick[2] = {kGame, kGame};
 int gLast[2] = {-2, -2};
 bool gDrawn[2];
@@ -182,19 +182,19 @@ int draw(int k, const int* cand, int count)
     return cand[0] != gLast[k] ? cand[0] : cand[1];
 }
 
-// The move of kind k (0 on a standing enemy, 1 on a kneeling one) for this prompt; `extra` the neck break or the
-// axe strike when switched on and possible
-int pick(int k, int extra)
+// The move of kind k (0 on a standing enemy, 1 on a kneeling one) for this prompt; `extra` / `extra2` the neck break,
+// the axe strike or the axe execution when switched on and possible
+int pick(int k, int extra, int extra2 = kGame)
 {
     const int bits = gBits.load();
     if (!(bits & 2)) {
         load();
     }
     const int mods = (bits & 2) ? 0 : gMods[k];
-    int cand[kVariants + 2];
+    int cand[kVariants + 3];
     int n = 0;
     if (bits & 8) {  // the mix off: the app's choice
-        cand[n++] = extra != kGame ? extra : mods ? 0 : kGame;
+        cand[n++] = extra != kGame ? extra : extra2 != kGame ? extra2 : mods ? 0 : kGame;
     } else {
         cand[n++] = kGame;
         for (int i = 0; i < mods; i++) {
@@ -202,6 +202,9 @@ int pick(int k, int extra)
         }
         if (extra != kGame) {
             cand[n++] = extra;
+        }
+        if (extra2 != kGame) {
+            cand[n++] = extra2;
         }
     }
     const int c = draw(k, cand, n);
@@ -214,7 +217,8 @@ int pick(int k, int extra)
             snprintf(mod, sizeof(mod), " %d", c + 1);
         }
         re4_log("melee: on a %s enemy: %s%s (%d to draw from)", k ? "kneeling" : "standing",
-                c == kGame ? "the game's" : c == kNeck ? "the neck break" : c == kAxe ? "the axe strike" : "the mod's move",
+                c == kGame ? "the game's" : c == kNeck ? "the neck break" : c == kAxe ? "the axe strike"
+                : c == kExec ? "the axe execution" : "the mod's move",
                 mod, n);
     }
     return c;
@@ -419,8 +423,11 @@ void axeSwing(cPlayer* pl)
     SndCall(1, 3, &pl->pos, 0, 0, pPL);
 }
 
+bool gExecSwing_reset();
+
 void axeFinish(cPlayer* pl)
 {
+    gExecSwing_reset();
     axeEnd(pl);
     EndPlDamage();
     pl->dmg.set(0, 0xF);
@@ -512,10 +519,61 @@ void plAxeStrike(cPlayer* pl)
     pl->subArc = pl->subArc2;
 }
 
+// The axe execution of a standing stunned Ganado (patch 0904, em10KickAction: the Ganado drops to its knees as when
+// shot in the leg): Leon draws the knife in its up stance, turns to it and waits for it to kneel (the knee motion's
+// kneel mark, Free 2, as Dm_Small reads it; at most kExecWait frames), then swings the axe strike (plAxeStrike)
+const int kExecWait = 24;
+bool gExecSwing = false;
+
+bool gExecSwing_reset()
+{
+    const bool was = gExecSwing;
+    gExecSwing = false;
+    return was;
+}
+
+void plAxeExec(cPlayer* pl)
+{
+    cEm* em = pl->pEmCatch;
+    if (gExecSwing) {
+        plAxeStrike(pl);
+        return;
+    }
+    pl->dmg.set(0, 0x1E);
+    StaFlagOn(pG, STA_PL_EM_ACTION);
+    switch (pl->r_no_2) {
+    case 0:
+        setWepTrans(pl, 0);
+        pl->Body->setKnife(true);
+        gAxeLive = true;
+        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pG->pPlayer, 0x83), 0, 6, 1, 0);
+        pl->m_Work0 = 0;
+        pl->m_Work1 = 12;
+        pl->r_no_2 = 30;
+        break;
+    case 30:
+        MotionMove(pl, 0);
+        pl->m_Work0++;
+        if ((em->Motion.Seq_old.Free & 2) || pl->m_Work0 >= (u32) kExecWait) {
+            if (pl->m_Work0 >= (u32) kExecWait) {
+                say(9, "the axe execution: the Ganado did not kneel in time; the axe strike swings anyway");
+            }
+            gExecSwing = true;
+            pl->r_no_2 = 0;
+        }
+        break;
+    }
+    if (pl->m_Work1 > 0) {
+        pl->m_Work1--;
+        pl->ang.y += Muku(&pl->pos, &em->pos, pl->ang.y, 0.19634955f);
+        pl->ang.y = LIMIT_ANGLE(pl->ang.y);
+    }
+}
+
 // A grab or a hit that cut the axe strike short: the knife away and the gun back
 void axeWatch(unsigned)
 {
-    if (gAxeLive && pPL && (pPL->r_no_0 != 4 || Pl_func_tbl[4] != plAxeStrike)) {
+    if (gAxeLive && pPL && (pPL->r_no_0 != 4 || (Pl_func_tbl[4] != plAxeStrike && Pl_func_tbl[4] != plAxeExec))) {
         re4_log("melee: the axe strike was cut short (routine %d): knife away, gun shown", (int) pPL->r_no_0);
         axeEnd(pPL);
     }
@@ -585,12 +643,30 @@ int re4_melee_neck(int special)
         say(5, "no neck break: HUNK's motions (em/em60.drs, entries 0x2B9..0x2BB) are not on the disc; Leon kicks");
         neck = false;
     }
-    if (pick(0, neck ? kNeck : kGame) != kNeck) {
+    const bool exec = (gBits.load() & 4) && !special && pPL && pPL->Body;
+    const int c = pick(0, neck ? kNeck : kGame, exec ? kExec : kGame);
+    if (c == kExec) {
+        gDrawn[0] = false;
+        say(7, "Leon's axe execution: a standing stunned Ganado drops to its knees and takes the axe strike");
+        return 2;
+    }
+    if (c != kNeck) {
         return 0;
     }
     gDrawn[0] = false;
     say(4, "Leon breaks a stunned Ganado's neck (HUNK's motions from em/em60.drs)");
     return 1;
+}
+
+void* re4_melee_execute(void)
+{
+    static bool hooked = false;
+    if (!hooked) {
+        hooked = true;
+        re4_add_frame_hook(axeWatch);
+    }
+    gExecSwing = false;
+    return (void*) plAxeExec;
 }
 
 // The runtime test's (game_probe.cpp re4probe_melee): the next draws start over

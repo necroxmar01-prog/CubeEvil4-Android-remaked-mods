@@ -2657,6 +2657,7 @@ extern "C" int re4probe_wardrobe(void)
 // off by the app's bit 25; no neck break without HUNK's motions (the test has no em/em60.drs); the axe strike.
 extern "C" void* re4_melee_motion(int kind, void* game);
 extern "C" int re4_melee_neck(int special);
+extern "C" void* re4_melee_execute(void);
 extern "C" void re4_mod_melee_path_set(const char* path);
 extern "C" void* re4_melee_kneel(void* game);
 extern "C" void re4_melee_reset(void);
@@ -2744,6 +2745,8 @@ extern "C" int re4probe_melee(const char* file)
     re4_aim_set((int) (0x80000000u | (4u | 8u) << 24));
     if (pPL && pPL->Body) {
         bad |= re4_melee_kneel(&game) == &game || !re4_melee_kneel(&game) ? 0x200 : 0;
+        // the axe execution of a standing stunned Ganado: drawn (the mix off: the app's choice), not with a parasite
+        bad |= re4_melee_neck(0) != 2 || re4_melee_neck(1) != 0 || !re4_melee_execute() ? 0x800 : 0;
     }
     pG->pl_type = 3;
     bad |= re4_melee_kneel(&game) != &game ? 0x400 : 0;
