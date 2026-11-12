@@ -3,6 +3,981 @@
 Diese Datei ist das Gedächtnis zwischen den Sitzungen. Jede Sitzung liest sie
 zuerst und aktualisiert sie am Ende (siehe `CLAUDE.md`).
 
+## Version 0.99.10-rc: Wünsche des Projektinhabers vom 11.11.2026 (Branch `09910`)
+
+Version 0.99.10-rc (versionCode 112), Releasetext `port/android-decomp/docs/releases/v0.99.10-rc.md` („Changes since
+v0.99.9.“, Known issues aus 0.99.9 übernommen). Basis bbbbff7c = master = 0.99.9-rc mit der README des Inhabers.
+Nächste freie Patchnummer 0229 (0228: Krausers Bogen, Abschnitt 6). `AppUpdate.compare` vergleicht Zahl für Zahl: 0.99.10 gilt als neuer als 0.99.9
+(neue Prüfung in `AppUpdateTest`).
+
+### 1. Navigationsleiste im App-Menü (Wunsch des Projektinhabers, Screenshot eines Samsung im Querformat)
+
+„Öffnet man das Ingame-Menü, erscheint die Android-Navigationsleiste … Schließt man das Menü, ist sie wieder weg.“
+Screenshot `E:\Development\Android\reports\09910-navbar\navbar-in-ingame-menu.webp` (portugiesisches Menü,
+Statusleiste oben und Navigationsleiste rechts sichtbar, „Voltar ao jogo“ am rechten Rand angeschnitten).
+
+- **Ursache:** Das App-Menü (`CoreMenu`, ein `Dialog`) und alle Rückfragen und Meldungen (`AlertDialog`) sind eigene
+  Fenster. Android zeigt die Systemleisten für das Fenster mit dem Fokus, solange dieses nicht selbst um Vollbild
+  bittet; nur das Spielfenster tat das (`CoreActivity.hideSystemUi`). Die Unterseiten des Menüs sind dasselbe Fenster.
+- **Behebung:** neue Klasse `Immersive` (`show(dialog)` statt `dialog.show()`): das Fenster bittet vor dem Zeigen um
+  ausgeblendete Leisten (`SYSTEM_UI_FLAG_FULLSCREEN | HIDE_NAVIGATION | IMMERSIVE_STICKY`, ab Android 11 zusätzlich
+  `WindowInsetsController.hide` mit `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`), ist beim Erscheinen kurz nicht fokussierbar
+  (damit die Leisten nicht aufblitzen) und danach wieder fokussierbar für Tasten und Controller; bekommt es den Fokus
+  zurück (eine Rückfrage darüber geschlossen, Benachrichtigungen weggewischt, Dateiauswahl zurück), bittet es erneut.
+  Nur die Leisten, nicht das Layout: Größe und Platz der Fenster bleiben (im Auto bleiben die Leisten, die das Auto
+  behält, frei; `CarDisplay`). Umgestellt: das App-Menü, seine 8 Rückfragen (Discs importieren, Shader-Cache,
+  Benchmark, Spielsprache, Renderer, Figur-Warnung, Extra-Spiele, Sofortspeicher) und die 8 Meldungen von
+  `CoreActivity` (Kern startet nicht, Kern beendet, Disc-Problem, Beenden?, Hinweis, zwei Import-Rückfragen,
+  Benchmark-Ergebnis).
+  Nicht betroffen: Toasts (bekommen keinen Fokus); fremde Fenster (Android-Dateiauswahl, Teilen-Menü) und der
+  Touch-Editor von RetroTouch (eigene Bibliothek) liegen außerhalb der App-Fenster.
+- **Geprüft (PC, Robolectric):** `ImmersiveTest` (Android 9 und 13): eine Rückfrage, das App-Menü und drei seiner
+  Rückfragen zeigen sich mit ausgeblendeten Leisten und sind danach fokussierbar; nach Fokus-Rückkehr wieder
+  ausgeblendet; eine Quelltext-Prüfung, dass `CoreMenu` und `CoreActivity` kein Fenster mehr ohne `Immersive.show`
+  zeigen. Alle Unit-Tests beider Varianten grün.
+- **Nicht geprüft:** auf einem Gerät (Samsung/Retroid).
+
+### 4. Fernglas auf breiten Bildschirmen (Wunsch des Projektinhabers, Screenshot eines 20:9-Handys)
+
+„Auf Bildschirmen die sehr breit sind, wird das Fernglas links und rechts abgeschnitten und man sieht das Spiel …
+Das sollte bei breiten Screens schwarz überdeckt werden.“ Screenshot
+`E:\Development\Android\reports\09910-binocular-wide\binocular-sides-uncovered.webp` (r101, Blick aufs Dorf,
+RE-Touch-Knöpfe, Bildformat „Nativ“).
+
+- **Ursache:** Bei „Nativ“ zeichnet der Kern die 3D-Welt breiter (Patch 0214, `runtime/picture.cpp`). Die schwarze
+  Maske des Fernglases ist wie die des Zielfernrohrs ein Teil des ID-Systems und behält ihre 16:9-Form in der Mitte;
+  daneben blieb die breitere 3D-Welt sichtbar. Für das Zielfernrohr gab es schon die Ausnahme (`STA_SCOPE_CAMERA`:
+  4:3-Projektion, die App zeigt das Bild in der 16:9-Box mit schwarzen Rändern), für das Fernglas nicht.
+- **Andere Masken:** Im Spiel gibt es genau zwei `IDApplication`-Masken über das ganze Bild, `IdScope` und
+  `IdBinocular` (`include/cam_extra.h`); `STA_LOOK_THROUGH` setzen nur diese beiden. Das Zielfernrohr (Gewehr,
+  halbautomatisches Gewehr, Raketenwerfer, alle Figuren) war schon richtig. Das Fernglas kommt an drei Stellen:
+  `CameraControl::HoldBinocular` (r101, Blick aufs Dorf, und nach dem Koffer wieder, `sscrn.cpp`) und die
+  Ereignis-Schnitte durch das Fernglas in r10b (Bootsfahrt, der Boss zeigt sich) und r214 (Katapulte), die
+  `STA_BINOCULAR` selbst setzen.
+- **Behebung (`runtime/picture.cpp`, kein Patch unter `src/`):** „wide“ auch dann aus, wenn `STA_BINOCULAR` gesetzt
+  ist. Die App zeigt das Fernglas dann in der 16:9-Box mit schwarzen Rändern, wie das Zielfernrohr. Logzeile
+  „picture: Native in the 16:9 box (r101, binoculars)“.
+- **Geprüft am PC (i686 -O2, Debug-Discs, Debug-Start r101, 20:9 = `RE4_VIEW_ASPECT=1.6667`, Leon an den
+  Aussichtspunkt gesetzt und A gedrückt, Bilder mit dem GL-Renderer der App auf 2000 × 900 im Format „Nativ“,
+  `~/p09910/runs/before|after|after2`):** 0.99.9 (Binärdatei aus `~/re4-0999`) zeigt das Fernglas wie im Screenshot
+  mit der Spielwelt links und rechts; mit der Behebung schwarze Ränder, das Fernglas selbst gleich groß; Zwischensequenz
+  davor unverändert breit; nach dem Absetzen (B) wieder „Native wide“. `whole_build.sh` i686 -O2: alle Prüfungen
+  grün (runtime-test, core-test mit „native aspect“).
+- **Nicht geprüft:** auf einem Gerät; die Fernglas-Schnitte in r10b und r214 (gleiche Bedingung, nicht eigens
+  angespielt).
+
+### 5. Texte ragen bei „4:3“ links über ihre Kästen (Nutzerbericht über den Projektinhaber, „wieder“)
+
+„Ein User meldet auch wieder die überlappenden Texte links in den Feldern wenn man 4:3 oder 4:3 GC benutzt.“
+Bilder `E:\Development\Android\reports\09910-text-overlap-43\` (Koffer → Akten → „Village Files“, Händler BUY
+„Attache Case XL“; Anzeige „1280×896 (2×)“, Version unbekannt). „Wieder“: Der Bericht zu 0.99.2 Punkt 8
+(`reports/0992-43-hud-cut-20261108-005243/screenshot-files-menu.jpg`, `aspect=3`) zeigt dieselbe Überlappung; damals
+wurde nur die halb verdeckte Lebensanzeige behoben (8a5959a6).
+
+- **Ursache:** Seit 0.95 (3ad0aadf, „4:3 (exakt)“, 29.10.2026) zeichnet die App bei „4:3“ (Format 3) alle flachen
+  Zeichnungen über den ganzen Bildschirm 15/14 breiter um die Bildmitte (`GxRenderer::SetWiden`, `WidenFor`: nur
+  orthografisch), damit sie die Form vom Fernseher behalten. Die Kästen, Rahmen und Anzeigen des ID-Systems
+  (`id_sys.cpp`: `CameraCurrentProjection`, vor der Kamera mit ihrer Perspektive gezeichnet) blieben aber schmal wie
+  die 3D-Welt. Die Texte des Nachrichtensystems (flach) wanderten dadurch nach außen, links über den Kastenrand
+  (bei x = 0,1 der Breite rund 3 % der Breite). „4:3 (GC)“, „16:9“, „Gestreckt“ und „Nativ“ verbreitern nicht: am
+  PC dort keine Überlappung (die Angabe „4:3 GC“ des Nutzers ließ sich nicht bestätigen; beide Bilder passen zu „4:3“).
+- **Behebung (App, `core_mode.cpp` drawGx):** „4:3“ verbreitert nichts mehr (`SetWiden(1)`); Fingertipps in den
+  Untermenüs gehen nach dem Kasten selbst (`notePicture`), die HUD-Fläche der Minikarte ist der Kasten
+  (`minimap_view.h`, Lage und Größe der Karte unverändert). Damit ist „4:3“ genau das Bild von „4:3 (GC)“, über
+  die volle Höhe gezogen: 3D-Welt, Kästen und Texte in derselben Form (etwa 7 % schmaler als auf dem Fernseher),
+  nichts reicht mehr über die Seiten hinaus. Wer die Fernseh-Form will, nimmt „4:3 (GC)“. Die Verbreiterung bleibt im
+  Renderer (Test `TestWiden`), `gx_chunk_render` gibt sie mit `RE4_GX_WIDEN_43=1` für Vergleiche wieder.
+- **Geprüft am PC (i686 -O2 Kern, Debug-Discs, r101 ohne „Nativ“, GX-Bilder mit dem GL-Renderer der App auf
+  2000 × 900, `~/p09910/runs/case|screens`):** Koffer mit „Handgun“ im Namensfeld: 0.99.9 bei „4:3“ Text auf dem
+  linken Kastenrand, 0.99.10 im Kasten wie bei 16:9 und „4:3 (GC)“. „4:3“ gegen „4:3 (GC)“ (Bildfläche auf den
+  Kasten gezogen): 48,2 dB statt 32,0/35,5 dB vorher (nur noch Umrechnung). Funkspruch mit Untertitel, Spiel mit
+  Lebensanzeige, Karte mit Legende, Fernglas mit „ZOOM“: bei „4:3“ angeordnet wie bei „4:3 (GC)“. 16:9, „4:3 (GC)“,
+  „Gestreckt“, „Nativ“: Bilder Byte für Byte gleich 0.99.9; `RE4_GX_WIDEN_43=1` gibt „4:3“ Byte für Byte wie 0.99.9.
+  `gx_gl_check` 0 Fehler, `minimap_place_check` 0 Probleme (nur die HUD-Fläche bei „4:3“ geändert, Karte gleich),
+  `core_mode.cpp` mit NDK r28c für armeabi-v7a und arm64 mit `-Wall -Werror` ohne Befund.
+- **Nicht geprüft:** auf einem Gerät; Akten-Liste und Händler selbst nicht angespielt (gleiche Ursache, am Koffer
+  und an der Karte geprüft); Fingertipps in Untermenüs bei „4:3“.
+
+### 6. Krausers Bogen in der Geschichte (Nutzerwunsch über den Projektinhaber, Patch 0228)
+
+**Seit dem Retroid-Test kein Knopf mehr** (Abschnitt 7.1): Krauser hat den Bogen von jedem Raumstart an. Der folgende
+Stand beschreibt die erste Fassung (cbf7a646).
+
+„please add kross bow for Krauser in storymode“ (mit dem Figuren-Cheat). Plan und Grenzen: `port/docs/cheat-menu-plan.md`
+Abschnitt „Krausers Bogen“.
+
+- **Grundlage:** Bogen = Gegenstand 0x52 (Waffe 0x1C, Krausers eigene Datei `wep_data_klauser` 0x1C, `ownWeapon`),
+  Pfeile = Gegenstand 0x72 (20 je Feld; `cItemMgr::trigger` nimmt einen je Schuss, „Infinite ammo“ keinen); Krausers
+  Mercenaries beginnen mit Bogen und 30 Pfeilen (`item.cpp` `set_char` 4). In der Geschichte gibt es keine Pfeile zu
+  finden, der Händler verkauft keine. Leons Tabelle hat für Waffe 0x1C keinen Eintrag (`wep_data_leon` 0x1C leer).
+- **Gebaut (`runtime/cheats.cpp`):** Cheat-Knopf 10 `giveBow`: nur während Krauser die Geschichte spielt (sonst −6),
+  der Bogen, wenn er fehlt, und die Pfeile auf 40 (vorhandene Felder erst auf 20). Beim Raumstart (`re4_story_char_room`)
+  verlassen Bogen und Pfeile den Koffer, sobald jemand anderes als Krauser spielt (Ashleys Abschnitt ausgenommen); war
+  der Bogen in der Hand, werden es leere Hände (`pG->weapon_no` 0: sonst las der Raumstart Waffe 0x1C für Leon, leerer
+  Eintrag, Absturz im ersten PC-Lauf). **Patch 0228** (`card.cpp` `cCard::makeSaveData` → `re4_story_char_card_items`):
+  die Spielstand-Datei (immer Leons, Patch 0195) ohne Bogen und Pfeile, ein Bogen in der Hand wird leere Hände (Platz
+  und `weapon_no`/`weapon_type` des Spielblocks); nur das Bild der Datei, das Spiel und der Fortsetzungspunkt behalten
+  den Bogen. (Ein erster Entwurf hängte sich zusätzlich in `cCard::loadMain` ein; das war der Ladeweg, wieder heraus.)
+  `core_api.cpp`: Knopf 10 zugelassen. Prüfhilfe `RE4_TEST_ARM="free+N:ID"` (`state_trace.cpp`: Gegenstand
+  ausrüsten wie „Equip“ im Koffer).
+- **App:** Knopf „Krauser's bow“ unter den Figuren (ein Drittel, unter „Krauser“), nur mit Krauser gewählt bedienbar,
+  eigene Antwortzeile darunter („Done“, „already owned: arrows refilled“, „Only while Krauser plays the story“),
+  Hilfetext; 4 Texte in 11 Sprachen. `CoreMenuShotTest`: die Bildwiederholrate `displayHz` (double) im Ersatz-Host (die
+  Bilder brachen seit 0.99.9 ab).
+- **Geprüft am PC (i686 -O2, `~/p09910/bowtests.sh`, Logs `~/p09910/bowtests2.log`):** EU r101 (Krauser per Debug-Start):
+  Bogen, 40 Pfeile, ausgerüstet, gezielt, geschossen: Pfeil-Symbol im Ring, 40 → 38 → 37 → 34 → 31; US r101 ebenso
+  (40 → 37); EU r200, r213, r305 ohne Absturz (r305: Krausers Pfeile mit roten Federn stecken in der Wand, 37 → 32); im
+  Protokoll keine Umleitung auf Leons Requisiten 0x70.. (`re4_story_char_leon_weapon` ist für 0x1C falsch). Wechsel
+  Krauser → Leon (Cheat) mit Bogen in der Hand: „out of the case, empty hands instead of the bow“, Leon spielt weiter.
+  Knopf mit Leon: abgelehnt. Speichern an der Schreibmaschine (Debug r100, frische Karte): Datei ohne Bogen, CRC in
+  Ordnung (`memcard_list.py`), Krauser hat danach den Bogen weiter; Laden als Leon: kein Bogen; Laden mit Krauser: kein
+  Bogen, der Knopf gibt ihn neu; Speichern mit Bogen in der Hand, Laden als Leon: leere Hände, Pistole ausrüstbar.
+  `whole_build.sh` i686 -O2 alle Prüfungen grün; App-Tests je 92; `check_translations.py` ohne Befund.
+- **Nicht geprüft:** auf einem Gerät; Händler (Verkaufen des Bogens), Instant-Spielstand mit Bogen (beim Laden als Leon
+  greift der Raumstart), Kämpfe gegen Bosse mit dem Bogen; JP-Discs.
+
+### 2./3. Benchmark beim ersten Start und Leistungsprofile (Wünsche des Projektinhabers)
+
+Plan: `port/docs/leistungsprofil-plan.md` (Mock-ups im Notizordner der Sitzungen, `09910-plan\`). Antworten des
+Projektinhabers (11.11.2026, „Ja, beide so“): Update-Nutzer werden nicht gezwungen, das Menü fragt einmal; der erste
+Benchmark ist mit B/Zurück abbrechbar und kommt beim nächsten Start wieder. Ergänzung: starke Geräte bekommen auch
+MSAA, FXAA und Texturfilter nach Spielraum vorgeschlagen, Benchmark 2 prüft und nimmt zurück.
+
+- **Kern der App (`core_mode.cpp`, `gx_bench_steps.h`):** Stufensuche (Modus 0) mit Startstufe der App (schwache
+  Grafikchips 2,5×), Aufwärmzeit (erster Start 15 s, sonst 5 s), die 60-FPS-Suche ab dem Ergebnis der 30er, und dem
+  Prozessor-Zeichen (`CpuSign`: 1× hält nicht und die tieferen Stufen bringen unter 10 % mehr). Neuer Prüfmodus 1:
+  am Steg mit den Optionen der App, „Dynamisch“ und der 60-FPS-Taktgeber wie beim Spielen (`benchForcing()` statt
+  `levelBench.active`), die Sekunden zählt der Kern, die App liest sie in Fenstern (`benchmarkMeasure`: Sekunden,
+  Spielbilder, gezeigte Bilder, schwache Sekunden, Stufen) und beendet ihn (`finishBenchmark`). JNI
+  `startBenchmark(mode, top, warmup)`, `benchmarkState` mit 9 Werten.
+- **Spielkern:** Befehl 24 (`runtime/benchmark.cpp`, `core_api.cpp`): 1, solange das Titelmenü wartet. Prüfhilfe
+  `RE4_TEST_BENCH` schreibt die Antwort ins Protokoll.
+- **App (`PerfProfile.java`, `BenchmarkFlow.java`, `CoreActivity`, `CoreMenu`):** Profile Benutzerdefiniert / Niedrig /
+  Mittel / Hoch je Gerät aus Benchmark-Stufen und Gerätedaten (Grafikchip aus `rendererInfo`, Kerne und Takt aus
+  cpufreq, Arbeitsspeicher, Display-Hz), Effekte nach Spielraum, Empfehlung, Zurücknehmen (MSAA 4×→2×→FXAA→aus, dann
+  Texturfilter 16×→8×→4×), Halte-Regel des Prüffensters (29 bzw. 57 Bilder/s, höchstens eine schwache Sekunde von 20,
+  „Dynamisch“ nicht mehr als eine halbe Stufe unter dem Spielraum). Benutzerdefiniert gemerkt (`perfCustom.*`), die
+  gesetzten Werte (`perfApplied.*`): eine Handänderung macht beim nächsten Zeigen der Startseite „Benutzerdefiniert“
+  daraus (`sync`). Ablauf: Popup 1 beim ersten Start, sobald das Titelmenü wartet (Befehl 24, Neuinstallation =
+  keine der Einstellungs-Schlüssel vorhanden, `benchFirst`), Benchmark 1 mit „Nativ“ und ohne Bild-Extras (nicht
+  gespeichert), Popup 2 (Gerät, Stufen, bremst, Vorschlag; „Ignorieren“ = nur die Stufen und „Dynamisch“), Benchmark 2
+  (je 4 s Eingewöhnung, 20 s vorher, 20 s mit dem Vorschlag, höchstens zweimal zurücknehmen), Popup 3 (Vorher/Nachher,
+  Gewinn, neue Effekte, Zurückgenommenes; „Ignorieren“ / „Akzeptieren“). Popups im Aussehen des Menüs, Vollbild
+  (`Immersive`), das Spiel steht solange. Startseite: Abschnitt „LEISTUNGSPROFIL“ (vier Knöpfe, ★ empfohlen, letzte
+  Messung, Benchmark-Knopf); Update-Nutzer: einmal „Jetzt messen / Später“. 36 Texte in 11 Sprachen, die alten
+  `ingame_benchmark_text`/`_done` entfernt; `check_translations.py` kennt `BenchmarkFlow.java`/`PerfProfile.java`.
+- **Geprüft (PC):** `PerfProfileTest` (die Geräte der Berichte: POCO X7 Pro Hoch mit 60 FPS, MSAA 2×, 16×; Retroid
+  Hoch mit FXAA und 8×; Infinix Mittel mit FXAA und 4×; moto g15, Galaxy A13, unter 3 GB, Prozessor-Zeichen Niedrig;
+  90 Hz ohne 60 FPS; ohne Benchmark nach Chip; Grenzen des Geräts; Zurücknehmen; Halte-Regel; Benutzerdefiniert
+  gemerkt, Handänderung, Bildformat ändert nichts; Chip-Name), `gx_gl_check` (`TestBenchSteps`: 60er ab dem 30er
+  Ergebnis, Prozessor-Zeichen ja/nein, Start bei 2,5× nach 15 s Aufwärmen), Kern i686 -O2 alle Prüfungen grün,
+  Befehl 24: 0 bei den Logos (Bild 100), 1 im Titelmenü (Bild 394, US-Discs), 0 beim freien Spielen (r100),
+  `core_mode.cpp` mit NDK r28c für beide ABIs `-Wall -Werror`, App-Tests beider Varianten je 100, Übersetzungsprüfung,
+  Bilder der Startseite (`CoreMenuShotTest`, en/de/ru/ar). Ein erster voller Testlauf hing 20 min in
+  `CoreMenuLayoutTest.cheatsPageSwitchesSendTheirBits` (Robolectrics Warteschlange, `idleMainLooper`); einzeln und im
+  zweiten vollen Lauf grün, Ursache nicht gefunden (zu beobachten).
+- **Nicht geprüft:** der ganze Ablauf auf einem Gerät (Popups, die zwei Benchmarks, die gemessenen Zahlen, Dauer);
+  der Prüfmodus läuft nur in der App (kein PC-Lauf mit Renderer).
+
+### 7. Nach dem Retroid-Test von 142a52b8 (vier Punkte des Projektinhabers, 11.11.2026)
+
+Der Inhaber spielte 142a52b8 auf dem Retroid (Adreno 650, Vulkan, EU-Discs, Deutsch).
+
+**7.1 Krausers Bogen ohne Knopf.** „Der Cheat ‚Krausers Bogen' soll kein Cheat sein, sondern Krauser soll (wenn man ihn
+als Cheat nutzt) den Bogen von Haus aus bereits haben.“
+- **Gebaut (`runtime/cheats.cpp`):** `re4_story_char_room` ruft bei jedem Raumstart `giveBow()`, solange Krauser die
+  Geschichte spielt (`pl_type` 4 und `standIn()`): der Bogen, falls er fehlt, die Pfeile auf 40 (vorhandene Felder
+  erst auf 20). Aufgefüllt wird also bei jedem Raumstart (Tür, Neustart des Raums, Laden); „Infinite ammo“ verbraucht
+  keine. Die Sicherheitsregeln bleiben: jemand anderes als Krauser (außer Ashleys Abschnitt) → Bogen und Pfeile aus
+  dem Koffer, leere Hände statt Waffe 0x1C; Patch 0228 hält sie aus jedem Spielstand. Knopf 10 entfernt
+  (`core_api.cpp` wieder 1..9, `CoreMenu` ohne Zeile/Antwort, vier Texte in 11 Sprachen gelöscht); der Hilfetext der
+  Figurenwahl hat einen Satz zum Bogen (11 Sprachen).
+- **Geprüft am PC (i686 -O2, `~/p09910/bowtests3.sh`, Log `~/p09910/bowtests3.log`):** Debug r100 Krauser: „bow added,
+  arrows 0 -> 40“ beim Raumstart, ausgerüstet, an der Schreibmaschine gespeichert: Datei ohne Bogen, CRC in Ordnung;
+  diese Datei als Leon: kein Bogen; mit Krauser gewählt: Bogen beim Raumstart wieder da. EU r101: Krauser mit Bogen in
+  der Hand → Leon: „out of the case, empty hands“, Leon spielt weiter; Leon allein: keine Bogen-Zeile. US r101:
+  geschossen (40 → 32), dann Spezialkostüm (der Raum startet neu): „kept, arrows 32 -> 40“. EU r200, r305, r213: Bogen
+  vom Start an, gezielt, geschossen. Speichern mit Bogen in der Hand, Laden als Leon: leere Hände, Pistole
+  ausrüstbar. Knopf 10 antwortet nicht mehr. Keine Abstürze, kein „signal“.
+
+**7.2 Die anderen Mercenaries-Figuren (nur Bericht, nichts gebaut).** Abgleich `item.cpp` `set_char` (ihre
+Mercenaries-Ausrüstung) mit der Geschichte und `ownWeapon` (welche Waffen eigene Dateien haben):
+- **Ada** (Punisher 0x21, TMP 0x30, halbautomatisches Gewehr 0x2F mit Zielfernrohr 0x45, drei Blendgranaten): alles
+  Waffen der Geschichte (Händler bzw. Fundorte); Ada zieht Punisher, Gewehr und TMP aus eigenen Dateien. Es fehlt
+  nichts Eigenes.
+- **HUNK** (TMP 0x3E, drei Handgranaten): 0x3E ist die TMP mit derselben Waffennummer wie Leons TMP 0x30; HUNK zeigt
+  seine eigene TMP, sobald Leon eine TMP ohne Schaft hat (mit Schaft Leons, seit 0.98.1). Nichts Eigenes fehlt.
+- **Wesker** (Pistole 0x23 mit Schalldämpfer 0x3F, Killer7 0x2A, halbautomatisches Gewehr, Granaten): Pistole und
+  Gewehr gibt es in der Geschichte, den Killer7 gibt der Cheat-Knopf „Killer7“. **Es fehlt nur der Schalldämpfer
+  0x3F**: kein Händler, kein Fundort. Ihn wie den Bogen zu geben wäre größer als beim Bogen: er ist ein Teil, das an
+  Leons Pistolen passt (`combination_info` 0x23/0x21/0x27 + 0x3F → 0x24/0x22/0x28), d. h. Leons Spielstände bekämen
+  neue Waffen-Abarten, deren Modelle für Leon ungeprüft sind; Weskers eigene Pistole `wep43` hat beide Modelle.
+  Vorschlag: nur auf Wunsch, dann mit derselben Regel wie beim Bogen (nur Wesker, nie im Spielstand). Gewünscht und
+  gebaut: Abschnitt 7.5.
+- **Bewegungen:** seit 0.98.1 (Patch 0197 und `loadStandInSet`, PC-Prüfung 04./05.11.2026): Ada Tritte und Griffe,
+  HUNK Genickbruch, Krauser Doppeltritt und Armangriff (X ohne Ashley), Wesker Handstoß und Fersentritt (Antwort des
+  Ganados) aus den Mercenaries-Dateien der Figuren. Damals nicht ausgelöst: Krausers Kniestoß. In dieser Runde nicht
+  erneut geprüft.
+
+**7.3 Profilzeile in einer Reihe.** „Alle in einer Reihe – Benutzerdefiniert soll neu heißen ‚Benutzer', dann die
+anderen 3 wie gehabt und am Ende der grüne Benchmark Button … Die Texte darunter dann über die ganze Breite.“
+- **Gebaut (`CoreMenu.profileRow`):** ein `MenuLayout.Buttons` mit fünf Spalten (Benutzer, Niedrig, Mittel, Hoch,
+  Benchmark), Namen bis zwei Zeilen; die Messzeile und der Hilfetext darunter über die ganze Breite. Kurze Namen für
+  `ingame_profile_custom`: de „Benutzer“, es „Usuario“, fr „Perso“, it „Utente“, pt „Usuário“ (en „Custom“, ru „Свой“,
+  ar, zh, hi, in waren schon kurz). Zu schmal oder zu große Schrift: die Reihe bricht um (wie alle Knopfreihen).
+- **Geprüft (Robolectric):** neuer Test `profileRowHoldsFiveButtonsAndTheTextsSpanTheWidth` (11 Sprachen, Schrift 1,0 /
+  1,15 / 1,3 auf 960 dp: fünf Knöpfe in einer Reihe, Benchmark am Ende, nichts abgeschnitten, Messzeile und Hilfe so
+  breit wie der Inhalt); `allPagesFitAcrossLanguagesWidthsAndFontScales` (Breiten 320–960 dp, Schrift bis 2,0) ohne
+  Befund; Menübilder (`CoreMenuShotTest`).
+
+**7.4 Benchmark.**
+- **a) Falsche Hänger-Meldungen** („hang: no game frame for 8 s“ bei Popup 2 und 3): die Popups halten das Spiel an,
+  die Wache in `CoreActivity.checkHang` wusste es nicht. Jetzt setzt `benchHost.hold` ein Merkmal `benchHeld`, die
+  Wache zählt dann wie beim offenen Menü nicht.
+- **b) Vorschläge zu teuer** (B1 4× / 3×, Vorschlag Hoch mit MSAA 4× und 16×; B2 vorher 30,1/50,7, 9 schwach, 3,2×;
+  MSAA 4× 27,1/38,8; MSAA 2× 29,4/32,2; FXAA 30,1/51,7, 6 schwach, 3×: alle „hält nicht“, angeboten wurde trotzdem):
+  (i) **B1 misst mit den Geschmacks-Einstellungen des Nutzers** (Tiefenschärfe, Lichthöfe, Schärfen, Filter: kein
+  Profil ändert sie) und mit den Leistungskernen, die Profil-Einstellungen auf Grundstand (`benchHost.applyClean`).
+  **MSAA nur bei Überschuss über die Bildschirmstufe** (`PerfProfile.screenLevel`: Zeilen eines 16:9-Bildes ×2/336,
+  wie „Dynamisch“ im Kern; `Device.rows` aus der Spielfläche): Hoch 4× ab einer ganzen Stufe Überschuss, 2× ab einer
+  halben, sonst FXAA; Mittel 2× ab einer ganzen Stufe. Für den Retroid (3× bei 60 FPS, Bildschirm 3×) heißt das FXAA
+  und 16× statt MSAA 4×. (ii) **Prüffenster:** ein neuer Renderer im Prüfmodus beginnt bei der gemessenen Stufe statt
+  eine halbe darüber (`core_mode.cpp` `benchChecking`, `AutoLevel::Start(..., from)`); die App wartet mindestens 4 s
+  und dann, bis die Stufe 5 s stand, höchstens 16 s (`BenchmarkFlow.settle`, Logzeile „settled after N s at …“).
+  (iii) **„Mindestens so ruhig wie vorher“** (`PerfProfile.keepsUp`: höchstens ein Bild/s weniger bei Spiel- und
+  gezeigten Bildern, höchstens eine schwache Sekunde von 20 mehr, Auflösung höchstens eine halbe Stufe unter vorher
+  bzw. dem Spielraum) gilt auch als bestanden; Popup 3 sagt dann „hielt nicht überall seine Bildrate, lief aber
+  mindestens so flüssig wie deine Einstellungen“. Läuft der letzte Stand weniger ruhig, steht in Gold „Hier lief es
+  weniger flüssig als deine Einstellungen: ‚Ignorieren' behält deine.“ und „Ignorieren“ hat den Fokus (neuer Text
+  `ingame_bench_worse`, `ingame_bench_not_held` umformuliert, je 11 Sprachen). Mit den Zahlen des Inhabers: FXAA
+  besteht „so ruhig wie vorher“, MSAA 4× und 2× nicht.
+- **c) Leistungskerne:** alle Profile setzen sie jetzt (`v[CORES] = 1`). „Standard“ ließ auf dem Retroid den
+  Zeichen-Thread auf mittleren Kernen (Dynamisch pendelte bei 2,5× statt 3–3,5×); auf Handys mit nur einer Kernart
+  ändert der Schalter nichts. Nachteil höchstens etwas mehr Wärme. **Nachtrag des Inhabers** („Vielleicht sollte der
+  Benchmark mit Leistungskernen gemessen werden?“) und Beobachtung der Hauptsitzung im selben Log (B1 lief mit „Force
+  Performance: default“, B2 verglich „vorher“ mit Kernen gegen „Hoch“ ohne): B1 misst mit Leistungskernen
+  (`applyClean`, schon in bed2b9d4); **B2 jetzt in beiden Fenstern mit der Kern-Einstellung des Vorschlags**
+  (`BenchmarkFlow.check`: `setFastCores` nach den Einstellungen von vorher, Logzeile „the performance cores on in both
+  windows“), damit nur eines wechselt; Popup 3 nennt die Leistungskerne unter „Dazu an“, wenn sie vorher aus waren.
+  Was der Schalter tut (`gx_decode.cpp` `hintChunk`): Spiel-Thread weg von den langsamsten Kernen (nicht auf einen
+  einzigen Kern), Vertex-Threads bei nur zwei schnellen Kernen auf die langsamen, Androids Leistungshinweis für 33,3 ms
+  je Bild. Gegenargument: mehr Wärme und Akku; ein Handy, das bei Hitze stark drosselt, kann in langen Sitzungen
+  langsamer werden, das gleicht „Dynamisch“ nur auf der Grafikseite aus. Auf einem Gerät nicht geprüft.
+- **d) Benchmark-Stelle mit verdrehten Raum-Kennungen:** die eingebaute Stelle (`port/whole/data/benchmark-place.
+  ce4benchmark`, Sofortspeicher des Inhabers vom 06.11.2026) stammt aus einem Spiel, dessen `.gci` mit 0.99.6 oder
+  älter importiert war: alle 121 Raum-Datensätze standen als Raum, Stufe; Patch 0225 drehte sie bei jedem Start zurück.
+  Die Datei ist jetzt einmal richtig gedreht (Skript im Notizordner `fix_bench_place.py`: die zwei Bytes je Datensatz,
+  die Gesamt-CRC des Spielstands über die GameCube-Bytes, die zwei Prüfsummen der Datei). **Geprüft am PC:** EU- und
+  Debug-Discs, `RE4_TEST_BENCH` aus r101: zur Stelle (125434 −700 149213, wie 0.99.9) ohne die Zeile von Patch 0225,
+  zurück nach r101; 0.99.9 zum Vergleich mit der Zeile. Ein erster Versuch ohne die neue Gesamt-CRC wurde vom Kern
+  abgelehnt („the place's save could not be read“), das zeigt, dass die Prüfung greift.
+- **e)** Bildformatwechsel im Spiel ohne Fehler (Bericht des Inhabers), nichts zu tun.
+- **Geprüft (PC):** `PerfProfileTest` (neu: Bildschirmstufe, Überschuss-Regel mit 720/1080/1220 Zeilen, Retroid mit
+  den Zahlen des Inhabers FXAA + 16×, alle Profile mit Leistungskernen, `keepsUp` mit den vier Fenstern des Inhabers),
+  `gx_gl_check` 0 Fehler (neu: `AutoLevel` startet unter der Spitze und steigt bis zu ihr, Grenzen), `core_mode.cpp`
+  mit NDK r28c für beide ABIs `-Wall -Werror`, Kern i686 -O2 alle Prüfungen grün, Übersetzungsprüfung ohne Befund.
+- **Robolectric-Hänger gefunden:** `cheatsPageSwitchesSendTheirBits` hing im vollen Lauf ein zweites Mal (Stapel:
+  `idleMainLooper` → `Choreographer.doFrame` → `AnimationHandler`, CPU voll): eine endlose Animation, die eine andere
+  Testklasse in derselben SDK-28-Umgebung zurückließ, bringt bei jedem Weiterstellen der Robolectric-Uhr ein neues
+  Bild, die Warteschlange wird nie leer. Der Test geht jetzt Aufgabe für Aufgabe (`runOneTask`, höchstens 2000) bis
+  das Aufleuchten endet.
+- **Nicht geprüft:** alles auf einem Gerät (die neuen Zahlen auf dem Retroid, die Popups mit den neuen Texten, die
+  Wache bei offenen Popups, die Profilzeile); der Prüfmodus (B2) läuft nur in der App, am PC nur seine Bausteine.
+
+**7.5 Weskers Schalldämpfer** (Antwort des Projektinhabers auf die Frage aus 7.2: „Ja, einbauen“).
+- **Gebaut (`runtime/cheats.cpp`):** `giveSilencer` beim Raumstart, solange Wesker die Geschichte spielt: der
+  Schalldämpfer 0x3F, falls er fehlt, auf die Pistole 0x23 (`cItemMgr::partsCombine`, wie der Koffer; zusammen 0x24,
+  Waffe 2 Typ 1, Weskers `wep43` hat beide Modelle); hält er die Pistole, liest der Raumstart sie mit Schalldämpfer
+  (`heldAgain`: `pG->weapon_no`/`weapon_type` aus der neuen Kennung). Ohne Pistole 0x23 im Koffer: keiner. Setzt der
+  Spieler ihn im Koffer auf die Punisher (0x22) oder Blacktail (0x28), bleibt er dort (Leons Dateien, Modelle
+  vorhanden). `stripSilencer` für alle anderen (Ashleys Abschnitt ausgenommen): der Schalldämpfer verlässt den Koffer,
+  die Pistole ist wieder sie selbst (`cItemMgr::erase` rüstet neu aus; in der Hand mit Typ 0). **Entscheidung für
+  Leon:** entfernen statt nur abnehmen, wie beim Bogen (der Schalldämpfer gehört Wesker, Leons Spielstände sollen für
+  GameCube und Dolphin normal bleiben). Patch 0228 (`re4_story_char_card_items`): Spielstand ohne Schalldämpfer, eine
+  Pistole in der Hand mit Schalldämpfer wird im Spielstand zur Pistole ohne (Waffenkennung und Typ des Spielblocks,
+  andere angesetzte Teile bleiben). Nebenwirkung: Leons Debug-Ausrüstung 3 (nur Debug-Discs) verliert ihren
+  Schalldämpfer beim nächsten Raumstart. Hilfetext der Figurenwahl: ein Satz zu Wesker (11 Sprachen). Prüfhilfe
+  `RE4_TEST_PART="free+N:WAFFE:TEIL"` (`state_trace.cpp`: Teil ansetzen wie „Kombinieren“, fehlende Waffe/Teil neu).
+- **Geprüft am PC (i686 -O2, `~/p09910/silencertests.sh`, Log `~/p09910/silencertests.log`, Bilder
+  `~/p09910/pics/sil`):** Debug r100 Wesker: „silencer on his handgun (0x24, in his hands)“, Schreibmaschine: Datei
+  ohne Schalldämpfer, „the pistol in the hands 0x23“, CRC in Ordnung; als Leon geladen: kein Schalldämpfer; mit
+  Wesker geladen: wieder dran. EU r101 Wesker → Leon mit der Pistole in der Hand: „out of the case“, „the pistol 0x24
+  is 0x23 again (in the hands)“, Leon zielt mit der Pistole ohne Schalldämpfer (Bild). Leon allein: keine Zeile. US
+  r101, EU r200, r305: Wesker zielt und schießt mit Schalldämpfer (Bild: Schalldämpfer am Lauf). EU r101 Wesker mit
+  Schalldämpfer an Punisher und Blacktail: beide im Bild mit Schalldämpfer, Schüsse. Spielstand mit der Pistole mit
+  Schalldämpfer in der Hand, als Leon geladen: Waffe 0x02, Leon zielt und schießt. Leon mit Schalldämpfer an der
+  Pistole (wie Debug-Ausrüstung 3): Modell vorhanden; der nächste Raumstart nimmt ihn ab. Keine Abstürze. Kern i686
+  -O2 alle Prüfungen grün.
+- **Nicht geprüft:** auf einem Gerät; Händler (Verkaufen/Tunen der Pistole mit Schalldämpfer); JP-Discs.
+- **Robolectric-Hänger (Nachtrag):** in den nächsten vollen Läufen hing `CoreMenuLayoutTest` an weiteren Stellen
+  (`warning`: `idle()` nach dem Anzeigen der Warnung; `managementOffersOtherDiscsAndAsksFirst`: `idle()` nach der
+  Rückfrage). 20 Stapelproben: `Choreographer.doFrame` → `AnimationHandler` → `AnimatorSet.doAnimationFrame` (wie die
+  Zustands-Animation eines Knopfs), und mit jedem Bild stellt Robolectric die Uhr weiter, sodass `idle()` nie endet.
+  Neue Hilfe `TestLooper` (Testquellen): `idle()` mit höchstens 3000 Aufgaben; ist der Looper dann noch beschäftigt,
+  werden die laufenden Animationen mit Dauer und Kind-Animationen auf stderr genannt (Testbericht) und angehalten.
+  Benutzt in `CoreMenuLayoutTest` (auch vor jedem Test), `ImmersiveTest`, `CoreMenuShotTest`. **Der erste Bericht nennt
+  sie:** das `AnimatorSet` der Zustands-Animation eines Material-Knopfs (`translationZ` 0 → 0 in 100 ms, `elevation`
+  0 → 2), Ziel schon `null` (der Knopf eines geschlossenen Dialogs), „running true“. Eine Animation des Android-
+  Rahmens, keine der App; in Robolectric kommt sie nicht ans Ende, weil die Uhr zwischen den Tests neu beginnt und der
+  Startpunkt der Animation dann in der Zukunft liegt. Auf Geräten endet sie nach 100 ms (auf dem Retroid mit
+  142a52b8 kein Hängen oder Flackern der Menüs). Mit `TestLooper` läuft die Klasse durch (15 Tests, im Bericht die
+  Zeile oben).
+
+### 8. Retroid-Berichte zu 0.99.10 (Schalldämpfer-Stand bbf433df): CRT-Blitzen, Minimap in Dumps, See (11.11.2026)
+
+Bericht des Projektinhabers (Adreno 650, Vulkan, EU-Discs): „Bei Verwendung des CRT Filters flackert es spontan
+rundherum kurz weiß auf … bei den gx-Dumps die Minimap riesengroß … wenn das Wasser am See im Hintergrund von Leon
+ist – ein Ghosting.“ Dateien `E:\Development\Android\reports\09910-crt-flicker-minimap-lake\`.
+
+- **CRT-Blitzen (behoben):** Im Log wechselte „Dynamisch“ alle 4–10 s zwischen 3× und 3,5×. Bei jedem Wechsel
+  verwarf der Vulkan-Renderer (`gx_vk.cpp` `RescaleHalves`) die Bilder aller Filter (FXAA, Nachschärfen, PSX, Farbe,
+  CRT) und setzte ihr „gezeigt“ zurück; bis zur nächsten Anzeige-Kopie des Spiels zeigten die Bildschirm-Auffrischungen
+  (60 Hz) das flache Bild ohne CRT-Glas, ohne dessen schwarzen, gewölbten Rand und ohne Maske: ein kurzes helles
+  Aufblitzen rundherum. GL behielt die CRT-Bilder schon, verwarf aber FXAA und Nachschärfen (ein Bild ohne sie). Jetzt
+  bleiben in beiden Renderern alle Filterbilder stehen, bis die nächste Anzeige-Kopie sie in der neuen Größe macht
+  (`FilterImage` / `FilterFxaa` vergleichen die Größe); nur die Halte-Stufe des PSX-Filters beginnt neu.
+  **Geprüft am PC:** `gx_chunk_render` (neu: mit `RE4_GX_RESCALE` und `RE4_GX_SCREEN` zusätzlich das Bild direkt nach dem
+  Stufenwechsel, `<Name>-rescaled-screen.ppm`), Dumps 00 des Inhabers (r100, CRT stark), Stufe 3× → 3,5× vor Bild 3,
+  Bildformat Nativ 960 × 540: vorher Vulkan (lavapipe, neuer Bau `port/build/app-host-vk` mit `RE4_BUILD_VK_CHECK=ON`)
+  ohne CRT direkt nach dem Wechsel (der Blitz), GL mit; nachher beide mit CRT. Mit PSX, Farbe, FXAA und Nachschärfen:
+  das Bild nach dem Wechsel gleich dem davor. Alle anderen Bilder Byte für Byte gleich. `gx_gl_check` 0 Fehler,
+  `core_mode.cpp`, `gx_vk.cpp`, `gx_gl.cpp` mit NDK r28c für beide ABIs `-Wall -Werror`.
+- **Minimap in den Dump-Bildern (behoben):** Die Bilder einer R3-Serie (`gx-geraet-NN-KK.bmp`, `SaveShot`) zeichnet
+  Vulkan mit `ReadPresented` in der Größe des XFB (512 × 448) samt Überlagerung; die Minimap zählt aber in
+  Bildschirm-Pixeln (291 bei 43, 43 auf 1920 × 1080) und deckte das halbe Bild zu. GL zeichnet sie nach `Present`,
+  dort war sie nie im Dump. Jetzt leert `SaveShot` die Überlagerung vor dem Auslesen (die nächste Bildschirm-Ausgabe
+  setzt sie wieder). Nur Diagnosebilder betroffen. Nicht am Gerät geprüft.
+- **Ghosting am See (nicht gefunden):** Die Dumps 01/02 (r11b, 142a52b8) sind echte Spielbilder: während einer
+  R3-Serie macht die App keine Zwischenbilder. Am PC nachgezeichnet (GL) sehen sie aus wie die Bilder des Geräts
+  (Vulkan); auch mit eingerechneten 60-FPS-Zwischenbildern (`RE4_GX_INTERP=1`) kein Doppelbild hinter Leon. Die
+  „doppelte“ Pistole in 02-03 zeigt auch der PC: wahrscheinlich Schlitten und Rahmen der Waffe von hinten. Ohne die
+  verdeckende Minimap braucht es neue Dumps mit einer Angabe, wo der Geist zu sehen ist, und den Vergleich 60 FPS an/aus.
+- **Benchmark mit gewählter Figur (behoben):** Der Benchmark lädt seinen eingebauten Spielstand (Leon); der Raumstart
+  der Figurenwahl machte daraus Wesker (Log: „the story's player is Wesker from r11b on“). Jetzt geben `wantedChar` und
+  `wantedCostume` (`runtime/cheats.cpp`) an der Benchmark-Stelle (`re4_bench_freeze`: auf dem Weg dorthin und dort)
+  keine Figur und kein Kostüm vor; der Rückweg lädt das eigene Spiel, dessen Raumstart die Figur wieder nimmt.
+  **Geprüft am PC:** EU- und US-Discs, Wesker gewählt, `RE4_TEST_BENCH` aus r101: an der Stelle keine Figurenzeile,
+  zurück in r101 „the story's player is Wesker“.
+- `last-crash`: der alte Fehlalarm „hang“ aus 142a52b8 (in bed2b9d4 behoben), kein Absturz.
+- **Gegenstände außerhalb des Koffers unsichtbar (behoben).** „Wenn man mit einem der Mercenaries im Hauptspiel spielt,
+  [sind] Waffen oder Objekte außerhalb des Koffers, … werden aber nicht angezeigt.“ Log 19:18 (Krauser): „case: item
+  0x52 had no place at (0 0) turn 0 on the spare board; moved to (2 6) turn 1 on the spare board“. **Ursache:**
+  `giveBow`/`giveSilencer` legten Bogen, Pfeile und Schalldämpfer mit `ItemMgr.get` an (ohne Platz, `board` 0); beim
+  nächsten Öffnen suchte Patch 0100 einen Platz, bei vollem Koffer auf der Ablage daneben. Die zeigt das Spiel aber nur
+  beim Aufheben eines Gegenstands, der nicht passt (`tempSpaceDisp(1)` in `PzzlThinking`); beim normalen Öffnen ist sie
+  unsichtbar und nicht erreichbar, und `isTerminable` lässt den Koffer dann nur mit einer Rückfrage schließen. Leon und
+  die Figuren sind gleich betroffen; nur unsere Zugaben (und sehr alte Debug-Spielstände, Patch 0100) kamen dorthin.
+  **Jetzt:** die Zugaben gehen wie ein gefundener Gegenstand in den Koffer (`putIn` → `PutInCase` des Spiels: erst die
+  Felder der eigenen Art auffüllen, dann ein freier Platz im Koffer, auch gedreht); ohne Platz kommt nichts, beim
+  nächsten Raumstart wird es wieder versucht. Zugaben, die frühere 0.99.10-Stände schon ohne Platz bzw. auf der Ablage
+  hinterlassen haben (`board` 0, nicht in der Hand), nimmt der Raumstart heraus und sortiert sie neu ein
+  (`offTheSpareBoard`). Hilfetext der Figurenwahl: ein Satz dazu (11 Sprachen). Neue Prüfhilfen: `RE4_TEST_FILL_CASE`
+  (Koffer mit bis zu vier Gegenstandsarten auffüllen, bis nichts mehr passt), `RE4_TEST_ITEM_LOSE` mit bis zu acht
+  Einträgen. Am GameCube-Pad öffnet Y den Koffer (`Key` 0x100000).
+  **Geprüft am PC (i686 -O2, EU-Discs, r101, `~/p09910/casetests.sh`, Bilder `~/p09910/pics/case*`):** Krauser, Koffer
+  mit Gewehren und Sprays gefüllt, Raumneustart: „no room in the case, not now“; drei Gewehre heraus, Sofortspeicher
+  laden: Bogen im Koffer (Bild: unten im Raster), Pfeile mangels Platz noch nicht. Wesker ebenso: erst „no room“, nach
+  zwei Sprays und einem Gewehr heraus der Schalldämpfer an der Pistole, im Koffer sichtbar mit „E“. Altfall: Bogen ohne
+  Platz wie früher (`RE4_TEST_PART` legt ihn per `ItemMgr.get` an), nach Öffnen des Koffers „moved … on the spare
+  board“ und im Bild unsichtbar (der Fehler des Inhabers nachgestellt); mit dem Fix beim nächsten Raumstart „item 0x52
+  off the spare board (1), into the case“ und sichtbar im Koffer.
+- **Nicht geprüft:** auf dem Gerät; ein voller Koffer, in dem der Bogen nie Platz findet (bleibt dann weg, bis Platz
+  ist; so gewollt).
+
+### Prüfung: Funktionen aus DevJuniors Mod-Fork (11.11.2026, nur Plan)
+
+Auftrag des Projektinhabers („Ja, prüfen lassen“). Plan mit Tabelle und Nachrichtenentwurf:
+`port/docs/devjunior-mods-plan.md`. Sein Branch `mods/free-movement` (83 Commits auf 0.99.6) liegt lokal als
+`refs/scratch/devjunior` (nicht gepusht). Gelesen, nicht gebaut: das Bauen und Starten seines Stands wurde in dieser
+Sitzung nicht erlaubt (fremder Code). Probe: seine Kern-Patches 0900, 0902, 0904, 0905 passen auf unseren Stand, 0901
+nicht; App-Seite Text-Konflikte nur in `CoreInput.java`, `CMakeLists.txt`, Status-Datei. Empfehlung zuerst: Logos
+überspringen (aus), Schnell-Nachladen im Stand, Leons Kleidung; Skin-Werkzeuge und Mod-Ordner nicht. Gebaut wird erst
+nach der Wahl des Projektinhabers.
+
+## Version 0.99.9-rc: Messer zielen, Zielfernrohr und Raketenwerfer mit Vulkan auf Mali (10.11.2026, Branch `work`)
+
+Version 0.99.9-rc (versionCode 111), Releasetext `port/android-decomp/docs/releases/v0.99.9-rc.md` („Changes since
+v0.99.8.“, Known issues aus 0.99.8 übernommen). Basis e1abc53d = 0.99.8-rc. Nächste freie Patchnummer 0228.
+
+### 1. Messer zielen mit Touchfläche oder C-Stick (Wunsch des Projektinhabers)
+
+„Wir haben derzeit eingebaut, dass Zielen alternativ mit Touchfläche oder C-Stick gemacht werden kann, es
+funktioniert aber nur für die Waffe, nicht für das Messer. Bitte auch für das Messer verfügbar machen.“
+
+- **Ursache:** Die App gibt beim Touch-Zielen mit gehaltenem L schon alles weiter (der Touch-C-Stick wird zum
+  Steuerstick, die Touchfläche schickt Winkel). Der Kern drehte die Wisch-Winkel aber nur in der Waffenhaltung
+  (`runtime/gyro.cpp` turnAim: Routine 0/6, ausdrücklich nicht 0x10 = Messer). Der C-Stick-Weg lief über den
+  Steuerstick und damit schon über `PlWepLockCtrl` (auch beim Messer).
+- **Behebung (`runtime/gyro.cpp`):** turnAim dreht beim Wischen (und mit der Maus, derselbe Weg
+  `re4_core_aim_turn`) auch die Messerhaltung: Routine 0/0xB, halten oder zustechen (r_no_2 1, 2), wie die Pistole
+  (Körper `ang.y`, `m3r` mit der Mitte des Wackelns `cPlWep::pitch`). Beim Wegstecken (r_no_2 3) nicht. **Das
+  Gyroskop lässt das Messer wie bisher in Ruhe** (Parameter `knifeToo` nur vom Wischen). Log „touch: the knife's aim
+  turned by a swipe (N frames so far)“. Kein Patch unter `src/`.
+- **Testschalter (PC):** `RE4_TEST_SWIPE="yaw,pitch,von,bis"` (ein Wischen je Spielbild, PADRead-Zählung),
+  `RE4_TRACE_AIM=1` (eine Zeile „aim: frame N pl r0/r1/r2/r3 ang .. waist .. m3r ..“ je Bild in Messer- oder
+  Waffenhaltung).
+- **Geprüft am PC (i686 -O2, Debug-Discs, Debug-Start r301, L bzw. R ab Bild 830 gehalten, `~/p0999/runs/kn_*`):**
+  ohne Eingabe dreht nichts; Stick links/hoch und Steuerkreuz links/hoch drehen wie bisher (Spiel-eigener Weg,
+  unverändert); Wischen 0,02/0,01 rad je Bild von 900 bis 1000: Leon dreht genau 2,02 rad, `m3r` bis 1; Gyroskop
+  (`RE4_TEST_GYRO=1.0,0.5`) beim Messer: nichts, Spur gleich der ohne Eingabe; Pistole mit Wischen wie vorher.
+  Laufzeittest neu `aimknife` (`re4probe_aim_knife`: halten, zustechen, wegstecken, Gyroskop, Untermenü, Anschlag);
+  `CoreTouchTests` neu: L gehalten mit „C stick“ (Touch-C-Stick = Steuerstick) und „Touch Area“ (Wisch-Winkel),
+  L losgelassen schaut die Fläche wieder. Alle Laufzeittests 0 Fehler, CoreTouchTests 299 Prüfungen.
+- **Nicht geprüft:** auf einem Gerät.
+
+### 2./3. Zielfernrohr und Raketenwerfer mit Vulkan auf Mali: Bildeinbrüche (zwei Nutzerberichte)
+
+„The sniper rifle is still underperforming, to the point of zooming in with the scope and dropping FPS with Vulkan.“
+und „Framedrop when using Rocket launcher and Rifle“. Berichte (als Daten gelesen; wer welchen schickte, ist
+unbekannt):
+
+- **`E:\Development\Android\reports\0999-cubeevil4-report-20261110-212201`:** realme RMX3710 (Helio G85, 2× A75 +
+  6× A55), Mali-G52 MC2 r49p1, Vulkan, 0.99.8-rc, fest 1× bzw. Dynamisch 1,5×→1×, Bildauslassen aus. **`weapon 0x0d`
+  ist der Raketenwerfer** (Tabelle `wep_info`, item.cpp: 0x35/0x17/0x6D), r331/r332, danach r316 mit 0x08 (Riot Gun)
+  und 0x0A (halbautomatisches Gewehr). Also wohl der Nutzer „Rocket launcher and Rifle“. GX core 33–45 ms je
+  Spielbild; „frame:“ Zeichnen 17–32 ms Prozessorzeit (render 17–30), also **zugleich am Prozessor begrenzt**
+  (großer Außenraum, 120 000–155 000 Ecken, Ecken-Umrechnung 28–33 ms auf 4 Threads); `present` 12–35 ms, die GPU
+  0,6–1,0 Bildstücke hinterher; EFB-Durchgänge 10–16 je Bild, davon 8–12 auf einem Teil (das Zielfernrohr nur zeitweise).
+- **`…-085930`:** Samsung SM-A245M (Galaxy A24, Helio G99), Mali-G57 MC2 r54p1, Vulkan, 0.99.8-rc, 1,5×. In r100;
+  im Zielfernrohr 24–30 EFB-Durchgänge je Bild (27 auf einem Teil, 12 % der Fläche), `present` 23–27 ms gegen 4–6 ms
+  ohne Zielfernrohr, GX core 35 ms je Bild mit 16 ms Warten auf den Renderer, „frame:“ Zeichnen nur 12–13 ms: **klar an
+  der GPU begrenzt**, wohl der Nutzer „sniper rifle … scope“.
+- **Was im Zielfernrohr teuer ist:** nicht Filter08 (wie in 0.99.7/0.99.8 angenommen), sondern **Filter0a**
+  (`src/game/filter0a.cpp`, „used for the scope and binocular vignette“): eine Kopie des ganzen Bildes in halber Größe,
+  in die Ecke gezeichnet, dann `nFeedLp` 2 × 8 Mal die Ecke kopieren (½) und versetzt mit 50 % zurückzeichnen, am Ende
+  die Ecke über das ganze Bild mit Maske. Gewehr, halbautomatisches Gewehr und **Raketenwerfer haben dasselbe**
+  (am PC: r301 EU, Waffe 9 bzw. 13, je 27 Kopien und 15 EFB-Durchgänge je Bild, `~/p0999/runs/rifle|rocket`). Jede
+  Kopie liest die vorige: nicht bündelbar; je Schritt zwei abhängige Render-Durchgänge (EFB-Ecke, Kopie).
+- **Ursache der Kosten je Durchgang (Port-Fehler):** jeder Render-Durchgang endete mit der Abhängigkeit „alles danach,
+  **auch die Vertex-Shader**, wartet auf die Farb-/Tiefenausgabe“ (`PassDependencies` dep[1], dstStage
+  VERTEX_SHADER | FRAGMENT_SHADER | TRANSFER). Auf einer kachelnden GPU (Mali, auch Adreno) darf dann das Vertex- und
+  Kachel-Werk des nächsten Durchgangs erst beginnen, wenn der vorige fertig ist: jede Grenze leert die GPU (Mali:
+  getrennte Aufträge für Vertex/Kachel und Fragmente, mit Abhängigkeit über den Kerneltreiber). Bei 30 abhängigen
+  Durchgängen je Bild passt das zu den gemessenen 0,7–0,9 ms je Schritt. Kein Vertex-Shader liest ein gerendertes Bild
+  außer den **Lens Flares** (`kFlareVs` liest die Sichtbarkeit `flareVis`); GX-Texturen sind nur im Fragment-Shader
+  gebunden (`texLayout`).
+- **Behebung (`gx_vk.cpp`, kein Patch unter `src/`):** dep[1] wartet nur noch mit Fragment-Shadern und Kopien
+  (`VertexWait()`); die Lens Flares bekommen nach ihrem Sichtbarkeits-Durchgang eine eigene Sperre (Farbausgabe →
+  Vertex-Shader). Bildgleich per Definition (nur die Synchronisation), geprüft mit der Synchronisationsprüfung der
+  Validierung. Testschalter `RE4_GX_VK_VERTEX_WAIT=1`: wie 0.99.8 (auf dem Gerät per `test-core-app.ps1 -CoreSettings`).
+- **Neue Zähler** in „Vulkan per picture“ (für Mali-Berichte): „EFB copy passes N“ (Kopier-Durchgänge je Bild),
+  „GPU work X ms a picture (n of m submissions measured)“ (Zeitstempel am Anfang und Ende der Arbeit eines Bildes,
+  ohne die Bildschirm-Befehle; `vk.timestampBits` der Queue, sonst „not measured (no timestamps)“) und „passes overlap
+  (0.99.9)“ bzw. „wait for the vertex stage (as 0.99.8)“.
+- **Nicht gebaut (und warum):** ein eigenes kleines Bild für die Ecke und das EFB im Layout GENERAL ändern die Zahl
+  der abhängigen Durchgänge nicht (je Schritt bleiben zwei: die Kopie braucht echtes bilineares Lesen einer halb
+  großen Textur, sonst nicht bitgleich), sparen nur Bandbreite, die bei 224×192 Bildpunkten klein ist (rund 0,7 MB
+  je Schritt bei 1,5×). Ein Shader für die ganze Unschärfe wäre nicht GameCube-genau. Erst Mali-Berichte mit 0.99.9
+  abwarten („GPU work“ im Zielfernrohr gegen außerhalb).
+- **Geprüft am PC** (WSL `~/re4-0999`, `gx_chunk_render` Vulkan/lavapipe, `RE4_VK_VALIDATION=2` mit
+  Synchronisationsprüfung, alter Ablauf gegen neuen, `~/p0999/ab.sh`): Gewehr- und Raketenwerfer-Zielfernrohr
+  (8+8), Raketenschuss (12), Lens Flares an (Geräte-Serien 00/01 aus `0998-flare-gxdumps`, 12+12; ohne Flares
+  unterscheiden sich 9 von 12, sie werden also gezeichnet), Menüs (12), Graustufen (16), Söldner (9), Tiefenschärfe
+  r104 (4), Ada (12), r101-Serie (16) bei 1,5×; dazu 1× (Raketenwerfer, Flares, Menüs), 2× mit 4×MSAA, 2,5× mit „Save
+  bandwidth“: **alle Bilder gleich, 0 Validierungsfehler**. `gx_vk.cpp` mit dem NDK r28c für ARM32 und ARM64
+  (`-Wall -Wextra -Werror`) übersetzt. Am PC (lavapipe rechnet seriell) zeigt die Zeit keinen Unterschied.
+- **Hinweis für den Mali-G52-Nutzer:** sein Gerät ist im Außenraum zusätzlich am Prozessor begrenzt (Zeichnen bis
+  32 ms je Bild); dort hilft „Frame skip: Aggressive“ (er hatte aus).
+- **Nicht geprüft:** auf einem Gerät (Mali, Retroid).
+
+### 4. Tastenbelegung: Zielen + A und Zielen + B schießen beide, Nachladen geht nicht (Nutzerbericht, ohne Bericht)
+
+- **Ursache (App, `ActionMap.buttons`):** Eine Kombination (Feuern = Zielen-Taste + zweite Taste) gab mit ihrer
+  zweiten Taste zusätzlich deren Einzelaktion ab. Mit der Vorgabe fällt das nicht auf (A ist Aktion = A, B ist
+  Rennen = B). Wer aber Aktion und Rennen tauscht (A rennt, B handelt), bekam bei R2 + A „R + A (Feuern) + B
+  (Rennen)“ und bei R2 + B „R + B (Nachladen) + A (Aktion)“: beide Male A und B zusammen, das Spiel schießt.
+  Gleiches, wenn Feuern und Nachladen getauscht oder auf dieselben zwei Tasten gelegt werden (die Zuweisung
+  tauschte Kombinationen nicht). Der alte Test hielt das sogar fest (`press(s, R2, A) == R|A|B`).
+- **Behebung:** Solange die erste Taste einer Kombination gehalten wird, gibt ihre zweite Taste nur die
+  Kombination. Eine Kombination, deren zwei Tasten eine andere schon hat, tauscht mit ihr (wie die Einzelaktionen;
+  die Meldung „Reload is now on …“ kommt von selbst). Ein eingerastetes L oder R („Latch L and R“) zählt als
+  gehaltene erste Taste von Feuern, Nachladen und Messerhieb (vorher gaben dort nur die Einzelaktionen A und B).
+  Die Vorgabe, die alternative Steuerung und die Spielmenüs bleiben, wie sie waren.
+- **Geprüft (Host-Tests):** ActionMapTests 60, CoreInputTests 1833, CoreTouchTests 299 Prüfungen ok (neu: Aktion
+  und Rennen getauscht, Feuern und Nachladen getauscht, eingerastetes Zielen). **Nicht geprüft:** auf einem Gerät.
+
+### 5. Krausers Armklinge (Nutzerwunsch, nur untersucht, nichts gebaut)
+
+- `src/pl0a/pl_klauser.cpp` `cPlKlauser::checkXbutton`: die GameCube-Taste **X** (`Joy[0].trg & 0x400`, das rohe
+  Pad, nicht die Tastenbelegung des Spiels), wenn der Arm nicht schon verwandelt ist und `krEffWait == 0` (das rote
+  Leuchten zeigt sich). Abgefragt beim Gehen/Stehen (actionSelect), beim Zielen (pl_R1_Weapon) und mit dem Messer.
+  Danach (pl_R1_KlauserAttack): links/rechts dreht, **A** schlägt, B oder X bricht ab. Nach einem Schlag wartet
+  `krEffWait = 0x546` (1350 Spielbilder, etwa 45 s), nach einem Abbruch nichts.
+- In der App liegt X schon überall: Touch-Taste X, Controller X, in der Tastenbelegung die Aktion „Ashley: Wait /
+  Follow“. Nichts zu bauen; höchstens die Beschriftung ergänzen (11 Sprachen). Nicht am PC ausprobiert.
+
+### 6. HD-Texturpakete (Recherche, nichts gebaut)
+
+- Dolphin benennt Ersatztexturen `tex1_BxH[_m]_<XXH64 der Stufe 0>[_<XXH64 des genutzten Palettenbereichs>]_<Format>`
+  (Dolphin `TextureInfo::CalculateTextureName`: Seed 0, Stufe 0 auf ganze Kacheln, Palette nur von kleinstem bis
+  größtem benutzten Index; `$` als Platzhalter). `GxCore::Upload` hat genau diese Rohdaten (Format, Größe, Kacheln
+  big-endian, TMEM-Palette); XXH64 bringt die eingebaute zstd mit.
+- Debug-Disc gegen EU-Verkaufsdisc (Skript über alle TPL-Bilder beider Discs, ohne Filme/Ton): 9524 von 9656
+  Texturen (98,6 %, 96 % der Bytes, 165 MB Stufe 0) sind gleich; Pakete für die Verkaufsversion träfen also fast
+  alles. US-Verkaufsdisc nicht verglichen.
+- Bekannte Pakete: „Resident Evil 4 HD Project“ (Albert Marin, Cris Morales; vor allem PC-UHD, eine Dolphin-Fassung
+  kursiert, Lizenz und Größe unklar), ein Wii-Paket (RB4E08/RB4P08, EmuTalk, alt). Keins wird geladen oder
+  mitgeliefert.
+- Für Handys nötig: Umwandeln beim Import (PNG/DDS nach ETC2 oder ASTC, BC-Formate können die meisten Handy-GPUs
+  nicht), Speichergrenze, Nachladen ohne Ruckeln, eigener Ordner zum Entfernen.
+- **Zurückgestellt** (Entscheidung des Projektinhabers, 11.11.2026): das HD Project hat etwa 8 GB, für die meisten
+  günstigen Handys der Nutzer zu groß. Die Erkenntnisse oben bleiben für später.
+
+### 7. CRT-Filter und Farbe (Wunsch des Projektinhabers, 11.11.2026)
+
+- **Wahl des Projektinhabers** nach Vorschaubildern (Notizordner `crt-colour-mockups-0999`): CRT nur „Light“ und
+  „Strong“ (kein „Flat“), Farbe „Warm film“ und „Survival horror“ (kein Sepia), je zwei Stärken per Tastendruck.
+- **Menü (Grafik):** unter „Filter“ die Taste „CRT · Off / Light / Strong“; darunter die Zeile „Colour“ mit „Off /
+  Warm film / Survival horror“ und daneben „Strength · Light / Strong“. Einstellungen `crtLevel` (0–2),
+  `colourMode` (0–2), `colourLevel` (1–2); Texte `ingame_crt`, `ingame_crt_help`, `ingame_colour`,
+  `ingame_colour_warm`, `ingame_colour_horror`, `ingame_colour_strength`, `ingame_colour_help` in 11 Sprachen.
+  Weg: `CoreBridge.setCrt` / `setColour` → `core_mode.cpp` (`optCrt`, `optColour`; Log „CRT: …“, „colour: …“) →
+  `GxRenderer::SetCrt` / `SetColour` je Bild.
+- **Farbe** (`fixed::kColourFs`): ein Durchgang über jede Bildkopie nach dem Retro-Filter (Xfb() und Present zeigen
+  ihn; Filme auch). Warm film: warme Töne +30 % Sättigung, kalte −15 %, warmer Weißabgleich in Mitten und Lichtern,
+  sanfte S-Kurve; Survival horror: 40 % Sättigung, tiefere Schwärzen, härtere S-Kurve, kalter Grünstich in den
+  Mitten. Light = halb, Strong = voll; Schwarz bleibt schwarz.
+- **CRT** (`kCrtLineFs`, `kCrtGlowFs`, `kCrtFs`, Stufen `kCrtPresets`): nach jeder Bildkopie zwei kleine Durchgänge
+  (die Spielzeilen, eine Zeile je Spielzeile, höchstens 1280 breit, mit seitlich verlaufener Farbe; ihr Leuchten auf
+  einem Viertel je Richtung), dann ersetzt der CRT-Shader den letzten Schritt auf den Bildschirm: gewölbtes Glas mit
+  runden Ecken und dunkleren Rändern, jede Spielzeile ein Strahl mit dunklen Lücken (unter drei Bildschirmpixeln je
+  Zeile blenden die Lücken aus, sonst Streifenmuster), das Leuchten, bei Strong eine Lochmaske. Gilt im Kasten des
+  Bildformats (4:3, 16:9, Native). Touch-Tasten, App-Menü, Minikarte und FPS-Anzeige bleiben außerhalb. GLES:
+  `GlRenderer::Colour`, `Crt`, `CrtPresent`; Vulkan: `FilterColour`, `FilterCrt`, eigene Pipelines für Bildschirmfoto
+  und Swapchain (`crtShotFx`, `crtSwapFx`, mit der Drehung des Displays). Fehlt ein Shader auf einem Treiber, bleibt
+  der Filter aus (einmal im Log).
+- **PC-Werkzeug:** `RE4_GX_CRT=1|2`, `RE4_GX_COLOUR=M,L`, `RE4_GX_PRESENT_REPEAT=N` (Zeit des Bildschirmschritts);
+  dieselben Schalter auch im App-Kern (`RE4_GX_CRT`, `RE4_GX_COLOUR`).
+- **Geprüft am PC** (`gx_chunk_render`, sechs Szenen: Waldweg r100, Höhle, Dorf bei Regen, Burgsaal mit Feuer, Haus,
+  Burg außen; Stufe 2×, Bildschirm 2400×1080):
+  - **Aus = wie vorher:** neues gegen altes Werkzeug (HEAD 792e561a), GLES und Vulkan, Formate 16:9, 4:3 und Native,
+    ohne Filter und mit FXAA + Nachschärfen Stark + Retro + TV-Filter: **alle Bilder Byte für Byte gleich** (144).
+  - **Vulkan-Validierung mit Synchronisationsprüfung:** CRT Light/Strong, Warm film und Survival horror je Light und
+    Strong, Warm film + CRT, in 16:9 und 4:3: **0 Fehler**.
+  - **Aussehen:** wie die Vorschaubilder (Vergleich nebeneinander, auch 1:1-Ausschnitt); GLES gegen Vulkan
+    praktisch gleich (mittlere Abweichung unter 0,02 %, höchstens 7 von 255).
+  - **Zeit** (nur Vergleich, Software-Grafik am PC; der Bildschirmschritt mit Rücklesen, Mittel aus 20): GLES
+    llvmpipe 3,6–5,6 ms → 16,4–17,6 ms, Vulkan lavapipe 5,5–5,8 ms → 9,7–11,6 ms; Light und Strong fast gleich.
+    Auf dem Gerät zeigt der Fehlerbericht die Zeit („present“, bei Vulkan „GPU work“).
+  - Renderer-Test `TestCrtColour` (`test_gx_gl.cpp`); NDK r28c ARM32/ARM64 `-Wall -Wextra -Werror` ohne Meldung;
+    `check_translations.py` ok.
+- **Nicht geprüft:** auf einem Gerät (Wirkung, Kosten auf Mali/Adreno, Drehung des Displays bei Vulkan).
+
+### 8. Bildtakt („Frame Pacing“, Nutzervorschlag, 11.11.2026): Untersuchung und Messzeile
+
+- **Heute:** CoreActivity fragt Bildschirme über 60 Hz nach ihrem 60-Hz-Modus (`preferredDisplayModeId`) und ab
+  Android 11 `Surface.setFrameRate(60, COMPATIBILITY_DEFAULT)`; ein eigener Taktgeber-Thread (Choreographer) misst
+  den Bildschirm (FramePacing: Median aus 32 Takten) und lässt bei 120/144 Hz jedes zweite Mal zeichnen, sonst
+  zeichnet GLES (GLSurfaceView, durchgehend, Swap-Intervall 1) bzw. Vulkan (FIFO, 3 Swapchain-Bilder) bei jedem Takt
+  das neueste Bild. Der Kern koppelt seine Retraces an den Bildschirm (`runtime/vi.cpp`, M9), aber nur, wenn eine
+  ganze Zahl von Takten innerhalb von 0,5 % ein NTSC-Halbbild ergibt (60 Hz, 120 Hz); sonst läuft er mit eigener
+  Uhr (59,94 Hz). Kein Swappy, kein `eglPresentationTimeANDROID`, kein `VK_GOOGLE_display_timing`.
+- **Ursachen ungleicher Abstände:**
+  - 90-Hz-Bildschirme: der Kern läuft ungekoppelt; 30 Spielbilder je Sekunde (33,37 ms) gegen drei Takte (bei
+    gemessenen 89,4 Hz 33,56 ms): etwa alle 1,7 s ein Bild nur zwei Takte lang (bei genau 90,0 Hz alle 11 s).
+    Mit 60 FPS (Zwischenbilder) wechseln sich 1 und 2 Takte ständig ab (das Zwischenbild hat t = 0,5, gezeigt wird
+    es nach einem Drittel).
+  - 60-Hz-Bildschirme, die etwas schneller laufen (gemessen 60,5 Hz, Bericht 0994-check 18:08, Xiaomi): außerhalb
+    der 0,5 % ungekoppelt, etwa alle 1,8 s ein Bild drei Takte lang.
+  - Der 60-Hz-Modus wird nicht überall genommen: realme RMX3710 (Bericht 0999-…-212201, Modi 90/60/45) und ein
+    720×1600-Gerät (0991-lava-door) bleiben trotz Anfrage bei 90 Hz; das Galaxy A24 hat nur 90 Hz.
+  - 144 Hz ohne 60/120-Modus: 72 Bilder je Sekunde, 30 Spielbilder = 4,8 Takte (2/3-Wechsel). In den Berichten nicht
+    gesehen.
+  - Unabhängig davon: Shader beim ersten Mal (Vulkan), CPU- oder GPU-Grenze (Mali-G52/G57), Frame skip.
+- **Berichte:** 42 + 8 + 3 + 2 + 2 Läufe auf reinen 60-Hz-Bildschirmen, die meisten 90/120-Hz-Handys nehmen den
+  60-Hz-Modus; 90 Hz geblieben in 9 (A24) + 4 Läufen, 60,5 Hz in 4 Läufen.
+- **Neu (Messung, ändert nichts am Bild):** `picture_cadence.h` (PictureCadence), aufgerufen in `core_mode.cpp`
+  bei jedem neuen Bild (`NotePicture`, auf den Takt des Bildschirms gerundet; die Takte aus `CoreBridge.vsync`).
+  Alle 10 s eine Logzeile „picture pacing: N new pictures in 10 s, interval median X ms, Y % more than 2 ms off it,
+  longest Z ms; in vsyncs of the display (H Hz) 1: … 2: … 3: … 4: … 5+: …“. Test `TestPictureCadence`
+  (`test_gx_gl.cpp`): 30 Bilder auf 60 Hz 301× 2 Takte, 0 %; eigene Uhr auf 89,4 Hz 295× 3 und 6× 2 Takte; 60 FPS auf
+  90 Hz 301× 1 und 300× 2 Takte, 50 % daneben. `gx_gl_check` 0 Fehler, NDK ARM32/ARM64 `-Werror` ohne Meldung.
+  **Nicht geprüft:** auf einem Gerät.
+- **Vorschläge** (Entscheidung des Projektinhabers offen): Kern auch an 90 Hz koppeln (zwei Halbbilder = drei
+  Takte) und bei 90 Hz nur neue Bilder zeigen; die Kopplungsgrenze von 0,5 % auf etwa 1 % (60,5-Hz-Bildschirme);
+  `setFrameRate` mit `FIXED_SOURCE` und ab Android 12 `CHANGE_FRAME_RATE_ALWAYS`; 60 FPS auf 90 Hz: Zwischenbild-
+  Anteil nach der Anzeigezeit oder ein Hinweis; Swappy/Present-Zeitpunkte erst danach.
+- **Gebaut (Freigabe des Projektinhabers „Ja, bauen“, 11.11.2026; 1–4, ohne Swappy):**
+  1. `runtime/vi.cpp re4_vi_locked_field`: nach der ganzen Zahl von Takten je Halbbild auch zwei Halbbilder = eine
+     ungerade Zahl von Takten (90 Hz: drei; das Halbbild 1,5 Takte, `re4_vi_lock_phase` rastet dann auf das Raster
+     eines halben Takts, jeder zweite Retrace kurz nach einem Takt). 30 Spielbilder je Sekunde kommen damit alle drei
+     Takte. Das Spiel läuft bei genau 90 Hz 0,1 % schneller, bei gemessenen 89,4 Hz 0,57 % langsamer; der Ton folgt
+     (unten). Filme und Titel mit 60 Bildern bleiben auf 90 Hz ungleich (1 und 2 Takte im Wechsel, wie vorher).
+  2. Grenze 1 % statt 0,5 % (60,5 Hz koppelt; 61 Hz nicht). Ton (`runtime/ai.cpp`): der gelernte Unterschied bis
+     1,15 % (vorher 0,75 %), der ganze Ausgleich bis 1,5 % (vorher 1 %); Test `core-test ax` mit dem Spiel 1,1 %
+     schneller und langsamer als der Ton des Geräts: kein zu kurzes Lesen nach 20 s.
+  3. `CoreActivity.surfaceSixtyHz`: `setFrameRate(60, FIXED_SOURCE)`, ab Android 12 mit `CHANGE_FRAME_RATE_ALWAYS`
+     (Log „surface frame rate: 60, fixed source, always switch“); wer trotzdem schneller bleibt, wird gemessen wie
+     vorher.
+  4. Menü Leistung → Experimentell: mit 60 FPS an und einem Bildschirm, auf dem 60 nicht gleichmäßig geht, 30 aber
+     schon (`FramePacing.sixtyUneven`: 90 Hz, 89,4 Hz; nicht 60, 60,5, 120, 144, 75), die Zeile
+     `ingame_smooth60_uneven` (11 Sprachen) unter den Tasten. `CoreMenu.Host.displayHz()`.
+  - **Nicht gebaut: „bei 90 Hz nur neue Bilder zeigen“.** GLSurfaceView tauscht nach jedem Zeichnen das Bild,
+    ein ausgelassenes Zeichnen zeigte dort einen leeren oder alten Puffer; die Gleichmäßigkeit kommt aus der
+    Kopplung (jedes neue Bild trifft dieselbe Stelle im Takt), das erneute Zeigen des alten Bildes kostet nur etwas
+    GPU. Ein sicherer Weg bräuchte eine neue Kern-Schnittstelle (Bild wartet ja/nein) bis in den Kernprozess.
+  - **PC-Simulation** (`RE4_VI_SIM_HZ=f` in `vi.cpp`: simulierter Bildschirm, jedes vom Spiel beendete Bild beim
+    ersten Takt mindestens 1 ms später notiert, die Zeile „picture pacing“; i686 -O2, Echtzeit, Debug-Discs, r100,
+    47 s): Phasen mit 30 Bildern je Sekunde: 60 Hz 0 % (300× 2 Takte), 60,5 Hz neu 0 % (303× 2) gegen alt 3 % (6× 3
+    Takte je 10 s), 89,4 Hz neu 0 % (299× 3) gegen alt 2 % (6× 2 Takte je 10 s), 90 Hz 0 % (301× 3), 120 Hz 0 %
+    (301× 4). Phasen mit 60 Bildern: 60/60,5/120 Hz 0 %, 90/89,4 Hz 50 % (1 und 2 Takte im Wechsel, wie vorher).
+    Gelegentliche Lücken von ~300 ms (das Spiel stand) kommen auch mit dem alten Stand vor (PC). Selbsttests
+    (`runtime-test vsync` mit 90/89,4/60,5/61/144/75 Hz und dem Raster bei 90 Hz, `core-test ax`) grün;
+    `FramePacingTests` 3449, App-Unit-Tests (Gradle) grün. **Nicht geprüft:** auf einem Gerät.
+
+## Version 0.99.8-rc: Fehler nach 0.99.7 (10.11.2026, Branch `0998`)
+
+Version 0.99.8-rc (versionCode 110), Releasetext `port/android-decomp/docs/releases/v0.99.8-rc.md` („Changes since
+v0.99.7.“, Known issues aus 0.99.7 übernommen). Branch `0998` (Basis 7a028327 = 0.99.7-rc), nächste freie
+Patchnummer 0228 (0227: der eigene Frame-Skip des Spiels, Abschnitt 4).
+
+### 1. „Ghosting“ mit der Tiefenschärfe (Nutzerbericht, Xiaomi 25102PCBEG, Adreno 840)
+
+Bericht über den Projektinhaber (10.11.2026, `E:\Development\Android\reports\0998-dof-ghosting\`): drei Berichte
+„Depth-of-field-Strong/-Light/-Off“ (ein Lauf, 0.99.7-rc, GLES, 4× = 2560×1344, Anisotropie 16, Nachschärfen stark,
+Lens Flares, 60 FPS mit Zwischenbildern an) und drei Bildschirmfotos (Pistole mit Laser in der Schlucht, r104).
+
+- **Was die Berichte zeigen:** in r104 läuft die Tiefenschärfe **des Spiels** (`dof: from frame 1014: light cut,
+  behind the focus, level 3`), nicht der Autofokus der App (in allen GX-Zeilen „0 autofocus passes“: legt das Spiel
+  einen Fokus an, bleibt der Autofokus aus). Der Kern hört nur an/aus: „Light“ und „Strong“ zeichnen hier dasselbe,
+  „Off“ lässt den Durchgang weg (Patch 0065). 30 Spielbilder/s sind normal (das Spiel rechnet 30, die App zeigt mit
+  Zwischenbildern 60); mit der Tiefenschärfe hat das nichts zu tun.
+- **Ursache (Port-Fehler, nicht die Zwischenbilder):** `Filter01Render` kopiert das Bild in halber Größe mit dem
+  Kopierfilter {32, 0, 0, 0, 0, 0, 32} (nur die Zeilen darüber und darunter) und legt die Kopie um 0,6–6,6
+  Bildpunkte schräg verschoben mit 50 % über alles hinter dem Fokus (Stufe 3: 2,6 Bildpunkte). Auf dem GameCube ist
+  die Kopie weich (2×2 Bildpunkte, dazu die Nachbarzeilen, beim Zurückzeichnen linear gefiltert): man sieht einen
+  weichen Schleier. Die App nahm für die 2×2-Box ihre eigenen Texel und ließ den Kopierfilter bei Textur-Kopien weg:
+  bei 4× ist die Kopie gestochen scharf und erscheint als **zweites, um ~10 Gerätebildpunkte verschobenes Bild**.
+  Mit Zwischenbildern genauso (die Zwischenbilder kopieren selbst, `interpCopies`, richtig).
+- **Behebung (`gx_core.cpp` EfbCopy, `gx_fixed_shaders.h` kCopyFs, `gx_gl.cpp`, `gx_vk.cpp`):** eine Textur-Kopie,
+  deren Kopierfilter die eigene Zeile auslässt (Anteil der Mitte 0, nur die Tiefenschärfe des Spiels), nimmt den
+  Filter (Zeilen darüber/darunter eine GameCube-Zeile entfernt, `step` = Sf(1)) und bei halber Größe die Box des
+  GameCube in der Auflösung (`CopyParams::box` = Sf(1): 16 lineare Abgriffe über 2×2 GameCube-Bildpunkte). Alle
+  anderen Kopien (Kopierfilter aus oder der Entflimmer-Filter des Bildmodus 8 8 10 12 10 8 8) bleiben bitgleich.
+  Log einmal: „blur copy (the game's depth of field): the line above 0.500, below 0.500, a box of N texels“.
+  GLES und Vulkan. Kein Patch unter `src/`.
+- **Nebenwirkung (GameCube-treu):** wo das Spiel einen Tiefenschärfe-Durchgang ohne Verschiebung zeichnet (Stufe 0,
+  z. B. nach einem Ereignis in r301 mit „event far, level 0, type 1, focus z 100“ bis zum nächsten Wechsel), ist der
+  Hintergrund jetzt weich wie auf dem GameCube; vorher war die scharfe Kopie dort unsichtbar. Nur mit
+  Tiefenschärfe Light/Strong.
+- **PC-Prüfung (WSL, `~/p0998`, Baum `~/re4-0998` und `~/re4-0998base` = 7a028327, `gx_chunk_render` llvmpipe /
+  lavapipe):** EU-Discs, Debug-Start r104 (`RE4_GX_DUMP_AT=800,1000`, Serie 2; Zwischensequenz mit „light cut“).
+  Vorher bei 4×: Hand und Spritze doppelt (Skala „5“ doppelt, scharfe Kante versetzt), bei 1× weicher Saum; nachher
+  bei 4× wie bei 1×, auch im Zwischenbild (`RE4_GX_INTERP=1`, „-zw“). Alter gegen neuen Stand bei 4× über gespeicherte
+  Bilder älterer Läufe: Menüs 12/12, grey1 12/12, mm1 9/9, Nebel (p0984 fog) 12/12, r101 12/12, r100-eu 12/12,
+  Laser 12/12 bitgleich; scope1 (r301) 5/12 gleich, die übrigen 7 mit dem Ereignis-Durchgang oben. Vulkan gegen GLES
+  (neu) höchstens 4 von 255 wie vorher. `gx_gl_check` neue Prüfung `TestBlurCopy` (roter Streifen, so kopiert und
+  zurückgezeichnet: Rot neben dem Streifen bei 1× 80, bei 4× 90; der alte Stand gibt bei 4× 0 und fällt durch):
+  0 Fehler; strenge Shaderprüfung 1118 Shader, 0 abgelehnt.
+- **Nicht geprüft:** auf einem Gerät (Adreno 840 des Nutzers, Retroid).
+
+### 2. „Bug using Ada Wong with fully upgrade Tmp“ (Nutzerbericht, Xiaomi 2311DRK48G, 0.99.7, ARM64)
+
+Bericht `E:\Development\Android\reports\0998-ada-tmp-20261110-085522` (ohne Beschreibung, ohne Bild): Cheats
+automatische QTEs, Zufallsgegenstände, Ada als Spielfigur ab r20a (vorher Leon); in r20a die TMP aus dem Koffer
+ausgerüstet (`Wep39 ADA-MACHINEGUN`, weapon 0x0b), gezielt, ein kurzer Schuss, R+B, START-Menü, Bericht. Kein
+Absturz, keine auffällige Zeile im Log.
+
+- **PC (EU-Discs, Debug-Start r20a, `RE4_TEST_CHEAT_SET=free+5:64`, `RE4_TEST_WEAPON=free+80:0x0b,T,lv=0x5025` =
+  Feuerkraft 5, Magazin 250, Nachladen 2; T 0 ohne und 1 mit Schaft; R halten, A 150 Bilder, B), i686 und
+  x86_64 (`~/p0998/dbg64.sh`):** Ada zielt (Laser), schießt Dauerfeuer (250 → 199), Waffe in der Hand, Mündungsfeuer,
+  Hülsen; in allen vier Läufen gleich. **Nicht nachgestellt.** Fragen an den Nutzer über die Hauptsitzung.
+
+### 3. Hinzugefügter L-Knopf im Stil RE ist quadratisch (Touch, RetroTouch 1.0.0-beta.10)
+
+Die Form gibt die App pro Aktion (`setButtonShape`, ROUNDED_RECT für L/R, CAPSULE für START/MENU), das
+Seitenverhältnis aber nur pro Knopf des Standardlayouts: RetroTouch (`RetroTouchView.applyPresentation`) holt
+Farbe, Form und Seitenverhältnis bei jedem Laden über die Kennung des Knopfs aus dem Standardlayout. Ein mit ADD
+angelegter Knopf (`button_N`) hat dort keinen, bekommt 1,0 und wird mit der Form der Aktion ein abgerundetes
+Quadrat; ein mit ACTION umbelegter Knopf behält das Verhältnis seines alten Platzes. In beta.10 gibt es kein
+Seitenverhältnis pro Aktion: **dafür braucht es eine RetroTouch-Änderung** (z. B. `setButtonAspect(action,
+aspect)`, genommen, wenn der Knopf im Standardlayout fehlt oder dort eine andere Aktion hat).
+
+**Behoben mit der neuen AAR des Projektinhabers (10.11.2026, gleicher Name 1.0.0-beta.10, neuer Inhalt):**
+`app/libs/retrotouch.aar` ersetzt (SHA1 e08c71a4…; geändert nur `RetroTouchView`, `RetroTouchControl` und
+`RetroTouchView$PointerState`, neu `setButtonAspect(actionId, aspect)`/`getButtonAspect`; 0 oder weniger nimmt den
+Wert zurück). Regel der Anleitung (Abschnitt 8): ein Knopf des Standardlayouts mit eigenem Seitenverhältnis und
+derselben Aktion behält es, alle anderen Knöpfe der Aktion nehmen den Wert pro Aktion, sonst 1:1.
+`TouchControls.applyAspects`: im Stil RE L und R mit `shoulder` (1,95, auf 4:3 schmaler, `TouchStyle.shoulderAspect`),
+START und MENU 2,1 (`TouchStyle.aspect`); im Stil GC für alle Aktionen zurückgenommen (wie die Formen), GC zeichnet
+also wie zuvor. Auch nach `reshape` (L/R-Breite neu für den Bildschirm) gesetzt. Gespeicherte Layouts unverändert
+gültig (Form und Seitenverhältnis gehören nicht ins Layout). Test `TouchStyleTest.addedButtonsShapedAsTheDefaultOnes`
+(ein mit ADD angelegtes L `button_1` zeichnet RetroTouch in RE 1,95, START 2,1, A 1; in GC 1:1, das Standard-L
+behält 1,95). Auf dem Gerät nicht getestet.
+
+### 4. „Aggressive frame skip (saves CPU)“ (Wunsch des Projektinhabers, Patch 0227) und die „frame:“-Zeile
+
+Machbarkeitsstudie (10.11.2026, Notiz `work-0998-frameskip-study.md` im Notizordner der Sitzungen), danach Freigabe
+des Projektinhabers („Ja bitte einbauen und gleich reparieren“). Der Frame-Skip des Renderers (`core_mode.cpp`,
+`GxRenderer::Skip`) lässt nur ein Bild weg, das das Spiel schon gebaut hat: Er spart GPU-Zeit, keine Prozessorzeit.
+Am PC (x86_64, EU-Discs) ist der Großteil eines Spielbilds Zeichnen: r103 4,05 ms, davon `Render` 2,68 und `objTrans`
+0,63, Logik ~0,5 (13 %); r105 2,13 ms, Logik ~0,15.
+
+- **Wie (Patch 0227, `runtime/cpu_skip.cpp`):** Das Bild hinkt der Logik ein Spielbild hinterher (`Trans` füllt die
+  Ordnungstabellen, das `Render` des nächsten Bilds zeichnet sie). Vor `Trans` entscheidet `re4_cpu_skip_decide`, ob
+  das Bild wegfällt; dann meldet `Trans` keine Objekte und Gegner an (Sichtprüfung, Lichter, verformte Eckpunkte),
+  und im nächsten Spielbild entfallen `Render_before`, `Render` (`Render_skip`: nur Nebel und Flags wie `Render`),
+  Kinobalken, `DrawOTag`, Debug-Log und -Texte (Puffer geleert), `Render_done` (`Render_done_skip`: Zeitscheiben des
+  Szenario-C-Tasks bleiben) und `Render_swap` (der VI zeigt das Bild davor). Weiter laufen: Logik, IdSys, die Anmeldung
+  der Effekte und Filter (Regen und Schnee bewegen sich in `Filter06Trans`), Blenden (`FadeControl`: nur das Viereck
+  wird nicht gezeichnet), Ton, DVD. Texturanimationen und -verschiebungen holen den ausgelassenen Schritt im nächsten
+  Bild nach (`re4_tex_steps` in `commonScreenMatSub`). Nur beim Spielen (`Rno0` 3, zwei Halbbilder pro Bild, kein
+  `SYS_TRANS_STOP`, kein festgehaltenes Bild, kein Unterbildschirm).
+- **Die Uhr:** Ein Bild fällt weg, wenn das Spielbild davor länger als seine zwei Halbbilder plus 2 ms gedauert hat,
+  höchstens eins in Folge (mindestens 15 Bilder/s); ein Spielbild über 250 ms (Laden, App angehalten) zählt nicht;
+  wer vorn liegt, bekommt kein Guthaben. **Abweichung von der Studie:** Ein über mehrere Bilder mitgetragener Rückstand
+  wie im Shaolin-Port passt nicht zu RE4: Jedes Spielbild wartet auf den Bildschirmtakt (`vsync_cnt` beginnt jedes
+  Bild bei 0), ein ausgelassenes Bild ist nicht kürzer als zwei Halbbilder, das Spiel kann nie aufholen. Mit
+  mitgetragenem Rückstand blieb nach einer Ladepause jedes zweite Bild weg, auch am schnellen PC (erste Fassung).
+- **Menü:** Leistung → Experimentell, eigene Zeile „Aggressive frame skip“ mit Hilfezeile (`ingame_cpu_skip`,
+  `ingame_cpu_skip_help`, 11 Sprachen), aus nach dem Einbau. Darf **zusammen** mit dem Frame-Skip des Renderers an sein
+  (der spart GPU-Zeit, dieser Prozessorzeit); 60 FPS schließt beide aus (wer 60 FPS einschaltet, schaltet beide aus,
+  und umgekehrt; gespeichert mit beidem an: 60 FPS bleibt). Weg: `CoreBridge.setCpuSkip` → `core_mode.cpp optCpuSkip`
+  (an den Kern geht „aus“, solange 60 FPS läuft) → `re4_core_set_cpu_skip` (im App-Prozess per `dlsym`, im
+  Kernprozess Nachricht `kSetCpuSkip` = 42, `coreproc.cpp`). Einstellung `cpuSkip`.
+- **Testschalter (PC):** `RE4_CPU_SKIP=1` (ab Start an), `RE4_CPU_SKIP_MAX=2|3` (Bilder in Folge, nur zum Ausprobieren),
+  `RE4_CPU_SKIP_TEST=1` (jedes erlaubte Bild weg, ohne Uhr), `RE4_CPU_SKIP_SLOW_DRAW=MS` (jedes gezeichnete Bild MS
+  Millisekunden teurer: der PC als Handy mit langsamem Prozessor).
+- **„frame:“-Zeile repariert:** `sectionLog` (`state_trace.cpp`, Patch 0108) verlangte genau die zwei Marken
+  TaskScheduler und SndWatcher; beim Spielen gibt es ~16 (EmMgr.move, objTrans …), die Zeile kam auf keinem Gerät.
+  Jetzt mit allen Marken und der Renderzeit: „frame: 600 frames in r103: logic 0.5 ms, drawing 3.3 ms (render 2.7,
+  models 0.7), rest …, frame end …, waiting … (averages; the longest frame …); N pictures left out (Aggressive frame
+  skip on/off)“. Dazu „frame skip (CPU): N pictures left out so far …“ beim ersten und jedem 500. Bild.
+  Laufzeittest `sections` um einen Fall mit Spielmarken erweitert.
+- **Geprüft am PC (x86_64-O2, 10.11.2026):**
+  - *Gleicher Spielzustand:* je Raum zwei Läufe (ohne und mit `RE4_CPU_SKIP_TEST=1`, jedes zweite Bild weg), Leon läuft,
+    zielt, schießt wie im Raum-Rundgang (5000 Bilder), Zustandsaufzeichnung (`RE4_TRACE`) Bild für Bild verglichen
+    (ohne die GX-Zählung): EU r100, r101, r103, r104, r200, r206, r222, r224, r226, r301, r305, Debug r100, r104 —
+    **gleich** (Spieler, Gegner, Kamera, Ereignisse, Zufallszähler, Schall), darunter Ereignisse am Raumanfang,
+    Tode mit Neuladen des Raums (r104 QTE, r200, r222, r301 zweimal), Hitzeflimmern (r101, r222, r224), Tiefenschärfe
+    (r104). Einzige Abweichung: r104 Bild 3592, Zahl der belegten Effektplätze 153 statt 163 — der Schweif-Effekt 0x0A
+    (`Esp0a_Trans`) legt beim **Zeichnen** bis zu 50 Hilfsteile für ein Bild an; ohne Zeichnen keine. Danach wieder
+    gleich, keine Wirkung aufs Spiel.
+  - *Bilder:* 16er-Serien in r103, r104 (ohne/mit): jedes mit Bildsprung gezeichnete Bild gleicht dem Bild desselben
+    Spielbilds ohne, bis auf die Debug-Zeitbalken am Rand (die messen die Rechenzeit). r222 (Lava) zeichnet das
+    Hitzeflimmern schon ohne Bildsprung von Lauf zu Lauf anders (zwei Läufe ohne: 1 von 16 Bildern gleich), dort
+    kein Vergleich möglich.
+  - *Uhr:* r103 im echten Takt: ohne Bremse 57 Bilder weg beim Raumanfang (Ladehänger), danach 0; mit
+    `RE4_CPU_SKIP_SLOW_DRAW=40`: ohne Bildsprung ~22 Spielbilder/s (Zeitlupe), mit ~30 (normal), 600 von 1200 Bildern
+    weg, nie zwei in Folge.
+  - Laufzeittests 0 Fehler; Android-Kern beider ABIs; App-Tests (Gradle), Übersetzungsprüfung.
+- **Nicht geprüft:** Zielfernrohr (kein Gewehr im Debug-Start), Spiegelungen eigens, ein Raumwechsel durch eine Tür
+  (nur Neuladen nach dem Tod und Start aus der Raumauswahl), Filme (dort ist der Bildsprung aus), ein echtes Handy mit
+  langsamem Prozessor.
+
+### 5. „Save bandwidth (Vulkan)“: weniger Laden und Speichern des EFB auf Kachel-GPUs (Wunsch des Projektinhabers)
+
+Auftrag (10.11.2026, „Ja bitte prüfe 1 und 2 und baue dann einen Toggle unter Performance / Experimental ein“), nach
+den Mali-G52-Berichten zum Zielfernrohr (`E:\Development\Android\reports\0998-scope-followup\`; dort ist „shown“
+die Zahl der Durchläufe der Zeichenschleife, nicht der Spielbilder: im Zielfernrohr Vulkan 35,1 ms pro Spielbild,
+GLES 39,9 ms, kein Vorsprung von GLES).
+
+- **Hebel 1 (Kopien bündeln):** geprüft. Kopien direkt hintereinander teilen sich schon ein Ende des EFB-Durchgangs
+  (`CopyPass`: der zweite findet keinen offenen Durchgang, das Layout ist schon gewechselt). Die 24 Kopien der
+  Zielfernrohr-Unschärfe (Filter08) lesen jede das Ergebnis der vorigen: nicht bündelbar. Was blieb: das Löschen nach
+  einer Kopie begann jedes Mal einen eigenen Durchgang über das ganze EFB (laden, löschen, speichern), den der nächste
+  wieder lud — jetzt in den nächsten Durchgang gefaltet (unten).
+- **Hebel 2 (nicht speichern/laden, was nicht gebraucht wird):** `GxCore::DeferClear` → `gx_vk.cpp`: das Löschen nach
+  einer Kopie (vor allem das der Bildausgabe) wird gemerkt; der nächste EFB-Durchgang beginnt genau auf dessen
+  Rechteck mit Ladeoperation CLEAR (Varianten von `efbPass`, `EfbVariant`; kompatibel, da nur Lade-Ops anders). Will
+  der Durchgang mehr als das Rechteck: wie bisher (laden, löschen im Durchgang). Was das EFB vorher liest (Kopie,
+  Lens Flares, Autofokus, Tiefe für GXPeekZ, neue Auflösung), löscht zuerst (`FlushClear`). Nicht mit MSAA.
+  **Verworfen:** die Tiefe des letzten Durchgangs vor der Bildausgabe nicht speichern (`STORE_OP_DONT_CARE`): nach der
+  letzten Texturkopie zeichnet das Spiel auch außerhalb des Ausgabe-Rechtecks (r101, r104, r222: ein solcher Durchgang
+  endete im ersten Versuch zu früh), und lavapipe am PC speichert trotzdem, der Bildvergleich kann es nicht beweisen.
+- **Menü:** Leistung → Experimentell, neben „Aggressive frame skip“: „Save bandwidth (Vulkan)“ (`ingame_vk_bandwidth`,
+  `ingame_vk_bandwidth_help`, 11 Sprachen), Einstellung `vkBandwidth`, **aus** nach dem Einbau (am Gerät unbewiesen); mit
+  OpenGL ES ausgegraut. Weg: `CoreBridge.setVkBandwidth` → `core_mode.cpp optVkBandwidth` → `GxRenderer::SetBandwidthSave`
+  → `GxCore::bwSave`. Zähler in „Vulkan per picture“: „save bandwidth on|off: N clears folded into the next pass (of M)“
+  (pro Bild; die Zahl der EFB-Durchgänge sinkt mit „on“ um eins pro Bild). Testschalter `RE4_GX_BANDWIDTH=1|log`
+  (gx_chunk_render; `log`: warum ein Löschen nicht gefaltet wird).
+- **Geprüft am PC (gx_chunk_render Vulkan/lavapipe, `RE4_VK_VALIDATION=2` mit Synchronisationsprüfung, an gegen aus,
+  `~/p0998/bwcmp.sh`):** Tiefenschärfe r104 (4), Zielfernrohr (15), Menüs (12), Graustufen (16), Söldner (9), Tod/Neu
+  laden (10, 15, 5), Ada (12), Bildserien zu 16 in r101 (Feuer, Hitzeflimmern), r103, r104, r222 (Lava, Hitzeflimmern),
+  bei 1×, 1,5×, 2,5×: **alle Bilder gleich, 0 Validierungsfehler**. In den Serien 15 von 16 Löschungen gefaltet (dem
+  letzten Bild fehlt der Nachfolger), EFB-Durchgänge r101 48 → 32, r103 105 → 89, r222 304 → 288. Im Zielfernrohr
+  fällt keines (Rechtecke der Texturkopien kleiner als der nächste Durchgang): dort bleibt es wie bisher.
+  gx_gl_check 0 Fehler; App-Tests, App-Bau, Übersetzungsprüfung. **Nicht geprüft:** auf einem Gerät (Mali, Adreno).
+
+### 6. Frame-Skip als ein Knopf: Aus > Normal > Aggressiv (Wunsch des Projektinhabers)
+
+„Derzeit lassen sich beide Frameskip Optionen gleichzeitig aktivieren … Frameskip Aus > Frameskip Normal > Frameskip
+Aggresiv > Frameskip Aus, daneben den 60 FPS Button und darunter die beiden bisherigen.“ Leistung → Experimentell:
+Zeile 1 „Frame skip: Off/Normal/Aggressive“ (jeder Druck schaltet weiter, `valueLabel`) | „60 FPS“; Zeile 2 „Merged
+draws“ | „Vertex ring“ (wie vor 0.99.8); Zeile 3 „Save bandwidth (Vulkan)“. Normal = Frame-Skip des Renderers
+(`CoreBridge.setFrameSkip`), Aggressiv = der des Spiels (`CoreBridge.setCpuSkip`, Patch 0227); nur einer an. 60 FPS
+schließt ihn aus (wie bisher, in beide Richtungen). Einstellung `frameSkipMode` 0/1/2 (`CoreMenu.frameSkipMode`,
+`storeFrameSkipMode`); die alten Schalter `frameskip`/`cpuSkip` werden übernommen (beide an: Aggressiv) und entfernt;
+beim Start mit 60 FPS: Aus. Texte `ingame_skip_normal`, `ingame_skip_aggressive`, Hilfen `ingame_skip_normal_help`,
+`ingame_skip_aggressive_help` (11 Sprachen); `ingame_cpu_skip`, `ingame_cpu_skip_help`, `ingame_frame_skip_help` fort.
+Test `FrameSkipModeTest` (4 Fälle). Auf dem Gerät nicht getestet.
+
+### 7. Lens Flares: Sterne wandern beim Drehen mit und flackern (GX-Aufnahmen des Projektinhabers)
+
+`E:\Development\Android\reports\0998-flare-gxdumps\dumps\gx-dumps\` (Retroid, Dorf bei Nacht und Regen, zwei Serien zu
+12 Bildern). Am PC nachgespielt (gx_chunk_render, Lens Flares an/aus): Serie 00, Bilder 10/11, die Kamera dreht schnell,
+die Lampe springt 33–43 GameCube-Pixel pro Bild. `GxCore::FlareTrack` ordnete eine Quelle ihrem Platz nur innerhalb von
+max(24, 2r) Pixeln zu: die Lampe galt als verloren, ihr Stern blieb an der alten Stelle (neben Leons Kopf, wo kein Licht
+mehr ist) und verblasste dort über etwa zehn Bilder (`kFlareVisFs`: 0,86 pro Bild), am Licht blendete ein neuer langsam
+ein. **Fix:** Zuordnung innerhalb von max(64, 3r) Pixeln (der Stern folgt der Lampe, Platz 1 im Protokoll 164 → 181 →
+214 → 256), ein verlorener Platz ist in etwa drei Bildern aus (0,45 pro Bild). Gemeinsamer Code: GLES und Vulkan.
+**Geprüft am PC:** Serie 00 Bilder 10/11 ohne liegengebliebenen Stern, alle übrigen 10 Bilder und Serie 01 (12) gleich
+wie vorher; GL gegen Vulkan wie ohne Lens Flares (höchstens 17 von 255, die Szene); gx_gl_check 0 Fehler. Auf dem Gerät
+nicht getestet.
+
+### 8. Kamera im Schrank beim Schieben, Ashley und Kamera in Leon an Türen (Nutzerbericht ohne Bild)
+
+„The camera get into the almirah while sliding it. Also ashley and camera get into Leon when enter into any door.“
+Untersucht im Code, nicht nachgestellt (kein Raum, keine Einstellungen): Die Schulterkamera (`CameraQuasiFPS::hitCheck`,
+`cameraHitCheck` in cam_ctrl.cpp) prüft Figuren, Objekte (auch die schiebbaren Regale, cEmRack) und Wände, kommt aber nie
+näher als ihr Nahpunkt: dort kann sie im Original in Dinge geraten. Was der Port daran ändert: „Far camera“ (Patch
+0171, aus ab Werk; die Prüfung läuft auf dem fernen Punkt), „Field of view“ (Patch 0205, 0 ab Werk), das breite Bild
+(„Native“, Patch 0214) zeigen mehr vom Nahen; die Nahebene bleibt; die 60-FPS-Zwischenbilder rechnen über einen
+Kameraschnitt nicht. Rückfragen an den Nutzer (Raum, Einstellungen, Bild/Bericht) über die Hauptsitzung.
+
+## Version 0.99.7-rc: Fehler und Wünsche nach 0.99.6 (09.11.2026, Branch `work0997`)
+
+Version 0.99.7-rc (versionCode 109), Releasetext `port/android-decomp/docs/releases/v0.99.7-rc.md` („Changes since
+v0.99.6.“, Known issues aus 0.99.6 übernommen, APK `CubeEvil4-0.99.7-rc.apk`). Arbeitsbranch `work0997` (Basis
+d57121de = 0.99.6-rc), Patches ab 0225, nächste freie Nummer 0227.
+
+### 1. Garrador im Gefängnis bewegt sich nicht („Special 2“-Kostüm?), Patches 0225 und 0226
+
+Nutzerbericht über den Projektinhaber (09.11.2026, EU-Discs): „the Garrador bug happens with the Special 2 costume,
+because I played through it again and it doesn't happen with the default costume“; 17 Spielstände und die
+Systemdatei (`E:\Development\Android\reports\0997-garrador-saves-EUR\EUR\Card A\`, `08-G4BP-bh4_data00..16.gci`).
+Vorgeschichte: Abschnitt „Bericht ‚Gegner bewegt sich nicht im Gefängnis‘“ (31.10.) und der Schlüssel-Bericht
+(Patch 0169, 01.11.).
+
+- **Die Spielstände:** echte GameCube-/Dolphin-Spielstände der Verkaufsfassung (April bis Juni 2026 gespeichert,
+  Kennungen der Räume in richtiger Folge), nicht aus der App. Vor r201 liegen drei in r200 (Kapitel 6):
+  Datei 01 (Normal, Standardkostüm), **Datei 06 (Profi, `game_costume` 1, `pl_costume` 3: Leon `pl10`, Ashley als
+  Begleiterin `pl15`)**, Datei 15 (Profi, Standardkostüm). Das Spezialkostüm gibt es nur mit einem durchgespielten
+  Spiel, der Nutzer hat es also importiert; sein Durchlauf „mit dem Standardkostüm“ war ein neues Spiel in der App.
+- **Ursache (Port-Fehler, nicht das Kostüm):** der `.gci`-Import (`runtime/gci.cpp`) drehte die Kennung jedes
+  Raum-Datensatzes (`ROOM_SAVE_DATA.RoomNo`, Teil einer Union) als u16 um. `cRoomData::init` schreibt sie aber
+  byteweise (`[0]` Stufe, `[1]` Raum) auf jedem Rechner, `load` vergleicht sie nur als Ganzes: im Port ist sie die
+  zwei Bytes des GameCube. Nach dem Import standen alle Kennungen als Raum, Stufe: von 121 Datensätzen fanden 109
+  keinen Raum (Türen, Gegenstände, Ereignisse wie nie besucht), vier Paare tauschten ihre: **r102 ↔ r201**,
+  r103 ↔ r301, r204 ↔ r402, r304 ↔ r403. r102 hat in Datei 06 die Merker 0xC0000000 und Gegenstandsmerker
+  0x68000000: in r201 heißt das „Garrador tot“ (Merker 0) und „Kampfbereich offen“ (1), und Gegenstandsmerker 1
+  ist der Gefängnisschlüssel im Bild. `R201Init` hängt dann `r201_appearClawMan` (Bereich 0x10) nicht ein, die
+  Gegnerliste setzt den Garrador trotzdem (sein Todes-Bit fehlt): er hängt für immer an den Ketten. Dasselbe erklärt
+  den Schlüssel-Bericht (Patch 0169) und vermutlich den Bericht vom 31.10. Der Export hatte denselben Fehler
+  (Dateien für Dolphin mit vertauschten Kennungen).
+- **Belegt am PC** (i686, EU-Discs, Datei 06 bzw. 15 mit Testwerkzeug nach r201 an den Debug-Startpunkt gesetzt,
+  CRCs neu; Leon läuft über `RE4_TEST_PLACE`/`PLACE2` und Tastenfolge durch Bereich 8 (Eingangsszene), 0xF
+  (Kamerafahrt), die Gittertür s13 und Bereich 0x10): mit 0.99.6 bei Spezial- **und** Standardkostüm Merker von r201
+  nach dem Laden 0xC0000000, Bereich 0x10 „no room code“, der Garrador bleibt in Routine 1/94 mit `flag` 0x30.
+  Debug-Start ohne Spielstand: Merker 0, Bereich 0x10 löst aus, Garrador frei (`flag` 0x31), greift an.
+- **Behoben:** `gci.cpp` lässt die zwei Bytes der Kennung (`turnRoomRecord`), Test `card_probe` angepasst (er
+  schrieb das falsche Verhalten fest). **Patch 0225** (`roomdata.cpp`): findet ein Spielstand mehr Räume mit
+  umgedrehten Kennungen als mit den eigenen, dreht `load` (und `clear`, neues Spiel aus einem durchgespielten
+  Stand) sie vorher zurück, eine Zeile im Protokoll. Spielstände der App selbst finden alle Räume und bleiben
+  unberührt. **Patch 0226** (`r201.cpp`, Sicherheitsnetz): Merker 0 gesetzt, aber das Todes-Bit des Garrador
+  (Liste 2, Eintrag 0x56, `EmSetDie`) nicht: Merker 0 zurück, eine Zeile im Protokoll (nicht bei Sprungpunkt 2).
+  Für Spielstände, die nach dem Laden eines alten Imports in der App neu gespeichert wurden (r201 hält r102s Merker
+  dann fest). Neue Testhilfe `RE4_TRACE_EM="ID:N"`, `RE4_TRACE_AT` nennt die Raum-Merker und ob ein Bereich Code hat.
+  `lp64_int_casts.json`: Zeile der Umwandlung in r201 nach 0226 verschoben (788 → 844).
+- **Geprüft am PC (i686, EU-Discs):** Import → Export aller 18 Dateien byte-gleich mit den Originalen (nach dem
+  64-Byte-Kopf). Datei 06 und 15 neu importiert: Merker 0, Garrador frei, greift an (auf Profi stirbt Leon). Alte
+  Karte (mit 0.99.6 importiert): Zeile von 0225 („121 rooms found turned, 12 as they were“), Garrador frei. Mit
+  0.99.6 importiert, geladen und in r201 neu gespeichert: Zeile von 0226, Merker 0x40000000, Garrador frei.
+  Gegenprobe: Garrador getötet (`RE4_TEST_EM_KILL`, setzt das Todes-Bit wie das Spiel), gespeichert, neu geladen:
+  Merker 0xE0000000, kein Garrador, keine Zeile von 0226; im Code enden alle Todeswege der Ganado-Klasse
+  (`Die_Cramp`, `Die_Lost`, `Die_Bomb`, `setLost`) in `EmSetDie`. Laufzeit- und Kerntests 0 Fehler,
+  Android-Kern beide ABIs gebaut.
+- **Nicht geprüft:** Gerät; ein exportierter Spielstand in Dolphin (nur über die byte-gleichen Rundläufe).
+  Spielstände, die nach einem alten Import in der App neu gespeichert wurden, behalten die übrigen vertauschten
+  Räume (r102, r103/r301, r204/r402, r304/r403) und die 109 verlorenen: dafür die Original-`.gci` neu importieren.
+- **Nebenbefund, nicht behoben:** die Eingangsszene im Spezialkostüm `evd/s201s00.evd` (Debug- und EU-Discs)
+  wandelt nicht vollständig um („ev0104.tpl: TPL version … conversion stopped“, „event (incomplete)“); die Szene
+  lief am PC trotzdem durch, ohne Wirkung auf den Garrador. Bild nicht geprüft. Dasselbe in `evd/s200s00.evd`
+  (Ankunft am Schlosstor im Spezialkostüm).
+
+### 2. Grauer Bildschirm mit der Touch-Steuerung darüber (r200), Ursache wie 1.
+
+Nutzerbericht über den Projektinhaber (09.11.2026, „User sieht nur einen grauen Screen mit dem Touch Overlay“;
+Bericht `E:\Development\Android\reports\0997-grauer-screen-20261109-142423`): Samsung Galaxy A24 (Mali-G57 MC2,
+Android 16, nur 90 Hz), 0.99.6-rc, GLES, EU-Discs.
+
+- **Aus dem Bericht:** derselbe Nutzer wie in 1. In dieser Sitzung importierte er mit 0.99.6 seine 17 `.gci`
+  und die Systemdatei, lud Datei 6 (`bh4_data05`, r200 am Schlosstor, Spezialkostüm, Profi). Titel und
+  Ladebildschirm zeichnen normal (rund 160 Zeichenaufträge je Bild), in r200 nur noch 3 je Bild: das Spiel zeichnet
+  den Raum gar nicht, die Anzeige (90 Hz, „shown 89.4/s“), die Oberfläche und der Renderer sind in Ordnung.
+- **Ursache:** der Import von 0.99.6 (Abschnitt 1): der Datensatz von r200 findet keinen Raum mehr, r200 gilt als
+  nie betreten (Merker 0, `R200Init` stellt Ankunftsszene und Lastwagen wieder auf), der Spielstand steht aber
+  hinter dem Tor. In diesem Zustand, den das Spiel selbst nie speichert, zeichnet es nichts.
+- **Belegt am PC** (i686, EU-Discs, frische Karte mit Systemdatei, Bilder über `RE4_GX_DUMP` und
+  `gx_chunk_render`): `bh4_data05` mit Raum-Datensätzen ohne Raum (wie nach dem Import von 0.99.6) zeigt in r200
+  von der ersten bis zur 1600. Aufnahme nach dem Laden nur 4 Zeichenaufträge, ein dunkelgraues Bild.
+  Gegenprobe Standardkostüm (`bh4_data14`, r200, `r200s00.evd` wandelt vollständig um): ebenso grau, das
+  Kostüm und `s200s00.evd` sind es also nicht. Die mit 0.99.6 importierte Karte mit dem Kern von 0.99.7:
+  Zeile von Patch 0225 („121 rooms found turned“), r200 mit Leon und Ashley am Tor, rund 360 Zeichenaufträge.
+- **Behoben** mit 0.99.7 (`gci.cpp`, Patch 0225), kein weiterer Code; Releasetext ergänzt.
+- **Nicht geprüft:** Gerät (Galaxy A24).
+
+### 3. Halbautomatisches Gewehr: Zielfernrohr mit dem Stick um 20 Bilder/s (Vulkan, Mali-G52)
+
+Nutzerbericht über den Projektinhaber (09.11.2026): „When using the semi-automatic rifle, if I aim and move the
+joystick, the frame rate drops to around 20 fps. This does not happen when I use the touchscreen.“ Bericht
+`E:\Development\Android\reports\0997-gewehr-zielen-20261109-175836`: Xiaomi 21061119DG (mt6768, Mali-G52 MC2,
+Vulkan-Treiber r26p0), Android 11, 0.99.6-rc, **Vulkan**, fest 1,5×, FXAA, Schärfen 1, Bildauslassen an, r301.
+
+- **Aus dem Bericht:** außerhalb des Zielfernrohrs 43–59 Bilder/s, mit Zielfernrohr insgesamt 33/12/36 Bilder/s
+  (auf die Zeit im Zielfernrohr umgerechnet etwa 12–15). Vulkan wartet je Bild bis 66 ms beim Anzeigen
+  (`present`), auf die GPU 0,05 ms, keine Shader oder Pipelines gebaut: die GPU ist ausgelastet. Der Zeichen-Thread
+  braucht 10–14 ms je Bildstück. Stick-Ereignisse nur 2–8 je Sekunde (kein Ereignis-Sturm). Dasselbe Gerätemuster
+  wie der Bericht des moto g15 (0.99.6, Sitzung A, Punkt 5: „Zielfernrohr mit seinen Kopien“).
+- **Ursache (`gx_vk.cpp`):** das Zielfernrohr macht seinen unscharfen Rand selbst: es kopiert eine 128×112-Ecke
+  des EFB und zeichnet sie zurück, 24-mal je Bild (am PC: 27 EFB-Kopien je Bild im Zielfernrohr, 8 ohne;
+  `gx_chunk_inspect.py copies`). Jede Kopie beendet den Render-Durchgang des EFB; der nächste begann auf dem ganzen
+  EFB, eine kachelnde GPU lädt dann Farbe und Tiefe des ganzen Bildes und schreibt sie am Ende zurück: bei 1,5×
+  rund 8 MB je Kopie, 24-mal mehr je Bild. Das hängt nicht am Stick: am PC zeichnet das Spiel mit stillem und
+  bewegtem Stick dasselbe (233–440 Aufträge, immer 27 Kopien). Warum Touch-Zielen ruhiger wirkte, zeigt der
+  Bericht nicht (Frage an den Nutzer).
+- **Behoben (Vulkan):** `GxCore::DrawArea` (`gx_core.cpp`) rechnet für kleine 2D-Aufträge (orthografisch, höchstens
+  64 Ecken, nicht verbreitert, kein Zwischenbild) die Fläche auf dem EFB aus (wie `FlareNote`, mit 2 Pixel Rand,
+  innerhalb der Schere); `UseEfbArea` gibt sie dem Renderer. Vulkan beginnt den EFB-Durchgang mit dieser
+  `renderArea` (auf 32 Pixel gerundet), ein Auftrag außerhalb beginnt ihn neu auf beiden Flächen; die Schere bleibt
+  in der Fläche. Laden und Speichern betreffen dann nur die Ecke (Vulkan lässt den Rest des Bildes unberührt).
+  Nicht mit MSAA (die Auflösung am Ende des Durchgangs), GLES unverändert. Schalter `RE4_GX_VK_PART=0` (immer das
+  ganze EFB) und `=log` (die ersten 64 Flächen im Protokoll). Die Zeile „Vulkan per picture“ nennt jetzt die
+  EFB-Durchgänge je Bild und wie viele davon auf einem Teil liefen.
+- **Geprüft am PC** (EU-Discs, `gx_chunk_render` mit Vulkan auf lavapipe, `RE4_VK_VALIDATION=2` mit
+  Synchronisationsprüfung): r301 mit Gewehr 10 im Zielfernrohr (still und mit Stick), Inventar, r200, Titel und
+  Menüs, bei 1× und 1,5×: 43 von 43 Bildern gleich mit und ohne Teilflächen, 0 Fehler, 0 Warnungen. Die
+  Unschärfe-Durchgänge laufen auf 224×192 von 960×792 (1,5×). Mit MSAA bleibt es beim ganzen EFB.
+- **Nicht geprüft:** Gerät; ob es auf dem Mali-G52 reicht (dort die Zeile „Vulkan per picture“: `present` und
+  „EFB passes … on a part“). GLES auf demselben Gerät (jede Kopie bricht dort ebenso den Durchgang).
+
+### 4. „Modern movement“ und stufenloses Drehen: gebaut und wieder ausgebaut (Steuerung wie 0.99.6)
+
+Frage des Projektinhabers (10.11.2026): Leon „in jede Richtung laufen lassen“ statt der acht Richtungen des Spiels
+(`game/pad.cpp` macht aus dem Stick vier Tasten; Gehen, Rückwärts und Rennen drehen mit fester
+`SPEED_WALK_TURN`, egal wie weit der Stick gedrückt ist). Gebaut in 473f0dc3: B „Modern movement“ (Stick-Filter in
+`PADRead`, Leon dreht zur Stickrichtung von der Kamera aus, 0,21 rad je Bild, Schalter im App-Menü) und A
+stufenloses Drehen (Patch 0227, `re4_turn_scale`). Am PC 10 von 10 Fällen mit beiden Disc-Arten
+(`whole_move_check.sh`). **Gerätetest des Projektinhabers (10.11.2026):** „Die ‚Moderne Steuerung‘ lässt Leon fast
+eine 90 Grad Snap-Drehung machen, das ist nicht spielbar“; Entscheidung: „Einfach die Steuerung wieder wie zuvor
+ohne den Button ‚Moderne Steuerung‘“. **Ausgebaut** (Revert von 473f0dc3): Filter, `runtime/modern_move.cpp`,
+Patch 0227 (die Nummer ist wieder frei), App-Schalter, Texte in 11 Sprachen, Prüfskript. Die Einstellung
+`modernMove` einer Testinstallation löscht die App beim Start. Für einen neuen Anlauf: das Drehen ohne
+Drehanimation wirkte wie ein Schnappen; eine Drehgeschwindigkeit wie die des Spiels und eine Drehanimation wären
+der Ausgangspunkt.
+
+### 5. Touch-Symbole übernommen (Branch `feature/touch-icons`, Spitze e2146ea4)
+
+Freigabe des Projektinhabers (10.11.2026, „Ja, übernehmen“), als Merge in `work0997` (ba094c77): RetroTouch
+1.0.0-beta.10, `TouchStyle.java` (Tastenstil Symbole als Vorgabe, Beschriftung wie bisher; Editor und App-Menü →
+Steuerung → „Button style“, 11 Sprachen), `TouchStyleTest`, README-Satz, und der Touch-Stick läuft nach kurzem
+Druck (`CoreInput.touchWalk`: ab 22 % des Wegs auf der Schwelle des Spiels, voll bei 80 %; mit L oder R gehalten
+wie bisher). Merge ohne Konflikte. **Namen (Wunsch des Projektinhabers, 10.11.2026):** „RE“ für Symbole
+(Vorgabe beim Touch, `TouchStyle.DEFAULT_BUTTON_STYLE` ICONS) und „GC“ für die bisherige Beschriftung, im Editor
+(`setStyleToggleLabels`) und im App-Menü, in allen 11 Sprachen unübersetzt (Arabisch mit Rechts-links-Zeichen);
+Hilfetext angepasst. Geprüft: `testCoreDebugUnitTest`, `check_translations.py`, `CoreInputTests`
+(1826 Prüfungen), `assembleCoreRelease`. Nicht geprüft: Gerät.
+
 ## Version 0.99.6-rc: Nutzerberichte nach 0.99.5 und Wünsche des Projektinhabers (09.11.2026, Branch `work`)
 
 Version 0.99.6-rc (versionCode 108), Releasetext `port/android-decomp/docs/releases/v0.99.6-rc.md` („Changes since
@@ -3542,6 +4517,7 @@ selbst zum Garrador gespielt: kein Problem.** Kein Fehler. EU-Unterschiede in r2
 Garrador): `r201_execClawManUpCut` mit `SceEventStart(1)` + `EffectEventDelete()` statt `SceEventStart(0)`; `R201Init`
 zeigt den benutzten Hebel als offen (`cEmSwitch::setOpened`); der Debug-Sprung `JumpPoint == 2` fehlt; Liste: Armbrust-
 Ganados 58/59 Wachradius 15 000 statt 10 000.
+**Nachtrag 09.11.2026 (0.99.7):** Ursache vermutlich ein mit bis zu 0.99.6 importierter `.gci`-Spielstand: der Import vertauschte die Raum-Datensätze r102 und r201 (Abschnitt 0.99.7, Patches 0225/0226).
 
 ## Version 0.96.5-beta (31.10.2026, lokal, Branch `claude/blissful-tesla-xa7h6c`)
 
@@ -14325,6 +15301,8 @@ die GameCube ließ sie überlaufen (schon vorher so, selten).
 | 0222 `game.cpp` | Port-Fehler (Patch 0195): `GameContinue` setzt nach `GameSave.load` die Ersatzfigur der Story (Ada, HUNK, Krauser, Wesker; `re4_story_char_continue`) wieder ein, bevor `PlSetCostume` und `ContinueWepData` den Spielertyp lesen. Der Continue-Punkt hält absichtlich Leon (`re4_story_char_save`); vorher las `ContinueWepData` eine seit dem Speichern gewechselte Waffe nach Leons Tabelle nach `WEP_DATA_ADDR` in Krausers Spielerarchiv mit seinem Modul `pl0a`, und `OSLink` stürzte ab. Nutzerbericht 09.11.2026 (Xiaomi peridot, 0.99.5: Absturz bei Tod oder Retry mit anderen Figuren) |
 | 0223 `light.cpp` | Port-Funktion (Wunsch des Projektinhabers 09.11.2026, aus dem OUYA-Zweig, dort Patch 0900): Sichtweite im App-Menü (Potato-Modus). `cLightMgr::setFog` und `hokanMove` geben GX den Nebel aus `re4_view_distance` (`runtime/view_distance.cpp`: Beginn und Ende mal 1 / 0,75 / 0,5, das Ende nicht unter 6 m, Räume ohne Nebel unverändert) und setzen die Sichtgrenze auf dieses Ende; `LightEnv.Fog` bleibt. `hokanMove` setzt den Nebel neu, wenn das Menü umgeschaltet hat (`re4_view_distance_changed`): wirkt sofort. Bei „Normal“ genau wie das Spiel. |
 | 0224 `cam_motion.cpp` | Port (undefiniertes Verhalten im Originalcode): `CameraMotion::move` beginnt `pos`, `at`, `fov` mit (0, 0, 0). Die Röntgen-Kameras von r330s00 (`etc_s00_0NN.fcv`) haben kein Ziel-Gelenk; das uninitialisierte `at` machte im Port die Kamera NaN, die Monitore des Operationsraums blieben grün. Nutzerbericht 09.11.2026 (zwei Bilder) |
+| 0225 `roomdata.cpp` | Port-Fehler (`.gci`-Import bis 0.99.6, `runtime/gci.cpp` drehte `RoomNo` als u16): `cRoomData::load`/`clear` drehen die Kennungen der Raum-Datensätze eines Spielstands zurück, wenn mit umgedrehten Kennungen mehr Räume passen als mit den eigenen (Spielstände der App bleiben unberührt). Vorher verloren importierte Spielstände 109 von 121 Räumen, r102/r201, r103/r301, r204/r402, r304/r403 tauschten ihre Merker (Garrador in r201 angekettet, Schlüssel fehlt). Nutzerbericht 09.11.2026 (17 `.gci`, EU) |
+| 0226 `r201.cpp` | Sicherheitsnetz neben 0225: Merker 0 von r201 („Garrador tot“) ohne sein Todes-Bit in der Gegnerliste (Eintrag 0x56) wird zurückgesetzt, der Garrador kommt frei (nicht bei Sprungpunkt 2). Für Spielstände, die nach einem alten Import in der App neu gespeichert wurden. Nutzerbericht 09.11.2026 |
 | 0900 `pl_class.cpp`, `player.cpp`, `cam_qfps.cpp`, `em_sub.cpp` | „Free movement“ und „Move while aiming“ (Mod von DevJunior im Stil des Remakes, App-Menü Controls, beide aus): `cPlayer::keyConfig` ruft zuerst `re4_player_input` (`runtime/free_move.cpp`). Freie Bewegung: In den Gehroutinen (r_no_1 0..4) dreht der Hauptstick Leon zur Richtung relativ zur Kamera, das Spiel bekommt nur „vorwärts“ (Key-Bit 0; Gehen/Laufen/Bewegungen bleiben die des Spiels), der C-Stick (X) dreht die Kamera um ihn (`CameraQuasiFPS::calcBaseMatrix` → `re4_free_cam_matrix`), Waffe ziehen dreht Leon zur Blickrichtung der Kamera; außerhalb kehrt die Kamera weich hinter ihn zurück, beim Zielen exakt; Steuerkreuz bleibt Tank-Steuerung. Bewegen beim Zielen: Bei bereiter Waffe/Messer (r_no_1 6/0xB, `isKamae`) verschiebt der C-Stick Leon (26 Einheiten/Bild, Füße gleiten, Kollision des Spiels danach); mit „Alternate Controls“ schickt die App den linken Stick als C-Stick (`CoreInput`). Bits 4/5 der Zieleinstellungen (`re4_aim_set`). Nachtrag 08.11.2026 (Wunsch von DevJunior): Zielgehen schneller (38 statt 26 Einheiten/Bild); `cPlayer::move` ruft nach den Routinen `re4_player_after_routine`, das Leons Gehbewegung (`m_MotTbl[2]`/`[0x61]`, rückwärts der Rückschritt `[8]`/`[0x63]`) in einer eigenen Arbeit (`gWalk`, eigene Key-Historien, `MotionSetCore` mit 0x20000000|0x10000000) nur auf die Beine legt (Teile unter den IK-Wurzeln dieser Bewegung, unter der Hüfte), weich ein- und ausgeblendet; R3 (`CoreBridge.recenterCamera`, Bit 6 der Zieleinstellungen wechselt je Druck) dreht die freie Kamera zurück hinter Leon. Nachtrag 08.11.2026 (Gerätetest DevJunior: Beine gestreckt): Die Füße der Gehbewegung sind IK-Ziele, keine Knochenversätze; jetzt wird die Gehpose wie in `MotionMove` gebildet (`MotionMoveCore`, `partsMatCalc`, `IKInit`, `InverseKinematics`) auf einer Kopie aller Teile, übernommen werden nur die Drehungen der Beine (Oberschenkel gegen das Modell, nicht gegen die gedrehte Zielhüfte), per Quaternion gemischt (höchstens 0,85), Knochenversätze bleiben die der Zielpose. Patch nach dem Zusammenführen mit 0.99.4-rc von 0219 auf 0900 umbenannt (das Original nutzt 0219/0220). Nachtrag 08.11.2026 (DevJunior, Touch): Mit „Move while aiming“ geht auf der Touch-Steuerung beim Zielen der Bewegungsstick (als C-Stick), gezielt wird rechts (Wischen bei AIM_LOOK, Touch-C-Stick bei AIM_C_STICK, sonst Blickzone/C-Stick als Stick; `CoreInput.pad`). Nachladen ohne Zielen wie im Remake: R und B im selben Bild in den Gehroutinen starten das direkte Nachladen des Prototyps (`setRno(0,6,4,0)`, `m_Work0 = 1`, `PlReloadDirect = 1` wie `actionSelect` mit Nachladetaste Typ 1; die Waffen enden es mit `wepDown`); dabei geht Leon mit dem Hauptstick (Kamera-relativ mit „Free movement“), Beine wie beim Zielgehen; neuer Touch-Knopf `reload` (RLOAD, R+B, im Editor). Test: `runtime-test freemove`, `CoreInputTests`, `CoreTouchTests`. Nachtrag 08.11.2026 (DevJunior): Beim Nachladen ohne Zielen behält Leon sein Tempo (Gehen bzw. bei gehaltener Lauftaste/„Always run“ Laufen; gemessen aus seiner eigenen Geh-/Laufbewegung, `measure`), Beine dann mit der Laufbewegung (`m_MotTbl[6]`/`[0x65]`); der Touch-Knopf RLOAD ist jetzt eine eigene Anfrage an den Kern (`CoreBridge.requestReload`, Bit 20 der Zieleinstellungen wechselt je Druck), damit er auch beim Laufen (B gehalten) nachlädt. „Knife parry“ (`runtime/parry.cpp`, Bit 21): Messertaste L (in der Messerhaltung auch A) öffnet 8 Bilder lang ein Fenster; `EmAtkHitCk2` (em_sub.cpp, in 0900) fragt `re4_parry_hit`: ein Schlag im Fenster und alle 24 Bilder danach verfehlen, Leon antwortet mit dem Messerhieb (Messerroutine r_no_2 2). Griffe sind keine Angriffskugeln und bleiben. Test: `runtime-test parry`, `freemove` (Tempo). Nachtrag 08.11.2026 (Gerätetest DevJunior): Die Parade klingt nach Metall (Rüstungstreffer der Gegner, `SndCall(8, 0xD, pos, em->id, 0, em)` des nächsten Dorfbewohners der em10-Familie, wie em10/em25/em2c/em2d/em32 ihn spielen); beim Zielgehen und Nachladen-Gehen bekommt die Hüfte das Wiegen der Gehbewegung (Hüfte der Gehpose gegen ihren gleitenden Mittelwert: Auf und Ab ganz, Drehung beim Zielen zur Hälfte, beim Nachladen ganz). Nachtrag 08.11.2026 (Gerätetest: Parade ohne Klirren): Der Dorfbewohner-Block hat keinen Rüstungstreffer 0xD; jetzt spielt die Parade 0x3F (das Klirren, wenn Leon eine geworfene Axt/Sichel abschießt: em10 `setSeDamage(8, 0x3F, em->id)`), sonst 0xD, an der Position des Gegners. Nachtrag 08.11.2026 (DevJunior): „Quick Reload (not aiming)“ als eigene App-Aktion der Tastenbelegung (Controller L1, ohne Belegung auch L3 und L1 außer mit den alternativen Tasten; Tastatur R): `CoreBridge.requestReload` wie RLOAD, wirkt auch ohne „Move while aiming“ (dann steht Leon beim Nachladen); R+B zusammen weiter nur mit „Move while aiming“. Test: `CoreInputTests`, `ActionMapTests`. Nachtrag 08.11.2026 (DevJunior): Auch die Feuertaste ohne Zielen lädt nach: mit den alternativen Tasten R2 ohne L1/L2, mit einer Belegung die zweite Taste von „Fire“, wenn sie keine eigene Einzelaktion hat (`CoreInput.takeReload`); der Kern nimmt A danach 6 Bilder lang aus dem Spiel (`eatA`), damit R2 (= A) keine Aktion auslöst; mit voller Waffe bleibt A die Aktionstaste. Freie Kamera folgt beim Gehen/Laufen von selbst Leons Richtung wie im Remake (nach 15 Bildern ohne rechten Stick, Anteil 0,025/0,04 je Bild, höchstens 0,035 rad, nicht über 135°: auf die Kamera zu). Test: `runtime-test freemove` (`game_probe.cpp re4probe_free_move`) Nachtrag 11.11.2026 (Gerätetest von DevJunior: „beim Nachladen im Gehen/Laufen bleibt er kurz stehen, als ob er zielen wollte“): ein direktes Nachladen aus dem Gehen oder Laufen nimmt die Beine sofort in den Gang (kein Einblenden über fünf Bilder aus den stehenden Beinen der Nachlade-Bewegung), ab dem Schritt, in dem er war (Bild der Geh-/Laufbewegung `Motion.Seq_frame`), und ganz (nicht `kLegMax`, beim Nachladen gibt es keine Zielhaltung zu bewahren). Bau und Prüfungen i686, armhf, x86_64; im Spiel nicht geprüft. |
 | — `runtime/dvd.cpp` (Mods-Ordner, kein Patch) | „Mods“ (Wunsch von DevJunior, 08.11.2026: Charakter-Skins): Jeder Ordner in `<Daten>/mods/` (App: `game/mods`, Ingame-Menü → Verwaltung → Mods: Ordner wählen, wird kopiert; alle entfernen mit Neustart) spiegelt den Ordner `files/` der Disc (oder enthält ihn als `files/`). Jede Datei dort ersetzt beim ersten Laden der Disc die Datei gleichen Pfads (Groß-/Kleinschreibung egal, wie `DVDConvertPathToEntrynum`) auf beiden Discs; Pakete in Namensfolge, ein späteres gewinnt; versteckte Ordner (`.incoming`) zählen nicht. Die Größe der Ersatzdatei geht in die FST (Kopie im Host und in MEM1), damit `DVDFastOpen` und die Leseschleife die ganze Datei lesen; Dateien ohne Gegenstück auf der Disc nennt das Log und lässt sie aus. `etc/sizetbl.dat` bleibt die der Disc (nur `FileExistCheck`). Mods für die PC-Version (UHD, little-endian, Texturen in `imagePackHD`) laufen so nicht (Analyse: Projekt-Notiz Skins). Die Dateien gehören dem Spieler und kommen nie ins Repository oder in die APK. Test: `runtime-test dvd mods`. Nachtrag 09.11.2026 (Wunsch von DevJunior: mehrere Skins einer Figur behalten, einen benutzen): Pakete lassen sich im Menü ein- und ausschalten; ein ausgeschaltetes enthält die versteckte Datei `.off` und `applyMods` lässt es aus. Nur ein Paket ersetzt eine Datei: Einschalten (und Hinzufügen) schaltet die anderen Pakete mit einer gleichen Datei aus (`ModSwitch.java`, Test `tests/ModSwitchTests.java` in der CI; `runtime-test dvd mods` mit `.off`); im Spiel nicht geprüft |
 | 0901 `read.cpp`, `trans.cpp` (+ `runtime/dvd.cpp`, `runtime/mem1.cpp`, `include/re4_ppc.h`) | Skins aus der PC-Version (Wunsch von DevJunior, 08.11.2026; Umwandler `port/tools/uhd_skin_convert.py`, kein Fehler des Prototyps): `ReadPlayerData` liest ein Spielerarchiv, dessen Rumpf größer ist als der feste Platz (0x807EC000, 0x118000 Bytes für Leon, sonst 0x188000), nach `RE4_MEM1_PLAYER_ALT_ADDR` (0x82600000, bis 0x600000 Bytes; `re4_player_data_place`, Größe aus der Teiltabelle wie bei `re4_core_data_place`, die Disc-Dateien behalten ihren Platz). `GetPrimBuff` nimmt, was im Primitivpuffer des Raums keinen Platz mehr hat, aus dessen Überlauf (`re4_prim_extra`, 0x82C00000, je Bildpuffer-Hälfte 0x200000, in `SetPrimBuffPtr` geleert). Der Locked Cache (Skinning-Matrizen) fasst 2048 statt 341 Matrizen (`RE4_LOCKED_CACHE_SIZE` 0x18000; `Sk1Loop` prüft die Grenze). `cheats.cpp loadLeon` liest einen größeren Leon nicht an seinen Platz (er liefe über Krausers Waffenpuffer). Umwandler: PC-Modelle (float, Läufe über aufeinanderfolgende Ecken: Typ 6 Streifen, 8 Vierecke, 5 Dreiecke) → GX-Listen mit Index16, Ecken je Attribut einmal, Gewichte zusammengefasst (bis 2048, darüber gröbere Stufen), Texturen aus `imagePackHD` verkleinert (CMPR/I8/IA8), Bewegungen und Ton aus der Disc-Datei; prüft das Skelett und liest jedes Modell zurück (`--verify`). `.lfs` der PC-Version (XMemCompress-LZX, Fenster 128 KB, Stücke zu 64 KB) entpackt `port/tools/re4lfs.py`; Paletten ganz aus den Paketen des PC-Spiels selbst (`07000000`) bleiben die der Disc. Nachtrag 08.11.2026: Skin „RE6 Leon Asia“ (`pl08.udas.lfs`) umgewandelt: Rumpf 2,4 MB mit Texturen 256 px, `re4_format_compare` 30 805 Werte gleich. Nachtrag 08.11.2026 (Gerätetest): In Zwischensequenzen nahm Leons Körper (sein Archivmodell `pl000a.bin`) die Texturen des Ereignisses, angelegt für das Disc-Modell; ist die Spielerdatei ein Mod (`re4_player_modded`), nimmt `ExePacket_SetOm` (event.cpp, in 0901) dann die des Archivs (`pl000a.tpl`). Fehlende Gesichtstexturen malt der Umwandler für das UV-Layout des Mods aus dem Gesichtsmodell der Disc (`bake_texture`: nächster Oberflächenpunkt gleicher Ausrichtung, Teile nach Überdeckung der Hüllquader, die Augen aus den Augäpfeln). Test: `runtime-test dvd mods`, `re4_format_compare --data` mit dem umgewandelten `em/pl00.drs` (39 266 Werte gleich); im Spiel nicht geprüft. Nachtrag 09.11.2026 (Gerätetest): Gesicht und Augen im Spiel bestätigt; in Zwischensequenzen von Kostüm 0 lag die Jacke der Ereignisse (Teile `ev000e`/`ev001e`) mit den Texturen des Skins über ihm. Die PC-Mods ersetzen `pl08` (Leon ohne Jacke); `ExePacket_SetParts` (event.cpp, in 0901) nimmt für einen Mod-Leon in Kostüm 0 wie in Kostüm 1 und 2 das Archivteil `pl000e` (`re4_mod_event_part`, runtime/dvd.cpp, schreibt jedes Teil eines Ereignisses ins Protokoll, solange die Spielerdatei ein Mod ist). Test: `runtime-test dvd mods` (i686, x86_64); im Spiel nicht geprüft. Nachtrag 09.11.2026: Der Umwandler übernimmt Formtabellen (Gesichtsausdrücke, `shape.cpp`): PC-Format wie das der Disc in little-endian (Ecke u16, dx/dy/dz s16 in 1/(1 << shift)); die Ecken-Indizes zeigen auf die zusammengelegten Positionen, Ecken mit verschiedenen Deltas bleiben getrennt, jede PC-Ecke wird in jedem Ausdruck nachgeprüft. Skin „Leon Requiem“ (`pl00`, `pl08`): Kopf 2 Formen mit 297/308 Deltas wie die Disc, `re4_format_compare --data` 63 028 Werte gleich; im Spiel nicht geprüft. Nachtrag 09.11.2026: `port/tools/skin_graft.py` setzt ein Modell eines Skins in einen anderen (gleiches Skelett), hängt dessen Texturen an die Palette an, nummeriert die Teilköpfe um und kann die Farbtexturen tönen (Farbton, Sättigung, Helligkeit). Leon Requiem mit den Haaren von Leon Asia (Eintrag 5, Palette 3; dunkleres Braun: Farbton 28°, ×1,2, ×0,72): `re4_format_compare --data` 62 234 Werte gleich; im Spiel nicht geprüft. Nachtrag 09.11.2026 (Gerätetest): Pelzkragen und Teile der Jacke durchsichtig. Die PC-Version hält die Masken ihrer I4-Alphatexturen im Alphakanal der DDS (daneben Weiß oder die Farbe des Pelzes); der Umwandler nahm für I8 die Helligkeit (nach dem Verkleinern meist schwarz). `enc_i8` nimmt jetzt den Alphakanal, wenn die Textur einen hat (Kragen 65, Haare 168 wie die DDS). Haare dunkler (Farbton 25°, ×1,3, ×0,55); im Spiel nicht geprüft. Nachtrag: `skin_graft.py --alpha-ref` setzt den Alpha-Vergleichswert der Teile mit Alphatextur (`alphaSetup`: gezeichnet wird Alpha > Wert; Disc 0); die Haare von Leon Asia mit 100, damit die schwach deckenden Texel an den Strähnenenden (bilinear gefiltert) nicht als Flecken erscheinen; im Spiel nicht geprüft. Nachtrag 09.11.2026: Eine Palettenstelle, die die PC-Datei als I4/I8 angibt, die die Modelle aber nur als Farbtextur zeichnen (`colour_slots`: Spielerarchiv Palette 1 ← Einträge 0, 6, 9, 12, Palette 3 ← 2, 4, 5; sonst das Modell davor), wird CMPR: die PC-Version zeichnet die DDS farbig, mit I8 war das Gesicht grau (Skin „Leon Black Coat“, `pl08`). `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag 09.11.2026 (Wunsch von DevJunior: im zweiten Kostüm ohne Mantel): `skin_graft.py --drop ENTRY:MATS` leert Teile eines Modells (Primitivstrom mit GX-NOPs gefüllt, alle Offsets bleiben), `--only-mats` nimmt nur Teile des Quellmodells, `--into 12` setzt es als `pl000l` ein (in Kostüm 1–3 mit Palette 1 gezeichnet). „Leon Black Coat“ `pl08`: Mantel und Kragen (Texturen 6, 9) leer, Hemd und Unterarme von Leon Requiem (Texturen 1, 3) als `pl000l`; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft (Zwischensequenzen: zeigen sie `pl000l`, offen). Nachtrag: dazu das Gurtzeug von Leon Requiem (Texturen 6, 7); das Hemd in der Farbe der Weste von Black Coat getönt (`--tint-mats 1`: Farbton 229°, ×1,5, ×1,5). Nachtrag (Gerätetest: Hemd blockig, Wunsch: kräftiger): `skin_graft.py --source-image` nimmt das Hemd aus der DDS des Mods (2048×1024 → 512×256 statt 256×128 aus CMPR), `--colorize` tönt nach Helligkeit in die mittlere Farbe der Weste (16, 18, 29; ohne Farbtonrauschen dunkler Pixel); `--inflate ENTRY:DIST` schiebt Rumpf und Arme von den Körperachsen weg (Wirbelsäule x 0, z -12; Arme y 1517, z -39; nicht entlang der Normalen: Schichten bleiben übereinander, dünne Riemen kippen nicht), „Leon Black Coat“ beide Kostüme um 18; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (Wunsch von DevJunior: die Beine auch, im Verhältnis): `--inflate` schiebt auch die Beine von ihren Achsen weg (x ±95, z 0; y 300..950, zu den Schuhen bei 220 und in den Rumpf bis 1050 ausgeblendet; die Innenseite nicht zum anderen Bein, die Knie berühren sich fast); `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft Nachtrag 09.11.2026 (Vorlage von DevJunior: Bilder des Leon aus dem RE4-Remake, breite Schultern, schmale Taille, anthrazitfarbenes Hemd): `skin_graft.py --physique athletic` verteilt `--inflate` ungleich (Brust und Schultern voll, Taille ein Drittel, Deltamuskeln ×1,15, Unterarme ×0,7, Oberschenkel ×0,75, Waden ×0,55); `--recolor TPL:STELLEN=R,G,B` färbt Texturen der Palette nach Helligkeit um, helle Einzelheiten (Schnallen, Reißverschlüsse) behalten ab Helligkeit 30..90 ihre Farbe. „Leon Black Coat“ v6: beide Kostüme athletisch um 26, Hemd (`pl08` Stellen 2, 13, 16; `pl00` 10, 12) in 38, 41, 50 statt Marineblau; `re4_format_compare --data` 61 743 Werte gleich wie v5; im Spiel nicht geprüft. Nachtrag 09.11.2026 (Gerätetest v6: wirkte dick statt kräftig, der Hals verschwand im Kragen; neue Vorlage: dunkelblaues Hemd): `--physique athletic` neu: der Rumpf vor allem zur Seite (breite Brust und Rücken), nach vorn nur an der Brustmuskulatur (y 1300..1500, ×0,45), der Rücken ×0,4, Taille und Bauch kaum (×0,1), Hals und Kragen (|x| < 80 über y 1440) gar nicht; die Arme nach Muskeln entlang der Knochen von Leons Skelett (Schulter 172, Ellbogen 436, Handgelenk 590): Deltamuskel voll (Achsel ×0,4), Bizeps ×0,85, Ellbogen ×0,3, Unterarm ×0,45, Hände nicht; Beine ×0,35..0,2. „Leon Black Coat“ v7: beide Kostüme athletisch um 22, Hemd 22, 28, 42 (Marineblau nach der Vorlage); `re4_format_compare --data` 61 743 Werte gleich; im Spiel nicht geprüft. Nachtrag (Wunsch von DevJunior: das Hemd glatt wie in der Vorlage): `--smooth RADIUS` macht mit `--recolor` den Stoff glatt (Helligkeit gaußsch geglättet, nur über bemalte Texel, damit das Schwarz um die UV-Inseln die Ränder nicht abdunkelt; 35 % des übrigen Kontrasts bleiben für weiche Falten, helle Einzelheiten bleiben scharf). „Leon Black Coat“ v8 = v7 mit `--smooth 6`; `re4_format_compare --data` 61 743 Werte gleich; im Spiel nicht geprüft. Nachtrag (Gerätetest v8: zwei Hemden übereinander, kaum Hals): unter dem Hemd von Leon Requiem (`pl000l`, Textur 16) lag noch das Hemd von Black Coat (Eintrag 0, Textur 13) mit hohem Kragen (Textur 2); beide jetzt mit `--drop 0:2,13` leer. `skin_graft.py --lower-collar ENTRY:FAKTOR` drückt einen Kragen zum Halsansatz (|x| < 85, über 1565; Halsgelenk 1560, das Kopfmodell reicht bis etwa 1596 hinab): „Leon Black Coat“ v9 `pl08` mit 0,5 (Kragen oben 1607 statt 1649); `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (Wunsch von DevJunior: das Hemd von Black Coat behalten; ein tieferer Kragen ließe den Hals schweben, das Kopfmodell endet vorn bei 1596, hinten bei 1633): v9 verworfen. Das Hemd von Black Coat ist nur die Vorderseite mit Kragenring (Texturen 13, 2; unter dem Mantel), Rücken und Ärmel kommen weiter von Leon Requiem (16). `skin_graft.py --hide-under 12:16=0:2,13` zieht die Ecken von 16, die die Vorderseite und der Kragen von Black Coat bedecken (Zylinderkoordinaten um die Wirbelsäule, Zellen 4° × 10, die Zelle und ihre vier Nachbarn bedeckt; die Ränder bleiben, leicht überlappend, keine Lücke), 15 zur Wirbelsäule hinein: keine zwei Hemden mehr übereinander. `--lower-collar` senkt jetzt nie unter das Halsende des Kopfmodells + 8 (`neck_edge`: tiefster Punkt je 30°). „Leon Black Coat“ v10 `pl08` (aus v8: 327 Ecken von 16 versteckt, Kragen bis knapp über das Halsende); `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (Gerätetest v10, Wunsch von DevJunior: das Hemd von Grund auf, eine Lage, bessere Qualität): „Leon Black Coat“ v11 `pl08` neu aus der unaufgepolsterten Grundlage: das Hemd von Black Coat (Vorderseite 13, Kragen 2) leer, das ganze Hemd ist das von Leon Requiem (16, mit Rücken, Ärmeln und eigenem Kragen), athletisch um 22, sein Kragen nur bis knapp über das Halsende (`--lower-collar` 0,5, durch `neck_edge` begrenzt: 14 Ecken); `skin_graft.py --replace-image TPL:STELLE=PFAD@BxH` nimmt die Textur neu aus dem DDS des Mods (2048 × 1024, als PNG) in 1024 × 512 statt 512 × 256, dann `--recolor` 22, 28, 42 und `--smooth 12` (doppelte Auflösung, doppelter Radius); Archiv 4,42 MB (Platz bis 6 MB); `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (Vorlagen von DevJunior: Leon aus „Infinite Darkness“, aschbraunes Haar mit helleren Strähnen, Dreitagebart): neues Werkzeug `port/tools/skin_face.py` für Leons Kopf: `--hair Schatten:Mitte:Licht` färbt die Haartextur (Eintrag 5) nach einer Farbrampe über ihre Helligkeit, vorher auf 512 vergrößert und als Strähnen neu gezeichnet (längs geglättet, damit die 4×4-Blöcke der alten Textur nicht mehr zu sehen sind, feine hellere und dunklere Strähnen), dazu das auf die Gesichtstextur gemalte Haar (Haaransatz, Schläfen, Nacken); `--stubble` malt Bartstoppeln auf Kiefer, Kinn, Wangen bis zu einer Linie von den Nasenflügeln zu den Koteletten, Oberlippe und unter das Kinn, die Lippen frei (wo ein Texel am Kopf liegt, aus dem Modell: Position je Texel auf seinem Dreieck; Gesichtstextur auf 512 vergrößert). „Leon Black Coat“ v12: beide Kostüme `--hair 20,15,11:56,45,34:118,100,78 --stubble 0.9`; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (Wunsch von DevJunior: Haar und Gesicht „von Grund auf“ nach den Vorlagen): `skin_face.py --sculpt-face` verformt das Kopfmodell (Eintrag 2) mit weichen Beulen: das untere Gesicht 4 länger, das Kinn eckiger (2,5 tiefer, 3 vor), die Kieferwinkel 4 breiter, die Wangenknochen höher und weiter außen über hohleren Wangen, die Brauen 2,5 vor, die Lippen 15 % schmaler; der unterste Ring des Halses (unter 1608) bleibt; `--hair-volume` / `--hair-length` machen das Haar auf dem Kopf voller und die hängenden Enden (ab 1710 abwärts) länger, etwas nach außen. „Leon Black Coat“ v13: beide Kostüme mit `--sculpt-face 1 --hair-volume 6 --hair-length 18` (dazu Farbe und Bart wie v12); `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Offen nach Gerätetest: in manchen Zwischensequenzen verschwindet Leons Körper, und die Waffe auf dem Rücken erscheint dort nicht (Zwischensequenzen zeigen Leon als eigenes Ereignismodell, nicht `pPL`); Fehlerbericht angefragt. Nachtrag (DevJunior: das Haar sieht noch nach Resident Evil 6 aus, es soll nach Resident Evil 9 (Requiem) aussehen): `skin_face.py --head-from SKIN.drs` nimmt Leons ganzen Kopf (Kopf, Palette, Gesicht mit seinen Formen, Haar: Einträge 2..5) aus einer anderen umgewandelten Skin, hier aus „Leon Requiem“ (dessen Haarmodell hat die Form des Disc-Haars: 1756 + 318 Dreiecke, seitlich gescheitelt, Ohren frei, kurzer Nacken; Strähnentextur des Mods). Die Gesichtsdaten liegen dort in Eintrag 4 (mit Formen): Bart und Formung wirken jetzt auf Kopf und Gesicht (Texelpositionen aus beiden Modellen), `--hair-size 0` lässt eine gute eigene Strähnentextur stehen (nur die Farbrampe). Hinweis: die rechteckigen dunklen Flecken im Probebild kamen vom eigenen Software-Renderer (innere Haarkarten zeigen ihre Rückseite), nicht vom Modell. „Leon Black Coat“ v14: beide Kostüme `--head-from` Requiem, `--hair-size 0 --hair 20,16,12:54,45,35:110,94,74 --stubble 0.9 --sculpt-face 1 --hair-volume 4 --hair-length 8`; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior: v14 hatte das Haar des Original-RE4, gewünscht ist Requiem-Haar und ein älteres Gesicht): v14 verworfen, zurück zu Kopf und Haar von Black Coat; `skin_face.py --restyle re9` formt das Haarmodell um (Scheitel auf Leons linker Seite, vorn links nach oben und hinten gestrichen, rechts vom Scheitel die Ansätze als Tolle gehoben und der Pony schräg nach rechts über das rechte Auge bis zum Wangenknochen statt bis zum Mund, die rechte Seite bis zum Kiefer, der Wirbel voller; danach nichts im Kopf: radiale Hülle des Kopfmodells je Richtung, höchstens 25 % hinaus, keine Spitze über dem Scheitel); `--age` malt Altersfalten in die Gesichtstextur (Stirn, zwischen den Brauen schwach, Krähenfüße, unter den Augen, Nase–Mund, Mundwinkel; Schatten unter den Augen und in den Wangen, leicht verwitterte, weniger rosige Haut), `--stubble-colour` graue Stoppeln. „Leon Black Coat“ v15: beide Kostüme `--restyle re9 --hair 24,19,14:60,49,38:120,103,82 --stubble 1.0 --stubble-colour 70,64,56 --age 1 --sculpt-face 1`; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior: im ersten Kostüm mit Mantel passt das Hemd nicht zu dem des zweiten): „Leon Black Coat“ v16 `pl00`: das Hemd von Leon Requiem aus `pl08` v11 (Eintrag 12, Textur 16: 1024 × 512, Marineblau, glatt, athletisch) als Eintrag 6 (pl000e, in allen Kostümen 0..3 gezeichnet, auch im Funkgerät, im Untermenü und in Zwischensequenzen statt der Jacke `ev000e`), das eigene Unterhemd von Black Coat (Texturen 10, 12) leer, die Schnallengurte (5) bleiben; das Hemd mit `--inflate 6:-16` unter den Mantel gezogen (bei −10 stach es an Schultern und Rücken noch durch). Archiv 4,30 MB; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag 09.11.2026 (Vorlage von DevJunior: älterer Leon wie in „Infinite Darkness“): `skin_face.py --face-model remake` legt Bart und Altersfalten auf den Kopf aus dem Remake-Mod (Augen 1722, Mund 1652, Nasenansatz 1678, Kinn 1615, Lippen weiter vorn; `re4` bleibt Vorgabe und unverändert): Bart über den Wangen tiefer, weicher, unregelmäßiger Rand, am Halsende des Kopfmodells ausgeblendet; Falten weicher und breiter (Stirn, Krähenfüße, Tränensäcke mit Schatten, Nase–Mund); `--stubble-grey` mischt graue Stoppeln bei. „Leon Black Coat“ v19: beide Kostüme `--face-model remake --age 1 --stubble 0.75 --stubble-colour 44,37,31 --stubble-grey 0.1` (Gesichtstextur 512); `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag (Vorlage von DevJunior: eher ein leichter Bart wie bei Dante aus DMC4): `--stubble-cheeks` lässt die Wangen über der Kieferlinie (vom Kinn zum Kieferwinkel) weitgehend frei, der Bart bleibt an Kinn, Kiefer und Oberlippe. „Leon Black Coat“ v20: beide Kostüme `--face-model remake --age 0.5 --stubble 0.7 --stubble-colour 52,40,31 --stubble-cheeks 0.3`; `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag (neue Vorlage von DevJunior: Leon aus „Infinite Darkness“ in Nahaufnahme): `--pale` macht die Haut blasser und kühler, `--sockets` vertieft die Augenhöhlen (unter den Brauen, innere und äußere Augenwinkel), `--pores` legt eine feine Hautkörnung über das Gesicht, `--stubble-patchy` macht den Bart fleckig (glattes Rauschen über die Modellposition, ohne Nähte zwischen den UV-Inseln). „Leon Black Coat“ v21: beide Kostüme `--face-model remake --pale 0.4 --sockets 1 --pores 0.4 --age 0.8 --stubble 0.6 --stubble-colour 50,44,38 --stubble-grey 0.12 --stubble-cheeks 0.45 --stubble-patchy 0.6`; `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior: der Bart um den Mund müde, unter der Unterlippe etwas frei): `--stubble-under-lip` lässt die Mulde unter der Unterlippe (|x| < 13..22, bis 12 unter die Lippe) frei, die Kinnspitze behält den Bart. „Leon Black Coat“ v22 = v21 mit `--stubble-under-lip 0.85`; `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior: der Mund wirkt schmutzig): `--stubble-lip-margin` hält einen sauberen Rand um Lippen und Mundwinkel frei, `--mouth-lines` schwächt die Falten unter den Mundwinkeln; im Modus `remake` dunkelt der Bart die Haut darunter nur noch um 10 % statt 22 % ab (wirkte wie Schmutz). „Leon Black Coat“ v23: beide Kostüme `--face-model remake --pale 0.4 --sockets 1 --pores 0.2 --age 0.8 --stubble 0.6 --stubble-colour 50,44,38 --stubble-cheeks 0.45 --stubble-patchy 0.6 --stubble-under-lip 0.85 --stubble-grey 0.05 --stubble-lip-margin 3 --mouth-lines 0.3`; `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior: die Falten von der Nase zum Mund weg): `--nose-lines 0` lässt sie aus den Altersfalten weg (auch die Wangenmulde daneben) und füllt die, die der Kopf des Remakes selbst hat: in der Textur hellt ein Band entlang der Falte dunklere Texel auf die örtliche Hauthelligkeit auf (Farbe und Körnung bleiben); im Kopfmodell (Eintrag 2) rücken Tiefe (z) der Positionen und die Normalen dort zu ihrer Umgebung (Gauß über die Vorderansicht, Radius 7; Nasenlöcher und Lippen bleiben: nur Normalen, die nach vorn zeigen, nur Nachbarn gleicher Tiefe). „Leon Black Coat“ v24 = v23 mit `--nose-lines 0` (449 Positionen, 189 Normalen); `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior: die Schatten der Wangen bleiben): die Wangenmulden hängen nicht mehr an `--nose-lines`, eigene Stärke `--cheek-hollows` (Vorgabe 1). „Leon Black Coat“ v25 = v24 mit den Wangenschatten; `re4_format_compare --data` 63 176 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag 10.11.2026 (Gerätetest „Leon Remake Lite“ v5: Haar fleckig, wirkt nicht wie echtes Haar, sitzt zu hoch; Gürtelteile und Körper stechen durch Jacke und Ärmel): der Umwandler hatte die Alphamasken des Kartenhaars mit `--tex-other 64` auf 64 Pixel verkleinert (Kleckse statt Strähnen), dazu eine fast schwarze Unterschicht des Remakes, die durch die ausgedünnten Karten schien. `skin_face.py --hair-pc PC.udas --packs DIR` nimmt Farbe und Alphamaske der Haare neu aus den DDS des Mods (größte Seite `--hair-tex`, 512), alle Haarteile nehmen die Hauptfarbe, die dunkle Unterschicht wird die Hauptfarbe × `--hair-dark` (0,8), Alpha-Vergleichswert `--hair-alpha-ref` 64; das Gesicht bleibt unangetastet, wenn sonst nichts am Gesicht geändert wird. Haar mit `skin_slim.py --cards 5:0.65` statt 0,5 (19 615 statt 15 789 Positionen, der Nacken deckt). `skin_slim.py --hide ENTRY@MATS:COVER:front=X,minx=X,hem=X`: `front` lässt vorn (z > 0, |x| < X) alles stehen (die offene Jacke), `minx` versteckt nur bei |x| >= X, `hem` versteckt auch, worüber die Hülle um die Körperachse (±8°) nach unten und oben hinausreicht, gleich wie weit entfernt (Gürteltaschen, die seitlich herausstechen). „Leon Remake Lite“ v6: `pl08` = v2 mit neuem Haar; `pl00` = v5 mit `--hide 0@4,5,6,7,8,9:6:front=120,hem=10` (Gürtelteile und Holster unter der Jacke, die Schnalle vorn bleibt, das Holster unter dem Saum bleibt), `--hide 0@2:6:front=120` (Hemd unter Rücken und Ärmeln), `--hide 0@3:6:minx=500` (Armbänder unter den Ärmeln), `--inside 0:6`, dann das neue Haar; Daten `pl08` 5,07 MB, `pl00` 5,92 MB (Platz 6 MB); `re4_format_compare --data` 79 467 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag 10.11.2026 (Wunsch von DevJunior: das Haar des Leon aus Resident Evil Requiem, ein FBX aus RE-Mesh-Editor mit den Haartexturen als TGA, auf „Leon Black Coat“): neues Werkzeug `port/tools/skin_hair_fbx.py` (liest binäre FBX 7.x selbst): ersetzt das Haar (Eintrag 5) durch die Haarnetze des FBX (`Hair00..02`): in die Achsen des Spiels gedreht (Meter, z oben, vorn −y), mit einem Maßstab und einer Verschiebung auf den Kopf der Skin gesetzt (zuerst die Augäpfel des FBX auf Leons Augenhöhlen ±28/1722, dann die Kopfhaut des FBX-Gesichts über den Augen auf die des Kopfmodells, nächste Punkte; Black Coat: Maßstab 1,010), je Schicht nur ein Anteil der Karten, die äußeren zuerst, reihum um den Kopf (`Hair00` 0,35, `Hair01` 0,2, `Hair02` alle: 22 748 statt rund 81 000 Positionen); Gewichte aus dem alten Haar der Skin (vier nächste Positionen, höchstens drei Knochen, auf 255 Einträge zusammengefasst, hier Stufen zu 15 %), also mit der Haarphysik; was im Schädel liegt, 1 über ihn (`cover` im Kegel von 4°); Alphamaske aus dem roten Kanal der ACOT-Textur in 1024 × 512 I8, die Farbe eine Farbe (`--colour`) nach der Helligkeit der ALBS-Textur schattiert (deren Farben sind Strähnen-Kennungen) in 512 × 256 CMPR, Alpha-Vergleichswert 64; die fast schwarze Kopfhaut des Remake-Kopfes (Gesichtstextur über y 1700, im Nacken über 1630, ohne die Brauen) in der Haarfarbe × 0,7, damit die Lücken zwischen den Karten nicht schwarz sind. „Leon Black Coat“ v27 = v26 mit diesem Haar (`--colour 56,46,34`), beide Kostüme: Daten `pl08` 5,16 MB, `pl00` 4,95 MB (Platz 6 MB), rund 52 000 Positionen je Kostüm; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag (DevJunior, nach dem Probebild: dunkler, und der Kopf schimmert noch durch): `scalp` färbt jetzt alles unter dem Haar unabhängig von der Helligkeit (über y 1800, über 1700 hinter z 30, ohne die Ohren), Haarfarbe × 0,6. „Leon Black Coat“ v28: `--colour 44,35,25 --layers Hair00:0.6,Hair01:0.15,Hair02:1` (die Unterschicht dichter: 27 146 Positionen), Daten `pl08` 5,31 MB, `pl00` 5,10 MB; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag 11.11.2026 (Gerätetest von DevJunior mit v28: „nur Haarblättchen, man sieht den ganzen Kopf“): `skin_hair_fbx.py` macht Farb- und Alphatextur des Haars mit voller Mipmap-Kette (bis 1 × 1, je Stufe auf ganze Kacheln aufgefüllt, Kopf: `minFilter` 5, `maxLOD` = Stufen − 1; trans.cpp nimmt eine Textur mit `minLOD` ≠ `maxLOD` als gemipmappt): ohne Mipmaps fallen die einzelnen Strähnen klein gesehen zwischen die Pixel, nur gemittelt würden sie grau unter dem Alpha-Vergleichswert; jede Stufe ist die gemittelte Bedeckung, so skaliert, dass so viele Texel den Wert 64 erreichen wie in der Basis, plus die Hälfte der Lücken je tiefer (`coverage_mips`, `--fill`), die Strähnen der Basis zur Hälfte um ein Texel verbreitert (`--thicken`). `skin_graft.tpl_images` liest Mipmap-Ketten mit (`image_bytes`). „Leon Black Coat“ v29 (mit Blinzeln, s. 0907) und „Leon Remake Lite“ v8: Daten `pl08` 5,56 / 5,53 MB, `pl00` 5,35 / 6,18 MB; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag 11.11.2026 (Gerätetest von DevJunior mit Black Coat v29: „das Haar ist noch durchsichtig, man sieht die Glatze“): das Spiel mischt ein Haarteil nach seinem Alpha (`trans.cpp` `bl[0]`: Quell-Alpha, nach dem Alpha-Vergleich), ein Texel knapp über der Referenz lässt die Kopfhaut durchscheinen, und bei der 3-fachen Auflösung des Emulators liegt die volle Textur mit ihren Lücken zwischen den Strähnen auf dem Bild. `skin_hair_fbx.py` hat dafür `--solid` (die Umgebung der Strähnen auf jeder Karte füllen, aus der über 3 Texel weichgezeichneten Maske) und `--harden` (über der Referenz steigt das Alpha so viel schneller auf deckend); Black Coat v30 mit `--layers Hair00:0.75,Hair01:0.2,Hair02:1 --thicken 0.8 --fill 0.8 --alpha-ref 40 --scalp-depth 0.8 --solid 0.8 --harden 4` (32 027 Haar-Dreiecke statt 25 967, Datenteil 5,78 MB). Mit nachgebildeter Mischung gerendert geprüft (v29 durchsichtig, v30 deckend); im Spiel nicht geprüft. Nachtrag 11.11.2026 (Gerätetest von DevJunior mit v30 und „Leon Requiem Lite“ v1: das Haar weiter durchsichtig, die Glatze zu sehen): die Ursache war die Haarphysik. Gut die Hälfte der Kartenpunkte hing mit etwa 30 % an den schwingenden Haarknochen (65..85, `pl_cloth.cpp leonHair`); im Spiel schwingen diese Ketten, und Karten nahe am Schädel sanken in ihn ein (die Renderbilder zeigen die Ruhepose). `skin_hair_fbx.py --physics 0` hängt das Haar ganz an den Kopf (v2: bestätigt „ya va un poco mejor“), `--cover-low` hebt auch Schläfen und Pony über den Schädel, `--scalp-reach`/`--hairline` malen den Kopf unter dem Haar, `--shade-contrast` mildert die Strähnenschattierung und füllt die Umgebung mit ihr. Nachtrag 12.11.2026 (Wunsch von DevJunior: der Kopf des Leon aus Resident Evil Requiem auf „Leon Requiem Lite“ v3; FBX aus RE-Mesh-Editor und die Gesichtstexturen ALBD, SCOT, NRMR und die Barttextur als TGA): neues Werkzeug `port/tools/skin_head_fbx.py`: der Kopf der Skin (Eintrag 2) behält seine Augen (Teile mit Textur 2 und 3), sein Hautteil wird das Gesichtsnetz des FBX (`Face_Mat`), gesetzt wie das Haar (`skin_hair_fbx.place`, Maßstab 1,010); der Hals je Seite (24 Richtungen) nur so tief, wie der alte Kopf dort reicht, und unter y 1625 nicht weiter als dessen Hals (`skin_slim.tuck` gegen den alten Kopf): er bleibt im Kragen; die alten Augäpfel auf die Mitte der Augäpfel des FBX gerückt (links 1,3/1,4/3,4, rechts −0,6/3,9/5,4), damit die neuen Lider sie decken; Normalen s8, Gewichte aus dem alten Kopf (vier nächste, auf 255 Einträge, hier 194). Gesichtstextur 1024 CMPR aus der ALBD: Kavität (SCOT blau) als Schatten, die Normalenkarte als Licht von oben, die Brauenmaske (SCOT rot) abgedunkelt, die Karten von Brauen, Wimpern und Bart des FBX dort aufgemalt, wo sie liegen (eigene Karten wären tausende Dreiecke mehr), die Wucherung der „Virus“-Textur am Hals (nur auf einer Seite) von der Gegenseite gespiegelt (`mirror_clean`, unter y 1660), der Hautton zu 60 % auf den des alten Gesichts gezogen. `skin_hair_fbx.scalp(rules=False)`: nur Haarnähe und Haaransatz, ohne die festen Bereiche des Disc-Kopfs (die ALBD hat ihren Haaransatz selbst; die festen Bereiche ergaben auf dem neuen Gesicht ein Rechteck auf der Stirn). Danach `skin_shapes.py --mouth-gain 1.2 --threshold 0.6 --slots 1-22` (alle 28 Plätze gingen nicht in den Platz). „Leon Requiem RE9“ v1: Daten `pl08` 6,25 MB, `pl00` 6,04 MB (Platz 6 MB); gerendert geprüft (vorn, 3/4, Seite, hinten; Mund offen, Blinzeln); `re4_format_compare --data` 62 650 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag 12.11.2026 (DevJunior schickt die Texturen des Anzugs aus Resident Evil Requiem, Wunsch: der ganze Anzug): das FBX ist mit Jacke exportiert (das RE Engine lässt Verdecktes weg: vom Hemd nur Vorderseite und Kragen), Hose, Schuhe, Handschuhe und Arme ohne Texturen; daher nur Kostüm 1 (`pl00`) mit der Lederjacke, `pl08` behält Körper und RE9-Kopf. Neues Werkzeug `port/tools/skin_body_fbx.py`: liest die Skin-Cluster des FBX (Gewichte, Bindepose aus `TransformLink`, Zentimeter, y oben), jeder RE-Engine-Knochen zählt als sein erster Vorfahr mit Gegenstück in Leons Skelett (Hüfte 17, Wirbelsäule 1/2, Hals 3, Kopf 4, Schlüsselbeine 5/11, Oberarme 7/13, Unterarme 8/14 bzw. 9/15, Hände 10/16; Stoffknochen der Jacke, Kragen und Ärmel wie das Körperteil, an dem sie hängen); T-Pose: jeder Oberarm um sein Schultergelenk zu Leons Ellbogen (436) gedreht und auf diese Länge gekürzt, jeder Unterarm von Leons Ellbogen zu seinem Handgelenk (704), linear gemischt nach den Gewichten, sonst die Platzierung von `skin_hair_fbx.place` (Kopf und Haar sitzen gleich). Dreiecke reduziert mit MeshLab (`pymeshlab`, Quadrik-Kantenkollaps mit Texturkoordinaten; braucht `libOpenGL.so.0`): die Positionen erst verschweißt (das RE Engine trennt an jeder Texturnaht, sonst fiel jede Texturinsel zu einem Fächer zusammen), planare Quadrik, Texturkoordinaten mit Gewicht 4 (sonst reichten Dreiecke über eine Naht in den dunklen Rand der Textur). Texturen: ALBD mit Verdeckung (ACOT blau) und Kavität (grün) schattiert, die Normalenkarte als Licht von oben, CMPR; Palettenbilder, die nur die geleerten Teile und das alte Modell nutzten, werden ersetzt (sonst angehängt), übrige durch ein 8×8-Bild. „Leon Requiem RE9“ v2 `pl00`: Modell 6 (pl000e, in allen Kostümen und Zwischensequenzen) = Jacke (Leder 4499, Futter 599, Kragen 2 × 399, Metall 500, Knöpfe 200 Dreiecke, Jackentextur 512) und Hemdvorderseite (1199, Hemdtextur 256): 4326 Positionen, 7795 Dreiecke, 225 Gewichtseinträge (Stufen 15 %); der alte Mantel (Modell 0, Texturen 3 und 6) geleert und verdichtet, das alte Hemd (Textur 15, 1024 × 512) entfällt. Weniger Positionen als vorher (Mantel 4607 und Hemd 8595 weg); Daten 5,62 MB (Platz 6 MB). Gerendert geprüft (vorn, 3/4, Seite, hinten, Kragen nah); `re4_format_compare --data` 62 612 Werte gleich, keine Abweichung; im Spiel nicht geprüft (Verformung beim Gehen, Saum gegen die Oberschenkel). Nachtrag 12.11.2026 (DevJunior: die Jacke ist eher schwarz, nicht grau): `skin_body_fbx.py --gain KEY=FAKTOR[,HELL]` dunkelt eine Textur ab, helle Einzelheiten (Metall, Knöpfe: Helligkeit über 70, über 40 eingeblendet) bleiben. „Leon Requiem RE9“ v3 `pl00` = v2 mit `--gain jacket=0.4` (Helligkeit im Median 32 → etwa 13; der alte Mantel 6..10); `re4_format_compare --data` ohne Abweichung; gerendert geprüft; im Spiel nicht geprüft. Nachtrag 12.11.2026 (Gerätetest von DevJunior mit „Leon Requiem RE9“ v3: wirkt nicht kräftig, viele Texturfehler an Gesicht und Augen; Wunsch: ein Mittelweg, Kopf und Mantel wie vorher, nur Textur und V-Ausschnitt des Requiem-Hemds ins alte Hemd): `skin_body_fbx.py --merge` behält das alte Modell (`--into`) und setzt die neuen Netze dazu (Gewichte der alten Teile wie im Modell), `--replace-mats TEX --replace-x X` nimmt vom alten Hemd den Rumpf (|x| < X) weg, die Ärmel bleiben, `--match-colour BILD=KEY` zieht ein altes Palettenbild auf Mittel und Streuung der neuen Textur (die Ärmel in der Farbe des Requiem-Hemds), `--neck D` verlängert den Hals des Kopfes am unteren Rand um bis zu D (je 15°-Richtung die Positionen bis 12 über dem tiefsten), `--inside ENTRY:COVER` drückt durchstechende Positionen unter den Mantel (`skin_slim.inside`, ab y 950). „Leon Requiem Lite RE9 Shirt“ v1 auf dem unveränderten „Leon Requiem Lite“ v3 (Kopf, Haar, Mantel): `pl08` Modell 12 = Rumpf des Requiem-Hemds (`Inner_Cloth1` 1799, Knopfleiste `Inner_Cloth2` 219, Reißverschluss `Inner_Metal` 200 Dreiecke, Hemdtextur 512) + Ärmel des alten Hemds (724 von 1542) + Gurte; `pl00` Modell 6 ebenso (Ärmel 670 von 1542), unter den Mantel gedrückt (660 Positionen); Hals beider Kostüme 25 länger. Daten `pl08` 5,43 MB, `pl00` 5,17 MB; gerendert geprüft; `re4_format_compare --data` 62 606 Werte gleich, keine Abweichung; im Spiel nicht geprüft. Nachtrag 12.11.2026 (DevJunior: den Requiem-Kopf wieder darauf, mit dem Hautton der vorigen Version): „Leon Requiem Lite RE9 Shirt“ v2 = v1 mit dem Kopf aus `skin_head_fbx.py --match 1.0 --keep-mats 2 --drop-mats 3` (neu `--drop-mats`: die dunklen Augenkarten des alten Kopfs, Textur 3, lagen vor den neuen Lidern, vermutlich das Flimmern und die Flecken an den Augen im Gerätetest; Hautton ganz auf den des alten Gesichts), Formen `skin_shapes.py --mouth-gain 1.2 --threshold 0.6 --slots 1-22`. Daten `pl08` 6,02 MB, `pl00` 5,76 MB; gerendert geprüft (Augen nah, Blinzeln); `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag 12.11.2026 (Vorlage von DevJunior: Gesicht und Haar des Leon aus Resident Evil Requiem, „mit leichten Ausdrucksfalten auf der Stirn“): `skin_head_fbx.py` neu `--tone R,G,B` (Hautton einer Vorlage statt des alten Gesichts), `--forehead S` (drei flache Stirnfalten 16/27/38 über den Augen, zu den Seiten ansteigend und auslaufend, je ein dünner Schatten mit hellerer Kante darüber, über die Länge ungleich (glattes Rauschen über die Modellposition), zwei kurze Falten zwischen den Brauen; nur vorn), `--iris R,G,B[,ANTEIL]` (Iris nach Helligkeit eingefärbt), `--hair-albedo`/`--hair-alpha`/`--hair-ramp`/`--hair-streaks` (die Farbtextur des Haars, Palette 3 Bild 0, neu mit voller Mipmap-Kette: Strähnenschattierung der ALBS wie `skin_hair_fbx.textures`, über eine Farbrampe Schatten:Mitte:Licht, hellere Strähnen in zufälligen Spalten). „Leon Requiem Lite RE9 Shirt“ v3 = v2 mit `--tone 122,100,88 --beard-colour 92,80,70 --beard 0.45 --forehead 0.6 --iris 105,120,100,0.5 --hair-ramp 24,21,18:52,46,40:120,106,90 --hair-streaks 0.3` (Farben aus der Vorlage gemessen). Daten wie v2; gerendert neben der Vorlage geprüft; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. Nachtrag 12.11.2026 (Gerätetest von DevJunior mit v3, Bilder: die Augen „glitzern“ in einem Dreiecksmuster, Flecken auf der Stirn, das Hemd sticht beim Bücken hinten durch den Mantel): die Augenhöhlen des RE-Engine-Gesichts (Lidinnenseiten) liegen auf und in seinen Augäpfeln und schnitten durch die alten Augäpfel, der Tiefentest zeigte beide abwechselnd (gerendert unsichtbar: der eigene Renderer entscheidet je Dreieck). `skin_head_fbx.py --eye-clear 0.2` lässt die Gesichtsdreiecke innerhalb Augapfelradius + 0,2 weg, `--eye-scale 0.97` verkleinert die Augäpfel um ihre Mitte, `--face-mips` gibt der Gesichtstextur eine Mipmap-Kette (klein gesehen flimmerten Bart, Brauen und Falten zu Flecken), die Stirnfalten weicher (Breite 2, Ungleichmäßigkeit 25 %, Stärke 0,5). `pl00`: das Hemd unter dem Mantel (Rücken, Seiten; vorn |x| < 120 bleibt) mit `skin_slim.py --hide 6:0:front=120` weg (987 von 2888 Dreiecken). „Leon Requiem Lite RE9 Shirt“ v4: Daten `pl08` 6,17 MB, `pl00` 5,84 MB; gerendert geprüft; `re4_format_compare --data` ohne Abweichung; im Spiel nicht geprüft. |
@@ -14345,6 +15323,7 @@ die GameCube ließ sie überlaufen (schon vorher so, selten).
 | 0915 `game/event.cpp` (+ `runtime/dvd.cpp` `re4_mod_event_bin`, `runtime/mod_place.cpp` `re4_mod_place_alloc`) | Skins in den Zwischensequenzen (Wunsch von DevJunior, 12.11.2026: „die Skins von Ada und Ashley erscheinen nicht in den Zwischensequenzen“; kein Fehler des Prototyps). Ein Ereignis bringt eigene Kopien der Figurenmodelle und Paletten mit (Bin-Tabelle der evd, „em/pl01/pl010a.bin“ …); nur Leons nimmt `ExeBeginEvt` aus seinem Archiv. `SetEvd` registriert jedes Bin so, wie `re4_mod_event_bin` es gibt: Jedes Figurenarchiv (`em/pl??.drs/.das`), das ein Mod-Paket ersetzt, wird einmal auf der Disc angesehen (gelesen, wie beim Lesen des Spiels umgewandelt, Länge und Prüfsumme jedes Eintrags behalten, die Kopie zurückgegeben); ein Bin mit genau den Bytes eines Eintrags (unabhängig vom Namen) kommt aus dem Archiv des Skins (sein Körper einmal in den Platz der Mods gelesen und umgewandelt), derselbe Eintrag; alle anderen bleiben die des Ereignisses. Gepackte Körper (yz2) bleiben draußen. Neues Laden der Mods (`applyMods`) lässt neu ansehen. Protokoll: „mods: event bin … = em/pl01.drs entry …“ bzw. „… is no entry of a skinned character archive“ (64 Zeilen). Test: `runtime-test event skins` (Disc und Mod mit je zwei Einträgen, Ereignis mit drei Bins: Kopie, eigenes, Kopie unter anderem Namen; ohne Mod); i686, armhf, x86_64; mit Disc-Daten nicht geprüft (ob die Kopien der Ereignisse den Archiven gleichen, zeigt das Protokoll). |
 | — `runtime/quick_slots.cpp` (Hook von 0900) | „D-pad quick slots“ (Mod von DevJunior im Stil des Remakes, App-Menü Controls, aus; Bit 7 der Zieleinstellungen): im Feld (Geh-, Waffen- und Messerroutinen, kein Untermenü/Ereignis/Zielfernrohr/Fernglas/Boot/Hocken, nicht Ashley) rüstet ein Druck aufs Steuerkreuz eine Waffe nach Art aus (oben Pistolen/Magnums, rechts Schrotflinten/TMP/Chicago/Minenwerfer/Raketenwerfer, unten Gewehre/Bogen, links Granaten), erneut gedrückt die nächste dieser Art im Koffer. Wechsel wie `SubScreenExit` (`ItemMgr.arm`, `SndBlkStop(2)`, `weaponRelease/Load/Init`) in Task-Platz 1 mit angehaltenem Haupttask (`TaskSuspend(0)`), weil `ReadWepData` schläft. Das Steuerkreuz wird dann aus `Key` (Stick-Bits bleiben) und `Joy[0].on` genommen; Drücke über eigene Flankenerkennung. Antippen rüstet beim Loslassen aus; eine Richtung 15 Bilder (0,5 s) gehalten steckt die Waffe weg (`ItemMgr.arm(NULL)`, bloße Hände: Gegenstand 0x800, Waffe 0, `wep_data_leon[0]`; derselbe Zustand wie nach dem Verkauf der Waffe in der Hand), wunschgemäß „ohne Waffe gehen wie im Remake“ (DevJunior, 08.11.2026). Test: `runtime-test quickslots` (Anfragen im Trockenlauf, `re4_quick_slots_dry`) |
 | 0174 `pl_wep.cpp` | Auto-Zielen: Startwinkel von der Waffenhand zum Zielpunkt im Maß von `PlWepAutoTrack` statt von den Füßen (Laser über dem Gegner); dazu `gyro.cpp`: Handzittern beendet die Zielhilfe nicht. Bericht des Projektinhabers 01.11.2026. Port-Patch |
+| 0228 `card.cpp` | Krausers Bogen in der Geschichte (0.99.10, Nutzerwunsch über den Projektinhaber, seit dem Retroid-Test bei jedem Raumstart statt Cheat-Knopf 10, `runtime/cheats.cpp` `giveBow`) und Weskers Schalldämpfer (0x3F, `giveSilencer`): `cCard::makeSaveData` lässt im Bild der Spielstand-Datei Bogen (0x52), Pfeile (0x72) und Schalldämpfer weg, macht aus der Pistole mit Schalldämpfer in der Hand die Pistole ohne und aus dem Bogen in der Hand leere Hände (belegter Platz, `weapon_no`/`weapon_type` des Spielblocks), denn ein Spielstand ist immer Leons und Leon hat keine Datei für Waffe 0x1C (`re4_story_char_card_items`). Das laufende Spiel und der Fortsetzungspunkt behalten den Bogen. Port-Funktion |
 
 Neuen Patch erzeugen: Datei aus `whole_prepare.rewrite()` kopieren, ändern,
 `port/tools/whole_make_patch.py NAME pfad/im/repo kopie` ausführen. Mehrere

@@ -55,6 +55,10 @@ final class CoreMenu extends Dialog {
     void fpsChanged(int place);  // CoreActivity.FPS_PLACE: 0 off, 1..4 where
     /** The setting "Touch Controls": TouchShowRule.AUTO, FORCE or SUPPRESS (the preferences hold it). */
     void touchModeChanged(int mode);
+    /** The touch controls show icons (RetroTouch's button style ICONS, else LABELS; RetroTouch keeps it). */
+    boolean touchIcons();
+    /** The choice "Button style": icons (true) or labels, at once. */
+    void touchIconsChanged(boolean icons);
     /** The switch "Use Gyro-Aiming" (the preferences hold it). */
     void gyroChanged(boolean on);
     /** The switch "Alternate Controls" (the preferences hold it). */
@@ -150,6 +154,12 @@ final class CoreMenu extends Dialog {
     void openUpdate();
     /** This run draws with Vulkan (the renderer the game started with, not only the menu's choice). */
     boolean vulkanRunning();
+    /** The display's rate as measured (FramePacing), else as Android says; 0 unknown. */
+    double displayHz();
+    /** What the app knows of this device for the performance profiles (0.99.10, PerfProfile). */
+    PerfProfile.Device perfDevice();
+    /** A performance profile chosen on the start page (PerfProfile.CUSTOM .. HIGH): stored and applied. */
+    void profileChosen(int profile);
   }
 
   private interface Changed<T> { void accept(T value); }
@@ -199,6 +209,7 @@ final class CoreMenu extends Dialog {
   private int page, requestSerial;
   private boolean working, slotPresent;
   private TextView graphicsLine, cardLine, slotDetails, slotDate, slotStatus, cheatStatus;
+  private boolean updateAsked;  // the question after an update (PerfProfile.FIRST_ASK) shown in this menu
   private int cheatBits;  // the cheat switches as the page sent them last (CoreActivity.CHEATS)
   private Button exportAll, saveSlot, loadSlot;
   private TextView modsLine;
@@ -465,16 +476,7 @@ final class CoreMenu extends Dialog {
     // the benchmark under "Dynamic" in a quiet green (wish of the project owner, 05./06.11.2026): the game goes to the
     // lake's dock (the project owner's save there, 06.11.2026) and measures which level holds 30 and 60 FPS with the
     // other options as they are; then the resolution becomes Dynamic, up to those levels
-    Button bench = button(s(R.string.ingame_benchmark), v -> askBenchmark());
-    StateListDrawable quiet = new StateListDrawable();
-    quiet.addState(new int[] {android.R.attr.state_focused}, focused(BENCH_GREEN));
-    quiet.addState(new int[] {android.R.attr.state_pressed}, shape(BENCH_GREEN, UPDATE_GREEN_EDGE, 6));
-    quiet.addState(new int[0], shape(BENCH_GREEN, BENCH_GREEN_EDGE, 6));
-    bench.setBackground(quiet);
-    bench.setTextColor(BENCH_TEXT);
-    bench.setTypeface(Typeface.DEFAULT, Typeface.NORMAL);
-    bench.setEnabled(host != null);
-    keys.addUnderFirst(bench);
+    keys.addUnderFirst(benchButton());
     body.addView(outer);
   }
   /** "Import other discs": the game ends for it (progress not saved is lost), so the menu asks first. */
@@ -485,7 +487,7 @@ final class CoreMenu extends Dialog {
         .setNegativeButton(R.string.ingame_cancel, null)
         .setPositiveButton(R.string.ingame_start_screen, (d, w) -> host.importDiscs()).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-    dialog.show();
+    Immersive.show(dialog);
   }
   /** "Clear shader cache": the game restarts for it (progress not saved is lost), so the menu asks first. */
   private void askClearShaders() {
@@ -495,17 +497,18 @@ final class CoreMenu extends Dialog {
         .setNegativeButton(R.string.ingame_cancel, null)
         .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.clearShaderCache(); }).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-    dialog.show();
+    Immersive.show(dialog);
   }
-  /** "Start the benchmark?" with what it does; the menu closes for it. */
+  /** "Start the benchmark?" with what it does; the menu closes for it (since 0.99.10 the benchmark with its suggestion,
+   *  BenchmarkFlow). */
   private void askBenchmark() {
     AlertDialog dialog = new AlertDialog.Builder(getContext())
         .setTitle(R.string.ingame_benchmark)
-        .setMessage(R.string.ingame_benchmark_text)
+        .setMessage(R.string.ingame_bench_text)
         .setNegativeButton(R.string.ingame_cancel, null)
         .setPositiveButton(R.string.ingame_benchmark_start, (d, w) -> { close(); host.startBenchmark(); }).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-    dialog.show();
+    Immersive.show(dialog);
   }
   /** The chosen resolution in halves (0: Dynamic; 2: 1×, 3: 1.5× … 8: 4×); until 27.10.2026 "scale" in whole levels. */
   static int scaleHalves(SharedPreferences g) {
@@ -546,6 +549,21 @@ final class CoreMenu extends Dialog {
     b.setSelected(on);
     b.setText(getContext().getString(R.string.ingame_toggle_value, s(name), s(value)));
   }
+  /**
+   * Frame skip (0.99.8, one button; wish of the project owner, 10.11.2026): 0 off, 1 Normal (the renderer leaves out a
+   * picture while it is behind, CoreBridge.setFrameSkip), 2 Aggressive (the game itself, CoreBridge.setCpuSkip).
+   * Before it two switches, "frameskip" and "cpuSkip"; both on: Aggressive.
+   */
+  static final String FRAME_SKIP = "frameSkipMode";
+  static int frameSkipMode(SharedPreferences g) {
+    if (g.contains(FRAME_SKIP)) return Math.max(0, Math.min(2, g.getInt(FRAME_SKIP, 0)));
+    if (g.getBoolean("cpuSkip", false)) return 2;
+    return g.getBoolean("frameskip", false) ? 1 : 0;
+  }
+  /** Frame skip stored as `mode` (frameSkipMode), the two switches of before gone. */
+  static void storeFrameSkipMode(SharedPreferences g, int mode) {
+    g.edit().putInt(FRAME_SKIP, Math.max(0, Math.min(2, mode))).remove("frameskip").remove("cpuSkip").apply();
+  }
   /** The depth of field's level (0 off, 1 light, 2 strong); until 0.98.3 the switch "dof" (on: light). */
   static final String DOF_LEVEL = "dofLevel";
   /** The benchmark's levels on this device (halves): "Dynamic" goes up to them with 30 / 60 FPS. */
@@ -558,6 +576,22 @@ final class CoreMenu extends Dialog {
   static final String SHARPEN_LEVEL = "sharpenLevel";
   static int sharpenLevel(SharedPreferences g) {
     return Math.max(0, Math.min(2, g.getInt(SHARPEN_LEVEL, 0)));
+  }
+  /** The filter "CRT" (0.99.9, wish of the project owner, 11.11.2026): 0 off (the default), 1 light, 2 strong. */
+  static final String CRT_LEVEL = "crtLevel";
+  static int crtLevel(SharedPreferences g) {
+    return Math.max(0, Math.min(2, g.getInt(CRT_LEVEL, 0)));
+  }
+  /**
+   * The row "Colour" (0.99.9, wish of the project owner, 11.11.2026): 0 off (the default), 1 warm film, 2 survival
+   * horror; its strength 1 light (the default), 2 strong.
+   */
+  static final String COLOUR_MODE = "colourMode", COLOUR_LEVEL = "colourLevel";
+  static int colourMode(SharedPreferences g) {
+    return Math.max(0, Math.min(2, g.getInt(COLOUR_MODE, 0)));
+  }
+  static int colourLevel(SharedPreferences g) {
+    return g.getInt(COLOUR_LEVEL, 1) >= 2 ? 2 : 1;
   }
   private void toggleLabel(Button b, int label, boolean on) {
     b.setSelected(on);
@@ -642,6 +676,7 @@ final class CoreMenu extends Dialog {
     slotStatus = text(s(R.string.ingame_instant_checking), 15, false);
     slotStatus.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(6));
     slotStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(slotStatus);
+    profileRow();
     heading(R.string.ingame_settings);
     MenuLayout.Buttons first = buttonsRow(body), second = buttonsRow(body), third = buttonsRow(body),
         fourth = buttonsRow(body);
@@ -655,6 +690,87 @@ final class CoreMenu extends Dialog {
     navigation[MODS] = nav(fourth, R.string.ingame_mods, R.string.ingame_mods_summary, MODS);
     if (host != null && host.gameLanguages()) gameLanguage();
     main.post(() -> { if (isShowing() && page == HOME && !working) refreshInstant(); });
+    // an update to 0.99.10: the menu asks once whether to measure now (decision of the project owner, 11.11.2026)
+    if (host != null && !updateAsked && graphics.getInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE) == PerfProfile.FIRST_ASK) {
+      updateAsked = true;
+      main.post(this::askMeasureAfterUpdate);
+    }
+  }
+
+  /** "Performance profile" between the instant save and the settings (wish of the project owner, 11.11.2026;
+   *  port/docs/leistungsprofil-plan.md, PerfProfile): Custom, Low, Medium, High and the green benchmark button in one
+   *  row (the project owner after the Retroid test, 11.11.2026), the active profile lit, the benchmark's suggestion
+   *  marked; under them the last measurement and the help over the whole width. A hand change of a profile's setting
+   *  makes Custom active (PerfProfile.sync, each time the start page is shown). */
+  private void profileRow() {
+    heading(R.string.ingame_profile);
+    final int active = PerfProfile.sync(graphics);
+    PerfProfile.Device d = host != null ? host.perfDevice() : null;
+    if (d == null) d = new PerfProfile.Device("", 0, 0, 0, 0, 0, 1, 1);
+    final PerfProfile.Bench b = PerfProfile.Bench.of(graphics);
+    final int recommended = PerfProfile.recommend(d, b);
+    final String[] names = {s(R.string.ingame_profile_custom), s(R.string.ingame_profile_low),
+        s(R.string.ingame_profile_medium), s(R.string.ingame_profile_high)};
+    // five a row, a name over two lines at most; a narrow window or a big font puts the rest in a second row
+    MenuLayout.Buttons row = new MenuLayout.Buttons(getContext(), 5, 2);
+    body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    final Button[] buttons = new Button[names.length];
+    for (int i = 0; i < names.length; i++) {
+      final int profile = i;
+      Button btn = cellAction(row, names[i], v -> {
+        if (host == null) return;
+        host.profileChosen(profile);
+        select(buttons, names, profile);
+      });
+      if (i == recommended && i != PerfProfile.CUSTOM) {
+        // the suggestion: a smaller second line under the name, as the costume switch's note
+        SpannableStringBuilder t = new SpannableStringBuilder(names[i]);
+        int from = t.length(); t.append('\n').append(s(R.string.ingame_profile_recommended));
+        t.setSpan(new RelativeSizeSpan(.75f), from, t.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        t.setSpan(new StyleSpan(Typeface.NORMAL), from, t.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        btn.setText(t);
+        btn.setPadding(dp(8), dp(2), dp(8), dp(2));
+      }
+      btn.setSelected(i == active);
+      btn.setContentDescription(names[i] + ", " + s(i == active ? R.string.ingame_on : R.string.ingame_off));
+      buttons[i] = btn;
+    }
+    row.addButton(benchButton());
+    // the last measurement over the whole width, as the help under it
+    TextView measured = text(b.measured ? getContext().getString(R.string.ingame_profile_measured,
+        PerfProfile.level(b.cap30), PerfProfile.level(b.cap60), s(BenchmarkFlow.limitText(d, b)))
+        : s(R.string.ingame_profile_not_measured), 15, false);
+    measured.setPadding(dp(MenuLayout.GAP), dp(4), dp(MenuLayout.GAP), dp(2));
+    body.addView(measured, new LinearLayout.LayoutParams(-1, -2));
+    help(R.string.ingame_profile_help);
+  }
+
+  /** The benchmark's button in a quiet green (wish of the project owner, 06.11.2026). */
+  private Button benchButton() {
+    Button bench = button(s(R.string.ingame_benchmark), v -> askBenchmark());
+    StateListDrawable quiet = new StateListDrawable();
+    quiet.addState(new int[] {android.R.attr.state_focused}, focused(BENCH_GREEN));
+    quiet.addState(new int[] {android.R.attr.state_pressed}, shape(BENCH_GREEN, UPDATE_GREEN_EDGE, 6));
+    quiet.addState(new int[0], shape(BENCH_GREEN, BENCH_GREEN_EDGE, 6));
+    bench.setBackground(quiet);
+    bench.setTextColor(BENCH_TEXT);
+    bench.setTypeface(Typeface.DEFAULT, Typeface.NORMAL);
+    bench.setEnabled(host != null);
+    return bench;
+  }
+
+  /** After an update to 0.99.10, once: measure now (the menu closes, the benchmark starts) or later. */
+  private void askMeasureAfterUpdate() {
+    if (!isShowing() || working) return;
+    Runnable done = () -> graphics.edit().putInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE).apply();
+    AlertDialog dialog = new AlertDialog.Builder(getContext())
+        .setTitle(R.string.ingame_bench_update)
+        .setMessage(R.string.ingame_bench_update_text)
+        .setNegativeButton(R.string.ingame_later, (d, w) -> done.run())
+        .setPositiveButton(R.string.ingame_bench_now, (d, w) -> { done.run(); close(); host.startBenchmark(); }).create();
+    dialog.setOnCancelListener(d -> done.run());
+    dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus());
+    Immersive.show(dialog);
   }
   /** "Game language" with the European discs: the languages each in its own language, three a row; a
    *  new language restarts the game after a question, "Cancel" keeps the one before (decisions of the
@@ -682,7 +798,7 @@ final class CoreMenu extends Dialog {
           }).create();
       dialog.setOnCancelListener(d -> keep.run());
       dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-      dialog.show();
+      Immersive.show(dialog);
     });
     help(R.string.ingame_language_help);
   }
@@ -763,7 +879,39 @@ final class CoreMenu extends Dialog {
       CoreBridge.setSharpen(next);
     });
     valueLabel(sharpen, R.string.ingame_sharpen, sharpenLabels[sharpenLevel(graphics)], sharpenLevel(graphics) != 0);
-    indentedHelp(s(R.string.ingame_filter_help) + " " + s(R.string.ingame_sharpen_help));
+    // the picture as a tube TV showed it (wish of the project owner, 11.11.2026): off, light, strong
+    Button crt = cellAction(buttonsRow(filters), "", v -> {
+      int next = (crtLevel(graphics) + 1) % 3;
+      graphics.edit().putInt(CRT_LEVEL, next).apply();
+      valueLabel((Button) v, R.string.ingame_crt, sharpenLabels[next], next != 0);
+      CoreBridge.setCrt(next);
+    });
+    valueLabel(crt, R.string.ingame_crt, sharpenLabels[crtLevel(graphics)], crtLevel(graphics) != 0);
+    indentedHelp(s(R.string.ingame_filter_help) + " " + s(R.string.ingame_sharpen_help) + " "
+        + s(R.string.ingame_crt_help));
+    // the colour (wish of the project owner, 11.11.2026): its look (off, warm film, survival horror) and beside it
+    // its strength (light, strong); each press moves on
+    MenuLayout.Buttons colourRow = buttonsRow(labelledOptions(R.string.ingame_colour));
+    final int[] colourLabels = {R.string.ingame_off, R.string.ingame_colour_warm, R.string.ingame_colour_horror};
+    final Button[] strength = new Button[1];
+    Button look = cellAction(colourRow, "", v -> {
+      int next = (colourMode(graphics) + 1) % 3;
+      graphics.edit().putInt(COLOUR_MODE, next).apply();
+      v.setSelected(next != 0);
+      ((Button) v).setText(s(colourLabels[next]));
+      strength[0].setSelected(next != 0);
+      CoreBridge.setColour(next, colourLevel(graphics));
+    });
+    look.setSelected(colourMode(graphics) != 0);
+    look.setText(s(colourLabels[colourMode(graphics)]));
+    strength[0] = cellAction(colourRow, "", v -> {
+      int next = colourLevel(graphics) == 2 ? 1 : 2;
+      graphics.edit().putInt(COLOUR_LEVEL, next).apply();
+      valueLabel((Button) v, R.string.ingame_colour_strength, sharpenLabels[next], colourMode(graphics) != 0);
+      CoreBridge.setColour(colourMode(graphics), next);
+    });
+    valueLabel(strength[0], R.string.ingame_colour_strength, sharpenLabels[colourLevel(graphics)], colourMode(graphics) != 0);
+    indentedHelp(s(R.string.ingame_colour_help));
     heading(R.string.ingame_optional_features);
     // the current room's outline at the bottom left, turning with the player (wish of the project owner, 04.11.2026)
     toggle(buttonsRow(labelledOptions(0)), R.string.ingame_minimap, graphics.getBoolean("minimap", false), on -> {
@@ -803,7 +951,7 @@ final class CoreMenu extends Dialog {
           }).create();
       dialog.setOnCancelListener(d -> keep.run());
       dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-      dialog.show();
+      Immersive.show(dialog);
     });
     if (!supported && buttons[0].length > 1) buttons[0][1].setEnabled(false);
     indentedHelp(s(supported ? R.string.ingame_renderer_help : R.string.ingame_renderer_unavailable));
@@ -815,6 +963,11 @@ final class CoreMenu extends Dialog {
         new int[] {TouchShowRule.AUTO, TouchShowRule.FORCE, TouchShowRule.SUPPRESS}, CoreActivity.touchMode(input), 3,
         mode -> host.touchModeChanged(mode));
     help(R.string.ingame_touch_help);
+    // the touch buttons' look (RetroTouch 1.0.0-beta.10, wish of the project owner, 09.11.2026): the same choice as
+    // the editor's style button, read from RetroTouch each time the page opens
+    choices(R.string.ingame_button_style, new String[] {s(R.string.ingame_button_icons), s(R.string.ingame_button_labels)},
+        new int[] {1, 0}, host == null || host.touchIcons() ? 1 : 0, Integer.MAX_VALUE, value -> host.touchIconsChanged(value == 1));
+    help(R.string.ingame_button_style_help);
     // the gyro in a section of its own, above the comfort controls (wishes of the project owner, 30.10.2026)
     heading(R.string.ingame_motion);
     boolean gyro = GyroAim.available(getContext()), gyroOn = gyro && input.getBoolean(CoreActivity.GYRO_AIM, false);
@@ -1362,26 +1515,44 @@ final class CoreMenu extends Dialog {
     help(R.string.ingame_potato_help);
     help(R.string.ingame_view_help);
     // the picture output under a heading of its own (wish of the project owner, 30.10.2026); since 05.11.2026
-    // without a row label in two columns, frame skip | 60 FPS over merged draws | vertex ring, the explanations
-    // over the whole width
+    // without a row label in two columns, the explanations over the whole width. Since 10.11.2026 (wish of the
+    // project owner): Frame skip | 60 FPS, under them merged draws | vertex ring as before, then "Save bandwidth"
     heading(R.string.ingame_experimental);
-    MenuLayout.Buttons output = buttonsRow(body), more = buttonsRow(body);
+    MenuLayout.Buttons output = buttonsRow(body), more = buttonsRow(body), vkRow = buttonsRow(body);
     // Frame skip leaves pictures out, 60 FPS adds pictures between: one or the other (wish of the
-    // project owner, 26.10.2026: both on jerked back and forth); switching one on switches the other off
+    // project owner, 26.10.2026: both on jerked back and forth); switching one on switches the other off.
+    // Frame skip one button (wish of the project owner, 10.11.2026: the two frame skips were on at once): each press
+    // moves it on, Off > Normal (the renderer's) > Aggressive (the game's own, patch 0227) > Off
+    final int[] skipLabels = {R.string.ingame_off, R.string.ingame_skip_normal, R.string.ingame_skip_aggressive};
     final Button[] skipAndSmooth = new Button[2];
-    skipAndSmooth[0] = toggle(output, R.string.ingame_frame_skip, graphics.getBoolean("frameskip", false), on -> {
-      graphics.edit().putBoolean("frameskip", on).apply(); CoreBridge.setFrameSkip(on);
-      if (on && skipAndSmooth[1].isSelected()) {
+    // 0.99.9 (frame pacing): with 60 FPS on a screen that 60 does not divide evenly (90 Hz) a line suggests 30
+    final double screenHz = host != null ? host.displayHz() : 0;
+    final TextView unevenHint = text(getContext().getString(R.string.ingame_smooth60_uneven,
+        (int) Math.round(screenHz)), 15, false);
+    unevenHint.setPadding(dp(MenuLayout.GAP), dp(4), dp(MenuLayout.GAP), dp(8));
+    final Runnable showHint = () -> unevenHint.setVisibility(
+        FramePacing.sixtyUneven(screenHz) && graphics.getBoolean("smooth60", false) ? View.VISIBLE : View.GONE);
+    skipAndSmooth[0] = cellAction(output, "", v -> {
+      int next = (frameSkipMode(graphics) + 1) % 3;
+      storeFrameSkipMode(graphics, next);
+      CoreBridge.setFrameSkip(next == 1); CoreBridge.setCpuSkip(next == 2);
+      valueLabel((Button) v, R.string.ingame_frame_skip, skipLabels[next], next != 0);
+      if (next != 0 && skipAndSmooth[1].isSelected()) {
         toggleLabel(skipAndSmooth[1], R.string.ingame_smooth60, false);
         graphics.edit().putBoolean("smooth60", false).apply(); CoreBridge.setSmooth(false);
+        showHint.run();
       }
     });
+    final int skipNow = frameSkipMode(graphics);
+    valueLabel(skipAndSmooth[0], R.string.ingame_frame_skip, skipLabels[skipNow], skipNow != 0);
     skipAndSmooth[1] = toggle(output, R.string.ingame_smooth60, graphics.getBoolean("smooth60", false), on -> {
       graphics.edit().putBoolean("smooth60", on).apply(); CoreBridge.setSmooth(on);
-      if (on && skipAndSmooth[0].isSelected()) {
-        toggleLabel(skipAndSmooth[0], R.string.ingame_frame_skip, false);
-        graphics.edit().putBoolean("frameskip", false).apply(); CoreBridge.setFrameSkip(false);
+      if (on && frameSkipMode(graphics) != 0) {
+        storeFrameSkipMode(graphics, 0);
+        CoreBridge.setFrameSkip(false); CoreBridge.setCpuSkip(false);
+        valueLabel(skipAndSmooth[0], R.string.ingame_frame_skip, R.string.ingame_off, false);
       }
+      showHint.run();
     });
     // merged draw calls (an experiment for phones with a slow graphics driver; wish of the project
     // owner, 30.10.2026: below 60 FPS); the renderer leaves it out while 60 FPS is on
@@ -1396,11 +1567,22 @@ final class CoreMenu extends Dialog {
     Button ring = toggle(more, R.string.ingame_vertex_ring, graphics.getBoolean("vertexRing", false), on -> {
       graphics.edit().putBoolean("vertexRing", on).apply(); CoreBridge.setVertexRing(on);
     });
+    // "Save bandwidth (Vulkan)" (wish of the project owner, 10.11.2026): under them; Vulkan only (with OpenGL ES greyed
+    // out and shown off, the choice kept), off by default until a Mali or Adreno report shows it helps
+    Button bandwidth = toggle(vkRow, R.string.ingame_vk_bandwidth, graphics.getBoolean("vkBandwidth", false), on -> {
+      graphics.edit().putBoolean("vkBandwidth", on).apply(); CoreBridge.setVkBandwidth(on);
+    });
     if (vulkanRun) {
       toggleLabel(merge, R.string.ingame_merge_draws, false); merge.setEnabled(false);
       toggleLabel(ring, R.string.ingame_vertex_ring, false); ring.setEnabled(false);
+    } else {
+      toggleLabel(bandwidth, R.string.ingame_vk_bandwidth, false); bandwidth.setEnabled(false);
     }
-    help(R.string.ingame_frame_skip_help);
+    body.addView(unevenHint);
+    showHint.run();
+    help(R.string.ingame_skip_normal_help);
+    help(R.string.ingame_skip_aggressive_help);
+    help(R.string.ingame_vk_bandwidth_help);
     help(R.string.ingame_smooth_help);
     help(R.string.ingame_skip_or_smooth);
     help(R.string.ingame_merge_help);
@@ -1670,7 +1852,7 @@ final class CoreMenu extends Dialog {
       return true;
     });
     dialog.setOnShowListener(d -> understood.requestFocus());
-    dialog.show();
+    Immersive.show(dialog);
   }
   /** "Special costumes · On/Off" over a smaller "(Leon/Ashley only)", as tall as one line's button (the
    *  owner, 03.11.2026: the second row as high as the first). */
@@ -1794,7 +1976,7 @@ final class CoreMenu extends Dialog {
         .setPositiveButton(R.string.ingame_restart, (d, w) -> { host.restartGame(); close(); }).create();
     dialog.setOnCancelListener(d -> later.run());
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-    dialog.show();
+    Immersive.show(dialog);
   }
 
   private void refreshInstant() { instant(0); }
@@ -1807,7 +1989,7 @@ final class CoreMenu extends Dialog {
         .setNegativeButton(android.R.string.cancel, null)
         .setPositiveButton(operation == 1 ? R.string.ingame_replace : R.string.ingame_instant_load, (d, w) -> instant(operation)).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
-    dialog.show();
+    Immersive.show(dialog);
   }
   private void instant(int operation) {
     if (working) return;

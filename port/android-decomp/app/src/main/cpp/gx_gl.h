@@ -41,6 +41,8 @@ struct GxStats {
   unsigned skippedChunks = 0;    // chunks run without drawing (Frame skip): state and textures only
   unsigned fxaaPasses = 0;       // display copies smoothed by FXAA
   unsigned sharpenPasses = 0;    // display copies sharpened (SetSharpen)
+  unsigned colourPasses = 0;     // display copies graded (SetColour)
+  unsigned crtPasses = 0;        // display copies made into the CRT's lines and glow (SetCrt)
   unsigned depthSnapshots = 0;   // depth maps taken for the game's GXPeekZ (BP 0x5B, the core's marker)
   unsigned depthDelivered = 0;   // of them handed to the core
   unsigned handedCopies = 0;     // EFB copies the renderer before handed over (HandOverCopies)
@@ -278,11 +280,25 @@ public:
   // GameCube blurs its picture for the TV. Off: the picture stays sharp (the taps' sum only, the
   // brightness option). Takes effect with the next display copy.
   void SetTvFilter(bool on);
+  // "Save bandwidth (Vulkan)": fewer loads and stores of the EFB on a tiling GPU (gx_vk.cpp); GL: nothing
+  void SetBandwidthSave(bool on);
   // PSone demake (wish of the project owner, 02.11.2026): the 3D draws as a PlayStation drew them, corners on a
   // 320-wide grid (the polygons wobble), textures without perspective correction and without filtering; then a
   // last pass over every display copy (after FXAA): one colour per cell of a 320 x 224 grid in 15-bit colour
   // with the PlayStation's 4 x 4 dither. Takes effect with the next draws (new programs, made once).
   void SetPsx(bool on);
+  // CRT (wish of the project owner, 11.11.2026; 0 off, 1 light, 2 strong): the picture as a tube TV showed it. After
+  // each display copy (after the colour) two small passes, its game lines with the colour of a composite signal bled
+  // sideways (one row a line, at most 1280 wide) and the glow of its bright parts (a quarter each way); Present then
+  // draws the box from them: a curved glass with rounded corners and darker edges, each game line a beam with dark
+  // gaps between (fading out below three screen pixels a line), the glow, with "Strong" a shadow mask. Only what
+  // the game draws: the touch controls, the app's menu and its overlays (minimap, FPS) stay as they are. Takes
+  // effect with the next display copy.
+  void SetCrt(int level);
+  // Colour (wish of the project owner, 11.11.2026): mode 0 off, 1 "Warm film" (browns and golds stronger), 2
+  // "Survival horror" (pale colours, harder contrast); level 1 light (half), 2 strong. One pass over every display
+  // copy after the PSone demake's, into a texture of its own that Xfb() and Present show. Movies too.
+  void SetColour(int mode, int level);
   // Lens flares (wish of the project owner, 04.11.2026; off by default): a small, faint glow and streak around
   // what the game draws as light (additive 3D effects: flames, candles, lamp glows), drawn after the scene's
   // last 3D draw (under the HUD), only where the source is not hidden in the EFB depth, faded in and out over
@@ -301,7 +317,8 @@ public:
   // "4:3 (exact)" (the app menu, 29.10.2026): the game computes its 3D picture for 4:3 but its
   // 512 x 448 picture showed 10:7 on a television; shown in a 4:3 box the 3D is exact and the flat
   // draws of the whole screen (HUD, menus, text) would be narrower. They are drawn `factor` wider
-  // around the screen's centre (15/14 for that box; 1: as the game sends them). Any thread.
+  // around the screen's centre (15/14 for that box; 1: as the game sends them). Any thread. Since
+  // 0.99.10 the app passes 1 (the id system's boxes stayed narrower than the widened texts in them).
   void SetWiden(float factor);
   // Frame skip (the app menu, 26.10.2026). The renderer is behind when the core has finished two
   // chunks: `a` need not be drawn when `b` (the next one) is drawn at once. Skip runs `a` without its

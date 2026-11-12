@@ -216,6 +216,13 @@ int main(int argc, char **argv) {
       renderer->SetPsx(psx && *psx == '1');
       const char *sharpen = std::getenv("RE4_GX_SHARPEN");
       renderer->SetSharpen(sharpen ? std::atoi(sharpen) : 0);
+      // RE4_GX_CRT=1|2, RE4_GX_COLOUR=MODE,LEVEL: the menu's CRT and colour (SetCrt, SetColour; 0.99.9)
+      const char *crt = std::getenv("RE4_GX_CRT");
+      renderer->SetCrt(crt ? std::atoi(crt) : 0);
+      int colourMode = 0, colourLevel = 1;
+      if (const char *colour = std::getenv("RE4_GX_COLOUR"))
+        std::sscanf(colour, "%d,%d", &colourMode, &colourLevel);
+      renderer->SetColour(colourMode, colourLevel);
       const char *fxaa = std::getenv("RE4_GX_FXAA");
       renderer->SetFxaa(fxaa && *fxaa == '1');
       const char *tv = std::getenv("RE4_GX_TV_FILTER");
@@ -235,7 +242,10 @@ int main(int argc, char **argv) {
           const bool crop = screenFormat == 0 || screenFormat == 2;
           renderer->SetShownRows(crop ? 56 : 0, crop ? 392 : 1 << 16);
         }
-        renderer->SetWiden(screenFormat == 3 ? 15.0f / 14.0f : 1.0f);
+        // "4:3" draws everything in the picture's shape since 0.99.10 (core_mode.cpp drawGx); RE4_GX_WIDEN_43=1
+        // gives the flat draws the 15/14 of 0.95..0.99.9 again (the comparison)
+        const char *oldWiden = std::getenv("RE4_GX_WIDEN_43");
+        renderer->SetWiden(screenFormat == 3 && oldWiden && *oldWiden == '1' ? 15.0f / 14.0f : 1.0f);
       }
       renderer->SetRecording(interp);
       std::string error;
@@ -349,6 +359,37 @@ int main(int argc, char **argv) {
         std::printf("%s: EFB-Stufe %d/2 (Rescale), %.2f ms\n", Stem(path).c_str(), shownHalves, ms);
       else
         std::printf("%s: EFB-Stufe %d/2 (Rescale)\n", Stem(path).c_str(), shownHalves);
+      // with RE4_GX_SCREEN: the screen right after the step, before the next picture's display copy, as the app's
+      // refreshes in between show it (OUTPUT_DIR/<name>-rescaled-screen.ppm; 0.99.10: the Vulkan renderer showed the
+      // plain XFB there, without the CRT's glass and its black border, the colour or the PSone filter)
+      unsigned rxw = 0, rxh = 0;
+      if (screenW > 0 && renderer->Xfb(&rxw, &rxh) && rxh) {
+        re4mm::Rect rhud, rpic;
+        re4mm::PictureRects(screenFormat, screenW, screenH, static_cast<int>(rxh), &rhud, &rpic, renderer->XfbWide());
+        std::vector<std::uint8_t> shot;
+        bool read = false;
+        if (screenFormat == 5) {
+          const re4mm::NativeView v = re4mm::Native(screenW, screenH, renderer->XfbWide());
+          read = renderer->ReadPresented(screenW, screenH, rpic.x, rpic.y, rpic.w, rpic.h,
+                                         rxh * static_cast<unsigned>(v.top) / 448, rxh * static_cast<unsigned>(v.rows) / 448,
+                                         &shot);
+        } else if (screenFormat == 0 || screenFormat == 2) {
+          read = renderer->ReadPresented(screenW, screenH, rpic.x, rpic.y, rpic.w, rpic.h, rxh * 56 / 448, rxh * 336 / 448,
+                                         &shot);
+        } else {
+          read = renderer->ReadPresented(screenW, screenH, rpic.x, rpic.y, rpic.w, rpic.h, 0, 0, &shot);
+        }
+        const std::string file = out + "/" + Stem(path) + "-rescaled-screen.ppm";
+        if (read && shot.size() >= static_cast<std::size_t>(screenW) * screenH * 4) {
+          if (FILE *p = std::fopen(file.c_str(), "wb")) {
+            std::fprintf(p, "P6\n%d %d\n255\n", screenW, screenH);
+            for (int y = 0; y < screenH; y++)
+              for (int x = 0; x < screenW; x++)
+                std::fwrite(&shot[(static_cast<std::size_t>(y) * screenW + x) * 4], 1, 3, p);
+            std::fclose(p);
+          }
+        }
+      }
     }
     const re4gx::GxStats before = renderer->Stats();
     if (timed)
@@ -460,14 +501,26 @@ int main(int argc, char **argv) {
       renderer->Xfb(&xw, &xh);
       re4mm::Rect hud, pic;
       re4mm::PictureRects(screenFormat, screenW, screenH, static_cast<int>(xh), &hud, &pic, renderer->XfbWide());
-      if (screenFormat == 5) {
-        const re4mm::NativeView v = re4mm::Native(screenW, screenH, renderer->XfbWide());
-        renderer->ReadPresented(screenW, screenH, pic.x, pic.y, pic.w, pic.h, xh * static_cast<unsigned>(v.top) / 448,
-                                xh * static_cast<unsigned>(v.rows) / 448, &rgba);
-      } else if (screenFormat == 0 || screenFormat == 2) {
-        renderer->ReadPresented(screenW, screenH, pic.x, pic.y, pic.w, pic.h, xh * 56 / 448, xh * 336 / 448, &rgba);
-      } else {
-        renderer->ReadPresented(screenW, screenH, pic.x, pic.y, pic.w, pic.h, 0, 0, &rgba);
+      auto present = [&]() {
+        if (screenFormat == 5) {
+          const re4mm::NativeView v = re4mm::Native(screenW, screenH, renderer->XfbWide());
+          renderer->ReadPresented(screenW, screenH, pic.x, pic.y, pic.w, pic.h, xh * static_cast<unsigned>(v.top) / 448,
+                                  xh * static_cast<unsigned>(v.rows) / 448, &rgba);
+        } else if (screenFormat == 0 || screenFormat == 2) {
+          renderer->ReadPresented(screenW, screenH, pic.x, pic.y, pic.w, pic.h, xh * 56 / 448, xh * 336 / 448, &rgba);
+        } else {
+          renderer->ReadPresented(screenW, screenH, pic.x, pic.y, pic.w, pic.h, 0, 0, &rgba);
+        }
+      };
+      present();
+      // RE4_GX_PRESENT_REPEAT=N (the CRT's cost, 0.99.9): the screen drawn and read back N times more, the mean time
+      if (const char *repeat = std::getenv("RE4_GX_PRESENT_REPEAT")) {
+        const int n = std::max(1, std::atoi(repeat));
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < n; i++)
+          present();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / n;
+        std::printf("%s: screen %.2f ms (with the read-back, mean of %d)\n", Stem(path).c_str(), ms, n);
       }
       const std::string file = out + "/" + Stem(path) + "-screen.ppm";
       if (FILE *p = std::fopen(file.c_str(), "wb")) {

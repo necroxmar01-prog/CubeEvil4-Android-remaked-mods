@@ -1462,6 +1462,7 @@ int re4probe_cheat_extras(void);
 int re4probe_potato(void);
 int re4probe_handcannon(void);
 int re4probe_gyro_boat(void);
+int re4probe_aim_knife(void);
 int re4probe_snd_bank(void);
 int re4probe_frame_sections(void);
 int re4probe_path_entry(void);
@@ -1859,7 +1860,13 @@ static void testVsync()
     CHECK(re4_vi_locked_field(now, now - 1000000, kP60) == kP60);           // 60 Hz
     CHECK(re4_vi_locked_field(now, now - 1000000, ntsc) == ntsc);           // 59.94 Hz
     CHECK(re4_vi_locked_field(now, now - 1000000, kP60 / 2) == kP60 / 2 * 2);  // 120 Hz: two vsyncs
-    CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL / 90) == 0);   // 90 Hz: own clock
+    // 90 Hz: two fields three vsyncs, a field of one and a half (0.99.9); the measured 89.4 Hz too
+    CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL / 90) == 1000000000LL / 90 * 3 / 2);
+    CHECK(re4_vi_locked_field(now, now - 1000000, 11185682) == 11185682LL * 3 / 2);
+    CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL * 10 / 605) == 1000000000LL * 10 / 605);  // 60.5 Hz
+    CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL * 10 / 610) == 0);  // 61 Hz: 1.8 % off
+    CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL / 144) == 0);  // 144 Hz: own clock
+    CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL / 75) == 0);   // 75 Hz
     CHECK(re4_vi_locked_field(now, now - 1000000, 1000000000LL / 50) == 0);   // 50 Hz
     CHECK(re4_vi_locked_field(now, now - 300000000, kP60) == 0);              // stale
     CHECK(re4_vi_locked_field(now, 0, kP60) == 0);
@@ -1874,6 +1881,26 @@ static void testVsync()
     CHECK(phase > 900000 && phase < 1100000);
     if (!ok) {
         re4_log("  vsync: phase %lld ns after 120 fields", phase);
+    }
+    // 90 Hz: the retraces walk onto the grid of half a vsync, 1 ms after it, every second one 1 ms after a vsync
+    {
+        const long long p90 = 1000000000LL / 90, f90 = p90 * 3 / 2;
+        long long r = 4000000;
+        int onVsync = 0;
+        for (int i = 0; i < 240; i++) {
+            long long moved = re4_vi_lock_phase(r, f90, 0, p90);
+            CHECK(moved - r <= f90 / 50 && r - moved <= f90 / 50);
+            if (i >= 200 && moved % p90 > 800000 && moved % p90 < 1200000) {
+                onVsync++;
+            }
+            r = moved + f90;
+        }
+        long long half = (r - f90) % (p90 / 2);
+        CHECK(half > 800000 && half < 1200000);
+        CHECK(onVsync >= 19 && onVsync <= 21);
+        if (!ok) {
+            re4_log("  vsync 90 Hz: phase %lld ns on the half grid, %d of 40 just after a vsync", half, onVsync);
+        }
     }
     // the real clock
     re4_os_run(vsyncTestMain);
@@ -2238,8 +2265,11 @@ static void testFrameSections()
     static char tail[16 * 160];
     re4_log_tail(tail, sizeof tail);
     // (the tail keeps 120 characters of a line)
-    const bool ok = strstr(tail, "frame: 600 frames in r105: logic 2.0 ms, drawing 5.0 ms, rest 3.0 ms, frame end "
-                                 "1.0 ms, waiting 21.3 ms") != 0;
+    // (since 0.99.8 with the render time in the drawing, and play's own marks: r106)
+    const bool ok = strstr(tail, "frame: 600 frames in r105: logic 2.0 ms, drawing 6.0 ms (render 1.0, models 5.0), "
+                                 "rest 3.0 ms, frame end 1.0 ms") != 0 &&
+                    strstr(tail, "frame: 600 frames in r106: logic 2.0 ms, drawing 6.0 ms (render 1.0, models 5.0), "
+                                 "rest 3.0 ms, frame end 1.0 ms") != 0;
     if (!ok) {
         re4_log("  sections: the line is not in the log");
     }
@@ -2506,6 +2536,20 @@ static void testGyroBoat()
         re4_log("  gyroboat: failed checks 0x%x%s", bad, logged ? "" : ", no log line");
     }
     report("gyroboat", bad == 0 && logged);
+}
+
+// Swipe aiming in the knife stance (runtime/gyro.cpp, 0.99.9; game_probe.cpp re4probe_aim_knife): holding and
+// slashing turn, putting it away, the gyro and a sub screen do not; the log line
+static void testAimKnife()
+{
+    const int bad = re4probe_aim_knife();
+    static char tail[48 * 160];
+    re4_log_tail(tail, sizeof tail);
+    const bool logged = strstr(tail, "touch: the knife's aim turned by a swipe") != nullptr;
+    if (bad || !logged) {
+        re4_log("  aimknife: failed checks 0x%x%s", bad, logged ? "" : ", no log line");
+    }
+    report("aimknife", bad == 0 && logged);
 }
 
 // The processor lines of the performance log (re4_cpu_info.h): the layout of a phone with two kinds
@@ -2895,6 +2939,7 @@ int re4_runtime_tests()
     testPotato();
     testHandcannon();
     testGyroBoat();
+    testAimKnife();
     testSndBank();
     testFrameSections();
     testPathEntry();

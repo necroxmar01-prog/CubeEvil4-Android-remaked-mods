@@ -90,7 +90,8 @@
 //                          facing (his model matrix's z axis) into FILE ("pose x y z fx fz room", then
 //                          "x0 z0 x1 z1 y" per edge) for tools/minimap_check.cpp
 //   RE4_TEST_CHEATS="free+N:A[,A...]"  N frames after the player is free, the
-//                          cheat menu's buttons A (1 Killer7, 2 case L, 3 money, 4 extra games)
+//                          cheat menu's buttons A (1 Killer7, 2 case L, 3 money, 4 extra games,
+//                          5..9 weapons)
 //                          one a frame, as the app's menu presses them while the
 //                          game runs (runtime/cheats.cpp; the switches: RE4_CHEATS)
 //   RE4_PAD_FREE_SCRIPT    pad.cpp: a test script started once the player is
@@ -163,9 +164,12 @@
 //                          the case as its "use" line does (put into the case first if missing;
 //                          cItemMgr::use, only where the room allows it: with RE4_TEST_PLACE
 //                          area=N): r101's key 0x3B at the iron door, patch 0127
-//   RE4_TEST_ITEM_LOSE="free+N:ID"  N frames after the player is free, item ID leaves the
+//   RE4_TEST_ITEM_LOSE="free+N:ID[,free+M:ID]..."  N frames after the player is free, item ID leaves the
 //                          case (cItemMgr::erase): a save whose room marks an item as taken
 //                          that the case lacks (the r201 prison key, patch 0169, 01.11.2026)
+//   RE4_TEST_FILL_CASE="free+N:ID[,ID...]"  N frames after the player is free, item ID (0x.., up to four kinds) put into the case as a found
+//                          item goes in (PutInCase) again and again until there is no room: a full case (the
+//                          app's own items into the case only where there is room, 0.99.10)
 //   RE4_TEST_STA="F[,F...]"  while the first room loads, the status flags F (Status_flg, numbers as
 //                          in global.h) are set before its init runs: STA_SUB_ASHLEY (Ashley with Leon,
 //                          02.11.2026)
@@ -197,6 +201,14 @@
 //                          weapon object is made again from the weapon file already read (weaponRelease,
 //                          weaponInit, as PlChangeData does after a costume change): a type the file was
 //                          not read for (HUNK's TMP file with the stock's type, patch 0206)
+//   RE4_TEST_ARM="free+N:ID"  N frames after the player is free, the case's item ID (hex) is armed and its weapon
+//                          file read and made, as the case's "Equip" does (weaponRelease, weaponLoad, weaponInit):
+//                          Krauser's bow 0x52, which he has in the story from the room start on (0.99.10)
+//   RE4_TEST_PART="free+N:WEAPON:PART"  N frames after the player is free, the part PART (hex; from the case, or a
+//                          new one) put on the case's weapon WEAPON (hex; a new one when the case has none) as the
+//                          case's "Combine" does
+//                          (cItemMgr::partsCombine): Wesker's silencer 0x3F on the Punisher 0x21 or Blacktail 0x27;
+//                          RE4_TEST_ARM after it arms the weapon with the part (0.99.10)
 //   RE4_TEST_ASHLEY_DIES="free+N"  N frames after the player is free, Ashley's life becomes 0 once: the
 //                          player's dejection (routine 6) before the game over (0.99.3, Ada's pose)
 //   RE4_TEST_PL_MOTION="free+N:IDX[-LAST/EVERY][,SEQ][,own]"  N frames after the player is free, Leon's
@@ -215,6 +227,10 @@
 //   RE4_TEST_LETTERBOX_OFF=1  the app's picture format "4:3" without the game's bars
 //                          (re4_core_set_letterbox(1), patch 0105) from the start, as the
 //                          app sets it (the 3D cut at rows 56/392 on the Retroid, 29.10.2026)
+//   RE4_TRACE_EM="ID:N"   every N frames each live enemy of id ID (hex): routine, flag, be_flag, life,
+//                          place; once all are gone their list entry's death bit (EmSetDie) and the
+//                          room's first save flag word (the r201 Garrador on his chains, 09.11.2026);
+//                          RE4_TRACE_AT also names the room's save flags and which exec areas have code
 //   RE4_TRACE_AT=1, RE4_TRACE_POS=N, RE4_TEST_PLACE2="N:x,y,z,a",
 //   RE4_TEST_AT_OFF="N,..", RE4_TEST_SMD_TRANS="ID=0|1,..", RE4_FLOOR_MAP,
 //   RE4_FLOOR_FILL         a room's trigger areas, doors and collision walls,
@@ -271,6 +287,8 @@
 #include "mes.h"
 #include "game.h"
 #include "item.h"
+#include "puzzle.h"
+#include "sscrn.h"
 #include "joy.h"
 #include "pl_wep.h"
 #include "obj.h"
@@ -361,6 +379,8 @@ extern "C" unsigned re4_heap_fail_count(void);    // runtime/log.cpp (patch 0081
 extern "C" void re4_gx_stats(unsigned out[11]);   // runtime/gx_decode.cpp
 extern "C" void re4_ai_set_block_hook(void (*hook)(void));  // runtime/ai.cpp
 extern u32 proc_tick[32];         // game/debug.cpp (patch 0108): ProcessTickGet of the last frame
+extern "C" unsigned re4_cpu_skip_window(void);  // runtime/cpu_skip.cpp (patch 0227): pictures left out
+extern "C" int re4_cpu_skip_on(void);
 extern const char* proc_name[32];
 extern int proc_tick_idx_bak;
 extern "C" void re4_gx_stats2(unsigned out[9]);
@@ -702,7 +722,9 @@ int g_testGameMode = -1;     // RE4_TEST_GAME_MODE
 int g_testMerc = 0;          // RE4_TEST_MERC
 long g_itemUseAfter = -1;    // RE4_TEST_ITEM_USE
 int g_itemUseId;
-long g_itemLoseAfter = -1;   // RE4_TEST_ITEM_LOSE
+long g_itemLoseAfter[8] = {-1, -1, -1, -1, -1, -1, -1, -1};  // RE4_TEST_ITEM_LOSE (up to eight)
+long g_fillAfter = -1;       // RE4_TEST_FILL_CASE
+int g_fillId[4] = {-1, -1, -1, -1};
 unsigned g_rsfRoom;          // RE4_TEST_RSF
 int g_sta[8], g_staCount;    // RE4_TEST_STA
 bool g_staDone;
@@ -713,6 +735,10 @@ long g_ashleyDiesAfter = -1; // RE4_TEST_ASHLEY_DIES
 long g_plMotionAfter = -1;   // RE4_TEST_PL_MOTION
 unsigned g_plMotion, g_plMotionLast, g_plMotionEvery, g_plMotionSeq;
 bool g_plMotionOwn;
+long g_armAfter = -1;        // RE4_TEST_ARM
+int g_armItem;
+long g_partAfter = -1;       // RE4_TEST_PART
+int g_partWeapon, g_partItem;
 long g_wepTypeAfter = -1;    // RE4_TEST_WEPTYPE
 long g_benchAt[4] = {-1, -1, -1, -1};  // RE4_TEST_BENCH
 int g_benchCmd[4];
@@ -733,7 +759,7 @@ unsigned g_killEvery;         // and the frames between them
 bool g_killHead;              // RE4_TEST_EM_KILL "head": a handgun shot in the head instead of the kill
 int g_rsf[8], g_rsfCount;
 bool g_rsfDone;
-int g_itemLoseId;
+int g_itemLoseId[8];
 long g_cheatAfter = -1;      // RE4_TEST_CHEATS
 int g_cheatActions[8], g_cheatCount;
 long g_streamAfter = -1;     // RE4_TEST_STREAM
@@ -1195,6 +1221,37 @@ void enemyLog(unsigned n, GLOBAL_WK* g)
         s.headLost = headLost;
         s.lost = !finite(e->pos);
     }
+    // RE4_TRACE_EM="ID:N": every N frames each live enemy of id ID (hex) with its routine, flag and place
+    // (the Garrador in r201 that did not come free, 09.11.2026)
+    static const char* traceEm = getenv("RE4_TRACE_EM");
+    static unsigned traceEmId, traceEmEvery;
+    static bool traceEmOk = traceEm && sscanf(traceEm, "%x:%u", &traceEmId, &traceEmEvery) == 2 && traceEmEvery > 0;
+    if (traceEmOk && n % traceEmEvery == 0) {
+        // after the last one is gone, once: its death bit in the enemy list (EmSetDie) and the room's first save flag
+        static int traceEmEntry = -1;
+        bool any = false;
+        for (u32 i = 0; i < count; i++) {
+            const cEm* e = (const cEm*) ((const u8*) arr + i * stride);
+            any = any || ((e->be_flag & 1) && e->id == traceEmId);
+        }
+        if (!any && traceEmEntry >= 0 && g->em_list_no >= 0 && g->em_list_no < 12) {
+            re4_log("em: 0x%02x gone at frame %u: list %d entry %d death bit %u, room save flags of r%03x 0x%08x",
+                    traceEmId, n, (int) g->em_list_no, traceEmEntry,
+                    (unsigned) ((g->Em_flg[g->em_list_no][traceEmEntry >> 5] >> (31 - (traceEmEntry & 31))) & 1),
+                    (unsigned) g->room_id, RoomData.getRoomSavePtr(g->room_id) ? (unsigned) RsfFlags(g->room_id)[0] : 0u);
+            traceEmEntry = -1;
+        }
+        for (u32 i = 0; i < count; i++) {
+            const cEm* e = (const cEm*) ((const u8*) arr + i * stride);
+            if ((e->be_flag & 1) && e->id == traceEmId) {
+                traceEmEntry = e->emset_no;
+                re4_log("em: s%u 0x%02x/%u frame %u r %u/%u/%u/%u f 0x%08x be 0x%08x hp %d at (%.0f %.0f %.0f)",
+                        (unsigned) i, (unsigned) e->id, (unsigned) e->type, n, (unsigned) e->r_no_0,
+                        (unsigned) e->r_no_1, (unsigned) e->r_no_2, (unsigned) e->r_no_3, (unsigned) e->flag,
+                        (unsigned) e->be_flag, (int) e->hp, (double) e->pos.x, (double) e->pos.y, (double) e->pos.z);
+            }
+        }
+    }
 }
 
 // The cursor of a sub screen (inventory, merchant, map) moves on the repeat bits of the pad, the
@@ -1253,15 +1310,20 @@ void playerLog(unsigned n, GLOBAL_WK* g)
         // RE4_TRACE_AT=1: the room's trigger areas (AEV records and those the room code made)
         static const char* traceAt = getenv("RE4_TRACE_AT");
         if (traceAt && *traceAt == '1') {
+            if (RoomData.getRoomSavePtr(g->room_id)) {
+                re4_log("at: room save flags of r%03x 0x%08x, JumpPoint %u, previous room r%03x", (unsigned) g->room_id,
+                        (unsigned) RsfFlags(g->room_id)[0], (unsigned) g->JumpPoint, (unsigned) g->room_id_prev);
+            }
             SCE_AT_DATA* w = sceAtSetOtStart();
             while ((w = sceAtGetOtAddr(w)) != 0) {
                 const AREA_XZ4& a = w->area.xz4;
                 re4_log("at: no %u id %u be 0x%02x trg 0x%02x target 0x%02x area %u floor %.0f height %.0f "
-                        "points (%.0f %.0f) (%.0f %.0f) (%.0f %.0f) (%.0f %.0f)",
+                        "points (%.0f %.0f) (%.0f %.0f) (%.0f %.0f) (%.0f %.0f)%s",
                         (unsigned) w->no, (unsigned) w->id, (unsigned) w->be_flg, (unsigned) w->trg_type,
                         (unsigned) w->target_type, (unsigned) w->area.type, (double) a.floor, (double) a.height,
                         (double) a.p[0].x, (double) a.p[0].z, (double) a.p[1].x, (double) a.p[1].z, (double) a.p[2].x,
-                        (double) a.p[2].z, (double) a.p[3].x, (double) a.p[3].z);
+                        (double) a.p[2].z, (double) a.p[3].x, (double) a.p[3].z,
+                        w->id == SCEAT_ID_EXEC ? (w->pFunc ? ", room code" : ", no room code") : "");
                 if (w->id == SCEAT_ID_DOOR) {
                     re4_log("at: no %u door to r%x%02x at (%.0f %.0f %.0f), key %u flag %u", (unsigned) w->no,
                             (unsigned) w->door.next_stage_no, (unsigned) w->door.next_room_no,
@@ -1493,51 +1555,73 @@ void sndLog(unsigned n, GLOBAL_WK* g)
     g_sndPeak = 0;
 }
 
-// --- the sections of a frame (patch 0108) ---
+// --- the sections of a frame (patch 0108; all the marks since 0.99.8) ---
 //
-//   frame: 600 frames in r105: logic 6.1 ms, drawing 9.8 ms, rest 2.0 ms, frame end 1.2 ms,
-//       waiting 14.2 ms (averages; the longest frame 41.0 ms)
+//   frame: 600 frames in r103: logic 0.5 ms, drawing 3.3 ms (render 2.7, models 0.6), rest 0.0 ms, frame end
+//       0.0 ms, waiting 28.1 ms (averages; the longest frame 41.0 ms); 0 pictures left out (Aggressive frame
+//       skip off)
 //
-// The game's own timing (main.cpp ProcessTickGet, wall time from the frame's start): logic = the
-// task scheduler (Leon, enemies, effects, cameras, the room), drawing = IdSys, Trans (the models'
-// GX commands, which the port's graphics decoder converts at once) up to SndWatcher, rest = text,
-// the cinema bars and the ordering table (more GX commands), frame end = Render_done and the
-// checks, waiting = for the retrace (the frame's pace). Every 600 frames of play (wishes of the
-// project owner, 22.10.2026: where a weak device's time goes).
+// The game's own timing (main.cpp ProcessTickGet, wall time from the frame's start): render = Render (the GX
+// commands of the ordering tables the frame before filled: models, effects, filters, which the port's graphics
+// decoder converts at once), logic = the task scheduler (Leon, enemies, effects, cameras, the room; its own marks
+// such as EmMgr.move lie inside), models = IdSys and Trans (the models' culling, lights and skinned vertices) up to
+// SndWatcher, drawing = render + models, rest = text, the cinema bars and the ordering table (more GX commands),
+// frame end = Render_done and the checks, waiting = for the retrace (the frame's pace); the pictures the game left
+// out (runtime/cpu_skip.cpp, patch 0227). Every 600 frames of play (wishes of the project owner, 22.10.2026: where a
+// weak device's time goes; 10.11.2026: and the split between logic and drawing). Until 0.99.8 the line wanted
+// exactly the two marks TaskScheduler and SndWatcher, but play has more (EmMgr.move, objTrans, ...): it never came.
 struct FrameSections {
-    double logic, drawing, rest, end, waiting, longest;
+    double render, logic, models, rest, end, waiting, longest;
     unsigned frames;
 };
 FrameSections g_sections;
 
 void sectionLog(unsigned n, GLOBAL_WK* g)
 {
-    // the last frame's marks: 4 setup, 5 TaskScheduler, 6 SndWatcher, 2 CPU, 3 draw remain, 0 total
-    if (proc_tick_idx_bak != 2 || !proc_name[5] || !proc_name[6] || strcmp(proc_name[5], "TaskScheduler") != 0 ||
-        strcmp(proc_name[6], "SndWatcher") != 0 || g->Rno0 != 3) {
+    // the last frame's marks: 4 render setup, then 5 on in order (TaskScheduler and SndWatcher among them), 2 CPU,
+    // 3 draw remain, 0 total
+    const int marks = proc_tick_idx_bak;
+    if (g->Rno0 != 3 || marks < 2 || marks > 32 - 5) {
+        return;
+    }
+    int task = -1, snd = -1;
+    for (int i = 5; i < 5 + marks; i++) {
+        if (!proc_name[i]) {
+            return;
+        }
+        if (strcmp(proc_name[i], "TaskScheduler") == 0) {
+            task = i;
+        } else if (strcmp(proc_name[i], "SndWatcher") == 0) {
+            snd = i;
+        }
+    }
+    if (task < 0 || snd < task) {
         return;
     }
     const double ms = 1000.0 / (162000000.0 / 4);  // OSGetTick: the bus clock / 4
     const u32* t = proc_tick;
-    if (!(t[4] <= t[5] && t[5] <= t[6] && t[6] <= t[2] && t[2] <= t[3] && t[3] <= t[0])) {
+    if (!(t[4] <= t[task] && t[task] <= t[snd] && t[snd] <= t[2] && t[2] <= t[3] && t[3] <= t[0])) {
         return;
     }
     FrameSections& s = g_sections;
-    s.logic += (t[5] - t[4]) * ms;
-    s.drawing += (t[6] - t[5]) * ms;
-    s.rest += (t[2] - t[6]) * ms;
+    s.render += t[4] * ms;
+    s.logic += (t[task] - t[4]) * ms;
+    s.models += (t[snd] - t[task]) * ms;
+    s.rest += (t[2] - t[snd]) * ms;
     s.end += (t[3] - t[2]) * ms;
     s.waiting += (t[0] - t[3]) * ms;
     s.longest = t[0] * ms > s.longest ? t[0] * ms : s.longest;
     if (++s.frames < 600) {
         return;
     }
+    const unsigned left = re4_cpu_skip_window();
     if (g_runWindow.take(n, kRunWindowLines, "run")) {
         const double f = s.frames;
-        re4_log("frame: %u frames in r%03x: logic %.1f ms, drawing %.1f ms, rest %.1f ms, frame end %.1f ms, "
-                "waiting %.1f ms (averages; the longest frame %.1f ms)",
-                s.frames, (unsigned) g->room_id, s.logic / f, s.drawing / f, s.rest / f, s.end / f, s.waiting / f,
-                s.longest);
+        re4_log("frame: %u frames in r%03x: logic %.1f ms, drawing %.1f ms (render %.1f, models %.1f), rest %.1f ms, "
+                "frame end %.1f ms, waiting %.1f ms (averages; the longest frame %.1f ms); %u pictures left out "
+                "(Aggressive frame skip %s)",
+                s.frames, (unsigned) g->room_id, s.logic / f, (s.render + s.models) / f, s.render / f, s.models / f,
+                s.rest / f, s.end / f, s.waiting / f, s.longest, left, re4_cpu_skip_on() ? "on" : "off");
     }
     s = FrameSections();
 }
@@ -2105,8 +2189,8 @@ void frame(unsigned n)
     for (int i = 0; i < 4; i++) {
         const long base = g_benchBoot[i] ? 0 : g_benchTitle[i] ? g_titleAt : g_freeAt;
         if (g_benchAt[i] >= 0 && base >= 0 && (long) n == base + g_benchAt[i]) {
-            re4_log("run: benchmark command %d at frame %u (RE4_TEST_BENCH)", g_benchCmd[i], n);
-            re4_bench_command(g_benchCmd[i]);
+            const int answer = re4_bench_command(g_benchCmd[i]);
+            re4_log("run: benchmark command %d at frame %u (RE4_TEST_BENCH): %d", g_benchCmd[i], n, answer);
             if (g_benchFirst < 0) {
                 g_benchFirst = n;
             }
@@ -2123,6 +2207,40 @@ void frame(unsigned n)
         pPL->weaponRelease();
         pPL->weaponInit();
         re4_log("run: weapon %d made again with type %d at frame %u (RE4_TEST_WEPTYPE)", (int) g->weapon_no, g_wepType, n);
+    }
+    // RE4_TEST_PART (0.99.10): a part put on a weapon of the case, as the case's "Combine" does (the part from the
+    // case, or new when it has none)
+    if (g_partAfter >= 0 && g_freeAt >= 0 && (long) n >= g_freeAt + g_partAfter && g->Rno0 == 3 && live(pPL)) {
+        g_partAfter = -1;
+        cItem* gun = ItemMgr.search((ITEM_ID) g_partWeapon);
+        if (!gun && ItemMgr.get((ITEM_ID) g_partWeapon, 0)) {
+            gun = ItemMgr.newbie();  // a weapon the case lacks: new
+        }
+        cItem* part = ItemMgr.search((ITEM_ID) g_partItem);
+        if (gun && !part && ItemMgr.get((ITEM_ID) g_partItem, 0)) {
+            part = ItemMgr.newbie();
+        }
+        if (gun && part && ItemMgr.partsCombine(gun, part)) {
+            re4_log("run: part 0x%02x on 0x%02x: 0x%02x at frame %u (RE4_TEST_PART)", g_partItem, g_partWeapon,
+                    (unsigned) ItemMgr.weaponId(gun), n);
+        } else {
+            re4_log("run: part 0x%02x not put on 0x%02x at frame %u (RE4_TEST_PART)", g_partItem, g_partWeapon, n);
+        }
+    }
+    // RE4_TEST_ARM (0.99.10): an item of the case armed, its weapon file read and made, as the case's "Equip"
+    if (g_armAfter >= 0 && g_freeAt >= 0 && (long) n >= g_freeAt + g_armAfter && g->Rno0 == 3 && live(pPL)) {
+        g_armAfter = -1;
+        cItem* it = ItemMgr.search((ITEM_ID) g_armItem);
+        if (it && ItemMgr.arm(it)) {
+            pPL->weaponRelease();
+            // as the case asks for it (ss_pzzl.cpp: weaponChangeRequest with the weapon's number and type)
+            pPL->weaponLoad(WeaponId2WeaponNo(ItemMgr.weaponId()), WeaponId2WeaponType(ItemMgr.weaponId()));
+            pPL->weaponInit();
+            re4_log("run: item 0x%02x armed, weapon 0x%02x made at frame %u (RE4_TEST_ARM)", g_armItem,
+                    (unsigned) g->weapon_no, n);
+        } else {
+            re4_log("run: item 0x%02x not in the case or not armable at frame %u (RE4_TEST_ARM)", g_armItem, n);
+        }
     }
     // RE4_TEST_PL_MOTION: an archive motion IDX (and sequence SEQ) on the player as the player routines start
     // them (MotionSetCore ..., 3, 1, 0), held in routine 6/1 (pl_R0_Dijection only moves the motion on): what a
@@ -2228,13 +2346,28 @@ void frame(unsigned n)
         re4_log("run: the player's head comes off at frame %u (RE4_TEST_HEAD_LOST), player type %u", n,
                 (unsigned) pG->pl_type);
     }
-    if (g_itemLoseAfter >= 0 && g_freeAt >= 0 && (long) n >= g_freeAt + g_itemLoseAfter) {
-        g_itemLoseAfter = -1;
-        cItem* p = ItemMgr.search((u16) g_itemLoseId);
+    if (g_fillAfter >= 0 && g_freeAt >= 0 && (long) n >= g_freeAt + g_fillAfter) {
+        g_fillAfter = -1;
+        for (int k = 0; k < 4 && g_fillId[k] >= 0; k++) {
+            int put = 0;
+            while (put < 80 && PutInCase((ITEM_ID) g_fillId[k], 0, (s8) SubScreenWk.board_size) == 1) {
+                put++;
+            }
+            re4_log("run: item 0x%02x put into the case %d times, then no room (RE4_TEST_FILL_CASE) at frame %u",
+                    g_fillId[k], put, n);
+        }
+    }
+    for (int k = 0; k < 8; k++) {
+        if (g_itemLoseAfter[k] < 0 || g_freeAt < 0 || (long) n < g_freeAt + g_itemLoseAfter[k]) {
+            continue;
+        }
+        g_itemLoseAfter[k] = -1;
+        const int id = g_itemLoseId[k];
+        cItem* p = ItemMgr.search((u16) id);
         if (p != 0) {
             ItemMgr.erase(p);
         }
-        re4_log("run: item 0x%02x %s the case (RE4_TEST_ITEM_LOSE) at frame %u", g_itemLoseId,
+        re4_log("run: item 0x%02x %s the case (RE4_TEST_ITEM_LOSE) at frame %u", id,
                 p == 0 ? "was not in" : "taken out of", n);
     }
     if (g_weaponAfter >= 0 && g_freeAt >= 0 && g_weaponAt < 0 && (long) n >= g_freeAt + g_weaponAfter &&
@@ -2735,6 +2868,21 @@ void configure()
             at = end && *end == ',' ? end + 1 : 0;
         }
     }
+    if (const char* part = getenv("RE4_TEST_PART")) {
+        if (strncmp(part, "free+", 5) == 0) {
+            char* end = 0;
+            g_partAfter = strtol(part + 5, &end, 10);
+            g_partWeapon = end && *end == ':' ? (int) strtoul(end + 1, &end, 16) : 0;
+            g_partItem = end && *end == ':' ? (int) strtoul(end + 1, 0, 16) : 0;
+        }
+    }
+    if (const char* arm = getenv("RE4_TEST_ARM")) {
+        if (strncmp(arm, "free+", 5) == 0) {
+            char* end = 0;
+            g_armAfter = strtol(arm + 5, &end, 10);
+            g_armItem = end && *end == ':' ? (int) strtoul(end + 1, 0, 16) : 0;
+        }
+    }
     if (const char* wt = getenv("RE4_TEST_WEPTYPE")) {
         if (strncmp(wt, "free+", 5) == 0) {
             char* end = 0;
@@ -2852,14 +3000,30 @@ void configure()
             }
         }
     }
-    const char* itemLose = getenv("RE4_TEST_ITEM_LOSE");
-    if (itemLose && strncmp(itemLose, "free+", 5) == 0) {
-        char* end = 0;
-        g_itemLoseAfter = strtol(itemLose + 5, &end, 10);
-        g_itemLoseId = end && *end == ':' ? (int) strtol(end + 1, 0, 0) : -1;
-        if (g_itemLoseId < 0) {
-            g_itemLoseAfter = -1;
+    if (const char* fill = getenv("RE4_TEST_FILL_CASE")) {
+        if (strncmp(fill, "free+", 5) == 0) {
+            char* end = 0;
+            g_fillAfter = strtol(fill + 5, &end, 10);
+            // ":ID[,ID...]": up to four kinds, each until there is no room
+            for (int k = 0; k < 4 && end && (*end == ':' || *end == ','); k++) {
+                g_fillId[k] = (int) strtol(end + 1, &end, 0);
+            }
+            if (g_fillId[0] < 0) {
+                g_fillAfter = -1;
+            }
         }
+    }
+    const char* itemLose = getenv("RE4_TEST_ITEM_LOSE");
+    // "free+N:ID[,free+M:ID]..." (up to eight; 0.99.10: room made in a full case)
+    for (int k = 0; k < 8 && itemLose && strncmp(itemLose, "free+", 5) == 0; k++) {
+        char* end = 0;
+        g_itemLoseAfter[k] = strtol(itemLose + 5, &end, 10);
+        g_itemLoseId[k] = end && *end == ':' ? (int) strtol(end + 1, &end, 0) : -1;
+        if (g_itemLoseId[k] < 0) {
+            g_itemLoseAfter[k] = -1;
+            break;
+        }
+        itemLose = end && *end == ',' ? end + 1 : 0;
     }
     const char* merc = getenv("RE4_TEST_MERC");
     g_testMerc = merc && *merc && *merc != '0';

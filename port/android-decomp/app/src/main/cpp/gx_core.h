@@ -112,6 +112,7 @@ struct CopyParams {
   float gain = 1.0f;
   float taps[3] = {0.0f, -1.0f, 0.0f};
   float step = 0.0f;
+  float box = 0.0f;  // a half copy's box: EFB texels from its centre (0: the 2x2 texels; kCopyFs)
   bool limited = false;
   float limit[2] = {-1e9f, 1e9f};
 };
@@ -183,7 +184,20 @@ struct GxCore {
   // over the display copy (a 320-wide grid, 15-bit colour with the PlayStation's 4 x 4 dither) into psxTex,
   // shown instead of it while psxShown
   bool psxOn = false, psxShown = false;
+  // Colour (GxRenderer::SetColour, 0.99.9): 0 off, 1 warm film, 2 survival horror, mixed in by colourStrength
+  // (0.5 light, 1 strong); the display copy as shown so far (after the PSone pass) graded into a picture of its
+  // own, shown while colourShown
+  int colourMode = 0;
+  float colourStrength = 0.5f;
+  bool colourShown = false, colourFailed = false;
+  // CRT (GxRenderer::SetCrt, 0.99.9): 0 off, 1 light, 2 strong; after each display copy its game lines (crtLines,
+  // with the colour bleed) and their glow in pictures of their own (crtReady), from which Present draws the screen
+  int crtLevel = 0, crtLines = 0;
+  bool crtReady = false, crtFailed = false;
   std::uint32_t curOpAt = 0;  // the op Run executes (FlareNote)
+  // "Save bandwidth (Vulkan)" (GxRenderer::SetBandwidthSave, 0.99.8): the EFB passes of a tiling GPU load and store
+  // less (gx_vk.cpp: a clear after a copy folded into the next pass, which then loads nothing there)
+  bool bwSave = false;
   // the depth map for the game's GXPeekZ (BP 0x5B marker), see GxRenderer::SetDepthSink
   DepthSink depthSink;
   bool peekWanted = false, peekFailed = false;
@@ -593,6 +607,15 @@ struct GxCore {
   virtual bool KeyProgram() = 0;
   virtual const void *DrawProgram(bool merged) = 0;
   virtual void UseEfb() = 0;
+  // the same for a draw that stays inside x0,y0..x1,y1 (the renderer's EFB pixels, DrawArea): a renderer that can
+  // load and store only that part of the EFB around it does (Vulkan's render area), the others take the whole EFB
+  virtual void UseEfbArea(int x0, int y0, int x1, int y1) {
+    (void) x0, (void) y0, (void) x1, (void) y1;
+    UseEfb();
+  }
+  // where a small 2D draw (orthographic, at most 64 vertices) lands on the EFB, in the renderer's pixels with a margin,
+  // within the scissor; false: unknown or not small (3D, many vertices, widened, an in-between picture's blend)
+  bool DrawArea(const Re4GxDraw &d, const Re4GxChunk &chunk, int area[4]) const;
   virtual void ApplyDrawState(const DrawState &s) = 0;
   virtual void UploadUniform(int binding, const void *data, std::size_t offset, std::size_t bytes,
                              std::size_t blockBytes, std::size_t copyBytes = 0) = 0;
@@ -640,6 +663,8 @@ struct GxCore {
   virtual void DisplayEffects(int pixelWidth, int pixelHeight, int y, int h, int w) = 0;
   virtual void SnapshotDepth() = 0;
   void ClearAfterCopy(std::uint32_t control, int x, int y, int w, int h);
+  // the clear after a copy kept for the EFB's next pass (true: the API took it, ClearAfterCopy does no more); GL never
+  virtual bool DeferClear(const GxClearRect &) { return false; }
   virtual void PlainEfb() = 0;
   // the in-between pass's GPU side: before it (the store of its blended vertices), after it; whether the key's
   // program exists, whether its merged draw calls' program does (made by Prewarm when not: a run draws one by one)
@@ -678,7 +703,10 @@ struct GxCore {
   void SetFxaa(bool on);
   void SetSharpen(int level);
   void SetTvFilter(bool on);
+  void SetBandwidthSave(bool on);
   void SetPsx(bool on);
+  void SetCrt(int level);
+  void SetColour(int mode, int level);
   void SetFlares(bool on);
   void SetFlareHalos(bool on);
   void SetDofStrong(bool on);

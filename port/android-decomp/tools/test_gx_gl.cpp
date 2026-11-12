@@ -16,6 +16,7 @@
 //     matrices and material colours in few calls, the picture unchanged
 #include "gx_bench_steps.h"
 #include "gx_auto_level.h"
+#include "picture_cadence.h"
 #include "gx_chunk_builder.h"
 #include "gx_gl.h"
 #include "gx_gl_shader.h"
@@ -1223,6 +1224,64 @@ void TestTvFilter(re4gx::GxRenderer &r) {
   Check(red(xfb, 199) < 10, "TV filter: off again, the line is sharp");
 }
 
+// The game's depth of field (filter01.cpp) copies the picture at half size with the copy filter 32 0 0 0 0 0 32
+// (only the lines above and below) and draws the copy back over the scene. On the GameCube that copy is soft;
+// until 0.99.7 it stayed sharp at a higher scale (its 2x2 box was the app's own texels, the filter left out) and
+// showed as a second, shifted picture ("ghosting", 0.99.8). A red stripe (columns 200..209) on blue, copied that
+// way and drawn back with linear filtering: at scale 1 and 4 the column left of the stripe gets some of its red
+// (at 4 within reach of the GameCube's two pixels, not only the app's last texel), columns further out stay blue.
+void TestBlurCopy() {
+  for (int scale : {1, 4}) {
+    re4gx::GxRenderer r;
+    std::string error;
+    Require(r.Init(scale, &error), error.c_str());
+    Builder b;
+    Baseline(b);
+    DisplayCopy(b, true, kBlue);
+    Quad(b, 200, 0, 210, 448, 0, kRed);
+    b.Bp(0x53, 32u);          // copy filter: the line above (tap 0)
+    b.Bp(0x54, 32u << 12);    // and the line below (tap 6), nothing on the line itself
+    b.Bp(0x49, 0);
+    b.Bp(0x4A, 511 | 447u << 10);
+    b.Bp(0x4D, 32);
+    b.Bp(0x4B, 0x400000 >> 5);
+    b.Bp(0x52, 6u << 4 | 2u << 15 | 1u << 9);  // RGBA8 to a texture, half size: 256 x 224
+    b.Bp(0x53, 0);
+    b.Bp(0x54, 0);
+    b.Bp(0x4A, 639 | 527u << 10);
+    b.Bp(0x00, 1u | 1u << 4);
+    b.Xf(0x103F, {1});
+    b.Xf(0x1040, {5u << 7});
+    b.Bp(0x28, 0 | 0 << 3 | 1 << 6 | 0 << 7 | 0x3F7u << 12);
+    b.Bp(0xC0, 8u | 15u << 4 | 15u << 8 | 15u << 12 | 1u << 19);
+    b.Bp(0x80, 1u << 4 | 1u << 5);  // clamp, linear (GXInitTexObjLOD 1, 1 of the game)
+    b.Bp(0x84, 0);
+    b.Bp(0x88, 255 | 223 << 10 | 6u << 20);
+    b.Bp(0x30, 255);
+    b.Bp(0x31, 223);
+    b.Texture(0, 0x400000ull | 1ull << 32, RE4_GX_TEX_COPY, 0x400000, 256, 224, 6, {});
+    std::vector<std::uint8_t> v;
+    VT(v, 0, 0, 0, kWhite, 0, 0);
+    VT(v, 512, 0, 0, kWhite, 1, 0);
+    VT(v, 512, 448, 0, kWhite, 1, 1);
+    VT(v, 0, 448, 0, kWhite, 0, 1);
+    b.Draw(RE4_GX_V_COLOR0 | RE4_GX_V_TEX0, 24, v, 4, 0x80);
+    r.Run(b.Chunk());
+    // the device pixel two texels (at scale 4: half a GameCube pixel) left of the stripe, one inside it, one far out
+    const int y = 200 * scale, edge = 200 * scale;
+    const int beside = EfbPixel(r, edge - (scale > 1 ? 2 : 1), y)[0], inside = EfbPixel(r, 205 * scale, y)[0];
+    const int far = EfbPixel(r, 190 * scale, y)[0];
+    std::fprintf(stderr, "  blur copy at scale %d: red beside the stripe %d, inside %d, far out %d\n", scale, beside,
+                 inside, far);
+    const std::string at = " (scale " + std::to_string(scale) + ")";
+    Check(beside > 40 && beside < 200, ("blur copy: the stripe's edge soft as on the GameCube" + at).c_str());
+    Check(inside > 150, ("blur copy: inside the stripe red" + at).c_str());
+    Check(far < 10, ("blur copy: columns further out stay blue" + at).c_str());
+    Check(glGetError() == GL_NO_ERROR, ("blur copy: no GL error" + at).c_str());
+    r.Release();
+  }
+}
+
 // Sharpen (the app menu's filter, 08.11.2026): a grey band (160) on grey (100), softened by the TV filter (its rows
 // above and below get in-between greys). Strong: the in-between rows move away from the middle (the edge gets
 // steeper), every texel stays within the two greys (no seams), flat parts stay as they are, one pass per display
@@ -1283,6 +1342,72 @@ void TestSharpen(re4gx::GxRenderer &r) {
   xfb = scene(0);
   Check(xfb == plain && steep(xfb, 196, 204, &inside) == offEdge, "sharpen: off again, the plain display copy");
   r.SetTvFilter(false);
+}
+
+// Colour and CRT (0.99.9): grey around an orange band and a black square. Colour "Warm film, Strong": one pass per
+// display copy, the orange warmer (red up, blue down), black stays black; "Survival horror, Strong": the orange
+// paler; off again the plain copy. CRT "Strong": the XFB stays as it is, the CRT's pictures once per display copy;
+// the screen (three screen pixels a game line) has dark gaps between the lines in the grey, its corner is black
+// (rounded); off again the plain screen, byte for byte.
+void TestCrtColour(re4gx::GxRenderer &r) {
+  const std::uint8_t kGrey[4] = {128, 128, 128, 255}, kOrange[4] = {200, 120, 40, 255}, kBlack[4] = {0, 0, 0, 255};
+  auto scene = [&]() {
+    Builder b;
+    Baseline(b);
+    DisplayCopy(b, true, kGrey);
+    Quad(b, 100, 200, 300, 260, 0, kOrange);
+    Quad(b, 400, 300, 500, 350, 0, kBlack);
+    DisplayCopy(b, false, kGrey);
+    r.Run(b.Chunk());
+    return r.Xfb(nullptr, nullptr);
+  };
+  const int f = r.Scale();
+  const GLuint plain = scene();
+  const std::vector<std::uint8_t> orange = TexPixel(plain, 200 * f, 230 * f);
+  const int W = 1792, H = 1344;  // 448 lines: three screen pixels each
+  std::vector<std::uint8_t> plainScreen, screen;
+  Require(r.ReadPresented(W, H, 0, 0, W, H, 0, 0, &plainScreen), "CRT: the plain screen read back");
+  // colour
+  unsigned before = r.Stats().colourPasses;
+  r.SetColour(1, 2);
+  GLuint xfb = scene();
+  const std::vector<std::uint8_t> warm = TexPixel(xfb, 200 * f, 230 * f), warmGrey = TexPixel(xfb, 50 * f, 50 * f);
+  std::fprintf(stderr, "  colour: orange %d,%d,%d -> warm film %d,%d,%d; grey -> %d,%d,%d\n", orange[0], orange[1],
+               orange[2], warm[0], warm[1], warm[2], warmGrey[0], warmGrey[1], warmGrey[2]);
+  Check(r.Stats().colourPasses == before + 2 && xfb != plain, "colour: one pass per display copy, shown");
+  Check(warm[0] > orange[0] && warm[2] < orange[2], "colour: warm film makes the orange warmer");
+  Check(warmGrey[0] > warmGrey[2], "colour: warm film warms the grey");
+  Check(Near(TexPixel(xfb, 450 * f, 320 * f), 0, 0, 0, 1), "colour: black stays black");
+  r.SetColour(2, 2);
+  xfb = scene();
+  const std::vector<std::uint8_t> pale = TexPixel(xfb, 200 * f, 230 * f);
+  std::fprintf(stderr, "  colour: survival horror %d,%d,%d\n", pale[0], pale[1], pale[2]);
+  Check(pale[0] - pale[2] < (orange[0] - orange[2]) / 2, "colour: survival horror makes the orange paler");
+  Check(Near(TexPixel(xfb, 450 * f, 320 * f), 0, 0, 0, 1), "colour: black stays black (survival horror)");
+  r.SetColour(0, 1);
+  xfb = scene();
+  Check(xfb == plain, "colour: off again, the plain display copy");
+  // CRT
+  before = r.Stats().crtPasses;
+  r.SetCrt(2);
+  xfb = scene();
+  Check(r.Stats().crtPasses == before + 2 && xfb == plain, "CRT: its pictures once per display copy, the XFB as it is");
+  Require(r.ReadPresented(W, H, 0, 0, W, H, 0, 0, &screen), "CRT: the screen read back");
+  // the grey at game x 128, around game line 112: the brightest and darkest of the screen rows of three lines
+  int lo = 255, hi = 0;
+  for (int y = 112 * 3 - 4; y < 112 * 3 + 5; y++) {
+    const int v = screen[(static_cast<std::size_t>(y) * W + W / 5) * 4 + 1];
+    lo = std::min(lo, v);
+    hi = std::max(hi, v);
+  }
+  std::fprintf(stderr, "  CRT: the grey between %d and %d across three lines; the corner %d\n", lo, hi, screen[1]);
+  Check(hi - lo > 30, "CRT: dark gaps between the game lines");
+  Check(screen[0] == 0 && screen[1] == 0 && screen[2] == 0, "CRT: the corner black (rounded, curved)");
+  Check(screen != plainScreen, "CRT: the screen differs");
+  r.SetCrt(0);
+  scene();
+  Require(r.ReadPresented(W, H, 0, 0, W, H, 0, 0, &screen), "CRT: the screen read back again");
+  Check(screen == plainScreen, "CRT: off again, the plain screen");
 }
 
 // PSone demake: a square of an in-between colour from x 101 on. Off: x 100 is the blue around it, x 101 and 102
@@ -1527,6 +1652,44 @@ void TestRescale() {
   r.Release();
 }
 
+// The pictures' cadence (picture_cadence.h): 30 pictures a second on 60 Hz, all 2 vsyncs, 0 % off; on 89.4 Hz with
+// the game's own clock (59.94 / 2 a second) mostly 3 vsyncs and now and then 2 (the picture early by a vsync);
+// 60 FPS on 90 Hz: 1 and 2 vsyncs by turns, half of them off; a pause starts over.
+void TestPictureCadence() {
+  auto run = [](double hz, double fps, int seconds, std::string *line) {
+    re4gx::PictureCadence c;
+    const long long period = static_cast<long long>(1e9 / hz);
+    const long long at = 1000000000LL;
+    bool got = false;
+    for (int i = 0; i <= static_cast<int>(fps * seconds) && !got; i++) {
+      const long long t = at + static_cast<long long>(i * 1e9 / fps) + 300000;  // drawn just after a vsync
+      // the vsync the picture waits for: the next one at or after its time
+      const long long v = at + ((t - at + period - 1) / period) * period;
+      got = c.Note(re4gx::PictureCadence::Snap(v, at, period), period, hz, line);
+    }
+    return got;
+  };
+  std::string line;
+  Check(run(60.0, 30.0, 11, &line), "cadence: a line after 10 s");
+  std::fprintf(stderr, "  %s\n", line.c_str());
+  Check(line.find("0 % more than 2 ms") != std::string::npos && line.find("2: 301,") != std::string::npos,
+        "cadence: 30 pictures on 60 Hz, all 2 vsyncs");
+  Check(run(89.4, 59.94 / 2, 11, &line), "cadence: 89.4 Hz");
+  std::fprintf(stderr, "  %s\n", line.c_str());
+  Check(line.find("2: 0,") == std::string::npos && line.find("3: ") != std::string::npos,
+        "cadence: the game's own clock on 89.4 Hz shows pictures of 2 vsyncs among the 3");
+  Check(run(90.0, 60.0, 11, &line), "cadence: 60 FPS on 90 Hz");
+  std::fprintf(stderr, "  %s\n", line.c_str());
+  Check(line.find("1: 0,") == std::string::npos && line.find("2: 0,") == std::string::npos,
+        "cadence: 60 FPS on 90 Hz, 1 and 2 vsyncs by turns");
+  re4gx::PictureCadence c;
+  std::string none;
+  c.Note(1000000000LL, 16666667, 60.0, &none);
+  c.Note(1033333333LL, 16666667, 60.0, &none);
+  c.Note(5000000000LL, 16666667, 60.0, &none);  // a pause
+  Check(c.intervals.empty(), "cadence: a pause starts over");
+}
+
 // The rule of Auto (gx_auto_level.h) with made-up measurements: `seconds` of chunks at `rate` a
 // second, each fence check finding `behind` chunks unfinished.
 struct AutoRun {
@@ -1613,7 +1776,8 @@ void TestBenchSteps() {
       "middle (30 up to 2x, 60 up to 1.5x)", [](int level, bool) { return level <= 4 ? 30 : 24; },
       [](int level, bool sixty) { return sixty ? (level <= 3 ? 60 : 47) : (level <= 4 ? 30 : 24); });
   Check(mid.Finished() && mid.Result(0) == 4 && mid.Result(1) == 3 && mid.Held(0) && mid.Held(1),
-        "benchmark: steps 4x 3.5x 3x 2.5x 2x for 30, the 60 pass again from 4x down to 1.5x");
+        "benchmark: steps 4x 3.5x 3x 2.5x 2x for 30, the 60 pass from 2x (the 30 result, 0.99.10) down to 1.5x");
+  Check(!mid.CpuSign(), "benchmark: the middle device's graphics chip holds it back, not the processor");
   // a slow one: not even 1x
   re4gx::BenchSteps slow = RunBench("slow (not even 1x)", [](int, bool) { return 22; }, [](int, bool) { return 22; });
   Check(slow.Finished() && slow.Result(0) == 2 && slow.Result(1) == 2 && !slow.Held(0) && !slow.Held(1),
@@ -1631,7 +1795,35 @@ void TestBenchSteps() {
   re4gx::BenchSteps dip2 = RunBench("two bad seconds at 4x",
                                     [&calls2](int, bool) { ++calls2; return calls2 == 3 || calls2 == 6 ? 25 : 30; },
                                     [](int, bool sixty) { return sixty ? 60 : 30; });
-  Check(dip2.Result(0) == 7 && dip2.Result(1) == 8, "benchmark: two bad seconds at 4x: 3.5x for 30, 4x for 60");
+  Check(dip2.Result(0) == 7 && dip2.Result(1) == 7,
+        "benchmark: two bad seconds at 4x: 3.5x for 30, the 60 pass from 3.5x (0.99.10) holds it");
+  // 0.99.10: a processor that holds the game back: about the same game pictures at every level, not even 1x
+  re4gx::BenchSteps cpu = RunBench("processor-bound (22-24 at every level)",
+                                   [](int level, bool) { return level <= 3 ? 24 : 22; }, [](int, bool) { return 22; });
+  Check(cpu.Result(0) == 2 && !cpu.Held(0) && cpu.CpuSign(), "benchmark: no level helps: the processor sign");
+  Check(!slow.CpuSign() || slow.Result(0) == 2, "benchmark: the slow device's sign is only set at 1x");
+  // a graphics chip that gets much faster lower down, still not 30 at 1x: no processor sign
+  re4gx::BenchSteps gpu = RunBench("graphics-bound (12 at 4x, 27 at 1x)",
+                                   [](int level, bool) { return 33 - 3 * level; }, [](int, bool) { return 20; });
+  Check(gpu.Result(0) == 2 && !gpu.Held(0) && !gpu.CpuSign(), "benchmark: lower levels help: no processor sign");
+  // 0.99.10: the 30 pass from 2.5x (a weak graphics chip) after 15 s that do not count
+  {
+    re4gx::BenchSteps w;
+    w.Start(0.0, 5, 15.0);
+    double t = 0.0;
+    int firstJudged = -1;
+    for (int i = 0; i < 400 && !w.Finished(); i++) {
+      t += 1.0;
+      const int level = w.Level();
+      std::string line;
+      // the first 15 s at 2.5x as if the programs were made (8 a second), then 30 at 2x and below
+      const int c = t <= 15.0 ? 8 : level <= 4 ? 30 : 24;
+      const re4gx::BenchSteps::Step step = w.Second(t, c, w.Pass() ? (level <= 3 ? 60 : 40) : c, 0, &line);
+      if (step != re4gx::BenchSteps::kNone && firstJudged < 0) firstJudged = static_cast<int>(t);
+    }
+    Check(w.Finished() && w.Result(0) == 4 && w.Result(1) == 3 && firstJudged == 25,
+          "benchmark: from 2.5x after a 15 s warm-up (the first level judged at 25 s), 2x and 1.5x");
+  }
   // fairly steady (the project owner's Retroid at 2x): 29-30 with a hitch now and then holds
   int calls3 = 0;
   re4gx::BenchSteps steady = RunBench(
@@ -1759,6 +1951,22 @@ void TestAutoLevel() {
     r.Play(41.0, 30.0, 0);
     Check(r.a.Level() == 2, "auto level: never above the screen's level");
     Check(r.a.Hold() == re4gx::AutoLevel::kFirstHold, "auto level: a step up that held 60 s: the wait back to 10 s");
+  }
+  {
+    // the benchmark's check (0.99.10): a renderer that starts below its top, at the benchmark's level, and still
+    // goes up to the top where the GPU keeps up
+    AutoRun r;
+    r.a.Start(7, 0.0, 2, true, 6, 6);
+    Check(r.a.Level() == 6 && r.a.Top() == 7, "auto level: starts at the level asked for, below the top");
+    while (r.a.Ups() == 0 && r.t < 60.0)
+      r.Play(0.5, 30.0, 0);
+    Check(r.a.Level() == 7, "auto level: from the start below the top up to the top");
+    AutoRun low;
+    low.a.Start(4, 0.0, 2, true, 3, 1);
+    Check(low.a.Level() == 2, "auto level: a start below the bottom takes the bottom");
+    AutoRun high;
+    high.a.Start(4, 0.0, 2, true, 3, 9);
+    Check(high.a.Level() == 4, "auto level: a start above the top takes the top");
   }
   {
     AutoRun r;
@@ -2418,6 +2626,7 @@ void TestOptions(bool poison, bool tiled, bool halfDof = true, int lose = 0) {
   TestFxaa(r);
   TestTvFilter(r);
   TestSharpen(r);
+  TestCrtColour(r);
   TestPsx(r);
   TestFrameSkip(r);
   Check(r.HalfDof() == halfDof, "options: the depth of field's resolution as asked for");
@@ -3874,6 +4083,7 @@ int main() {
   TestCanonicalKey();
   TestPrewarm();
   TestRescale();
+  TestBlurCopy();
   TestAutoLevel();
   TestBenchSteps();
   TestHandOverCopies();
@@ -3913,6 +4123,8 @@ int main() {
     TestDepthMap(renderer, false);
     TestFxaa(renderer);
     TestSharpen(renderer);
+    TestCrtColour(renderer);
+    TestPictureCadence();
     TestFrameSkip(renderer);
     TestFog(renderer);
     TestShaderVariety(renderer);

@@ -473,7 +473,7 @@
  },
  {
   "file": "src/game/trans.cpp",
-  "line": 2418,
+  "line": 2462,
   "text": "(u8*) pG->prim_cnt",
   "operand": "pG->prim_cnt",
   "type": "s32",
@@ -481,7 +481,7 @@
  },
  {
   "file": "src/game/trans.cpp",
-  "line": 2425,
+  "line": 2470,
   "text": "(u8*) pG->prim_cnt",
   "operand": "pG->prim_cnt",
   "type": "s32",
@@ -657,7 +657,7 @@
  },
  {
   "file": "src/st2/r201.cpp",
-  "line": 788,
+  "line": 844,
   "text": "(void*) open",
   "operand": "open",
   "type": "int",

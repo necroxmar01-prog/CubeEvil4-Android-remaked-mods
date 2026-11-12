@@ -988,6 +988,68 @@ void GxCore::FlareNote(const Re4GxDraw &d, const Re4GxChunk &chunk, std::uint32_
   flareCands.push_back(f);
 }
 
+// A small 2D draw's place on the EFB. The rifle scope's blur (0.99.7, report of a Xiaomi with a Mali-G52 MC2: 12-15
+// pictures a second in the scope with Vulkan) copies a 128x112 corner of the EFB and draws it back 24 times a picture:
+// every copy ends the EFB's render pass, and on a tiling GPU the next pass loads the whole EFB (colour and depth) and
+// stores it again at its end. With the draw's place known, Vulkan begins that pass on the corner alone.
+bool GxCore::DrawArea(const Re4GxDraw &d, const Re4GxChunk &chunk, int area[4]) const {
+  const unsigned primitive = d.primitive & 0xFF;
+  if (!(xfReg[0x26] & 1) || primitive == RE4_GX_LINES || primitive == RE4_GX_POINTS || d.vertexCount == 0 ||
+      d.vertexCount > 64 || d.stride < 12 || WidenFor(key) != 1.0f)
+    return false;
+  unsigned mtxAt = 12;
+  if (d.layout & RE4_GX_V_NORMAL)
+    mtxAt += (d.layout & RE4_GX_V_BINORMAL_TANGENT) ? 36 : 12;
+  mtxAt += ((d.layout & RE4_GX_V_COLOR0) ? 4 : 0) + ((d.layout & RE4_GX_V_COLOR1) ? 4 : 0);
+  for (int t = 0; t < 8; t++)
+    mtxAt += (d.layout & (RE4_GX_V_TEX0 << t)) ? 8 : 0;
+  // (the registers themselves: Draw asks before FillXfRegs brings xf.viewport and xf.proj up to date)
+  const float vp0[4] = {AsFloat(xfReg[0x1A]), AsFloat(xfReg[0x1B]), 0.0f, AsFloat(xfReg[0x1D])};
+  const float vp1[1] = {AsFloat(xfReg[0x1E])};
+  const float pr0[4] = {AsFloat(xfReg[0x20]), AsFloat(xfReg[0x21]), AsFloat(xfReg[0x22]), AsFloat(xfReg[0x23])};
+  float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+  for (std::uint32_t v = 0; v < d.vertexCount; v++) {
+    const std::uint8_t *at = chunk.vertices + d.vertexOffset + static_cast<std::size_t>(v) * d.stride;
+    float pos[3];
+    std::memcpy(pos, at, 12);
+    unsigned row = d.matrices[0] & 63;
+    if ((d.layout & RE4_GX_V_MATRIX) && mtxAt < d.stride)
+      row = at[mtxAt] & 63;
+    if (row > 61)
+      return false;
+    float e[2];
+    for (int r = 0; r < 2; r++)
+      e[r] = xf.posTex[row + r][0] * pos[0] + xf.posTex[row + r][1] * pos[1] + xf.posTex[row + r][2] * pos[2] +
+             xf.posTex[row + r][3];
+    // orthographic: x' = p0 x + p1, y' = p2 y + p3; the viewport as FlareNote's
+    const float sx = (vp0[3] - 342.0f) + vp0[0] * (pr0[0] * e[0] + pr0[1]);
+    const float sy = (vp1[0] - 342.0f) + vp0[1] * (pr0[2] * e[1] + pr0[3]);
+    if (!std::isfinite(sx) || !std::isfinite(sy))
+      return false;
+    x0 = std::min(x0, sx);
+    x1 = std::max(x1, sx);
+    y0 = std::min(y0, sy);
+    y1 = std::max(y1, sy);
+  }
+  // GX pixels with 2 to spare, within the scissor (ApplyState's), then the renderer's pixels (rounded outwards)
+  const int xoff = static_cast<int>(bp[0x59] & 0x3FF) * 2, yoff = static_cast<int>((bp[0x59] >> 10) & 0x3FF) * 2;
+  const int sx0 = std::max(0, static_cast<int>((bp[0x20] >> 12) & 0x7FF) - xoff);
+  const int sy0 = std::max(0, static_cast<int>(bp[0x20] & 0x7FF) - yoff);
+  const int sx1 = std::min(kEfbWidth, static_cast<int>((bp[0x21] >> 12) & 0x7FF) - xoff + 1);
+  const int sy1 = std::min(kEfbHeight, static_cast<int>(bp[0x21] & 0x7FF) - yoff + 1);
+  const int gx0 = std::max(sx0, static_cast<int>(std::floor(std::max(x0, -1e6f))) - 2);
+  const int gy0 = std::max(sy0, static_cast<int>(std::floor(std::max(y0, -1e6f))) - 2);
+  const int gx1 = std::min(sx1, static_cast<int>(std::ceil(std::min(x1, 1e6f))) + 2);
+  const int gy1 = std::min(sy1, static_cast<int>(std::ceil(std::min(y1, 1e6f))) + 2);
+  if (gx1 <= gx0 || gy1 <= gy0)
+    return false;  // (nothing on the EFB: as before)
+  area[0] = Lo(gx0);
+  area[1] = Lo(gy0);
+  area[2] = Hi(gx1);
+  area[3] = Hi(gy1);
+  return true;
+}
+
 void GxCore::FlareTrack() {
   std::vector<FlareCand> merged;
   for (const FlareCand &f : flareCands) {
@@ -1052,8 +1114,12 @@ void GxCore::FlareTrack() {
       }
       if (s.lost == 0)
         continue;  // taken by another source of this picture
+      // (0.99.8: within 64 GameCube pixels, three radii for a big fire; with 24 a light jumped out of its slot
+      // while the camera turned fast, its star stayed behind where the light had been and faded for some ten
+      // pictures while a new one faded in at the light: stars wandering and flickering along, project owner's
+      // dumps of 10.11.2026)
       const float d = std::hypot(s.x - cx, s.y - cy);
-      if (d < std::max(24.0f, 2.0f * s.r) && d < bestD) {
+      if (d < std::max(64.0f, 3.0f * s.r) && d < bestD) {
         best = i;
         bestD = d;
       }
@@ -1243,10 +1309,16 @@ void GxCore::SetDepthSink(DepthSink sink) { this->depthSink = std::move(sink); }
 void GxCore::SetFxaa(bool on) { this->fxaaOn = on; }
 void GxCore::SetSharpen(int level) { this->sharpLevel = level < 0 ? 0 : level > 2 ? 2 : level; }
 void GxCore::SetPsx(bool on) { this->psxOn = on; }
+void GxCore::SetCrt(int level) { this->crtLevel = level < 0 ? 0 : level > 2 ? 2 : level; }
+void GxCore::SetColour(int mode, int level) {
+  this->colourMode = mode < 0 || mode > 2 ? 0 : mode;
+  this->colourStrength = level >= 2 ? 1.0f : 0.5f;
+}
 void GxCore::SetFlares(bool on) { this->flaresOn = on; }
 void GxCore::SetFlareHalos(bool on) { this->flareHalos = on; }
 void GxCore::SetDofStrong(bool on) { this->dofStrong = on; }
 void GxCore::SetTvFilter(bool on) { this->tvFilter = on; }
+void GxCore::SetBandwidthSave(bool on) { this->bwSave = on; }
 void GxCore::SetWiden(float factor) {
   this->widen2d.store(factor > 0.5f && factor < 2.0f ? factor : 1.0f, std::memory_order_relaxed);
 }
@@ -1451,7 +1523,11 @@ void GxCore::Draw(const Re4GxDraw &d, const Re4GxChunk &chunk, const MergeCall *
     return;
   const ShaderKey &k = key;
   const unsigned primitive = d.primitive & 0xFF;
-  UseEfb();
+  int area[4];
+  if (!merge && !interpPass && DrawArea(d, chunk, area))
+    UseEfbArea(area[0], area[1], area[2], area[3]);
+  else
+    UseEfb();
   ApplyState(primitive);
   const float pointSize = static_cast<float>((bp[0x22] >> 8) & 0xFF) / 6.0f * Sf(1);
   if (xf.proj[1][3] != pointSize) {
@@ -2225,6 +2301,32 @@ void GxCore::EfbCopy(std::uint32_t control) {
       GXLOG("TV filter: the line above %.3f, the line %.3f, the line below %.3f", above, at, below);
     }
   }
+  // The game's depth of field (filter01.cpp, Filter01CopyEFB) copies the picture at half size with a
+  // copy filter of only the lines above and below ({32, 0, 0, 0, 0, 0, 32}) and draws that copy back
+  // over the scene, shifted by 0.6 to 6.6 pixels at 50 %. On the GameCube the copy is soft (2x2 of its
+  // pixels, the lines around). Until 0.99.7 the app left the filter out of texture copies and took the
+  // 2x2 box from its own texels, a fraction of a pixel at a higher scale: the copy stayed sharp and
+  // showed as a second, shifted picture over the background ("ghosting", Xiaomi report of 0.99.7 at 4x,
+  // 10.11.2026). A copy whose filter leaves the line itself out takes the filter (a GameCube line
+  // apart) and the GameCube's box at the scale. Other texture copies keep their line (no filter, or the
+  // render mode's deflicker filter) and stay as they were.
+  if (!toXfb && !depth) {
+    float above = 0.0f, at = 1.0f, below = 0.0f;
+    CopyFilterTaps(&above, &at, &below);
+    if (at == 0.0f && above + below > 0.0f) {
+      p.taps[0] = above;
+      p.taps[1] = at;
+      p.taps[2] = below;
+      p.step = Sf(1);
+      p.box = half ? Sf(1) : 0.0f;
+      static bool logged = false;
+      if (!logged) {
+        logged = true;
+        GXLOG("blur copy (the game's depth of field): the line above %.3f, below %.3f, a box of %.1f texels",
+              above, below, p.box);
+      }
+    }
+  }
   // The game reads some copies (water, heat haze: EFB rows 56..447 at half size) through a texture
   // object that is shorter than the copy, so on the GameCube a lookup below the drawn picture
   // clamps to the last drawn row. The copy here is read whole: rows the letterbox never drew
@@ -2547,8 +2649,6 @@ void GxCore::ClearAfterCopy(std::uint32_t control, int x, int y, int w, int h) {
   r.color = (c >> 3) & 1;
   r.alpha = (c >> 4) & 1;
   r.depth = (bp[0x40] >> 4) & 1;
-  if (r.color || r.alpha || r.depth)
-    UseEfb();  // MSAA on the tiles: the EFB back first, the clear is only the copy's region
   r.rect[0] = Lo(x);
   r.rect[1] = Lo(y);
   r.rect[2] = Lo(x + w) - Lo(x);
@@ -2558,6 +2658,12 @@ void GxCore::ClearAfterCopy(std::uint32_t control, int x, int y, int w, int h) {
   r.rgba[2] = static_cast<float>(bp[0x50] & 255) / 255.0f;
   r.rgba[1] = static_cast<float>((bp[0x50] >> 8) & 255) / 255.0f;
   r.z = static_cast<float>(bp[0x51] & 0xFFFFFF) / 16777215.0f;
+  if (!(r.color || r.alpha || r.depth))
+    return;
+  // "Save bandwidth (Vulkan)": the clear goes with the EFB's next pass (its load), not a pass of its own
+  if (DeferClear(r))
+    return;
+  UseEfb();  // MSAA on the tiles: the EFB back first, the clear is only the copy's region
   ClearRect(r);
 }
 

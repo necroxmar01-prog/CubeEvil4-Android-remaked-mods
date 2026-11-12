@@ -36,7 +36,8 @@ public class CoreMenuShotTest {
     CoreMenu.Host host = (CoreMenu.Host) Proxy.newProxyInstance(CoreMenu.Host.class.getClassLoader(),
         new Class<?>[] {CoreMenu.Host.class},
         (proxy, method, args) -> method.getReturnType() == boolean.class ? Boolean.TRUE
-            : method.getReturnType() == float.class ? (Object) 1f : method.getReturnType() == int.class ? (Object) 0 : null);
+            : method.getReturnType() == float.class ? (Object) 1f : method.getReturnType() == int.class ? (Object) 0
+            : method.getReturnType() == double.class ? (Object) 60.0 : null);
     new File(folder).mkdirs();
     Method show = CoreMenu.class.getDeclaredMethod("showPage", int.class, boolean.class); show.setAccessible(true);
     String[] names = {"home", "display", "audio", "controls", "performance", "cheats", "management"};
@@ -77,7 +78,7 @@ public class CoreMenuShotTest {
         show.invoke(menu, 5, false);
         View hunk = withText(body, "HUNK");
         hunk.performClick();
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();  // shown: its look is set
+        TestLooper.idle();  // shown: its look is set
         android.app.AlertDialog ask = (android.app.AlertDialog) org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
         View decor = ask.getWindow().getDecorView();
         decor.setLayoutDirection(config.getLayoutDirection());
