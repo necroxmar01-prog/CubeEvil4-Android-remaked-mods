@@ -2308,6 +2308,7 @@ static void testKnifeSpeed()
 // Ashley's pistol (runtime/ashley_gun.cpp, patch 0911): the second aim word's bit 29 switches it (logged), the other
 // bits of that word stay theirs; her rounds come back one every 90 frames up to 10.
 extern "C" int re4_ashley_ammo_after(int left, int frames);
+extern "C" int re4_ashley_gun_selftest(void);
 static void testAshleyGun()
 {
     int bad = 0;
@@ -2322,6 +2323,11 @@ static void testAshleyGun()
     if (!strstr(tail, "ashley: her pistol off")) bad |= 4;
     if (re4_ashley_ammo_after(0, 89) != 0 || re4_ashley_ammo_after(0, 90) != 1 || re4_ashley_ammo_after(9, 900) != 10 ||
         re4_ashley_ammo_after(3, 450) != 8) bad |= 8;
+    const int give = re4_ashley_gun_selftest();  // patch 0912: give and take in the case
+    if (give) {
+        re4_log("  ashleygun: give/take checks failed 0x%x", give);
+        bad |= 0x10;
+    }
     re4_aim_set(second);
     if (bad) {
         re4_log("  ashleygun: failed checks 0x%x", bad);

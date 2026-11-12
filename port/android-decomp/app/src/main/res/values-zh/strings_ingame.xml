@@ -399,7 +399,7 @@
     <string name="ingame_skip_intro">跳过开场标志</string>
     <string name="ingame_skip_intro_help">跳过开场标志：游戏直接从标题菜单开始，不显示 Nintendo、Capcom 等标志（下次启动起生效）。</string>
     <string name="ingame_ashley_gun">阿什莉的手枪</string>
-    <string name="ingame_ashley_gun_help">阿什莉的手枪：阿什莉作为同伴携带一把手枪，在跟随你和等待时射击附近的敌人。她的弹药会随时间恢复（10发，每3秒恢复1发）。第一版：从手提箱交给她的功能稍后加入。</string>
+    <string name="ingame_ashley_gun_help">Ashley 的手枪：从手提箱给 Ashley 一把手枪（装备，然后选 Ashley）。作为同伴，她在跟随你和等待时都会射击附近的敌人。她的弹药会随时间恢复（10 发，每 3 秒一发）。她的手枪留在手提箱中，带粉色边框；装备，然后选 Leon，即可收回。</string>
     <string name="ingame_melee_help">近战：带有 melee/melee.dat 的模组会替换对眩晕敌人的踢击动画。扭断脖子：里昂像汉克一样终结站立的眩晕村民（需要光盘中佣兵模式的 em/em60.drs 文件）；带寄生虫的敌人仍然用踢击。 斧劈：对跪地眩晕的敌人，里昂用小刀使出村民的斧头攻击，而不是踢击（若皮肤把小刀换成了斧头，就会显示斧头）。 随机混合：每次终结技在游戏原有的和已开启的之中随机选择；关闭时始终使用你的选择。</string>
     <string name="ingame_outfit_help">剧情给里昂的服装，或始终穿第一套（带夹克）或第二套（不带）；立即更换，房间在他所在位置重新开始。背后的武器：他最后拿过的长武器（霰弹枪、步枪、冲锋枪、火箭筒）在手提箱里而不在手上时挂在他背后。倾斜、高度、与背部的距离和肩膀可随意调整；“过场动画中”在过场中也显示。</string>
 </resources>

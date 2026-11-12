@@ -1,8 +1,16 @@
 // Ashley's pistol (wish of DevJunior, 11.11.2026: "Ashley self-defence: she can use a pistol as the partner ... she
 // follows us and backs us up"; his choices: a switch in the Mods page, the arm aimed by code, she shoots while she
-// follows and while she waits, ammunition that comes back with time). Stage 1: with the app's switch on she carries
-// a pistol as the partner; giving it from the case and taking it back, and Ashley's own chapter, come later. Compiled with the game's flags into libre4_main
-// (re4_gamehooks_obj); the switch arrives with the second aim word (bit 29, runtime/aim_options.cpp).
+// follows and while she waits, ammunition that comes back with time). Compiled with the game's flags into
+// libre4_main (re4_gamehooks_obj); the switch arrives with the second aim word (bit 29, runtime/aim_options.cpp).
+// Ashley's own chapter comes later.
+//
+//  - Stage 2, patch 0912 (Sscrn/ss_pzzl.cpp): with the switch on and Ashley the partner, "Equip" on a handgun or a
+//    magnum (the D-pad quick slots' up list) opens the case's own "use on" choice, Leon or Ashley. Ashley: she
+//    takes that pistol (kGiven, bit 7 of the item's flags, cItem::flags bit 0 being the only one the game uses: it
+//    goes with the save; one pistol at a time, a pistol she had goes back to Leon; Leon put to bare hands if it was
+//    his). Leon: she gives it back and he equips it ("Equip" on it without the choice, the switch off, does the
+//    same). The pistol stays in the case, framed pink (pzzlEquipDisp); the D-pad quick slots skip it. She is armed
+//    while the switch is on and the case holds such a pistol; selling or discarding it takes it from her.
 //
 //  - Patch 0911 (pl_npc.cpp cSubChar::move, before the parts' world matrices): re4_ashley_gun_move. While she is
 //    the partner in play (the game running, no event, sub screen or movie, Leon as the player; her routine standing,
@@ -34,6 +42,7 @@
 #include "obj18.h"
 #include "model.h"
 #include "dvd.h"
+#include "item.h"
 #include <dolphin/dvd.h>
 
 #include <atomic>
@@ -50,6 +59,9 @@ const u32 kGunAddr = 0x82200000u;  // cheats.cpp kWepPlaceAddr (Krauser's own ga
 const u32 kGunMax = 0x100000u;
 const char* const kGunFile = "em/wep02.drs";
 const int kGunBin = 6, kGunTpl = 5;
+
+const u8 kGiven = 0x80;        // cItem::flags: the pistol is Ashley's (patch 0912)
+const u16 kPistols[] = {0x23, 0x24, 0x21, 0x22, 0x40, 0x25, 0x26, 0x27, 0x28, 0x03, 0x29, 0x2A, 0x2B, 0x37};
 
 const f32 kRange = 12000.0f;   // 12 m
 const f32 kCone = 1.4f;        // radians either side of where she faces, while she walks
@@ -83,6 +95,37 @@ cSubChar* gCarrier = 0;
 cObj* gOld = 0;
 void* gOldModel = 0;
 int gOldWait = 0;
+
+bool isPistol(u16 id)
+{
+    for (u16 k : kPistols) {
+        if (k == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// the pistol Ashley carries: a handgun of Leon's case marked kGiven, or NULL
+cItem* givenItem()
+{
+    if (!ItemMgr.m_pItem) {
+        return 0;
+    }
+    cItem* p = ItemMgr.m_pItem;
+    for (int i = 0; i < ItemMgr.m_array_num && i < 0x400; i++, p++) {
+        if ((p->flags & 1) && (p->flags & kGiven) && p->type == 0) {
+            return p;
+        }
+    }
+    return 0;
+}
+
+// she shoots: the switch on and she holds a pistol
+bool armed()
+{
+    return gOn.load(std::memory_order_relaxed) && givenItem() != 0;
+}
 
 u32 be32At(const u8* p)
 {
@@ -447,9 +490,9 @@ void gunFrame(unsigned)
 {
     retireOld();
     cSubChar* a = gAshley && pG && pG->Frame_cnt - gSeen <= 2 && pSUB == (cEm*) gAshley ? gAshley : 0;
-    if (!gOn.load(std::memory_order_relaxed) || !a || pG->pl_type != 0 || gHand < 0 || gArmOf != a) {
+    if (!armed() || !a || pG->pl_type != 0 || gHand < 0 || gArmOf != a) {
         if (gObj) {
-            dropGun(!gOn.load() ? "switched off" : "no Ashley");
+            dropGun(!gOn.load() ? "switched off" : !givenItem() ? "no pistol given" : "no Ashley");
         }
         return;
     }
@@ -515,7 +558,7 @@ void re4_ashley_gun_move(cSubChar* a)
     if (!gHooked.exchange(true)) {
         re4_add_frame_hook(gunFrame);
     }
-    if (!gOn.load(std::memory_order_relaxed)) {
+    if (!armed()) {
         gW = 0.0f;
         gTarget = 0;
         return;
@@ -570,12 +613,94 @@ void re4_ashley_gun_move(cSubChar* a)
     }
 }
 
+// Patch 0912 (the case, Sscrn/ss_pzzl.cpp; the game thread): the pistol Ashley carries, framed in the case.
+cItem* re4_ashley_gun_item(void)
+{
+    return pG && pG->pl_type == 0 ? givenItem() : 0;
+}
+
+// Patch 0912: 1 = "Equip" on p asks who takes it (Leon or Ashley): the switch on, Leon's game, Ashley the partner
+// (id 3, as the case's "use on" choice asks), p a handgun or a magnum.
+int re4_ashley_gun_menu(cItem* p)
+{
+    return p && (p->flags & 1) && gOn.load(std::memory_order_relaxed) && pG && pG->pl_type == 0 && pSUB &&
+           ((cModel*) pSUB)->id == 3 && isPistol(p->id);
+}
+
+// Patch 0912: Ashley takes p; a pistol she had goes back to Leon, Leon's own put away when it was p. 1 done.
+int re4_ashley_gun_give(cItem* p)
+{
+    if (!p || !(p->flags & 1) || !isPistol(p->id)) {
+        return 0;
+    }
+    cItem* had = givenItem();
+    if (had && had != p) {
+        had->flags &= (u8) ~kGiven;
+        re4_log("ashley: pistol 0x%02x back to Leon", (unsigned) had->id);
+    }
+    p->flags |= kGiven;
+    if (ItemMgr.weapon() == p) {
+        ItemMgr.arm(0);
+    }
+    gAmmo = kMag;
+    gRegenT = 0;
+    re4_log("ashley: she takes pistol 0x%02x", (unsigned) p->id);
+    return 1;
+}
+
+// Patch 0912: Leon takes p back from her (before he equips it); nothing when it is not hers.
+void re4_ashley_gun_take(cItem* p)
+{
+    if (p && (p->flags & kGiven)) {
+        p->flags &= (u8) ~kGiven;
+        re4_log("ashley: she gives pistol 0x%02x back to Leon", (unsigned) p->id);
+    }
+}
+
+// runtime/quick_slots.cpp: 1 = p is Ashley's pistol (the D-pad does not take it from her)
+int re4_ashley_gun_holds(const cItem* p)
+{
+    return p && (p->flags & 1) && (p->flags & kGiven);
+}
+
 // The app (the second aim word's bit 29, runtime/aim_options.cpp; any thread): Ashley's pistol on or off.
 void re4_ashley_gun_set(int on)
 {
     if (gOn.exchange(on != 0) != (on != 0)) {
         re4_log("ashley: her pistol %s", on ? "on" : "off");
     }
+}
+
+// For the runtime test (patch 0912's give and take on a case of three items, the game's own swapped out
+// meanwhile): a bit per failed check, 0 = all passed.
+int re4_ashley_gun_selftest(void)
+{
+    cItem items[3];
+    memset(items, 0, sizeof items);
+    items[0].flags = 1, items[0].id = 0x23;  // the handgun
+    items[1].flags = 1, items[1].id = 0x25;  // the Red9
+    items[2].flags = 1, items[2].id = 0x2C;  // the shotgun
+    cItem* const keep = ItemMgr.m_pItem;
+    const int keepN = ItemMgr.m_array_num;
+    const bool keepOn = gOn.load();
+    ItemMgr.m_pItem = items;
+    ItemMgr.m_array_num = 3;
+    gOn.store(true);
+    int bad = 0;
+    if (givenItem() || armed()) bad |= 1;
+    if (re4_ashley_gun_give(&items[2]) != 0 || givenItem()) bad |= 2;          // not a pistol
+    if (re4_ashley_gun_give(&items[0]) != 1 || givenItem() != &items[0] || !armed()) bad |= 4;
+    if (re4_ashley_gun_give(&items[1]) != 1 || givenItem() != &items[1] || (items[0].flags & kGiven)) bad |= 8;
+    if (!re4_ashley_gun_holds(&items[1]) || re4_ashley_gun_holds(&items[0])) bad |= 0x10;
+    re4_ashley_gun_take(&items[1]);
+    if (givenItem() || items[1].flags != 1) bad |= 0x20;
+    re4_ashley_gun_give(&items[0]);
+    gOn.store(false);
+    if (armed() || givenItem() != &items[0]) bad |= 0x40;                      // the switch off: unarmed, still hers
+    ItemMgr.m_pItem = keep;
+    ItemMgr.m_array_num = keepN;
+    gOn.store(keepOn);
+    return bad;
 }
 
 // For the runtime test: rounds left after `frames` frames without a shot, from `left`.
