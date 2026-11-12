@@ -1,6 +1,7 @@
 # Skins für Nebenfiguren (Ashley, Luis …) – Plan
 
-Wunsch von DevJunior (11.11.2026): „die NPCs ändern können (auch Luis und Ashley)“; seine Wahl: Skins (Modelle),
+Wunsch von DevJunior (11.11.2026): „die NPCs ändern können (auch Luis und Ashley)“, dazu Ada Wong, HUNK, Krauser,
+Wesker und die Figuren der Söldner („damit man sie in der Kampagne benutzen und sehen kann“); seine Wahl: Skins (Modelle),
 wie bei Leon (`claude/cubeevil4-skins.md` im Projekt, `port/tools/uhd_skin_convert.py`, Patch 0901). Kein Fehler
 des Prototyps: eine Port-Funktion der Mods.
 
@@ -39,10 +40,19 @@ des Prototyps: eine Port-Funktion der Mods.
 5. **Werkzeuge:** Einträge je Figur (Kopf, Gesicht, Haar, Hände) in `skin_slim.py`/`skin_shapes.py` usw.; das
    Haar von Ashley hat eigene Physik (`pl_cloth.cpp`: Haar, Rock, Pullover).
 
+- **Ada, HUNK, Krauser, Wesker als Spielfigur der Kampagne** gibt es schon (Cheat-Menü „Spielfigur“, Patch 0195):
+  ihr Archiv kommt als Spielerarchiv über `ReadPlayerData` und nutzt damit den Ausweichplatz von 6 MB wie Leon; ihre
+  Skins brauchen nur den Umwandler (N2). Als Nebenfigur (Ada und Krauser in den Ereignissen, Luis, Ashley, Gegner)
+  kommen sie über `readEmData`: Platz aus N1.
+
 ## Schritte
 
-- **N1 – Platz für Mod-Figurenarchive (Cloud):** Patch an `readEmData`; Laufzeittest mit einer künstlich großen
-  Datei; Entscheidung über den Ort (Hürde 2) vorher mit DevJunior.
+- **N1 – Platz für Mod-Figurenarchive (Cloud): ✅ 11.11.2026, Patch 0914** (`runtime/mod_place.cpp`). Statt MEM1 auf
+  64 MB zu vergrößern (auf 64-bit-Android liegt MEM1 im Bereich der großen Java-Objekte, dessen Ende bei kleinem
+  `dalvik.vm.heapsize` unter 0x84000000 liegt: der Kern wäre dort gar nicht mehr gestartet) bekommen die Mods einen
+  eigenen Platz von 16 MB oberhalb von MEM1, nur wenn ein Mod-Archiv ihn braucht; die Prüfungen des Spiels gehen bis
+  `re4_game_top` (Umschreibung in `whole_prepare.py`), GX und ARAM sehen ihn bei 0x04000000. Laufzeittest `modplace`;
+  mit Disc-Daten und auf dem Gerät nicht geprüft.
 - **N2 – Umwandeln (Cloud, mit den Dateien von DevJunior):** ein PC-Skin für Ashley (`pl11.udas`, und `pl01` für ihr
   Kapitel) und einer für Luis (`pl14.udas`); Vergleich mit `re4_format_compare` wie bei Leon.
 - **N3 – Gerät:** Ashley als Begleiterin, in ihrem Kapitel, Luis in der Hütte; Speicher, Bildrate, Zwischensequenzen.

@@ -1,0 +1,64 @@
+# Patch 0914 (wish of DevJunior, 11.11.2026: skins for Ashley, Luis, Ada and the other characters; his approval of the
+# extra 16 MB the same day; port/docs/npc-skins-plan.md). Not a bug of the prototype: a port feature of the mods.
+# game/read.cpp readEmData: a character's archive (EmReadSearch: the partner, the people of the events, every enemy)
+# that a mod pack replaces is read to a block of the mods' place above MEM1 (runtime/mod_place.cpp re4_mod_em_place,
+# at least the file and the room's own size) instead of a block of the room's heap, which a skin of several MB does
+# not find; its REL part is copied out when the room's size reaches over it, as with the heap's block. InitModule
+# gives the block back (re4_mod_em_release). The disc's own files, and a mod's when the place is full, go as before.
+--- a/src/game/read.cpp
++++ b/src/game/read.cpp
+@@ -248,6 +248,9 @@
+ 
+ // Frees a loaded module slot: unlinks the REL (flag bit1), frees the archive (bit2; debug heap
+ // when bit3) and the separately copied module (bit0), clears the slot.
++extern "C" void* re4_mod_em_place(const char* name, unsigned int need); /* port (patch 0914): runtime/mod_place.cpp */
++extern "C" int re4_mod_em_release(const void* p); /* port (patch 0914) */
++
+ void InitModule(MODULE_DAT* m)
+ {
+     if (m->pDll != NULL && m->ctrl_flag.check(MODULE_CTRL_DLL_LINK)) {
+@@ -263,6 +266,7 @@
+     if (m->pDll != NULL && m->ctrl_flag.check(MODULE_CTRL_DLL_MALLOC)) {
+         Mem_free(m->pDll);
+     }
++    re4_mod_em_release(m->pData); /* port (patch 0914): a mod's archive gives its block back */
+     memclr_asm(m, sizeof(MODULE_DAT));
+ }
+ 
+@@ -379,6 +383,7 @@
+     u32 bssSize = 0;
+     u32 newSize;
+     u32 dataSize;
++    int modPlace = 0; /* port (patch 0914) */
+ 
+     switch (pG->pl_type) {
+     case 0:
+@@ -413,6 +418,11 @@
+     if (pG->Rno0 == 2) {
+         mode = 0x100;
+     }
++    /* port (patch 0914): a character archive a mod replaces goes to the mods' place (as the game's own, when it was
++       given one) */
++    if (addr == NULL && (addr = re4_mod_em_place(name, size)) != NULL) {
++        modPlace = 1;
++    }
+     if (addr == NULL) {
+ #line 725 "D:/Bio4/Prog/read.cpp"
+         req = DVD_READ_N(name, NULL, 0, 0, 0, mode | 0x8004);
+@@ -453,12 +463,15 @@
+         m->ctrl_flag.off(MODULE_CTRL_DATA_MALLOC);
+         pArc = addr;
+         newSize = len;
++        if (modPlace && newSize < size) {
++            newSize = size; /* port (patch 0914): the room's own size, as the heap's block grows to it */
++        }
+     }
+     if (e->dll != 0) {
+         pModule = (void*) (*(u32*) ((u8*) pArc + 4) + (u32) pArc);
+         dataSize = (u32) pModule - (u32) pArc;
+         bssSize = len - dataSize;
+-        if (addr == NULL && dataSize < size) {
++        if ((addr == NULL || modPlace) && dataSize < size) {
+             void* old = pModule;
+ #line 814 "D:/Bio4/Prog/read.cpp"
+             pModule = MEM_ALLOC(bssSize, 1, 0xD);

@@ -131,6 +131,11 @@ namespace re4gx {
 
 uint8_t* memory(uint32_t physical, uint32_t size)
 {
+    if (physical >= RE4_MOD_PLACE_PHYSICAL) {  // the mods' character archives (mod_place.cpp)
+        unsigned int left = 0;
+        void* p = re4_mod_place_at(physical, &left);
+        return p && size <= left ? (uint8_t*) p : nullptr;
+    }
     if (physical < RE4_MEM1_SIZE) {
         if (size > RE4_MEM1_SIZE - physical) {
             return nullptr;
@@ -163,6 +168,9 @@ uint32_t aliasGeneration()
 uint8_t* memorySpan(uint32_t physical, uint32_t* available)
 {
     *available = 0;
+    if (physical >= RE4_MOD_PLACE_PHYSICAL) {
+        return (uint8_t*) re4_mod_place_at(physical, available);
+    }
     if (physical < RE4_MEM1_SIZE) {
         *available = RE4_MEM1_SIZE - physical;
         return (uint8_t*) (uintptr_t) (RE4_MEM1_BASE + physical);
@@ -200,6 +208,9 @@ uint8_t* listMemory(uint32_t address, uint32_t size)
         return nullptr;
     }
     const uint8_t* list = (const uint8_t*) (uintptr_t) address;
+    if (re4_mod_place_holds(list, size)) {
+        return (uint8_t*) list;
+    }
     if (!re4_valid_port_ptr(list) || !re4_valid_port_ptr(list + size - 1)) {
         return nullptr;
     }
@@ -300,12 +311,15 @@ unsigned int re4_gx_physical(const void* pointer)
     if (p < RE4_MEM1_SIZE) {
         return (unsigned int) p;  // a physical address already (or NULL)
     }
+    if (unsigned int physical = re4_mod_place_physical(pointer)) {
+        return physical;
+    }
     return aliasOf(p);
 }
 
 void* re4_gx_cached(unsigned int physical)
 {
-    physical &= 0x03FFFFFF;
+    physical &= 0x07FFFFFF;  // the mods' place lies above the 64 MB of the GameCube's addresses
     if (physical >= kAliasBase) {
         return re4gx::memory(physical, 0);
     }

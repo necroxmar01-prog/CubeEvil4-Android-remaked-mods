@@ -56,6 +56,11 @@ unsigned char* mainMemory(u32 addr)
     if (addr >= 0xC0000000u && addr < 0xC0000000u + RE4_MEM1_SIZE) {
         return (unsigned char*) (unsigned long) (addr - 0x40000000u);
     }
+    // the mods' character archives (mod_place.cpp): a cached address of the place as it is, or its physical one
+    // (OSCachedToPhysical: the cached address - 0x80000000)
+    if (addr < 0x80000000u && re4_mod_place_holds((const void*) (unsigned long) (addr + 0x80000000u), 1)) {
+        return (unsigned char*) (unsigned long) (addr + 0x80000000u);
+    }
     return (unsigned char*) (unsigned long) addr;
 }
 

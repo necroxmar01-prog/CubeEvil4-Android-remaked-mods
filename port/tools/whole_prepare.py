@@ -53,6 +53,11 @@ LIBC_UNSIGNED = re.compile(r"\bunsigned\s+int\b")
 # on ILP32 the value stays the same (milestone 12).
 PAD_TO_SIZE = re.compile(r"\[([^\[\]]*?)\s*-\s*sizeof\s*\(([^()]*)\)\s*\]")
 TEXT_SUFFIXES = (".c", ".cpp", ".h", ".hpp", ".inc")
+# The game's checks of "a pointer into game memory" (VALID_PTR in main_mem.h, `> 0x82FFFFFF`, the folded
+# `- 0x80000000 <= 0x02FFFFFF`): the top is re4_game_top (runtime/mod_place.cpp), 0x82FFFFFF until the place for the
+# mods' character archives above MEM1 is taken (patch 0914, port/docs/npc-skins-plan.md).
+GAME_TOP = re.compile(r"\b0x82FFFFFF\b")
+GAME_SPAN = re.compile(r"0x80000000(\s*)(<=|>)(\s*)0x02FFFFFF\b")
 
 # `decl asm("symbol")` outside a register declaration is a symbol alias, not
 # code: the original declares a second name (often with a different signature)
@@ -166,6 +171,24 @@ def rewrite(text: str) -> str:
         text = ROOM_ID_ADDR.sub(lambda m: f"(u16*) &pG->{ROOM_ID_WORD[m.group(1)]}", text)
     text = rewrite_gx_fifo(text)
     return text
+
+
+def apply_game_top(tree: Path) -> int:
+    """GAME_TOP / GAME_SPAN on the game's sources and headers, after the patches (0021, 0037 name the constants in
+    their context); src/lib (the SDK) has none. Returns the number of sites."""
+    sites = 0
+    for path in sorted(list((tree / "src").rglob("*")) + list((tree / "include").rglob("*"))):
+        if path.suffix not in TEXT_SUFFIXES or not path.is_file() or "lib" in path.relative_to(tree).parts[1:2]:
+            continue
+        text = path.read_text(encoding="utf-8", errors="surrogateescape")
+        if "FFFFFF" not in text:
+            continue
+        new, a = GAME_SPAN.subn(r"0x80000000\1\2\3(re4_game_top - 0x80000000)", text)
+        new, b = GAME_TOP.subn("re4_game_top", new)
+        if a or b:
+            path.write_text(new, encoding="utf-8", errors="surrogateescape")
+            sites += a + b
+    return sites
 
 
 # Word accesses to byte fields (port/tools/whole_byte_views.py, reviewed list
@@ -503,6 +526,7 @@ def prepare(out: Path) -> Path:
     exact_width_types(staging)
     fixed = fixed_form_structs(staging)
     apply_patches(staging)
+    tops = apply_game_top(staging)
     sizes = lp64_sizes(staging)
     views = apply_byte_views(staging)
     casts = apply_int_casts(staging)
@@ -514,7 +538,7 @@ def prepare(out: Path) -> Path:
         sys.exit("inline asm check failed (port/tools/whole_asm_check.py):\n  " + "\n  ".join(problems))
     print(f"whole_prepare: asm {whole_asm_check.summary(found)}; {views} byte views; "
           f"{fixed} fixed-form pointer members; {sizes} LP64 work sizes; {casts} signed casts to pointers; "
-          f"{arcs} acosf/asinf calls guarded")
+          f"{arcs} acosf/asinf calls guarded; {tops} game memory checks up to re4_game_top")
     sync(staging, tree)
     shutil.rmtree(staging)
     write_sdk_c_only(out)

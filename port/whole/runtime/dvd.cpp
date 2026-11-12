@@ -900,6 +900,20 @@ void re4_mod_melee_path_set(const char* path)
     snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
 }
 
+// Patch 0914 (runtime/mod_place.cpp): the bytes a read of `name` writes (its size, or its body's when larger) when a
+// mod replaces it, 0 for the disc's own file.
+int re4_mod_file_bytes(const char* name)
+{
+    Disc* d = current();
+    s32 entry = d ? lookup(*d, name) : -1;
+    if (entry <= 0 || isDir(*d, (u32) entry) || !d->mod || !d->mod[entry]) {
+        return 0;
+    }
+    u32 size = word(*d, (u32) entry, 2);
+    const u32 body = bodySize(name);
+    return (int) (body > size ? body : size);
+}
+
 int re4_player_modded(void)
 {
     return gPlayerModded;

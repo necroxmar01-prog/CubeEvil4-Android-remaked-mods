@@ -31,6 +31,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+extern "C" int re4_mod_place_holds(const void* p, unsigned long size);  // runtime/mod_place.cpp
 
 extern GLOBAL_WK* pG;
 extern cEmMgr EmMgr;
@@ -62,7 +63,7 @@ bool shapesWanted()
 bool inMem1(const void* p)
 {
     unsigned long a = (unsigned long) p;
-    return a >= 0x80000000ul && a < 0x83000000ul;
+    return (a >= 0x80000000ul && a < 0x83000000ul) || re4_mod_place_holds(p, 1);
 }
 
 // A game structure (parts, model infos, model data) lies on a 4-byte boundary. While a room is torn

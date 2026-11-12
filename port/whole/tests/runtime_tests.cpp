@@ -2363,6 +2363,18 @@ static void testQteAuto()
     report("qteauto", bad == 0 && logged);
 }
 
+// The place for the mods' character archives (runtime/mod_place.cpp, patch 0914); it stays taken for the rest of the
+// test process (re4_game_top raised): run late.
+extern "C" int re4_mod_place_selftest(void);
+static void testModPlace()
+{
+    const int bad = re4_mod_place_selftest();
+    if (bad) {
+        re4_log("  modplace: failed checks 0x%x", bad);
+    }
+    report("modplace", bad == 0);
+}
+
 // The cheat menu's weapon list (runtime/cheats.cpp giveFromList)
 extern "C" int re4_cheat_list_selftest(void);
 static void testCheatList()
@@ -2800,6 +2812,7 @@ int re4_runtime_tests()
     testQteAuto();
     testCheatExtras();
     testCheatList();
+    testModPlace();
     testPotato();
     testHandcannon();
     testGyroBoat();

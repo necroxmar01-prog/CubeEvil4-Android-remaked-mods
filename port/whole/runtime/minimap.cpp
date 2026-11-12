@@ -25,6 +25,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+extern "C" int re4_mod_place_holds(const void* p, unsigned long size);  // runtime/mod_place.cpp
 
 extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_add_frame_hook(void (*hook)(unsigned));  // runtime/pad.cpp
@@ -50,7 +51,7 @@ unsigned gSlots;
 bool live(const void* p)
 {
     const unsigned long a = (unsigned long) p;
-    return p && ((a >= 0x80000000ul && a < 0x83000000ul) || re4_valid_port_ptr(p));
+    return p && ((a >= 0x80000000ul && a < 0x83000000ul) || re4_mod_place_holds(p, 1) || re4_valid_port_ptr(p));
 }
 
 // What the room's floor is made of now: its pieces, their triangles and places.

@@ -23,6 +23,7 @@
 #include <dolphin/os.h>
 #include <math.h>
 #include <string.h>
+extern "C" int re4_mod_place_holds(const void* p, unsigned long size);  // runtime/mod_place.cpp
 
 extern int OptionOpenCheck();
 extern void CRCInit();
@@ -63,7 +64,8 @@ TITLE_WORK* gTitle;
 bool live(const void* p)
 {
     const unsigned long address = (unsigned long) p;
-    return p && ((address >= 0x80000000ul && address < 0x83000000ul) || re4_valid_port_ptr(p));
+    return p && ((address >= 0x80000000ul && address < 0x83000000ul) || re4_mod_place_holds(p, 1) ||
+                 re4_valid_port_ptr(p));
 }
 
 bool shapeFits()

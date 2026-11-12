@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+extern "C" int re4_mod_place_holds(const void* p, unsigned long size);  // runtime/mod_place.cpp
 
 extern GLOBAL_WK* pG;
 extern cPlayer* pPL;
@@ -150,7 +151,7 @@ namespace {
 bool inMem1(const void* p)
 {
     unsigned long a = (unsigned long) p;
-    return a >= 0x80000000ul && a < 0x83000000ul;
+    return (a >= 0x80000000ul && a < 0x83000000ul) || re4_mod_place_holds((const void*) a, 1);
 }
 
 // The deepest camera depth of the joints of model m (cParts::mat, the world
