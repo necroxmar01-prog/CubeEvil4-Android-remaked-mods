@@ -215,6 +215,8 @@ def main(argv=None):
     ap.add_argument("--tex", type=int, default=1024, help="the face texture's size (power of two, default 1024)")
     ap.add_argument("--keep-mats", default="2", help="the old head's parts (texture indices) to keep: its eyes")
     ap.add_argument("--eyes-follow", type=int, default=1, help="1: the kept eyes moved onto the FBX's eyeballs")
+    ap.add_argument("--drop-mats", default="", help="the old head's parts (texture indices) to leave out (DevJunior, "
+                    "12.11.2026, device test: the old head's dark eye cards (3) floated in front of the new lids)")
     ap.add_argument("--neck", type=float, help="cut the neck below this height (default: the old head's lowest)")
     ap.add_argument("--cavity", type=float, default=0.35, help="the cavity's shade (0..1)")
     ap.add_argument("--relief", type=float, default=0.25, help="the normal map's light (0..1)")
@@ -245,7 +247,8 @@ def main(argv=None):
     s, t = H.place(fbx, head)
     print("FBX head on the skin's: scale %.3f, shift (%.1f, %.1f, %.1f)" % (s, *t))
     keep = [int(x) for x in a.keep_mats.split(",") if x]
-    skin_part = [p for p in G.parts(head) if not G.is_empty(head, p) and head[p + 0xC] not in keep]
+    drop = [int(x) for x in a.drop_mats.split(",") if x]
+    skin_part = [p for p in G.parts(head) if not G.is_empty(head, p) and head[p + 0xC] not in keep + drop]
     if len(skin_part) != 1:
         raise SystemExit("the old head has %d parts besides %s: give --keep-mats" % (len(skin_part), keep))
     skin_part = skin_part[0]
