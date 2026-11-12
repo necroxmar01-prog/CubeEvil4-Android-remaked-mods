@@ -34,7 +34,6 @@ extern cPlayer* pPL;
 extern u32 Key_type_tbl[2][64];          // game/pad.cpp
 extern "C" int re4_quick_slots_on(void);  // runtime/aim_options.cpp
 extern "C" void re4_log(const char* fmt, ...);
-extern "C" int re4_ashley_gun_holds(const cItem* p);  // runtime/ashley_gun.cpp (patch 0912)
 
 namespace {
 
@@ -82,7 +81,7 @@ cItem* pick(int slot)
     int heldAt = -1;
     for (int i = 0; i < s.n && n < 16; i++) {
         cItem* p = ItemMgr.search(s.ids[i]);
-        if (!p || p->num == 0 || re4_ashley_gun_holds(p)) {  // Ashley's pistol stays hers
+        if (!p || p->num == 0) {
             continue;
         }
         if (p == held) {

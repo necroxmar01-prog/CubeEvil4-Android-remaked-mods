@@ -2,39 +2,22 @@
 # Not a bug of the prototype: a port feature with runtime/ashley_gun.cpp (stage 2 of patch 0911).
 # Sscrn/ss_pzzl.cpp PieceCommand::move: "Equip" on a handgun or a magnum, while re4_ashley_gun_menu says so (the
 # Mods page's switch on, Leon's game, Ashley the partner, id 3), opens the case's own "use on" choice (Leon /
-# Ashley, IdSub 0x70.., as "Use" does with a herb): Ashley takes the pistol (re4_ashley_gun_give: bit 7 of the
-# item's flags, saved with the game), Leon takes it back from her and equips it (re4_ashley_gun_take, also on a
-# plain "Equip"). pzzlEquipDisp frames the pistol she carries pink (pieceFrameDisp, as the equipped weapon's frame).
+# Ashley, IdSub 0x70.., as "Use" does with a herb). Leon: he equips it. Ashley: she takes it out of the case
+# (re4_ashley_gun_give: the item's inventory type set to one no case shows, saved with the game; DevJunior,
+# 11.11.2026: it takes no room while she has it), its piece removed at once as pzlPlayer::rehash removes a used-up
+# item's. She gives it back when Leon holds the partner command button or the switch goes off (runtime).
 --- a/src/Sscrn/ss_pzzl.cpp
 +++ b/src/Sscrn/ss_pzzl.cpp
-@@ -96,6 +96,10 @@
+@@ -96,6 +96,8 @@
  u32 colorRRGGBBAA(u32 r, u32 g, u32 b, u32 a);
  int back2PieceSelect(SUB_SCREEN* wk);
  void pzzlEquipDisp(SUB_SCREEN* wk, int sw);
-+extern "C" cItem* re4_ashley_gun_item(void);      /* port (patch 0912): runtime/ashley_gun.cpp */
-+extern "C" int re4_ashley_gun_menu(cItem* p);      /* port (patch 0912) */
++extern "C" int re4_ashley_gun_menu(cItem* p);      /* port (patch 0912): runtime/ashley_gun.cpp */
 +extern "C" int re4_ashley_gun_give(cItem* p);      /* port (patch 0912) */
-+extern "C" void re4_ashley_gun_take(cItem* p);     /* port (patch 0912) */
  void pzzlCursorDisp(SUB_SCREEN* wk, int sw);
  void drawCursorInit(SUB_SCREEN* wk, PzzlCursor* c);
  void cmpVer(PzzlCursor* c, Vec* v);
-@@ -302,6 +306,15 @@
-         id[2]->be_flag &= ~8;
-         id2[2]->be_flag &= ~8;
-     }
-+    /* port (patch 0912): the pistol Ashley carries, framed pink */
-+    if (sw) {
-+        cItem* given = re4_ashley_gun_item();
-+        pzlPiece* gp = given ? pl->piecePtr(given) : 0;
-+
-+        if (gp && gp != pl->pieceInHand()) {
-+            pieceFrameDisp(gp->model, colorRRGGBBAA(0xFF, 0x70, 0xB0, 0x20), 3);
-+        }
-+    }
- }
- 
- // Draws the case cursor every frame: the cell frame under the board cursor (drawCursor), the piece
-@@ -2493,7 +2506,14 @@
+@@ -2493,6 +2495,12 @@
                      }
                      mode = 3;
                      openMsgWindow(wk, 0x27);
@@ -45,11 +28,9 @@
 +                    SndCall(0, 4, 0, 0, 0, 0);
 +                    return;
                  } else {
-+                    re4_ashley_gun_take(pzzl_sel->item);
                      used = ItemMgr.arm(pzzl_sel->item);
                      if (used) {
-                         wk->puzzlePlayer->rehash();
-@@ -2599,6 +2619,7 @@
+@@ -2599,6 +2607,7 @@
  
          // two-case switches: both compares before the arms (`cmpwi 4; beq; cmpwi 6; beq; b`)
          switch (command_id) {
@@ -57,16 +38,29 @@
          case 4:
              base = 0x70;
              break;
-@@ -2634,6 +2655,15 @@
+@@ -2634,6 +2643,28 @@
              int msg = 0;
  
              switch (command_id) {
-+            case 0: /* port (patch 0912): Leon equips the pistol (Ashley gives hers back) or Ashley takes it */
++            case 0: /* port (patch 0912): Leon equips the pistol or Ashley takes it out of the case */
 +                if (subSel == 0) {
-+                    re4_ashley_gun_take(pzzl_sel->item);
 +                    used = ItemMgr.arm(pzzl_sel->item);
-+                } else {
-+                    used = re4_ashley_gun_give(pzzl_sel->item);
++                } else if ((used = re4_ashley_gun_give(pzzl_sel->item)) != 0) {
++                    pzlPlayer* pl = wk->puzzlePlayer;
++                    pzlPiece* gp = pl->piecePtr(pzzl_sel->item);
++
++                    /* its piece leaves the case at once (rehash drops only used-up items) */
++                    if (gp && gp->isOnBoard()) {
++                        if (pl->boardPtr()->search(gp)) {
++                            pl->boardPtr()->rmPiece(gp);
++                        } else if (pl->spacePtr()->search(gp)) {
++                            pl->spacePtr()->rmPiece(gp);
++                        }
++                    }
++                    if (gp) {
++                        gp->model->push();
++                        gp->clear();
++                    }
 +                }
 +                SndCall(0, used ? 8 : 7, 0, 0, 0, 0);
 +                break;
