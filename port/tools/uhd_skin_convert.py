@@ -894,12 +894,49 @@ def convert_tpl(blob, packs, size, stats, gc_tpl=None, bake=None, colour_only=()
 # The models that draw with a palette: a player archive's (pl_leon.cpp setModel and the others: body, parts and
 # knife with entry 1, face, head and hair with entry 3), elsewhere the model in front of it.
 PLAYER_TPL_USERS = {1: (0, 6, 9, 12), 3: (2, 4, 5)}
+# The other characters' palettes and the models drawn with them (entry = the game's archive index - 4): Ashley as the
+# player (pl_ashley.cpp cPlAshley::setModel / setRightHand / setLeftHand: pl01, pl05 in the other costume) and as the
+# partner (pl11.cpp cSubAshley: pl11, pl15). Wish of DevJunior, 11.11.2026: skins for the other characters.
+CHARACTER_TPL_USERS = {
+    "pl01": {1: (0, 4, 6, 13, 16, 17), 5: (3,), 7: (2,)},
+    "pl05": {1: (0, 4, 6, 13, 16, 17), 5: (3,), 7: (2,)},
+    "pl11": {1: (0, 5, 6, 8, 9, 10, 11, 12), 4: (2,), 7: (3,)},
+    "pl15": {1: (0, 5, 6, 8, 9, 10, 11, 12), 4: (2,), 7: (3,)},
+}
+TPL_USERS = PLAYER_TPL_USERS  # main() sets the character's
+
+
+class Aligned:
+    """The PC archive seen with the disc's entries: a mod's archive may hold entries the disc's lacks (the PC release
+    added empty entries and a motion sequence to some characters, e.g. Ashley's pl11 three empty ones after the
+    models and a SEQ at the end); they are matched by their kinds in order (difflib), a disc entry without a partner
+    keeps the disc's."""
+
+    def __init__(self, gc, pc):
+        import difflib
+        self.pc = pc
+        gk = [gc.kind(i) for i in range(len(gc.offsets))]
+        pk = [pc.kind(i) for i in range(len(pc.offsets))]
+        self.map = [None] * len(gk)
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, gk, pk, autojunk=False).get_opcodes():
+            if tag == "equal" or (tag == "replace" and i2 - i1 == j2 - j1):
+                for k in range(i2 - i1):
+                    self.map[i1 + k] = j1 + k
+        self.offsets = gc.offsets
+        self.types = [pc.types[j] if j is not None else gc.types[i] for i, j in enumerate(self.map)]
+        self.dropped = [j for j in range(len(pk)) if j not in set(m for m in self.map if m is not None)]
+
+    def kind(self, i):
+        return self.pc.kind(self.map[i]) if self.map[i] is not None else ""
+
+    def entry(self, i):
+        return self.pc.entry(self.map[i]) if self.map[i] is not None else b""
 
 
 def colour_slots(pc, t):
     """The slots of palette `t` its models use only as colour (material) texture, none as bump, alpha or
     specular texture."""
-    users = PLAYER_TPL_USERS.get(t, ()) if len(pc.offsets) >= 100 else (t - 1,)
+    users = TPL_USERS.get(t, ()) if len(pc.offsets) >= 100 or TPL_USERS is not PLAYER_TPL_USERS else (t - 1,)
     colour, other = set(), set()
     for k in users:
         if k < 0 or k >= len(pc.offsets) or pc.kind(k) != "BIN" or not pc.entry(k):
@@ -916,7 +953,7 @@ def colour_slots(pc, t):
     return colour - other
 
 
-def check_skeleton(gc_model, pc_model):
+def check_skeleton(gc_model, pc_model, free=()):
     gb = []
     for i in range(gc_model[0x19]):
         r = gc_model[0x60 + i * 16:0x60 + i * 16 + 16]
@@ -924,9 +961,16 @@ def check_skeleton(gc_model, pc_model):
     pb = [(raw[0], raw[1], xyz) for raw, xyz in Model(pc_model).bones()]
     if len(gb) != len(pb):
         return "parts %d (disc) and %d (PC)" % (len(gb), len(pb))
+    moved = []
     for i, (a, b) in enumerate(zip(gb, pb)):
         if a[:2] != b[:2] or max(abs(x - y) for x, y in zip(a[2], b[2])) > 0.5:
+            if i in free and a[:2] == b[:2]:
+                moved.append(i)
+                continue
             return "part %d differs (disc %s, PC %s)" % (i, a, b)
+    if moved:
+        print("the PC skeleton's parts %s lie elsewhere (--bones-free): the model keeps them, the disc's motions "
+              "drive them" % moved)
     return None
 
 
@@ -944,7 +988,15 @@ def main(argv=None):
                          "RE4_LOCKED_CACHE_SIZE / 0x30; the GameCube's held 341; above 255 the normals are s16)")
     ap.add_argument("--keep", default="", help="comma-separated entries to take from the disc file unchanged")
     ap.add_argument("--verify", action="store_true", help="read every model back and compare with the PC's")
+    ap.add_argument("--bones-free", default="",
+                    help="parts (e.g. 93-125, Ashley's skirt chains, which pl_cloth swings) that may lie elsewhere in "
+                         "the PC skeleton than on the disc, same parent")
     a = ap.parse_args(argv)
+    free = set()
+    for r in a.bones_free.split(","):
+        if r:
+            lo, _, hi = r.partition("-")
+            free.update(range(int(lo), int(hi or lo) + 1))
 
     gc = Archive(open(a.gc, "rb").read(), ">")
     pcdata = open(a.pc, "rb").read()
@@ -952,18 +1004,30 @@ def main(argv=None):
         import re4lfs
         pcdata = re4lfs.unpack(pcdata)
     pc = Archive(pcdata, "<")
+    global TPL_USERS
+    stem = os.path.basename(a.gc).split(".")[0].lower()
+    TPL_USERS = CHARACTER_TPL_USERS.get(stem, PLAYER_TPL_USERS)
     if len(gc.offsets) != len(pc.offsets):
-        sys.exit("the archives differ: %d entries on the disc, %d in the PC file" % (len(gc.offsets), len(pc.offsets)))
+        pc = Aligned(gc, pc)
+        print("the archives differ: %d entries on the disc, %d in the PC file; matched by kind, PC entries left out: %s"
+              % (len(gc.offsets), len(pc.pc.offsets), pc.dropped))
+        if sum(1 for m in pc.map if m is None) > 0 and any(gc.kind(i) in ("BIN", "TPL") and pc.map[i] is None
+                                                          for i in range(len(gc.offsets))):
+            print("  disc models or palettes without a PC partner keep the disc's: %s" %
+                  [i for i in range(len(gc.offsets)) if pc.map[i] is None and gc.kind(i) in ("BIN", "TPL")])
     keep = {int(x) for x in a.keep.split(",") if x}
     packs = Packs(a.packs)
     if gc.kind(0) == "BIN" and pc.kind(0) == "BIN":
-        why = check_skeleton(gc.entry(0), pc.entry(0))
+        why = check_skeleton(gc.entry(0), pc.entry(0), free)
         if why:
             sys.exit("the skeletons differ: %s; the disc's motions would not fit this model" % why)
     entries = []
     for i in range(len(gc.offsets)):
         kind_gc, kind_pc = gc.kind(i), pc.kind(i)
         blob_pc = pc.entry(i)
+        if isinstance(pc, Aligned) and pc.map[i] is None:
+            entries.append(gc.entry(i))
+            continue
         if kind_gc != kind_pc:
             sys.exit("entry %d: %s on the disc, %s in the PC file" % (i, kind_gc, kind_pc))
         if i in keep or not blob_pc:
