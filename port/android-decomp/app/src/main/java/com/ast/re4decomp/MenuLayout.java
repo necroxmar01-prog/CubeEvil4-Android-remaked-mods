@@ -27,7 +27,7 @@ final class MenuLayout {
 
   static final class Buttons extends GridLayout {
     private final int maxColumns, lines;
-    private int measuredColumns;
+    private int measuredColumns, measuredChildren = -1;
 
     Buttons(Context context, int maxColumns) {
       this(context, maxColumns, 1);
@@ -44,6 +44,11 @@ final class MenuLayout {
       LayoutParams lp = new LayoutParams();
       lp.width = 0;
       lp.height = LayoutParams.WRAP_CONTENT;
+      // weighted from the start: a button added after the row was measured (the mods' list, refilled when a pack is
+      // switched; DevJunior, 12.11.2026) kept GridLayout's default unweighted spec, width 0: an invisible column of
+      // one-letter lines, the page a long empty stretch above the buttons
+      lp.columnSpec = spec(UNDEFINED, FILL, 1f);
+      lp.rowSpec = spec(UNDEFINED, FILL);
       lp.setMargins(dp(getContext(), GAP), dp(getContext(), GAP), dp(getContext(), GAP), dp(getContext(), GAP));
       addView(button, lp);
     }
@@ -61,7 +66,7 @@ final class MenuLayout {
       }
       int columns = Math.max(1, Math.min(Math.min(maxColumns, getChildCount()), available / needed));
       // Clear auto-assigned spans before changing column count (also supports resizing back up).
-      if (measuredColumns != columns) {
+      if (measuredColumns != columns || measuredChildren != getChildCount()) {
         setColumnCount(UNDEFINED);
         setRowCount(UNDEFINED);
         for (int i = 0; i < getChildCount(); i++) {
@@ -73,6 +78,7 @@ final class MenuLayout {
         setColumnCount(columns);
         setRowCount((getChildCount() + columns - 1) / columns);
         measuredColumns = columns;
+        measuredChildren = getChildCount();
       }
       super.onMeasure(widthSpec, heightSpec);
     }

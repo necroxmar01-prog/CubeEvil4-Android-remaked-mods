@@ -935,6 +935,34 @@ public class CoreMenuLayoutTest {
   /** The performance profiles in one row with the benchmark at its end, the lines under it over the whole width (the
    *  project owner after the Retroid test, 11.11.2026), in each language at the three font sizes on a handheld's width;
    *  on a narrow window the row may break, never clip (allPagesFitAcrossLanguagesWidthsAndFontScales). */
+  /** The mods' list is refilled when a pack is switched (CoreMenu.refreshMods: removeAllViews, then the buttons
+   *  again): every button keeps a width and the row stays as high as its buttons (DevJunior, 12.11.2026: with more
+   *  than one mod a long empty stretch above "Add mod folder"). */
+  @Test public void refilledButtonRowKeepsItsButtonsVisible() throws Exception {
+    try (var controller = Robolectric.buildActivity(Activity.class).create()) {
+      Activity activity = controller.get();
+      MenuLayout.Buttons row = new MenuLayout.Buttons(activity, 1);
+      for (int round = 0; round < 3; round++) {
+        row.removeAllViews();
+        for (int i = 0; i < 2 + round; i++) {
+          Button b = new Button(activity);
+          b.setText("Leon Requiem Lite RE9 Shirt " + i + " (2 files): On");
+          row.addButton(b);
+        }
+        row.measure(View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        row.layout(0, 0, 1200, row.getMeasuredHeight());
+        int tallest = 0;
+        for (int i = 0; i < row.getChildCount(); i++) {
+          View child = row.getChildAt(i);
+          assertTrue("round " + round + " button " + i + " has a width", child.getWidth() > 600);
+          tallest = Math.max(tallest, child.getHeight());
+        }
+        assertTrue("round " + round + ": the row as high as its buttons", row.getMeasuredHeight() < (tallest + 100) * row.getChildCount());
+      }
+    }
+  }
+
   @Test public void profileRowHoldsFiveButtonsAndTheTextsSpanTheWidth() throws Exception {
     CoreMenu.Host host = (CoreMenu.Host) Proxy.newProxyInstance(CoreMenu.Host.class.getClassLoader(),
         new Class<?>[] {CoreMenu.Host.class}, (proxy, method, args) -> method.getReturnType() == boolean.class
