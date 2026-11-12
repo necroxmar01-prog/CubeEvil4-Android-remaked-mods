@@ -35,7 +35,10 @@
 //    the action button (patch 0916, emBoxActEvtCk: the prompt the game shows there only in its tutorial rooms, now
 //    as "Kick" in every room) makes him slash it with his knife (or a skin's axe): the low slash 0x86, its blade at
 //    the box on frame kBoxHit, which breaks it as a shot does (emBoxSetBreak: debris, sound, the item); kBoxEnd
-//    frames in all, an aim or fire key ends it after the hit. Switched with the third aim word's bit 12.
+//    frames in all, an aim or fire key ends it after the hit. Switched with the third aim word's bit 12. A mod pack's
+//    melee.dat entry 16 stands in for the slash (DevJunior, 12.11.2026: Jake's low kick without the frames where he
+//    raises his hand; uhd_motion_convert.py --box), played from its entry 17's start to its end frame, the box
+//    breaking on its hit frame.
 // Only Leon (pl_type 0); the other characters keep their moves.
 #include "types.h"
 #include "global.h"
@@ -73,6 +76,8 @@ std::atomic<int> gBits(0);
 const int kVariants = 8;      // a mod's moves of each kind
 char gLoaded[1600];           // the archive at RE4_MEM1_MELEE_ADDR ("" none; a path that failed counts as read)
 void* gMod[2][kVariants];     // its motions: on a standing enemy, on a kneeling one
+void* gBoxMot;                // its box strike's motion (entry 16; patch 0916), played from gBoxFrames[0] to [2]
+u8 gBoxFrames[3];             // entry 17 ("BXF"): start, the frame that breaks the box, end
 int gMods[2];                 // how many of each
 int gSaid;                    // what the log told already (bits by kind)
 
@@ -106,6 +111,7 @@ void load()
     snprintf(gLoaded, sizeof(gLoaded), "%s", path);
     memset(gMod, 0, sizeof(gMod));
     gMods[0] = gMods[1] = 0;
+    gBoxMot = nullptr;
     gSaid &= ~3;
     if (!*path) {
         return;
@@ -118,7 +124,7 @@ void load()
         fclose(f);
     }
     const u32 count = size >= 0x20 ? be32At(base) : 0;
-    enum { kMax = 2 * kVariants };
+    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 };  // the moves, the box strike's motion and its frames
     u32 at[kMax], len[kMax];
     bool ok = whole && count >= 1 && count <= kMax && 0x10 + count * 8 <= size;
     for (u32 i = 0; ok && i < count; i++) {
@@ -127,7 +133,7 @@ void load()
         ok = at[i] >= 0x10 + count * 8 && at[i] <= end && end <= size && !(at[i] & 3);
         len[i] = ok ? end - at[i] : 0;
         // a motion: u16 last frame, u8 joints, the table and at least one offset
-        if (ok && len[i] && (len[i] < 0x10 || base[at[i] + 2] == 0)) {
+        if (ok && len[i] && i != kMoves + 1 && (len[i] < 0x10 || base[at[i] + 2] == 0)) {
             ok = false;
         }
     }
@@ -143,7 +149,20 @@ void load()
     h.size = (u32) size;
     h.dest = RE4_MEM1_MELEE_ADDR;
     re4_formats_part_loaded("mods/melee.drs", 0, 0, &h, RE4_MEM1_MELEE_ADDR);
-    for (u32 i = 0; i < count; i++) {
+    if (count == kMax && len[kMoves] && len[kMoves + 1] >= 3) {  // the box strike's motion and frames
+        const u8* fr = base + at[kMoves + 1];
+        const unsigned last = get16(base + at[kMoves]);  // converted: host order
+        if (fr[0] < fr[1] && fr[1] < fr[2] && fr[2] <= last) {
+            gBoxMot = base + at[kMoves];
+            memcpy(gBoxFrames, fr, 3);
+            re4_log("melee: %s entry %d: the box strike's motion, frames %u..%u, the box breaks on %u", path,
+                    (int) kMoves, (unsigned) fr[0], (unsigned) fr[2], (unsigned) fr[1]);
+        } else {
+            re4_log("melee: %s: the box strike's frames %u/%u/%u do not fit its %u frames: the knife's slash", path,
+                    (unsigned) fr[0], (unsigned) fr[1], (unsigned) fr[2], last);
+        }
+    }
+    for (u32 i = 0; i < count && i < kMoves; i++) {
         if (len[i]) {
             const int k = (int) (i & 1);
             gMod[k][gMods[k]++] = base + at[i];
@@ -602,20 +621,28 @@ void plBoxStrike(cPlayer* pl)
     switch (pl->r_no_2) {
     case 0:
         setWepTrans(pl, 0);
-        pl->Body->setKnife(true);
         gAxeLive = true;
-        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pG->pPlayer, kBoxMot), 0, 3, 1, 0);
-        axeSwing(pl);
-        pl->m_Work0 = kBoxHit;
+        load();
+        if (gBoxMot && !(gBits.load() & 2)) {  // a mod's kick (wish of DevJunior, 12.11.2026: Jake's low kick)
+            MotionSetCore(pl, &pl->Motion, gBoxMot, 0, 4, 1, gBoxFrames[0]);
+            pl->m_Work0 = gBoxFrames[1] - gBoxFrames[0];
+            pl->m_Work2 = gBoxFrames[2] - gBoxFrames[0];
+            say(11, "the box strike plays the mod's motion");
+        } else {
+            pl->Body->setKnife(true);
+            MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pG->pPlayer, kBoxMot), 0, 3, 1, 0);
+            axeSwing(pl);
+            pl->m_Work0 = kBoxHit;
+            pl->m_Work2 = kBoxEnd;
+        }
         pl->m_Work1 = 6;
-        pl->m_Work2 = kBoxEnd;
         pl->r_no_2 = 1;
         break;
     case 1:
         MotionMove(pl, 0);
         if (pl->m_Work0 && --pl->m_Work0 == 0 && box && box->hp > 0) {
             emBoxSetBreak(box, 0);
-            say(10, "Leon's box strike broke a box (the knife's low slash)");
+            say(10, "Leon's box strike broke a box");
         }
         if (!pl->m_Work2 || --pl->m_Work2 == 0 || (!pl->m_Work0 && (joyKamae() || (Key.on & 0x10F)))) {
             axeEnd(pl);
@@ -691,6 +718,13 @@ void* re4_box_strike_func(void)
         re4_add_frame_hook(axeWatch);
     }
     return (void*) boxStrikeAction;
+}
+
+// For the tests: the active mods' box strike frames (start << 16 | hit << 8 | end), -1 none (the knife's slash)
+int re4_box_strike_motion(void)
+{
+    load();
+    return gBoxMot ? gBoxFrames[0] << 16 | gBoxFrames[1] << 8 | gBoxFrames[2] : -1;
 }
 
 void re4_box_strike_set(int on)

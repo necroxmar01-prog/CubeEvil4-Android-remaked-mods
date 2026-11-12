@@ -2662,6 +2662,8 @@ extern "C" void* re4_melee_execute(void);
 extern "C" void re4_mod_melee_path_set(const char* path);
 extern "C" void* re4_melee_kneel(void* game);
 extern "C" void re4_melee_reset(void);
+extern "C" int re4_box_strike_motion(void);  // runtime/melee.cpp
+
 extern "C" int re4probe_melee(const char* file)
 {
     if (!pG) {
@@ -2770,6 +2772,41 @@ extern "C" int re4probe_melee(const char* file)
         re4_aim_set((int) 0xC0000000u);
         bad |= re4_box_strike(box) != 0 ? 0x2000 : 0;  // switched off
         re4_aim_set((int) (0xC0000000u | 1u << 12));
+    }
+    // the box strike's motion from a mod (entries 16 and 17: the motion, its frames 1 / 3 / 5)
+    {
+        u8 box[0xF0];
+        memset(box, 0, sizeof(box));
+        box[3] = 18;
+        for (int i = 0; i < 18; i++) {
+            const u32 at = i < 17 ? 0xA0 : 0xE0;
+            box[0x10 + i * 4 + 2] = (u8) (at >> 8);
+            box[0x10 + i * 4 + 3] = (u8) at;
+            memcpy(box + 0x10 + 18 * 4 + i * 4, i < 17 ? "FCV" : "BXF", 3);
+        }
+        memcpy(box + 0xA0, dat + 0x40, 0x40);  // the five-frame motion of the archive above
+        box[0xE0] = 1;
+        box[0xE1] = 3;
+        box[0xE2] = 5;
+        FILE* g = fopen(file, "wb");
+        bad |= !g || fwrite(box, 1, sizeof(box), g) != sizeof(box) ? 0x4000 : 0;
+        if (g) {
+            fclose(g);
+        }
+        re4_mod_melee_path_set(file);
+        bad |= re4_box_strike_motion() != (1 << 16 | 3 << 8 | 5) ? 0x80000 : 0;
+        box[0xE2] = 9;  // past the motion's last frame: the knife's slash
+        g = fopen(file, "wb");
+        if (g) {
+            fwrite(box, 1, sizeof(box), g);
+            fclose(g);
+        }
+        re4_mod_melee_path_set("");
+        re4_box_strike_motion();  // read anew: the same path holds another archive now
+        re4_mod_melee_path_set(file);
+        bad |= re4_box_strike_motion() != -1 ? 0x80000 : 0;
+        re4_mod_melee_path_set("");
+        bad |= re4_box_strike_motion() != -1 ? 0x80000 : 0;
     }
     pG->pl_type = 3;
     bad |= re4_melee_kneel(&game) != &game ? 0x400 : 0;
