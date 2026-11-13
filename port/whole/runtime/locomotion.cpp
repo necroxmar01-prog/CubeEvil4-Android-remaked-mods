@@ -39,6 +39,11 @@ namespace {
 const int kMoves = 4;
 const int kSlots[kMoves] = {0, 2, 6, 8};  // m_MotTbl: stand, walk, run, back step (the sequence in the next slot)
 const char* const kNames[kMoves] = {"stand", "walk", "run", "back step"};
+// The head's turn toward an enemy (cPlNeck) blends the body with the game's own "looking right / left" variant of the
+// stand, the walk and the run (m_MotTbl 0x3F / 0x39 / 0x41 and the next slot): two different walks mixed, out of step
+// (device report 13.11.2026: the walk hitched and repeated). With the remake's motion in a slot its variants are
+// taken out (cPlNeck::init leaves invalid ones alone) and the blend's rate held at zero.
+const int kNeck[kMoves] = {0x3F, 0x39, 0x41, 0};
 const f32 kTimeMin = 0.75f, kTimeMax = 1.35f;
 const unsigned kMaxBytes = 0x40000;
 const int kSeqMax = 255;
@@ -51,6 +56,8 @@ struct Move {
     f32 scale;      // the scale its root motion has now
     void* orig;     // the game's motion and sequence it stands in for now
     void* origSeq;
+    void* neck[2];  // the game's looking variants taken out
+    bool neckOut;
     u16 seq[2 + 2 * (kSeqMax + 1)];
 };
 
@@ -342,9 +349,24 @@ void apply(cPlayer* pl, bool fresh)
             fit(k, mv.orig, mv.origSeq);
             tbl[slot] = mv.mot;
             tbl[slot + 1] = mv.seq;
+            if (kNeck[k] && (fresh || !mv.neckOut)) {
+                mv.neck[0] = tbl[kNeck[k]];
+                mv.neck[1] = tbl[kNeck[k] + 1];
+                mv.neckOut = true;
+            }
+            if (kNeck[k]) {
+                tbl[kNeck[k]] = tbl[kNeck[k] + 1] = 0;
+            }
         } else if (ours) {
             tbl[slot] = mv.orig;
             tbl[slot + 1] = mv.origSeq;
+            if (kNeck[k] && mv.neckOut) {
+                tbl[kNeck[k]] = mv.neck[0];
+                tbl[kNeck[k] + 1] = mv.neck[1];
+            }
+            mv.neckOut = false;
+        } else if (fresh) {
+            mv.neckOut = false;
         }
     }
     gApplied = want ? 1 : 0;
@@ -358,6 +380,13 @@ void watch(unsigned)
     }
     load();
     const bool want = on() && fits() && gCount;
+    if (gApplied == 1 && pPL->pMotionB) {  // one of the remake's motions plays: no blend with a game's variant
+        for (const Move& mv : gMove) {
+            if (mv.mot && (void*) pPL->Motion.pMot == (void*) mv.mot) {
+                pPL->pMotionB->Brate = 0.0f;
+            }
+        }
+    }
     if ((want ? 1 : 0) != gApplied && pPL->r_no_0 == 0 && pPL->r_no_1 == 0) {
         apply(pPL, false);
         pPL->r_no_2 = 0;  // the footwork sets its motion anew

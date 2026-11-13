@@ -1019,6 +1019,13 @@ int re4_knife_slash(void* p)
         return 0;
     }
     MotionSetCore(pl, &pl->Motion, mot, 0, 3, 1, 0);
+    // the game's slash sets its three-way blend anew (cMot3); without it the stance's blend would stay mixed in
+    // (device report 13.11.2026: the left arm deformed), and the knife is out for sure (the pistol stayed in the hand)
+    if (pl->pMotionB) {
+        pl->pMotionB->Brate = 0.0f;
+    }
+    pl->Wep->setTrans(0, 0);
+    pl->Body->setKnife(true);
     gComboLen = pl->Motion.Seq_frame_num;
     MotionMove(pl, 0);
     pl->Waist->set(pl->m_Fwork0, 0.4f);
