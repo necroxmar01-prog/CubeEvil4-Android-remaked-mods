@@ -459,8 +459,8 @@ def main(argv=None):
     body = U.build_body(entries, arc.types)
     data = U.build_archive(arc, body)
     Path(a.out).write_bytes(data)
-    print("%s: %d bytes, data part %d bytes (the player's place holds %d)" % (a.out, len(data), len(body), 0x600000))
-    if len(body) > 0x600000:
+    print("%s: %d bytes, data part %d bytes (the player's places hold %d)" % (a.out, len(data), len(body), 0x800000))
+    if len(body) > 0x800000:
         raise SystemExit("too large: a smaller face texture (--tex 512)")
 
 

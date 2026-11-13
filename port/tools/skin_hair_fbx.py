@@ -39,6 +39,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+# The largest player archive body the app reads (runtime/re4_runtime.h RE4_MOD_PLAYER_MAX: 6 MB in MEM1, 8 MB in the
+# mods' place since 12.11.2026)
+PLAYER_MAX = 0x800000
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import skin_face as F  # noqa: E402
 import skin_graft as G  # noqa: E402
@@ -550,6 +554,18 @@ def enc_i8(im):
     return U.enc_i8(px, w, h)
 
 
+def enc_i4(im):
+    """GX I4 (8 x 8 tiles, two texels a byte, the first in the high nibble) from the brightness (or the alpha of an
+    image with one, as enc_i8): half the bytes of I8, 16 steps (DevJunior, 12.11.2026: "more quality for the hair":
+    an alpha twice as wide and high in the room of 1.5 times the old one)."""
+    a = np.asarray(im.convert("RGBA"), dtype=np.float64)
+    v = a[..., 3] if (a[..., 3] < 255).any() else a[..., 0] * 0.3 + a[..., 1] * 0.6 + a[..., 2] * 0.1
+    q = np.clip(np.rint(v / 17.0), 0, 15).astype(np.uint8)
+    h, w = q.shape
+    t = q.reshape(h // 8, 8, w // 8, 8).transpose(0, 2, 1, 3).reshape(-1, 2)
+    return bytes((t[:, 0] << 4 | t[:, 1]).astype(np.uint8))
+
+
 def enc_cmpr(im):
     return U.enc_cmpr(*_px(im))
 
@@ -682,6 +698,12 @@ def main(argv=None):
     ap.add_argument("--colour", help="R,G,B of the hair (default: the skin's old hair colour)")
     ap.add_argument("--alpha-ref", type=int, default=64)
     ap.add_argument("--alpha-size", default="1024x512", help="the alpha texture's size (WxH, default 1024x512)")
+    ap.add_argument("--alpha-format", default="I8", choices=("I8", "I4"),
+                    help="I4: half the bytes of I8 (16 steps), for a larger --alpha-size")
+    ap.add_argument("--colour-size", default="512x256", help="the colour texture's size (WxH, default 512x256)")
+    ap.add_argument("--ramp", help="SHADOW:MIDDLE:HIGHLIGHT (R,G,B each): the colour texture through this ramp "
+                    "with --streaks, as skin_head_fbx.py --hair-ramp, instead of --colour")
+    ap.add_argument("--streaks", type=float, default=0.3, help="lighter streaks with --ramp (default 0.3)")
     ap.add_argument("--thicken", type=float, default=0.5, help="spread this share of the strand mask one texel")
     ap.add_argument("--fill", type=float, default=0.5,
                     help="the smaller mipmap levels cover this share of the gaps more (see coverage_mips)")
@@ -752,10 +774,17 @@ def main(argv=None):
     colour = tuple(int(x) for x in a.colour.split(",")) if a.colour else hair_colour(imgs, mc, ma)
     aw, ah = (int(v) for v in a.alpha_size.lower().split("x"))
     ref = max(0, min(254, a.alpha_ref))
-    cols, masks = textures(a.albedo, a.alpha, a.alpha_channel, colour, ref, alpha_size=(aw, ah), thicken=a.thicken,
-                           fill=a.fill, solid=a.solid, harden=a.harden, contrast=a.shade_contrast)
+    cw, ch = (int(v) for v in a.colour_size.lower().split("x"))
+    cols, masks = textures(a.albedo, a.alpha, a.alpha_channel, colour, ref, alpha_size=(aw, ah),
+                           colour_size=(cw, ch), thicken=a.thicken, fill=a.fill, solid=a.solid, harden=a.harden,
+                           contrast=a.shade_contrast)
+    if a.ramp:
+        import skin_head_fbx as HF  # here: it imports this module
+        stops = [tuple(float(c) for c in x.split(",")) for x in a.ramp.split(":")]
+        cols = HF.hair_levels(a.albedo, a.alpha, (cw, ch), stops, a.streaks)
     imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
-    imgs[ma] = encode_levels(masks, 0x1, imgs[ma][0], enc_i8)
+    imgs[ma] = (encode_levels(masks, 0x0, imgs[ma][0], enc_i4) if a.alpha_format == "I4" else
+                encode_levels(masks, 0x1, imgs[ma][0], enc_i8))
     if not a.no_scalp:
         for mc_, n in scalp(imgs, head, entries[4], colour, depth=a.scalp_depth, hair=G.positions(hair),
                             reach=a.scalp_reach, hairline=a.hairline):
@@ -770,8 +799,8 @@ def main(argv=None):
     body = U.build_body(entries, arc.types)
     data = U.build_archive(arc, body)
     Path(a.out).write_bytes(data)
-    print("%s: %d bytes, data part %d bytes (the player's place holds %d)" % (a.out, len(data), len(body), 0x600000))
-    if len(body) > 0x600000:
+    print("%s: %d bytes, data part %d bytes (the player's places hold %d)" % (a.out, len(data), len(body), PLAYER_MAX))
+    if len(body) > PLAYER_MAX:
         raise SystemExit("too large: keep fewer cards (--layers)")
 
 

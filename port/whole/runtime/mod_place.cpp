@@ -1,5 +1,7 @@
 // A place for the mods' character archives (wish of DevJunior, 11.11.2026: skins for Ashley, Luis, Ada and the other
-// characters; port/docs/npc-skins-plan.md, his approval of the extra 16 MB the same day).
+// characters; port/docs/npc-skins-plan.md, his approval of the extra 16 MB the same day). 8 MB more behind those
+// (his approval, 12.11.2026, for the hair of a Leon skin: the player's place in MEM1 holds 6 MB): a player archive
+// larger than that place (runtime/dvd.cpp re4_player_data_place) is read there, always to the same address.
 //
 // The game reads a character's archive (Ashley as the partner, Luis, the people of the events, every enemy:
 // read.cpp readEmData through EmReadSearch) into a block of its heap as large as the file. A skin converted from the
@@ -95,7 +97,7 @@ unsigned long firstFit(unsigned long size)
                 moved = true;
             }
         }
-        if (at + size > gBase + kSize) {
+        if (at + size > gBase + RE4_MOD_PLACE_EM) {  // behind them: the player's (re4_mod_player_place)
             return 0;
         }
         if (!moved) {
@@ -171,6 +173,19 @@ void* re4_mod_place_alloc(unsigned long size, const char* what)
         re4_log("mods: %s (%lu bytes): no room left in the place for the mods' character archives", what, size);
     }
     return result;
+}
+
+// A player archive larger than its place in MEM1 (runtime/dvd.cpp re4_player_data_place): the place's last
+// RE4_MOD_PLAYER_MAX bytes, always the same; 0 when it is larger or the place could not be taken.
+void* re4_mod_player_place(unsigned int size)
+{
+    if (size > RE4_MOD_PLAYER_MAX) {
+        return 0;
+    }
+    pthread_mutex_lock(&gLock);
+    const bool ok = take();
+    pthread_mutex_unlock(&gLock);
+    return ok ? (void*) (gBase + RE4_MOD_PLACE_EM) : 0;
 }
 
 // Patch 0914 (read.cpp InitModule): the game frees a module; its archive's block is free again. 1 = it was one.
@@ -257,6 +272,18 @@ int re4_mod_place_selftest(void)
     if (again != gBase) bad |= 0x80;
     re4_mod_em_release((void*) b);
     if (re4_mod_em_place(0, 0) != 0) bad |= 0x100;
+    // the characters' blocks end where the player's place begins
+    pthread_mutex_lock(&gLock);
+    const unsigned long whole = firstFit(RE4_MOD_PLACE_EM), over = firstFit(RE4_MOD_PLACE_EM + 32);
+    pthread_mutex_unlock(&gLock);
+    if (whole != gBase || over != 0) bad |= 0x200;
+    void* pl = re4_mod_player_place(RE4_MOD_PLAYER_MAX);
+    if (pl != (void*) (gBase + RE4_MOD_PLACE_EM) || re4_mod_player_place(RE4_MOD_PLAYER_MAX + 1) != 0 ||
+        !re4_mod_place_holds(pl, RE4_MOD_PLAYER_MAX) ||
+        re4_mod_place_physical(pl) != RE4_MOD_PLACE_PHYSICAL + RE4_MOD_PLACE_EM)
+        bad |= 0x400;
+    else
+        memset(pl, 0x33, RE4_MOD_PLAYER_MAX);  // writable
     return bad;
 }
 

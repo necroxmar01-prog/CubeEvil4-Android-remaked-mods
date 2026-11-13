@@ -38,7 +38,7 @@ import skin_hair_fbx as H  # noqa: E402
 import skin_head_fbx as HF  # noqa: E402
 import uhd_skin_convert as U  # noqa: E402
 
-PLAYER_PLACE = 0x600000
+PLAYER_PLACE = 0x800000  # runtime/re4_runtime.h RE4_MOD_PLAYER_MAX
 
 
 def ray_hit_dist(origins, dirs, T, reach):

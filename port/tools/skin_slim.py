@@ -679,7 +679,7 @@ def main(argv=None):
     data = U.build_archive(base, U.build_body(entries, base.types))
     Path(a.out).write_bytes(data)
     print("%s: %d bytes, data part %d bytes (the player's place holds %d)" %
-          (a.out, len(data), len(U.build_body(entries, base.types)), 0x600000))
+          (a.out, len(data), len(U.build_body(entries, base.types)), 0x800000))
 
 
 if __name__ == "__main__":

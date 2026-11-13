@@ -485,7 +485,7 @@ def main(argv=None):
     entries[a.entry] = with_shapes(head, table)
     data = U.build_archive(arc, U.build_body(entries, arc.types))
     Path(a.out).write_bytes(data)
-    print("%s: %d bytes, data part %d bytes (the player's place holds 6291456)" %
+    print("%s: %d bytes, data part %d bytes (the player's places hold 8388608)" %
           (a.out, len(data), U.Archive(data, ">").parts[0][1]))
     if a.preview:
         Path(a.preview).mkdir(parents=True, exist_ok=True)

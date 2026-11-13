@@ -209,9 +209,14 @@ void* re4_mod_shape_twin(void* info, void* model, void** skin_model);
  * the game's own; 0 when this is full too. Reset when the game starts a frame buffer half. */
 #define RE4_MEM1_PRIM_EXTRA_ADDR 0x82C00000u
 /* The place for the mods' character archives (runtime/mod_place.cpp, patch 0914): RE4_MOD_PLACE_SIZE bytes above
- * MEM1, taken when a mod's archive first asks; the graphics processor and ARAM see it at RE4_MOD_PLACE_PHYSICAL.. */
-#define RE4_MOD_PLACE_SIZE 0x01000000u
+ * MEM1, taken when a mod's archive first asks; the graphics processor and ARAM see it at RE4_MOD_PLACE_PHYSICAL..
+ * Its first RE4_MOD_PLACE_EM bytes hold the characters' archives; behind them RE4_MOD_PLAYER_MAX bytes hold a player
+ * archive larger than RE4_MEM1_PLAYER_ALT_MAX (DevJunior's approval, 12.11.2026: more room for the skins' hair). */
+#define RE4_MOD_PLACE_SIZE 0x01800000u
+#define RE4_MOD_PLACE_EM 0x01000000u
+#define RE4_MOD_PLAYER_MAX 0x00800000u
 #define RE4_MOD_PLACE_PHYSICAL 0x04000000u
+void* re4_mod_player_place(unsigned int size);
 void* re4_mod_em_place(const char* name, unsigned int need);
 void* re4_mod_place_alloc(unsigned long size, const char* what);
 int re4_mod_em_release(const void* p);

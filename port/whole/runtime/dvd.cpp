@@ -1041,8 +1041,14 @@ void* re4_player_data_place(const char* name, unsigned fixedMax)
         return 0;
     }
     if (size > RE4_MEM1_PLAYER_ALT_MAX) {
-        re4_log("DVD: %s: player data of %u bytes, larger than the %u bytes of either place: the fixed one, "
-                "it runs over the weapon data", name, size, RE4_MEM1_PLAYER_ALT_MAX);
+        // larger than the place in MEM1: behind the mods' character archives (runtime/mod_place.cpp, 12.11.2026)
+        if (void* p = re4_mod_player_place(size)) {
+            re4_log("DVD: %s: player data of %u bytes (fixed place %u), read to %p (the mods' place)", name, size,
+                    fixedMax, p);
+            return p;
+        }
+        re4_log("DVD: %s: player data of %u bytes, larger than the %u bytes of every place: the fixed one, "
+                "it runs over the weapon data", name, size, RE4_MOD_PLAYER_MAX);
         return 0;
     }
     re4_log("DVD: %s: player data of %u bytes (fixed place %u), read to 0x%08x", name, size, fixedMax,

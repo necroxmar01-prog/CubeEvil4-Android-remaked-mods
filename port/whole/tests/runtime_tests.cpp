@@ -438,9 +438,11 @@ static void testDvdMods()
     CHECK(makeDirs(base + "/mods/b/files/sound") &&
           writeFile(base + "/mods/b/files/sound/quickslot.wav", "RIFF", 4));  // the quick slots' sound, no disc file
     // a player archive: the disc's with a body of 0x1000 bytes, the mod's of 0x200000 (patch 0901)
-    std::vector<unsigned char> small(0x440), large(0x440);
+    std::vector<unsigned char> small(0x440), large(0x440), huge(0x440), over(0x440);
     small[0x26] = 0x10;  // part 0 (type 0): 0x1000 bytes
     large[0x25] = 0x20;  // 0x200000 bytes
+    huge[0x25] = 0x78;   // 0x780000 bytes: larger than the place in MEM1 (6 MB), the mods' place's player part
+    over[0x25] = 0x81;   // 0x810000 bytes: larger than both
     CHECK(writeFile(base + "/disc1/files/em/pl10.drs", small.data(), small.size()));
 
     char saved[1024];
@@ -470,6 +472,18 @@ static void testDvdMods()
 
     // a larger mod: the place behind the cheats' (and the primitive buffer's overflow, per half)
     CHECK(makeDirs(base + "/mods/c/em") && writeFile(base + "/mods/c/em/pl10.drs", large.data(), large.size()));
+    re4_set_data_dir(root);
+    // larger than 6 MB: the player's part of the mods' place, larger than 8 MB: none (the fixed place)
+    CHECK(writeFile(base + "/mods/c/em/pl10.drs", huge.data(), huge.size()));
+    re4_set_data_dir(root);
+    {
+        void* p = re4_player_data_place("em/pl10.drs", 0x118000);
+        CHECK(p && p == re4_mod_player_place(0x780000) && re4_mod_place_holds(p, RE4_MOD_PLAYER_MAX));
+    }
+    CHECK(writeFile(base + "/mods/c/em/pl10.drs", over.data(), over.size()));
+    re4_set_data_dir(root);
+    CHECK(re4_player_data_place("em/pl10.drs", 0x118000) == 0);
+    CHECK(writeFile(base + "/mods/c/em/pl10.drs", large.data(), large.size()));
     re4_set_data_dir(root);
     CHECK(re4_player_data_place("em/pl10.drs", 0x118000) == (void*) (unsigned long) RE4_MEM1_PLAYER_ALT_ADDR &&
           re4_player_modded());
