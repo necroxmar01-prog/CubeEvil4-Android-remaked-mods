@@ -26,12 +26,19 @@
 #include "player.h"
 #include "em.h"
 #include "snd.h"
+#include "pl_body.h"
+#include "pl_sub.h"
+#include "motion.h"
+#include "game.h"
+#include "em_sub.h"
+#include "em10.h"
 
 extern cPlayer* pPL;
 extern "C" int re4_parry_on(void);  // runtime/aim_options.cpp
 extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_knife_tap_input(void* pl);  // runtime/melee.cpp: a tap of the knife key slashes (patch 0922)
 extern "C" void re4_knife_parry_mark(void);
+extern "C" void* re4_csaw_motion(int i);  // runtime/melee.cpp: the mod's chainsaw clash (0 the block, 1 the push)
 
 namespace {
 
@@ -164,6 +171,129 @@ int re4_parry_hit(Vec* pos)
         return 1;
     }
     return 0;
+}
+
+}  // extern "C"
+
+namespace {
+
+// The chainsaw clash (wish of DevJunior, 13.11.2026: "the clash when you parry the chainsaw man, as in the remake";
+// patch 0924). The game's own struggle when the saw catches Leon (em10 C_SawHit, R1 0x30: the button mash PlGacha,
+// more than 30 presses or the end of the saw's motion break him free, the Ganado staggers back with 0xFE; a failed
+// mash kills him) becomes the clash when the knife key's parry window is open as the saw connects: Leon holds the
+// saw off with his knife (the mod's chc0_jack_pl_2nd_wp5300 1200, melee.dat entry 24: its block, held from kHold
+// while he mashes, then its push), no blood, no death timer, the metal clash sound instead of the cutting one. The
+// overhead swing (C_SawCriAtk, otherwise the one-shot decapitation C_SawCriHit) goes into the same clash when parried.
+// Without the mod's motions Leon struggles with the game's own 0x101 / 0x102, still without dying.
+const f32 kHold = 60.0f;     // the block's frame he holds while the mash goes on
+const int kClashSe = 12;     // frames between the metal clash sounds
+cEm* gClashEm;               // the chainsaw Ganado in the clash
+int gClashSe;
+bool gClashCut;              // the cutting sound stopped
+
+void endClash(cPlayer* pl)
+{
+    pl->Body->setKnife(false);
+    setWepTrans(pl, 1);
+    EndPlDamage();
+    pl->dmg.set(0, 30);
+    gClashEm = 0;
+}
+
+// Leon's routine of the clash (in place of plem10_C_SawHit): r_no_2 0 start, 1 the block, 2 / 3 the push
+void plCsawClash(cPlayer* pl)
+{
+    StaFlagOn(pG, STA_PL_CATCHED);
+    pl->dmg.set(0, 10);
+    pl->subArc = pl->pEmCatch->subArc;
+    pl->dmg.set(0, 2);
+    cEm* em = pl->pEmCatch;
+    void* block = re4_csaw_motion(0);
+    switch (pl->r_no_2) {
+    case 0:
+        MotionSetCore(pl, &pl->Motion, block ? block : PL_ARC_PTR(pl->subArc, 0x101), 0, 5, 1, 0);
+        setWepTrans(pl, 0);
+        pl->Body->setKnife(true);
+        pl->atari.set(400.0f, 700.0f, 10);
+        pl->r_no_2++;
+    case 1:
+        if (block && pl->Motion.Seq_frame >= kHold) {
+            pl->Motion.Seq_speed = 0.0f;  // the knife against the saw while he mashes
+        }
+        EmCatchMotionMove(pl, 0.3f, 0.2f);
+        if (em->r_no_0 != 1 || em->r_no_1 != 0x30) {
+            endClash(pl);
+            break;
+        }
+        if (em->r_no_2 >= 2) {
+            pl->r_no_2 = 2;
+        }
+        break;
+    case 2:
+        if (block) {
+            pl->Motion.Seq_speed = 1.0f;  // on into the push
+        } else {
+            MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pl->subArc, 0x102), 0, 5, 1, 0);
+        }
+        re4_log("parry: Leon broke free of the chainsaw clash");
+        pl->r_no_2++;
+    case 3:
+        if (MotionMove(pl, 0)) {
+            endClash(pl);
+        }
+        break;
+    }
+    pl->Catch_at_adj = pl->pos;
+    pl->subArc = pl->subArc2;
+}
+
+}  // namespace
+
+extern "C" {
+
+// Patch 0924 (em10.cpp em10_R1_br_C_SawCriAtk): 1 when the knife key's parry window is open (the overhead swing then
+// takes the clash, R1 0x30, instead of the decapitation)
+int re4_csaw_parry_open(void)
+{
+    return re4_parry_on() && pG->pl_type == 0 && gWindow > 0 && pPL && pPL->r_no_0 == 0;
+}
+
+// Patch 0924 (em10_R1_C_SawHit, its first frame): Leon's routine for the catch: the clash's when parried, else `orig`
+void* re4_csaw_clash_routine(void* em, void* orig)
+{
+    if (!re4_csaw_parry_open()) {
+        gClashEm = 0;
+        return orig;
+    }
+    gWindow = 0;
+    gParries++;
+    gClashEm = (cEm*) em;
+    gClashSe = 0;
+    gClashCut = false;
+    re4_log("parry: the chainsaw parried: the clash (%d parries so far)", gParries);
+    return (void*) plCsawClash;
+}
+
+// Patch 0924 (em10_R1_C_SawHit, its struggle step, each frame): in the clash no death timer, no blood on the saw, the
+// metal clash instead of the cutting sound
+void re4_csaw_clash_frame(void* p)
+{
+    cEm* em = (cEm*) p;
+    if (em != gClashEm) {
+        return;
+    }
+    FREE_EM10* w = EM10_WK(em);
+    w->Timer = 2;   // the death comes when Timer and Timer2 have run out
+    w->Timer3 = 2;  // the blood on the saw every other frame when it runs out
+    if (!gClashCut) {
+        gClashCut = true;
+        SndStop(w->TmpU32, 0);
+        w->TmpU32 = 0;
+    }
+    if (gClashSe-- <= 0) {
+        gClashSe = kClashSe;
+        SndCall(8, 0x3F, &em->pos, em->id, 0, em);
+    }
 }
 
 // runtime/melee.cpp: the attacker of the last parried blow while still active and alive, else 0

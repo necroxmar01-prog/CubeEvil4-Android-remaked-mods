@@ -45,7 +45,9 @@ for the knife's slash (patch 0922, pl_knife.cpp knife_r3_fire00): retimed so the
 slash's game frame 8 (its hits run on 6..10), cut KNIFE_TAIL source frames after it (the stance comes back sooner).
 Entries 21..23: Leon's answer to a parried blow (runtime/parry.cpp): the mod's perfect parry and its two pushes back
 (cha0_wp5000H 0800 parry_just, 0830 / 0840 parry_crash_L / R), at 30 frames per second, cut after PARRY_END source
-frames; the slash's hits on its frames 6..10 stagger the attacker as the knife's answer did.
+frames; the slash's hits on its frames 6..10 stagger the attacker as the knife's answer did. Entries 24 / 25: the
+chainsaw clash (runtime/parry.cpp, patch 0924; the 2023 game's chc0_jack_pl_2nd_wp5300 1200 / 1202: Leon holds the
+saw off with his knife, then pushes it away).
 
 --move OUT/melee/move.dat writes Leon's movements of the 2023 game (cha0_general, which the mod ships; wish of DevJunior,
 13.11.2026: "remaster Leon's movements", phase 1) for runtime/locomotion.cpp (patch 0923): one seamless cycle each
@@ -94,6 +96,9 @@ KNIFE_HIT = 8         # knife_r3_fire10: hits on frames 6..10, full damage on 7.
 KNIFE_TAIL = 30       # source frames kept after the blade's fastest one
 PARRIES = ["0800_parry_just", "0830_parry_crash_L", "0840_parry_crash_R"]
 PARRY_END = 56        # source frames of a parry kept
+# the 2023 game's chainsaw clash (Leon's side; wp5300 the chainsaw): his knife against the saw, then the push
+CSAW = "_chainsaw/animation/ch/chc0/motlist/2nd/chc0_jack_pl_2nd_wp5300.motlist.663"
+CSAW_MOVES = ["1200_knife_parry_F_start", "1202_knife_parry_F_end"]
 
 HANDGUNS = [1, 2, 3, 4, 0x11]  # item.cpp wep_info: the handguns' weapon numbers (em_sub.cpp HandgunCk)
 
@@ -294,6 +299,15 @@ def kicks(root, model, tol, out_path, no_fingers, box=None):
         entries.append(data)
         print("parry   %-28s %d game frames, %d bytes; check %.1f/%.1f deg" % (m.name, len(fit.frames), len(data),
                                                                           c[0], c[1]))
+    _v, csaw = R.read_motlist(root / CSAW)
+    for name in CSAW_MOVES:
+        m = next(x for x in csaw if x.name.endswith(name))
+        fit = Fit(m, model, "leon", 2.0, tol, m.frames, no_fingers)
+        data = fcv.serialise(fit.motion(fit.scale))
+        c = fit.check(data)
+        entries.append(data)
+        print("chainsaw clash %-28s %d game frames, %d bytes; check %.1f/%.1f deg" % (
+            name, len(fit.frames), len(data), c[0], c[1]))
     tags = [b"FCV\x00"] * len(entries)
     tags[17] = b"BXF\x00"  # the box strike's frames: read as bytes
     body = U.build_body(entries, tags)

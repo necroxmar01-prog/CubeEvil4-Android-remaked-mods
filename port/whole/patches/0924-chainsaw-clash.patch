@@ -1,0 +1,39 @@
+# Patch 0924 (wish of DevJunior, 13.11.2026: "the clash when you parry the chainsaw man, as in the remake"). Not a bug
+# of the prototype: a port feature of the mods.
+# em10.cpp, the chainsaw Ganado: with the knife parry's window open (runtime/parry.cpp re4_csaw_parry_open) the
+# overhead swing goes into the struggle C_SawHit (0x30) instead of the one-shot decapitation C_SawCriHit (0x32); in
+# C_SawHit re4_csaw_clash_routine gives Leon the clash routine instead of plem10_C_SawHit, and re4_csaw_clash_frame
+# keeps the clash without the death timer, the blood or the cutting sound. The game's mash and break free stay.
+# Declared in re4_whole_prelude.h.
+--- a/src/em10/em10.cpp
++++ b/src/em10/em10.cpp
+@@ -11463,9 +11463,9 @@
+     switch (em->r_no_2) {
+     case 0:
+         if (pG->pl_type != 2) {
+-            EmCatchPLSet(em, 0.0f, 2, -15.17f, 0.0f, 853.48f, plem10_C_SawHit);
++            EmCatchPLSet(em, 0.0f, 2, -15.17f, 0.0f, 853.48f, (void (*)(cPlayer*)) re4_csaw_clash_routine(em, (void*) plem10_C_SawHit)); /* port: patch 0924 */
+         } else {
+-            EmCatchPLSet(em, 0.0f, 2, 8.56f, 0.0f, 520.49f, plem10_C_SawHit);
++            EmCatchPLSet(em, 0.0f, 2, 8.56f, 0.0f, 520.49f, (void (*)(cPlayer*)) re4_csaw_clash_routine(em, (void*) plem10_C_SawHit)); /* port: patch 0924 */
+         }
+         MotionSetCore(em, &em->Motion, PL_ARC_PTR(em->subArc, 0xFB), 0, 5, 1, 0);
+         w->Timer2 = 0;
+@@ -11485,7 +11485,7 @@
+         VibSetData((VibDataTbl*) CORE_ARC(CORE_VIBRATION), 0xD, 1);
+         em->r_no_2++;
+     case 1:
+-        Ctrl12Set(w->pCtrlGroup, CTRL12_ID_EM10_NOT_NEAR, 5);
++        Ctrl12Set(w->pCtrlGroup, CTRL12_ID_EM10_NOT_NEAR, 5); re4_csaw_clash_frame(em); /* port: patch 0924 */
+         if (w->pWeapon) {
+             if (w->Timer3) {
+                 w->Timer3--;
+@@ -11654,7 +11654,7 @@
+         if (fabsf(pPL->pos.y - em->pos.y) > 50.0f) {
+             EmRoutineSetW(em, 1, 0x30, 0, 0);
+         } else {
+-            EmRoutineSetW(em, 1, 0x32, 0, 0);
++            EmRoutineSetW(em, 1, re4_csaw_parry_open() ? 0x30 : 0x32, 0, 0); /* port: patch 0924 */
+         }
+     }
+ }

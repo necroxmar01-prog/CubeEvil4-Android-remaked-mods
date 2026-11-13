@@ -1490,6 +1490,7 @@ int re4_finish_probe(int i);
 void re4_finish_reset(void);
 int re4_knife_combo_count(void);
 int re4_box_strike_motion(void);
+void* re4_csaw_motion(int i);
 int re4_move_count(void);
 void re4_mod_move_path_set(const char* path);
 void re4_mod_melee_path_set(const char* path);
@@ -2516,6 +2517,9 @@ static void testFinish()
         re4_log("  finishers: %s holds %d slashes of the hatchet combo and %d parries (expected 3, 3)", real, n & 0xFF,
                 n >> 8);
         bad |= n != (3 | 3 << 8) ? 0x20000 : 0;
+        const bool csaw = re4_csaw_motion(0) && re4_csaw_motion(1);
+        re4_log("  finishers: %s chainsaw clash motions %s", real, csaw ? "both" : "missing");
+        bad |= !csaw ? 0x20000 : 0;
         const int box = re4_box_strike_motion();
         re4_log("  finishers: %s box strike frames 0x%x", real, box);
         bad |= box < 0 ? 0x20000 : 0;

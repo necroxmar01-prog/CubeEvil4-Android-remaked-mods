@@ -116,6 +116,8 @@ const int kParry = 3;                    // the answers to a parried blow (entri
 void* gParry[kParry];
 int gParries;
 int gLastParry = -1;
+const int kCsaw = 2;                     // the chainsaw clash (entries 24 / 25; runtime/parry.cpp, patch 0924)
+void* gCsaw[kCsaw];
 const int kTap = 8;                      // a press of the knife key at most this long is a tap: the combo's slash
 const int kTapQueue = 20;                // frames a tap waits for the knife's stance (or the slash before it)
 int gHeld;                               // frames the knife key has been down
@@ -202,6 +204,7 @@ void load()
     gCombos = 0;
     gComboStep = -1;
     gParries = 0;
+    gCsaw[0] = gCsaw[1] = 0;
     gSaid &= ~3;
     if (!*path) {
         if (gBig) {
@@ -241,7 +244,7 @@ void load()
     }
     const u32 count = size >= 0x20 ? be32At(base) : 0;
     // the moves, the box strike's motion and its frames, the hatchet's combo (entries 18..20, patch 0922), the parries
-    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 + kCombo + kParry };
+    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 + kCombo + kParry + kCsaw };
     u32 at[kMax], len[kMax];
     bool ok = whole && count >= 1 && count <= kMax && 0x10 + count * 8 <= size;
     for (u32 i = 0; ok && i < count; i++) {
@@ -287,10 +290,14 @@ void load()
             gCombo[gCombos++] = base + at[i];
             re4_log("melee: %s entry %u: the knife's slash %d of the combo, %u frames", path, (unsigned) i, gCombos,
                     (unsigned) get16(base + at[i]));
-        } else {
+        } else if (i < kMoves + 2 + kCombo + kParry) {
             gParry[gParries++] = base + at[i];
             re4_log("melee: %s entry %u: an answer to a parried blow, %u frames", path, (unsigned) i,
                     (unsigned) get16(base + at[i]));
+        } else {
+            gCsaw[i - (kMoves + 2 + kCombo + kParry)] = base + at[i];
+            re4_log("melee: %s entry %u: the chainsaw clash's %s, %u frames", path, (unsigned) i,
+                    i == kMoves + 2 + kCombo + kParry ? "block" : "push", (unsigned) get16(base + at[i]));
         }
     }
     for (u32 i = 0; i < count && i < kMoves; i++) {
@@ -1100,6 +1107,13 @@ int re4_knife_combo_count(void)
 {
     load();
     return gCombos | gParries << 8;
+}
+
+// runtime/parry.cpp: the mod's chainsaw clash motion (0 the block, 1 the push), 0 none (or the mods' moves off)
+void* re4_csaw_motion(int i)
+{
+    load();
+    return i >= 0 && i < kCsaw && !(gBits.load() & 2) ? gCsaw[i] : 0;
 }
 
 // runtime/parry.cpp: the slash it starts now answers a parried blow
