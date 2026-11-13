@@ -1240,8 +1240,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     @Override public void send() { CoreActivity.this.send(); }
 
     @Override public void r3(boolean down) {
-      Log.i(TAG, "touch R3 -> app " + (tools ? "graphics capture" : "nothing (tools off)"));
-      if (down) capture();
+      if (down) r3Pressed();
     }
   };
 
@@ -1250,6 +1249,15 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
    * next pictures for the diagnosis in the cloud (files/gx-dumps, test-core-app.ps1 /
    * pull-gx-dumps.ps1 fetch them); only with "R3 = Graphics capture" or the test scripts' tools.
    */
+  private void r3Pressed() {
+    // with "Free movement" R3 is the camera's (it turns back behind Leon): no graphics capture then (DevJunior,
+    // 12.11.2026: "the stick that sets the view takes a screenshot"; the capture switched on in the menu ran too)
+    boolean freeMove = getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(FREE_MOVE, false);
+    Log.i(TAG, "R3 -> " + (freeMove ? "camera behind Leon" : tools ? "graphics capture" : "nothing (tools off)"));
+    CoreBridge.recenterCamera();
+    if (!freeMove) capture();
+  }
+
   private void capture() {
     if (!tools) return;
     File dir = AppStorage.base(this);
@@ -1841,11 +1849,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       case CoreInput.APP_GX_DUMP:
         // R3 (right stick pressed): the graphics data of the next pictures for the
         // diagnosis in the cloud (files/gx-dumps, test-core-app.ps1 / pull-gx-dumps.ps1 fetch them);
-        // with "Free movement" also the camera back behind Leon (patch 0900)
-        if (first) {
-          CoreBridge.recenterCamera();
-          capture();
-        }
+        // with "Free movement" the camera back behind Leon instead (patch 0900, see r3Pressed)
+        if (first) r3Pressed();
         return true;
       default:
         break;
