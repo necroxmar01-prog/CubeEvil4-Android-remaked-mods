@@ -844,6 +844,7 @@ int backPlaceSent = -1;  // the weapon on the back's placement the core was told
 std::atomic<int> optKnifeSpeed{0};
 std::atomic<int> optBoxStrike{1};  // the menu's "Box strike" (bit 12 of the third aim word)
 std::atomic<int> optFinishers{1};  // the menu's "Finishers" (bit 13 of the third aim word)
+std::atomic<int> optRemakeMove{1}; // the menu's "Remake movement" (bit 14 of the third aim word)
 int knifeSpeedSent = -1;
 // The menu's AUDIO page (CoreBridge.setSoundVolume, wish of the project owner, 30.10.2026): music | effects << 8 in
 // percent (the core's runtime/sound_volume.cpp).
@@ -2392,7 +2393,8 @@ bool drawGx() {
       backPlaceSent = backPlace;
     }
     const int knife = optKnifeSpeed.load() | (optBoxStrike.load() & 1) << 12  // bit 12 "Box strike" (patch 0916)
-        | (optFinishers.load() & 1) << 13;  // bit 13 "Finishers" (patch 0921)
+        | (optFinishers.load() & 1) << 13   // bit 13 "Finishers" (patch 0921)
+        | (optRemakeMove.load() & 1) << 14;  // bit 14 "Remake movement" (patch 0923)
     if (api.setAim && knife != knifeSpeedSent) {
       api.setAim(static_cast<int>(0xC0000000u | static_cast<unsigned>(knife)));  // the third aim word
       knifeSpeedSent = knife;
@@ -3363,6 +3365,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setBoxStrike
 // The menu's "Finishers" (wish of DevJunior, 13.11.2026: the PC mod's RE9 finishers on stunned Ganados, patch 0921).
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setFinishers(JNIEnv *, jclass, jboolean on) {
   if (optFinishers.exchange(on ? 1 : 0) != (on ? 1 : 0)) LOG("melee: finishers %s", on ? "on" : "off");
+}
+
+// The menu's "Remake movement" (wish of DevJunior, 13.11.2026: Leon's movements of the 2023 remake, patch 0923).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setRemakeMove(JNIEnv *, jclass, jboolean on) {
+  if (optRemakeMove.exchange(on ? 1 : 0) != (on ? 1 : 0)) LOG("move: remake movement %s", on ? "on" : "off");
 }
 
 // R3 (the right stick pressed): the free camera back behind Leon (patch 0900), a toggle of bit 6 of the aim bits.

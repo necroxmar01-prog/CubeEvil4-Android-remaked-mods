@@ -1977,6 +1977,9 @@ final class CoreMenu extends Dialog {
     // the RE9 finishers of a mod pack's melee/finish.dat (wish of DevJunior, 13.11.2026; the core's runtime/finisher.cpp)
     toggle(third, R.string.ingame_melee_finish, input.getBoolean(CoreActivity.FINISHERS, true),
         on -> { input.edit().putBoolean(CoreActivity.FINISHERS, on).apply(); CoreBridge.setFinishers(on); });
+    // Leon's movements of the 2023 remake from a mod pack's melee/move.dat (the core's runtime/locomotion.cpp)
+    toggle(buttonsRow(body), R.string.ingame_melee_move, input.getBoolean(CoreActivity.REMAKE_MOVE, true),
+        on -> { input.edit().putBoolean(CoreActivity.REMAKE_MOVE, on).apply(); CoreBridge.setRemakeMove(on); });
     help(R.string.ingame_melee_help);
   }
   /** The weapon on the back to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it

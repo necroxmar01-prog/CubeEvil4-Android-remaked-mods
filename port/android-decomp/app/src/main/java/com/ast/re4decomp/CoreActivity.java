@@ -156,6 +156,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   static final String BOX_STRIKE = "boxStrike";
   /** The menu's "Finishers" (a mod pack's RE9 finishers on stunned Ganados, patch 0921), on by default. */
   static final String FINISHERS = "finishers";
+  /** The menu's "Remake movement" (a mod pack's remake movements for Leon, patch 0923), on by default. */
+  static final String REMAKE_MOVE = "remakeMove";
   // "Skip intro logos" (wish of DevJunior, 10.11.2026; patch 0905): the title starts at its main menu (bit 28 of the
   // placement word, on by default)
   static final String SKIP_INTRO = "skipIntro";
@@ -430,6 +432,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     CoreBridge.setKnifeSpeed(knifeSpeed);
     CoreBridge.setBoxStrike(inputPrefs.getBoolean(BOX_STRIKE, true));
     CoreBridge.setFinishers(inputPrefs.getBoolean(FINISHERS, true));
+    CoreBridge.setRemakeMove(inputPrefs.getBoolean(REMAKE_MOVE, true));
     input.setStickShape(inputPrefs.getInt(STICK_DEAD_ZONE, 0), inputPrefs.getInt(STICK_RANGE, 100));
     stickWatch.setShape(input.deadZone(), input.range());
     if (input.deadZone() != 0 || input.range() != 100) {

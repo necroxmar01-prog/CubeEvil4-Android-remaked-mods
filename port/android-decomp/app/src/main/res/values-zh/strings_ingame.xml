@@ -458,6 +458,7 @@
     <string name="ingame_melee_random">随机混合</string>
     <string name="ingame_melee_box">击碎箱子</string>
     <string name="ingame_melee_finish">处决</string>
+    <string name="ingame_melee_move">重制版动作</string>
     <string name="ingame_skip_intro">跳过开场标志</string>
     <string name="ingame_skip_intro_help">跳过开场标志：游戏直接从标题菜单开始，不显示 Nintendo、Capcom 等标志（下次启动起生效）。</string>
     <string name="ingame_ashley_gun">阿什莉的手枪</string>

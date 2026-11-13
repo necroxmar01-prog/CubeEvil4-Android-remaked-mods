@@ -519,6 +519,8 @@ char gMeleePath[1600];
 // A mod's finishers (mods/<pack>/melee/finish.dat, port/tools/re9_finisher_pack.py; patch 0921): read by
 // runtime/finisher.cpp. The last pack's in the folder's order.
 char gFinishPath[1600];
+// A mod's movements for Leon (mods/<pack>/melee/move.dat; patch 0923, runtime/locomotion.cpp)
+char gMovePath[1600];
 
 void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int depth, int no)
 {
@@ -539,6 +541,14 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
             if (strcmp(gMeleePath, path) != 0) {
                 snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
                 re4_log("DVD: mod %s: %s holds its melee motions", pack, name);
+            }
+            free(names[k]);
+            continue;
+        }
+        if (strcmp(name, "melee/move.dat") == 0) {
+            if (strcmp(gMovePath, path) != 0) {
+                snprintf(gMovePath, sizeof(gMovePath), "%s", path);
+                re4_log("DVD: mod %s: %s holds Leon's movements", pack, name);
             }
             free(names[k]);
             continue;
@@ -921,6 +931,17 @@ const char* re4_mod_melee_path(void)
 void re4_mod_melee_path_set(const char* path)
 {
     snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
+}
+
+// The active mods' movements for Leon (see gMovePath), "" without them; the second for the runtime test.
+const char* re4_mod_move_path(void)
+{
+    return gMovePath;
+}
+
+void re4_mod_move_path_set(const char* path)
+{
+    snprintf(gMovePath, sizeof(gMovePath), "%s", path);
 }
 
 // The active mods' finishers (see gFinishPath), "" without them.

@@ -1489,6 +1489,8 @@ void re4_mod_finish_path_set(const char* path);
 int re4_finish_probe(int i);
 void re4_finish_reset(void);
 int re4_knife_combo_count(void);
+int re4_move_count(void);
+void re4_mod_move_path_set(const char* path);
 void re4_mod_melee_path_set(const char* path);
 int re4probe_qte_touch(void);
 int re4probe_qte_auto(void);
@@ -2515,6 +2517,15 @@ static void testFinish()
         bad |= n != (3 | 3 << 8) ? 0x20000 : 0;
         re4_mod_melee_path_set("");
         re4_knife_combo_count();
+    }
+    // Leon's remake movements (re9_finisher_pack.py --move; RE4_TEST_MOVE_DAT=path): stand, walk, run, back step
+    if (const char* real = getenv("RE4_TEST_MOVE_DAT")) {
+        re4_mod_move_path_set(real);
+        const int n = re4_move_count();
+        re4_log("  finishers: %s holds %d movements (expected 4)", real, n);
+        bad |= n != 4 ? 0x40000 : 0;
+        re4_mod_move_path_set("");
+        bad |= re4_move_count() != 0 ? 0x40000 : 0;
     }
     report("finishers", bad == 0);
 }

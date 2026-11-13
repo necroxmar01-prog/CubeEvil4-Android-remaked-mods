@@ -47,6 +47,13 @@ Entries 21..23: Leon's answer to a parried blow (runtime/parry.cpp): the mod's p
 (cha0_wp5000H 0800 parry_just, 0830 / 0840 parry_crash_L / R), at 30 frames per second, cut after PARRY_END source
 frames; the slash's hits on its frames 6..10 stagger the attacker as the knife's answer did.
 
+--move OUT/melee/move.dat writes Leon's movements of the 2023 game (cha0_general, which the mod ships; wish of DevJunior,
+13.11.2026: "remaster Leon's movements", phase 1) for runtime/locomotion.cpp (patch 0923): one seamless cycle each
+(searched: the pair of frames LOOP_SEARCH apart whose poses differ least) of the stand, the walk, the jog (the game's
+run), the walk back and the two turns in place (wheel loops); without fingers (the game's hands hold the weapon).
+Entry 0 ("MOV1", big-endian): per movement u8 the motion table's slot (m_MotTbl: 0 stand, 2 walk, 6 run, 8 back), u8 flags (1 its speed matched to the game's at runtime: walk, run, back), u16 its entry, u16
+its last frame, u16 the right and the left foot's strike (game frames, 0xFFFF none), u16 pad.
+
 Game files and the PC mod's files never go into the repository; this tool only reads and writes the paths given.
 """
 import argparse
@@ -256,6 +263,79 @@ def kicks(root, model, tol, out_path, no_fingers):
                                                                            len(KICKS_KNEELING)))
 
 
+# Leon's movements (--move): (slot, the cha0_general motion, (first, last) cycle lengths searched in source frames or None
+# for the whole motion, flags)
+MOVES = [(0, "0160_stand_loop", (150, 300), 0), (2, "0403_walk_F_loop", (60, 70), 1),
+         (6, "0520_jog_loop_VerA", (40, 50), 1), (8, "0443_walk_B_loop", (50, 170), 1)]
+LOOP_BONES = ["Hip", "Spine_0", "Spine_2", "Neck_0", "Head", "R_UpperArm", "R_Forearm", "L_UpperArm", "L_Forearm",
+              "R_Thigh", "R_Shin", "R_Foot", "L_Thigh", "L_Shin", "L_Foot"]
+
+
+def find_loop(motion, lengths):
+    """(first, length) of the cycle whose ends' poses (the main bones against the root's heading, the hips' place) differ
+    least, both even (the game's frames are every second)."""
+    src = RT.Source(motion)
+    total = int(motion.frames)
+    if lengths is None:
+        return 0, total - total % 2
+    feats = []
+    for f in range(total + 1):
+        rot, pos = src.pose(f)
+        turn = RT.rot_y(RT.yaw_of(rot[0])).T
+        feats.append(np.concatenate([(turn @ rot[src.by_name[b]]).ravel() for b in LOOP_BONES] +
+                                    [turn @ (pos[src.by_name["Hip"]] - pos[0]) * 3.0]))
+    feats = np.array(feats)
+    best = (1e9, 0, lengths[0])
+    for length in range(lengths[0], lengths[1] + 1, 2):
+        for first in range(0, total - length + 1, 2):
+            d = float(np.linalg.norm(feats[first] - feats[first + length]))
+            if d < best[0]:
+                best = (d, first, length)
+    return best[1], best[2]
+
+
+def plants(motion, first, length, back=False):
+    """Game frames (from the cycle's start) where the right and the left foot strike: furthest ahead of the hips along
+    the way (behind them walking back)."""
+    src = RT.Source(motion)
+    out = []
+    for foot in ("R_Foot", "L_Foot"):
+        ds = []
+        for f in range(first, first + length + 1, 2):
+            rot, pos = src.pose(f)
+            turn = RT.rot_y(RT.yaw_of(rot[0])).T
+            ds.append((turn @ (pos[src.by_name[foot]] - pos[src.by_name["Hip"]]))[2])
+        ds = np.array(ds[:-1])  # the last frame is the first again
+        out.append(int(np.argmin(ds) if back else np.argmax(ds)))
+    return out
+
+
+def moves(root, model, tol, out_path):
+    """Leon's movements (see --move)."""
+    _v, mots = R.read_motlist(root / CHA0)
+    entries, table = [b""], []
+    for slot, name, lengths, flags in MOVES:
+        m = next(x for x in mots if x.name.endswith(name))
+        first, length = find_loop(m, lengths)
+        fit = Fit(m, model, "leon", 2.0, tol, m.frames, True,
+                  frames=list(np.arange(first, first + length + 1e-6, 2.0)))
+        data = fcv.serialise(fit.motion(fit.scale))
+        c = fit.check(data)
+        entries.append(data)
+        feet = plants(m, first, length, back=slot == 8) if flags & 1 else [0xFFFF, 0xFFFF]
+        table.append(struct.pack(">BBHHHHH", slot, flags, len(entries) - 1, len(fit.frames) - 1, feet[0], feet[1], 0))
+        dist = np.linalg.norm(np.array(fit.root[-1][0]) - np.array(fit.root[0][0])) * fit.scale
+        print("move %-22s slot 0x%x: source %d..%d, %d game frames, %d bytes, %.0f mm a cycle, feet %s; check %.1f/%.1f "
+              "deg" % (name, slot, first, first + length, len(fit.frames), len(data), dist, feet, c[0], c[1]))
+    entries[0] = b"MOV1" + struct.pack(">I", len(table)) + b"".join(table)
+    tags = [b"MOV\x00"] + [b"FCV\x00"] * (len(entries) - 1)
+    body = U.build_body(entries, tags)
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(body)
+    print("%s: %d bytes, %d movements" % (out, len(body), len(table)))
+
+
 def sequence(frames, kill, down):
     keys = []
     for f in range(frames):
@@ -293,6 +373,7 @@ def main(argv=None):
     ap.add_argument("--no-fingers", action="store_true")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--kicks", help="also write the mod's kicks as the pack's melee archive (melee/melee.dat)")
+    ap.add_argument("--move", help="also write Leon's movements of the 2023 game (melee/move.dat)")
     a = ap.parse_args(argv)
 
     # the mod's natives/stm folder (its _re9_melee_proto and _chainsaw)
@@ -315,6 +396,8 @@ def main(argv=None):
     leon_model, ganado_model = model_of(a.leon), model_of(a.ganado)
     if a.kicks:
         kicks(root, leon_model, a.tolerance, a.kicks, a.no_fingers)
+    if a.move:
+        moves(root, leon_model, a.tolerance, a.move)
     want = set(a.only.split(",")) if a.only else None
     entries = [("FIN", b"")]
     made = {}

@@ -461,6 +461,7 @@
     <string name="ingame_melee_random">Zufallsmix</string>
     <string name="ingame_melee_box">Kisten-Hieb</string>
     <string name="ingame_melee_finish">Finisher</string>
+    <string name="ingame_melee_move">Remake-Bewegung</string>
     <string name="ingame_skip_intro">Intro-Logos überspringen</string>
     <string name="ingame_skip_intro_help">Intro-Logos überspringen: Das Spiel startet direkt im Titelmenü, ohne die Logos von Nintendo, Capcom und anderen (ab dem nächsten Start).</string>
     <string name="ingame_ashley_gun">Ashleys Pistole</string>

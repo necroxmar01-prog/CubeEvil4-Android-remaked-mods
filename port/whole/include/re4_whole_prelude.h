@@ -120,6 +120,9 @@ void* re4_melee_kneel(void* game);
 /* Patch 0904: re4_melee_neck gives 2 for the axe execution of a standing stunned Ganado (it kneels, then the axe
  * strike); this is Leon's routine for it. */
 void* re4_melee_execute(void);
+/* Patch 0923 (pl_wep.cpp cPlayer::weaponInit; runtime/locomotion.cpp): the weapon's module filled the player's motion
+ * table; a mod's remake movements take the stand, walk, run and back step. */
+void re4_move_table(void* pl);
 /* Patch 0922 (pl_knife.cpp knife_r3_fire00; runtime/melee.cpp): 1 when Leon's knife slash plays a mod's hatchet combo
  * (it set the motion), 0 the game's three-way slash. */
 int re4_knife_slash(void* pl);

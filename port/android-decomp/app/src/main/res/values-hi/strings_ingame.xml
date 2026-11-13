@@ -461,6 +461,7 @@
     <string name="ingame_melee_random">रैंडम मिक्स</string>
     <string name="ingame_melee_box">बक्सा प्रहार</string>
     <string name="ingame_melee_finish">फ़िनिशर</string>
+    <string name="ingame_melee_move">रीमेक की चाल</string>
     <string name="ingame_skip_intro">शुरुआती लोगो छोड़ें</string>
     <string name="ingame_skip_intro_help">शुरुआती लोगो छोड़ें: खेल सीधे टाइटल मेनू से शुरू होता है, Nintendo, Capcom और अन्य लोगो के बिना (अगली बार शुरू करने से)।</string>
     <string name="ingame_ashley_gun">ऐशली की पिस्तौल</string>

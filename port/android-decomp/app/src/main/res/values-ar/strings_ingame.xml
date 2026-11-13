@@ -482,6 +482,7 @@
     <string name="ingame_melee_random">مزج عشوائي</string>
     <string name="ingame_melee_box">ضربة الصناديق</string>
     <string name="ingame_melee_finish">ضربات الإجهاز</string>
+    <string name="ingame_melee_move">حركة الريميك</string>
     <string name="ingame_skip_intro">تخطي شعارات البداية</string>
     <string name="ingame_skip_intro_help">تخطي شعارات البداية: تبدأ اللعبة من قائمة العنوان مباشرة، دون شعارات Nintendo وCapcom وغيرها (من التشغيل التالي).</string>
     <string name="ingame_ashley_gun">مسدس آشلي</string>

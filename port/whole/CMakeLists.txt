@@ -294,7 +294,7 @@ add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge
     runtime/gx_owner.cpp runtime/potato.cpp runtime/aim_options.cpp
     runtime/sound_volume.cpp runtime/minimap.cpp runtime/laser_colour.cpp runtime/benchmark.cpp
     runtime/glow_check.cpp runtime/view_distance.cpp runtime/cpu_skip.cpp runtime/free_move.cpp
-    runtime/quick_slots.cpp runtime/parry.cpp runtime/wardrobe.cpp runtime/melee.cpp runtime/finisher.cpp runtime/ashley_gun.cpp
+    runtime/quick_slots.cpp runtime/parry.cpp runtime/wardrobe.cpp runtime/melee.cpp runtime/finisher.cpp runtime/locomotion.cpp runtime/ashley_gun.cpp
     runtime/lock_on.cpp runtime/blink.cpp runtime/wheel_zoom.cpp runtime/enemy_random.cpp)
 target_link_libraries(re4_gamehooks_obj PRIVATE re4_game_flags)
 target_include_directories(re4_gamehooks_obj PRIVATE runtime)

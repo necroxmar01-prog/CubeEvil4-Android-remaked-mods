@@ -476,6 +476,7 @@
     <string name="ingame_melee_random">Random mix</string>
     <string name="ingame_melee_box">Box strike</string>
     <string name="ingame_melee_finish">Finishers</string>
+    <string name="ingame_melee_move">Remake movement</string>
     <string name="ingame_skip_intro">Skip intro logos</string>
     <string name="ingame_skip_intro_help">Skip intro logos: the game starts at the title menu, without the Nintendo, Capcom and other logos (from the next start).</string>
     <string name="ingame_ashley_gun">Ashley\'s pistol</string>

@@ -1,0 +1,16 @@
+# Patch 0923 (wish of DevJunior, 13.11.2026: "remaster Leon's movements" with the 2023 remake's). Not a bug of the
+# prototype: a port feature of the mods.
+# pl_wep.cpp cPlayer::weaponInit: once the weapon's module has filled the motion table, re4_move_table
+# (runtime/locomotion.cpp) lets a mod pack's remake movements (melee/move.dat) take Leon's stand, walk, run and back
+# step with bare hands or a handgun. Declared in re4_whole_prelude.h.
+--- a/src/game/pl_wep.cpp
++++ b/src/game/pl_wep.cpp
+@@ -168,7 +168,7 @@
+         m_MotTbl[i] = 0;
+     }
+     if (WeaponInitFunc) {
+-        WeaponInitFunc(this);
++        WeaponInitFunc(this); re4_move_table(this); /* port: patch 0923 */
+     }
+     if (!StaFlagChk(pG, STA_PL_BOAT) && !(stat.check(cPlayer::F_CROUCH))) {
+         r_no_0 = 0;
