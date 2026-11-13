@@ -43,8 +43,11 @@
 //    a slash or a kick breaks 3 or 2 boxes at once"): on the hit frame up to kBoxMore other intact boxes, barrels or
 //    vases break with the struck one, the nearest first: those whose side lies within kBoxSplash of Leon, in front
 //    of him (kBoxCone) and from his feet up to kBoxHigh (a stack's upper crates).
-//  - Hatchet combo (wish of DevJunior, 13.11.2026: "the hatchet attacks seen freely" in the RE9 mod): melee.dat entries
-//    18..20 replace the knife's slash with the mod's three-slash combo (patch 0922, re4_knife_slash).
+//  - Hatchet combo (wish of DevJunior, 13.11.2026: "the hatchet attacks seen freely" in the RE9 mod; "held, the classic,
+//    a click, the remake's"): a tap of the knife key (released within kTap frames) slashes at once with the mod's
+//    three-slash combo, melee.dat entries 18..20 (patch 0922, re4_knife_tap_input / re4_knife_slash), the next slash
+//    for the next tap; the key held is the knife's stance as ever, its slash the game's three-way one by the aim.
+//    A parried blow (runtime/parry.cpp) is answered with one of the mod's parries (entries 21..23).
 //  - Finishers (wish of DevJunior, 13.11.2026: the PC mod "RE9 Melee - Hatchet - Finishers for Leon"): a mod pack's
 //    melee/finish.dat (runtime/finisher.cpp) adds the hatchet finisher on a kneeling Ganado and the guns' finishers
 //    on a standing one to the moves drawn (with the mix off they go first); they play through the neck break's enemy
@@ -67,6 +70,7 @@
 #include "em.h"
 #include "em_sub.h"
 #include "embox.h"
+#include "joy.h"
 
 #include <atomic>
 #include <math.h>
@@ -107,6 +111,16 @@ u32 gSeed = 0x2545F491u;
 const int kCombo = 3;                    // the knife's combo of a mod (entries 18..20): the slashes in turn
 void* gCombo[kCombo];
 int gCombos;
+const int kParry = 3;                    // the answers to a parried blow (entries 21..23)
+void* gParry[kParry];
+int gParries;
+int gLastParry = -1;
+const int kTap = 8;                      // a press of the knife key at most this long is a tap: the combo's slash
+const int kTapQueue = 20;                // frames a tap waits for the knife's stance (or the slash before it)
+int gHeld;                               // frames the knife key has been down
+int gTapQueued;                          // frames left for a tap's slash to start
+bool gTapSlash;                          // the next slash is a tap's (the combo)
+bool gParryNext;                         // the next slash answers a parried blow
 int gComboStep = -1;                     // the last slash of the combo played, and when it started (pad frame)
 unsigned gComboAt;
 unsigned gComboLen;                      // its frames
@@ -140,6 +154,7 @@ void load()
     gBoxMot = nullptr;
     gCombos = 0;
     gComboStep = -1;
+    gParries = 0;
     gSaid &= ~3;
     if (!*path) {
         if (gBig) {
@@ -178,8 +193,8 @@ void load()
         fclose(f);
     }
     const u32 count = size >= 0x20 ? be32At(base) : 0;
-    // the moves, the box strike's motion and its frames, the hatchet's combo (entries 18..20, patch 0922)
-    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 + kCombo };
+    // the moves, the box strike's motion and its frames, the hatchet's combo (entries 18..20, patch 0922), the parries
+    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 + kCombo + kParry };
     u32 at[kMax], len[kMax];
     bool ok = whole && count >= 1 && count <= kMax && 0x10 + count * 8 <= size;
     for (u32 i = 0; ok && i < count; i++) {
@@ -217,10 +232,17 @@ void load()
                     (unsigned) fr[0], (unsigned) fr[1], (unsigned) fr[2], last);
         }
     }
-    for (u32 i = kMoves + 2; i < count; i++) {  // the hatchet's combo: Leon's knife slashes (patch 0922)
-        if (len[i]) {
+    for (u32 i = kMoves + 2; i < count; i++) {  // the hatchet's combo and the parries: Leon's knife (patch 0922)
+        if (!len[i]) {
+            continue;
+        }
+        if (i < kMoves + 2 + kCombo) {
             gCombo[gCombos++] = base + at[i];
             re4_log("melee: %s entry %u: the knife's slash %d of the combo, %u frames", path, (unsigned) i, gCombos,
+                    (unsigned) get16(base + at[i]));
+        } else {
+            gParry[gParries++] = base + at[i];
+            re4_log("melee: %s entry %u: an answer to a parried blow, %u frames", path, (unsigned) i,
                     (unsigned) get16(base + at[i]));
         }
     }
@@ -964,21 +986,39 @@ int re4_melee_neck(int special)
 int re4_knife_slash(void* p)
 {
     cPlayer* pl = (cPlayer*) p;
-    if (!leon() || !pl || (gBits.load() & 2)) {
+    const bool tap = gTapSlash, parry = gParryNext;
+    gTapSlash = gParryNext = false;
+    if (!leon() || !pl || (gBits.load() & 2) || !(tap || parry)) {
         return 0;
     }
     load();
-    if (!gCombos) {
+    void* mot = 0;
+    if (parry && gParries) {
+        int k = 0;
+        if (gParries > 1) {
+            gSeed = gSeed * 1664525u + 1013904223u;
+            k = (int) ((gSeed >> 16) % (u32) gParries);
+            if (k == gLastParry) {
+                k = (k + 1) % gParries;
+            }
+        }
+        gLastParry = k;
+        mot = gParry[k];
+        say(14, "a parried blow answered with the mod's parry");
+    } else if (tap && gCombos) {
+        const unsigned now = re4_pad_frame();
+        int step = 0;
+        if (gComboStep >= 0 && now - gComboAt <= gComboLen + kComboGap) {
+            step = (gComboStep + 1) % gCombos;
+        }
+        gComboStep = step;
+        gComboAt = now;
+        mot = gCombo[step];
+    }
+    if (!mot) {
         return 0;
     }
-    const unsigned now = re4_pad_frame();
-    int step = 0;
-    if (gComboStep >= 0 && now - gComboAt <= gComboLen + kComboGap) {
-        step = (gComboStep + 1) % gCombos;
-    }
-    gComboStep = step;
-    gComboAt = now;
-    MotionSetCore(pl, &pl->Motion, gCombo[step], 0, 3, 1, 0);
+    MotionSetCore(pl, &pl->Motion, mot, 0, 3, 1, 0);
     gComboLen = pl->Motion.Seq_frame_num;
     MotionMove(pl, 0);
     pl->Waist->set(pl->m_Fwork0, 0.4f);
@@ -992,11 +1032,61 @@ int re4_knife_slash(void* p)
     return 1;
 }
 
-// For the tests: the combo's slashes the active archive holds
+// For the tests: the combo's slashes the active archive holds (and its parries, << 8)
 int re4_knife_combo_count(void)
 {
     load();
-    return gCombos;
+    return gCombos | gParries << 8;
+}
+
+// runtime/parry.cpp: the slash it starts now answers a parried blow
+void re4_knife_parry_mark(void)
+{
+    gParryNext = true;
+    gTapQueued = 0;
+}
+
+// Before the routines read the keys (runtime/parry.cpp re4_parry_input, patch 0900): a tap of the knife key (down at
+// most kTap frames) slashes with the combo: the knife's stance (routine 0xB, drawn by the press) goes into its slash
+// step as on the fire key; one tapped during a slash waits for its end (kTapQueue frames at most).
+void re4_knife_tap_input(void* p)
+{
+    cPlayer* pl = (cPlayer*) p;
+    if (!pl || !leon() || (gBits.load() & 2)) {
+        gHeld = gTapQueued = 0;
+        return;
+    }
+    load();
+    if (!gCombos) {
+        gHeld = gTapQueued = 0;
+        return;
+    }
+    const bool down = (Key.on & 0x800) || (Joy[0].on & 0x40);
+    if (down) {
+        gHeld++;
+    } else {
+        if (gHeld > 0 && gHeld <= kTap) {
+            gTapQueued = kTapQueue;
+        }
+        gHeld = 0;
+    }
+    if (gTapQueued <= 0) {
+        return;
+    }
+    gTapQueued--;
+    if (pl->r_no_0 != 0) {
+        gTapQueued = 0;  // hurt or in an event
+        return;
+    }
+    if (pl->r_no_1 == 0xB && (pl->r_no_2 == 0 || pl->r_no_2 == 1)) {
+        pl->r_no_2 = 2;  // the slash, as pl_knife's stance step sets it on the fire key
+        pl->r_no_3 = 0;
+        gTapSlash = true;
+        gTapQueued = 0;
+    } else if (pl->r_no_1 != 0xB) {
+        Key.on |= 0x800;  // the knife key held until his stance is up
+        Joy[0].on |= 0x40;
+    }
 }
 
 void* re4_melee_execute(void)

@@ -43,6 +43,9 @@ its contact window (the mod's lua: source frames 22..28) falls there, the rest a
 the free hatchet attacks, the combo of the mod's knife moves (cha0_wp5000H 0630 / 0640 / 0650, attack 1st, 2nd, 3rd),
 for the knife's slash (patch 0922, pl_knife.cpp knife_r3_fire00): retimed so the blade's fastest frame falls on the
 slash's game frame 8 (its hits run on 6..10), cut KNIFE_TAIL source frames after it (the stance comes back sooner).
+Entries 21..23: Leon's answer to a parried blow (runtime/parry.cpp): the mod's perfect parry and its two pushes back
+(cha0_wp5000H 0800 parry_just, 0830 / 0840 parry_crash_L / R), at 30 frames per second, cut after PARRY_END source
+frames; the slash's hits on its frames 6..10 stagger the attacker as the knife's answer did.
 
 Game files and the PC mod's files never go into the repository; this tool only reads and writes the paths given.
 """
@@ -82,6 +85,8 @@ WP5000H = "_chainsaw/animation/ch/cha0/motlist/cha0_wp5000h.motlist.663"
 KNIFE_COMBO = ["0630_attack_1st", "0640_attack_2nd", "0650_attack_3rd"]
 KNIFE_HIT = 8         # knife_r3_fire10: hits on frames 6..10, full damage on 7..8
 KNIFE_TAIL = 30       # source frames kept after the blade's fastest one
+PARRIES = ["0800_parry_just", "0830_parry_crash_L", "0840_parry_crash_R"]
+PARRY_END = 56        # source frames of a parry kept
 
 HANDGUNS = [1, 2, 3, 4, 0x11]  # item.cpp wep_info: the handguns' weapon numbers (em_sub.cpp HandgunCk)
 
@@ -235,6 +240,14 @@ def kicks(root, model, tol, out_path, no_fingers):
         entries.append(data)
         print("hatchet %-28s blade fastest on source frame %d: %d game frames, %d bytes; check %.1f/%.1f deg" % (
             m.name, peak, len(fit.frames), len(data), c[0], c[1]))
+    for name in PARRIES:
+        m = next(x for x in knife if x.name.endswith(name))
+        fit = Fit(m, model, "leon", 2.0, tol, min(m.frames, PARRY_END), no_fingers)
+        data = fcv.serialise(fit.motion(fit.scale))
+        c = fit.check(data)
+        entries.append(data)
+        print("parry   %-28s %d game frames, %d bytes; check %.1f/%.1f deg" % (m.name, len(fit.frames), len(data),
+                                                                          c[0], c[1]))
     body = U.build_body(entries, [b"FCV\x00"] * len(entries))
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

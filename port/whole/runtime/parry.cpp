@@ -30,6 +30,8 @@
 extern cPlayer* pPL;
 extern "C" int re4_parry_on(void);  // runtime/aim_options.cpp
 extern "C" void re4_log(const char* fmt, ...);
+extern "C" void re4_knife_tap_input(void* pl);  // runtime/melee.cpp: a tap of the knife key slashes (patch 0922)
+extern "C" void re4_knife_parry_mark(void);
 
 namespace {
 
@@ -87,6 +89,7 @@ extern "C" {
 // Patch 0900's hook (re4_player_input, cPlayer::keyConfig, before the routines read the keys).
 void re4_parry_input(cPlayer* pl)
 {
+    re4_knife_tap_input(pl);
     if (!pl || !re4_parry_on() || pG->pl_type == 1) {
         gWindow = gGuard = gSlash = 0;
         return;
@@ -110,6 +113,7 @@ void re4_parry_input(cPlayer* pl)
             if (pl->r_no_2 != 2) {
                 pl->r_no_2 = 2;  // the slash, as pl_knife's stance step sets it on the fire key
                 pl->r_no_3 = 0;
+                re4_knife_parry_mark();  // a mod's parry answers it (runtime/melee.cpp, patch 0922)
             }
             gSlash = 0;
         } else {

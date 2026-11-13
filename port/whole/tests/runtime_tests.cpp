@@ -2510,8 +2510,9 @@ static void testFinish()
     if (const char* real = getenv("RE4_TEST_MELEE_DAT")) {
         re4_mod_melee_path_set(real);
         const int n = re4_knife_combo_count();
-        re4_log("  finishers: %s holds %d slashes of the hatchet combo (expected 3)", real, n);
-        bad |= n != 3 ? 0x20000 : 0;
+        re4_log("  finishers: %s holds %d slashes of the hatchet combo and %d parries (expected 3, 3)", real, n & 0xFF,
+                n >> 8);
+        bad |= n != (3 | 3 << 8) ? 0x20000 : 0;
         re4_mod_melee_path_set("");
         re4_knife_combo_count();
     }
