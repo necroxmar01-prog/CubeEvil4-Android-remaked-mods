@@ -87,6 +87,7 @@ extern "C" void* re4_finish_kneel_routine(void* kick);
 extern "C" void* re4_finish_motion(int kind);
 extern "C" void re4_finish_clear(void);
 extern "C" unsigned re4_pad_frame(void);                      // runtime/pad.cpp
+extern "C" void* re4_parry_attacker(void);                   // runtime/parry.cpp
 extern cPlayer* pPL;
 
 namespace {
@@ -121,6 +122,52 @@ int gHeld;                               // frames the knife key has been down
 int gTapQueued;                          // frames left for a tap's slash to start
 bool gTapSlash;                          // the next slash is a tap's (the combo)
 bool gParryNext;                         // the next slash answers a parried blow
+void* gParryMot;                         // the parry answer playing (its hit not yet dealt: gParryHit false)
+bool gParryHit;
+const f32 kParryHitFrame = 7.0f;         // the knife slash's full-damage frames are 7..8 (knife_r3_fire10)
+
+// The parry answer's hit (device report 13.11.2026: "after a perfect parry they are no longer stunned"): the knife's
+// hit check is a line along Leon's right forearm on frames 6..10, which the mod's parries (a deflection, pushes) do
+// not swing at the attacker; on frame 7 his knife's own hit (PlWepHitCheck2, the knife 0x10, full damage) goes from
+// Leon's chest through the attacker's (runtime/parry.cpp noted him), so the game's damage rules stagger him as the
+// knife's answer did.
+void parryWatch(unsigned)
+{
+    cPlayer* pl = pPL;
+    if (!gParryMot || !pl) {
+        return;
+    }
+    if (pl->r_no_0 != 0 || pl->r_no_1 != 0xB || pl->r_no_2 != 2 || (void*) pl->Motion.pMot != gParryMot) {
+        gParryMot = 0;
+        return;
+    }
+    if (gParryHit || pl->Motion.Seq_frame < kParryHitFrame) {
+        return;
+    }
+    gParryHit = true;
+    cEm* em = (cEm*) re4_parry_attacker();
+    if (!em) {
+        re4_log("melee: the parry answer found no attacker to hit");
+        return;
+    }
+    Vec p0 = pl->getPartsPtr(2)->world;
+    Vec p1 = em->getPartsPtr(2) ? em->getPartsPtr(2)->world : em->pos;
+    if (!em->getPartsPtr(2)) {
+        p1.y += 1200.0f;
+    }
+    Vec d;
+    PSVECSubtract(&p1, &p0, &d);
+    const f32 len = sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
+    if (len > 2500.0f) {
+        re4_log("melee: the parry's attacker stepped away (%.0f): no hit", (double) len);
+        return;
+    }
+    PSVECScale(&d, &d, 1.3f);  // through him
+    PSVECAdd(&p0, &d, &p1);
+    const u32 hit = PlWepHitCheck2(pl, &p0, &p1, 0x10, 1, 6000.0f);
+    re4_log("melee: the parry answer hit the attacker (enemy id 0x%x, %.0f away): %u", (unsigned) em->id, (double) len,
+            (unsigned) hit);
+}
 int gComboStep = -1;                     // the last slash of the combo played, and when it started (pad frame)
 unsigned gComboAt;
 unsigned gComboLen;                      // its frames
@@ -1004,6 +1051,13 @@ int re4_knife_slash(void* p)
         }
         gLastParry = k;
         mot = gParry[k];
+        static bool hooked = false;
+        if (!hooked) {
+            hooked = true;
+            re4_add_frame_hook(parryWatch);
+        }
+        gParryMot = mot;
+        gParryHit = false;
         say(14, "a parried blow answered with the mod's parry");
     } else if (tap && gCombos) {
         const unsigned now = re4_pad_frame();

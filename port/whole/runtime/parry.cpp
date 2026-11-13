@@ -54,6 +54,25 @@ bool villager(int id)
     return (id >= 0x10 && id <= 0x20) || id == 0x22 || id == 0x25 || id == 0x3A;
 }
 
+// The enemy whose blow was turned aside: the nearest active one to the blow (runtime/melee.cpp's parry answer hits
+// him; the mod's parry moves do not swing the blade at him as the knife's slash does)
+cEm* gAttacker;
+
+void noteAttacker(Vec* pos)
+{
+    gAttacker = 0;
+    f32 bestD = 1500.0f * 1500.0f;
+    for (cEm* m = EmMgr.getActiveWork(); m != 0; m = EmMgr.getNext(m)) {
+        const f32 dx = m->pos.x - pos->x;
+        const f32 dz = m->pos.z - pos->z;
+        const f32 d = dx * dx + dz * dz;
+        if (d < bestD && m->hp > 0) {
+            bestD = d;
+            gAttacker = m;
+        }
+    }
+}
+
 // The metal clash at the blow: the armour hit of the nearest villager within reach (none: silent).
 void clash(Vec* pos)
 {
@@ -140,8 +159,20 @@ int re4_parry_hit(Vec* pos)
         re4_log("parry: a blow turned aside (%d so far)", gParries);
         if (pos) {
             clash(pos);
+            noteAttacker(pos);
         }
         return 1;
+    }
+    return 0;
+}
+
+// runtime/melee.cpp: the attacker of the last parried blow while still active and alive, else 0
+void* re4_parry_attacker(void)
+{
+    for (cEm* m = EmMgr.getActiveWork(); m != 0; m = EmMgr.getNext(m)) {
+        if (m == gAttacker) {
+            return m->hp > 0 ? m : 0;
+        }
     }
     return 0;
 }
