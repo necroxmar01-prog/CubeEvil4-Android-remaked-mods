@@ -3,6 +3,246 @@
 Diese Datei ist das Gedächtnis zwischen den Sitzungen. Jede Sitzung liest sie
 zuerst und aktualisiert sie am Ende (siehe `CLAUDE.md`).
 
+## Version 0.99.13-rc (in Arbeit, Branch `09913`, Basis 55ccbeb6; 13.11.2026 origin/09912 971fd1d6 = Release 0.99.12-rc hineingemischt)
+
+Version 0.99.13-rc (versionCode 115), Releasetext `port/android-decomp/docs/releases/v0.99.13-rc.md` („Changes since
+v0.99.12.“, Known issues aus 0.99.12 übernommen). Nächste freie Patchnummer weiter 0232.
+
+### 1. Meldung „Zufällige Gegner klappt nicht, immer dieselben“ (13.11.2026)
+
+Analyse ohne Bericht des Spielers, Einzelheiten in `port/docs/gegner-randomizer-plan.md` Abschnitt 8: kein Fehler im
+Weg vom Knopf zum Kern gefunden (gelesen, nicht auf einem Gerät geprüft); die Stufe 1 tauscht in fast allen offenen
+Räumen nur Ganados derselben Art untereinander auf denselben Stellen (Seed 4242: echte neue Stellen nur in r20c und
+r304), im frühen Dorf r100–r103 ändert sich nichts außer höchstens einem fehlenden Ganado in r103. **Entscheidung des
+Projektinhabers (13.11.2026): „Das mit dem nicht funktionierenden Randomizer lassen wir, der User dürfte diesen falsch
+verstanden haben.“** Der Cheat bleibt, wie er ist; die Vorschläge A–E (Plan, Abschnitt 8) sind nicht gebaut.
+
+### 2. Kabelgebundener Xbox-Controller: LT/RT drehen die Kamera und bleiben hängen (Meldung eines Spielers)
+
+Bericht `E:\Development\Android\reports\09913-xbox-wired-triggers\report.md` (0.99.11-rc, Motorola Edge 70 Fusion,
+originaler Xbox-One-Controller per USB und OTG-Adapter, EU-Discs): „Pressing LT or RT moves the camera to one side by
+itself, and it stays stuck there“; Latch L/R, Alternative Steuerung, Totzone/Reichweite und Umbelegen helfen nicht.
+
+- **Ursache:** Die App nahm Z/RZ als rechten Stick, sobald ein Controller beide meldet (`CoreActivity`
+  `onGenericMotionEvent`, seit K2). Das ist die Reihenfolge der Controller, die Android kennt (Key-Layout-Dateien
+  `Vendor_xxxx_Product_yyyy.kl`: Stick Z/RZ, Trigger LTRIGGER/RTRIGGER bzw. BRAKE/GAS; alle Controller der bisherigen
+  Berichte: Retroid, Xbox und DualShock 4 per Bluetooth, GamePad Plus). Ein Controller ohne passende Datei behält die
+  Reihenfolge des Linux-Treibers (Generic.kl): xpad (kabelgebundene Xbox-Pads, X-input-Pads) gibt den rechten Stick
+  auf RX/RY und die Trigger auf Z/RZ, ohne Trigger-Achse. Z/RZ sind für Android mittige Achsen (−1…1), ein
+  losgelassener Trigger steht bei −1: als Stick gelesen, drückt er die Kamera ganz zur Seite, solange er ruht (erst
+  nach der ersten Bewegung des Triggers, vorher meldet Android 0). Der echte rechte Stick (RX/RY) wurde nicht gelesen.
+- **Behoben (`ControllerAxes.java`, neu):** je Gerät beim ersten Stick-Ereignis entschieden. Mit Trigger-Achse bleibt
+  alles wie bisher. Ohne Trigger-Achse, aber mit Z, RZ, RX und RY: Stick RX/RY, Trigger Z (L) und RZ (R) vom
+  Minimum (losgelassen) bis zum Maximum, außer die Flat-Werte des Kernels sagen das Gegenteil (Z/RZ mit Flat, RX/RY
+  ohne: dann Stick Z/RZ wie bisher; xpad gibt seinen Sticks ein Flat und den Triggern keins). Ein Trigger auf einer
+  mittigen Achse zählt erst, wenn er einmal nahe dem Minimum gesehen wurde (vor seinem ersten Ereignis meldet Android
+  die Mitte, das wäre ein halb gedrückter Trigger; ein Pad, das dort doch einen Stick hat, drückt in Ruhe nie L oder R).
+  Die Tastenbelegung im Menü (`CoreMenu`, Trigger fangen) nutzt dieselben Achsen. Protokoll: einmal je Gerät
+  „controller N "…": right stick RX/RY, triggers Z/RZ (the driver's order …)“ bzw. „right stick Z/RZ, triggers
+  LTRIGGER or BRAKE, RTRIGGER or GAS“; `controllers.txt` im Bericht nennt die Zuordnung je Controller („layout: …“).
+  Kommentar in `ControllerLog.readAxis` berichtigt (22 ist GAS, 23 BRAKE). Der alte ARM64-Modus (`ControllerActivity`,
+  `GameScreenDialog`) ist unverändert.
+- **Geprüft am PC:** `ControllerAxesTest` (7 Tests, Ereignisse wie vom Gerät: das kabelgebundene Xbox-Pad mit den
+  Achsen und Flats von xpad – Gehen vor dem ersten Trigger, LT drücken und loslassen, danach andere Tasten, rechter
+  Stick, RT; ein schneller Druck; die Tastenbelegung; Retroid, Xbox per Bluetooth, DualShock 4, GamePad Plus mit ihren
+  Achsen aus den Berichten unverändert; RX/RY allein, Z/RZ allein, Flats umgekehrt; ein Stick, der für einen Trigger
+  gehalten wird, drückt in Ruhe nichts). Gegenprobe: mit der alten Regel schlagen 5 der 7 Tests an.
+- **Nicht geprüft:** auf einem Gerät mit einem kabelgebundenen Xbox-Pad (keins hier); welche Achsen das Motorola
+  wirklich meldet (der Bericht hatte keine `controllers.txt`).
+
+### 3. Meldung „nach dem Update auf 0.99.12 nur noch 45 statt 60 FPS“ (13.11.2026)
+
+Bericht `E:\Development\Android\reports\09913-45fps\` (nubia NX709S, Adreno 730, Android 13; GLES, 60 FPS an, Frame
+skip aus, Profil Custom; 10:03–11:19, dazu `previous/` = 0.99.11, 2 Minuten). Auswertung mit `09913-fps_timeline.py`
+(Notizordner): Bilder je Minute, Zwischenbilder je Sekunde, ausgelassene, GPU-Zeit, Räume, Zeit in Spielmenüs.
+
+- **Keine Verschlechterung durch 0.99.12 gefunden.** Die 30-FPS-Abschnitte (ganze 10-s-Fenster mit ~303 Bildern) sind
+  genau die Zeiten in den Menüs des Spiels: Koffer, Karte, Händler, Akten (`run: sub screen open … closed`, zusammen
+  **2015 s von etwa 72 Minuten**) und einmal 88 s ein Bild ohne 3D-Abgleich in r11f (10:49:52–10:51:20, kein
+  Untermenü, vermutlich das START-Menü; `re4_picture_still`). Dort macht die App seit 0.91 absichtlich keine
+  Zwischenbilder (68ecb617, c5a4ca5a: Textlisten verschmieren, Aufblitzen). Minuten mit weniger als 5 s im Menü: im
+  Mittel **56 FPS**, die meisten 58–60; Zwischensequenzen haben ihre Zwischenbilder (r11fs02 ~30/s).
+- **Einstellung des Spielers um 10:28:** fest Stufe 3 statt Dynamisch (ab 2x) und Anisotropie 16 statt 2: GPU je
+  Bild ~8 → 9–10 ms, etwas mehr ausgelassene Zwischenbilder, in r10f 54–55 FPS statt ~60; danach in r200 wieder 60.
+  Keine Hitze-Drosselung erkennbar (nach einer Stunde 60 FPS).
+- **0.99.12-Teile geprüft:** der 30-FPS-Rhythmushalter (`PictureHold`, ab423bdf) wirkt nur ohne 60 FPS; der
+  Texturlader nur mit Paket (keins); die Benchmark-Wiederholung lief nicht (kein früherer Benchmark, `benchDate`
+  fehlt; `benchFirst` 2 = die Frage nach dem Update steht noch aus).
+- **Altbefund:** der Bildschirm bleibt bei 120 Hz, obwohl die App 60 Hz wünscht (auch 0.99.11 und 0.99.7). Die App
+  zeigt dann jedes Bild für 2 Bildwechsel, oft aber abwechselnd 1 und 3 (z. B. „1: 200, 2: 180, 3: 200“): gleiche
+  Anzahl, ungleichmäßiger. In 0.99.11 gab es nur zwei saubere Fenster („1: 51, 2: 503, 3: 49“), zu wenig zum
+  Vergleich. Möglicher Schritt (nicht gebaut, Inhaber fragen): ein Rhythmushalter wie `PictureHold` auch für 60 Bilder
+  auf 120 Hz.
+- Nichts am Programm geändert; Rat an den Spieler siehe Bericht an den Inhaber.
+
+### 4. Gleichmäßiger Takt bei 60 FPS auf Bildschirmen, die bei 120 Hz bleiben (Projektinhaber, 13.11.2026: „Ja, bauen“)
+
+Folge aus Abschnitt 3: auf dem nubia (120 Hz, 60 FPS an) kam ein Bild je 2 Bildwechsel an die Reihe, erreichte den
+Schirm aber beim ersten Bildwechsel nach dem Ende der GPU-Arbeit, 2 oder 3 nach Beginn, im Wechsel also 1 und 3
+Bildwechsel lang. Ein Zurückhalten wie `PictureHold` (30 FPS auf 60 Hz) hilft hier nicht: dort entscheidet die App,
+zu welchem Bildwechsel sie ein Bild zeichnet; bei 120 Hz entscheidet das Ende der GPU-Arbeit.
+
+- **`PresentPacer` (`picture_cadence.h`):** jedes Bild bittet Android um seinen Bildwechsel
+  (`eglPresentationTimeANDROID`, Teil der Android-Grafikschicht): `latency` Bildwechsel nach dem Bildwechsel, an dem
+  sein Zeichnen begann, auf dem Raster der App (`every`, `FramePacing`: 2 bei 120 Hz; ein Zeichnen, das einen
+  Bildwechsel zu spät begann, behält seinen Platz). Ein rechtzeitig fertiges Bild wartet dann auf seinen Platz, statt
+  einen früher zu kommen. Start mit `every + 1` (3 bei 120 Hz: 8 ms mehr für Bilder, die in 2 fertig gewesen wären);
+  danach nach dem, was der Schirm tat (`EGL_ANDROID_get_frame_timestamps`: GPU fertig, gezeigt): eins mehr, wenn mehr
+  als jedes 20. von 60 Bildern zu spät kam, eins weniger nach 5 s ohne verspätetes Bild mit einem Bildwechsel Reserve;
+  zwischen `every` und `every + 2`. **Tritt 30 s beiseite** (keine Zeitwünsche, alles wie vorher), wenn es nicht hilft:
+  mehr als jedes 4. Bild zu spät auch bei `every + 2`, oder der Zeichenfaden dreimal in 2 s hinter dem Spiel
+  (Zwischenbild ausgelassen, `gxBetweenDropped`); danach neuer Versuch ab `every + 1`. So hält es nie ein Bild zurück,
+  während das Gerät nicht nachkommt. Nur mit 60 FPS an (das 30-FPS-Menü bleibt, wie es war), nur wo `every`
+  Bildwechsel eine Sechzigstelsekunde sind (120, 180, 240 Hz; 60 Bilder auf 90 Hz können nicht gleichmäßig sein:
+  1 und 2 Bildwechsel im Wechsel, dort schlägt das Menü schon 30 vor), nur OpenGL ES (Vulkan zeigt selbst an), nur wenn
+  Android die Funktion meldet; 60-Hz-Schirme (Retroid) unverändert, auch ohne Zeitstempel. Prüfschalter
+  `RE4_GX_PRESENT_TIME=0` (aus).
+- **App:** `CoreActivity.pace` gibt das Raster weiter (`CoreBridge.setPictureEvery`); `core_mode.cpp`
+  `present::beforeSwap` nach jedem GX-Bild vor dem Tausch von GLSurfaceView.
+- **Protokoll:** die Zeile **„picture pacing“** endet jetzt, sobald der Halter einmal lief, mit „; present times: N
+  pictures asked for their vsync, 3 after their drawing's“ bzw. „; present times set aside (the device behind) …“ bzw.
+  „none asked“. Einmal „screen pacing: present times there/not there, frame timestamps …“, beim ersten Bild „each
+  picture asked for its vsync, 3 after its drawing's …“, beim Beiseitetreten „present times set aside for 30 s …“, und
+  alle 10 s **„screen pacing (as shown): …“** mit den Abständen, wie der Schirm sie wirklich zeigte (Zeitstempel von
+  Android), dazu Verzögerung, gefragte, beurteilte, verspätete Bilder, Schritte hoch und runter. „picture pacing“ misst
+  weiter am Zeichenfaden (bei 120 Hz nicht, was der Schirm zeigt).
+- **Geprüft am PC:** `gx_gl_check` 0 Fehler, neu `TestPresentPacer` (120,44 Hz wie beim Spieler, jedes 23. Zeichnen
+  einen Bildwechsel zu spät): Bilder 1,3–2,3 Bildwechsel nach Beginn fertig: **ohne Halter „1: 159, 2: 285, 3: 159“
+  (47 % genau 2), mit Halter „2: 603“ (100 %)**, kein Bild verloren, Verzögerung 2,53 → 3,00 Bildwechsel (im Mittel
+  3,9 ms mehr); langsamere GPU (2,5–3,4): ein Schritt auf 4, 98 % genau 2; schnelle GPU (0,6–1,2): nach 5 s zurück auf
+  2, 99 %; zu langsames Gerät (3,6–5,0): nach 120 Bildern beiseite, Verzögerung wie ohne (5,04), nicht mehr verlorene
+  Bilder, nach 30 s neuer Versuch; dreimal hinten in 2 s: beiseite, seltener: nicht; 60, 90 und 144 Hz unberührt;
+  240 Hz mit jedem 4. `gradlew :app:externalNativeBuildCoreDebug` (NDK, `core_mode.cpp`) ohne Fehler und Warnung.
+  `core_mode.cpp` selbst läuft am PC nicht (keine Android-EGL-Erweiterungen in Mesa).
+- **Nicht geprüft:** auf einem Gerät (keins mit 120 Hz hier); ob das nubia die Zeitwünsche befolgt, zeigt die neue
+  Zeile „screen pacing (as shown)“ im nächsten Bericht.
+
+### 5. Bloom (Projektinhaber, 13.11.2026: „Ja, einbauen“)
+
+Vorschlag an den Inhaber: Aus (Vorgabe) / Leicht / Stark, nur auf die Spielwelt, nicht auf HUD, Texte, Menüs; GLES
+und Vulkan gleich; aus mit Potato-Einstellungen; der Benchmark schaltet ihn nur auf starken Geräten ein.
+
+- **Wo:** `GxCore::Run` nach dem letzten 3D-Bild der Hauptansicht (dieselbe Stelle wie die Lens Flares,
+  `FlareScan`: HUD, Texte, Blenden und Menüs kommen danach) und **vor** den Lens Flares (die nicht noch einmal
+  leuchten). Nicht auf Menübildern des Spiels (`RE4_GX_CHUNK_STILL`), nicht in Filmen und 2D-Bildern (kein 3D-Bild);
+  die Zwischenbilder von 60 FPS laufen denselben Weg (`Interpolate` → `Run`). CRT, Farbe, PSone und FXAA an der
+  Display-Kopie nehmen ihn mit.
+- **Wie (`gx_fixed_shaders.h` `kBloomPickFs`/`kBloomBlurFs`/`kBloomAddFs`, `BloomPass` in `gx_gl.cpp` und
+  `gx_vk.cpp`):** ein eigenes Bild mit einem Texel je 4 × 4 Spielpixel (128 × 112 für die volle Szene, bei jeder
+  Auflösung gleich: gleicher Look, gleiche Kosten); je Texel 4 × 4 Abtastungen (eine je Spielpixel), jede einzeln
+  über der Schwelle genommen (hellster Farbkanal, weicher Übergang als Quadrat: eine Flamme nahe Weiß voll, heller Nebel
+  knapp über der Schwelle kaum; eine kleine Kerzenflamme behält ihren Anteil), dann 2 (Leicht) bzw. 3 (Stark)
+  Weichzeichner-Paare (9-Tap-Gauß, Abstand 1 / 1,5 / 2 Texel), zuletzt addiert (eins + eins, nur Farbe, EFB-Alpha
+  bleibt) über den Szenenteil: die Schere des letzten 3D-Bilds innerhalb des XF-Viewports (`BloomRegion`), so bleiben
+  die Kinobalken schwarz. Leicht: Schwelle 0,72, Stärke 0,55; Stark: 0,62 / 0,85 (`BloomLookOf`). Mit „Halos + Lens
+  Flares“ geben die Lichter, an denen ein Halo leuchtet (bis zu 8, die größten), keinen Bloom (`BloomHalos`, Maske im
+  ersten Durchgang): nie doppelter Schein. MSAA: GL löst die Farbe auf und addiert in den Mehrfach-Puffer (wie die
+  Flares), Vulkan liest das aufgelöste `efbColor` und addiert im EFB-Durchgang. Dynamische Auflösung: die Bilder
+  werden bei anderer Größe neu angelegt (`PassTexture`/`FilterImage`), sie leben nur innerhalb eines Bilds.
+- **App:** Display → Effekte, Knopf „Bloom: Aus / Leicht / Stark“ (Vorgabe Aus, `graphics` `bloomLevel`), eigene
+  Hilfezeile; Texte `ingame_bloom(_help)` in 11 Sprachen (`check_translations.py` 420 Texte ohne Befund).
+  `CoreBridge.setBloom` → `core_mode.cpp` `optBloom` → `GxRenderer::SetBloom` (Prüfschalter `RE4_GX_BLOOM=1/2`);
+  `CoreBridge.bloomSent`: aus, solange eine Potato-Einstellung an ist (Wetter, Spezialeffekte, Partikel, Schatten,
+  kürzere Sichtweite). Leistungsprofil: neuer Schlüssel `bloomLevel` am Ende (ältere gespeicherte Profile lesen 0),
+  „Hoch“ setzt Leicht nur, wo der Chip mehr als die Stufe des Bildschirms schafft (wie MSAA) und der Prozessor nicht
+  am Limit ist (`PerfProfile.bloomFor`); Mittel und Niedrig nie.
+- **Geprüft am PC:** `gx_gl_check` 0 Fehler, neu `TestBloom` (GL 1x, GL 1x mit „vergessenen“ Inhalten magenta, GL
+  2x, GL mit 4x MSAA in eigenen Puffern in allen `TestOptions`-Spielarten, Vulkan 2x mit lavapipe): Lampe weiß auf
+  dunklem Raum, Leicht: 10 Pixel daneben 40 → 66, Stark → 85 (22 Pixel: 44 / 57), GL, MSAA und Vulkan gleich; Raum
+  fern, mittelgraues Ding unter der Schwelle und die Umgebung des HUD-Quadrats unverändert; Kinobalken bleibt
+  schwarz; Menübild ohne Bloom; aus wieder wie vorher. Raum-Bilder aus dem PC-Kern (Debug-Start der Debug-Discs,
+  GX-Dumps, `gx_chunk_render` 2x, GLES und Vulkan): r111/r113/r11a (Dorf bei Nacht), r11c (Wald bei Nacht: **0
+  Pixel geändert**), r201/r203/r209/r20a (Burg mit Feuerschalen und Kerzen), r105/r10a/r103 (Tag), r100 (Titel);
+  Streifen „aus | leicht | stark“ in `E:\Development\Android\builds\bloom\`. Nach dem ersten Durchgang die Schwelle
+  weicher (als Quadrat): heller Nebel am Tag (r105) wurde mit „Stark“ milchig, danach etwa ein Drittel weniger
+  geänderte Pixel, die Feuer gleich. GLES gegen Vulkan: mit Bloom so nah wie ohne (in 47 von 48 Bildern dieselben
+  0–28 abweichenden Pixel, in einem 2 mehr). Zeit am PC (llvmpipe, Software): etwa 5–7 ms je Bild mit glFinish, auf
+  dem Handy nicht vergleichbar (ein 128 × 112-Bild und ein Additions-Durchgang über die Szene).
+  App-Tests: `CoreMenuLayoutTest` (Knopf, drei Stufen, Hilfezeile, Potato aus), `PerfProfileTest` (nur Hoch mit
+  Spielraum); je 132 grün; `gradlew :app:externalNativeBuildCoreDebug` ohne Fehler.
+- **Nicht geprüft:** auf einem Gerät (Aussehen, Kosten); mit Lens Flares und Halos zugleich (die Maske braucht
+  mehrere Bilder in Folge, im PC-Test nur einzelne Dumps); MSAA auf den Kacheln eines Mobil-Chips (llvmpipe kann es
+  nicht); in den Zwischenbildern von 60 FPS (derselbe Weg, aber nicht eigens geprüft); während eines Auflösungs-
+  wechsels von „Dynamisch“.
+
+### 6. Zufällige Gegner, Stufe 1.5 (Projektinhaber, 13.11.2026, nach seinem Test in r100)
+
+Bericht des Inhabers `E:\Development\Android\reports\09913-randomizer-owner\` („sie sind alle ident zum original“):
+Schalter angekommen („cheats: random enemies with seed 294150“), r100 absichtlich geschützt. Gewählt: ehrlicher
+Hilfetext, Zählräume, neue Stellen mit Prüfung, echte ±10 % (Einzelheiten `port/docs/gegner-randomizer-plan.md`
+Abschnitt 9; Patch 0231 erweitert: die Schleife am Ende fragt bis −1).
+
+- **Kern (`runtime/enemy_random.cpp`):** dritte Raumart „nur zählend“ (`enemy_random_rooms.inc` Spalte 2 = 2; 11 Räume
+  r106 r107 r117 r206 r207 r20b r20d r210 r21a r30b r30c): Stellen ja, Zahl nie. Jeder gewöhnliche Ganado nach dem Tausch
+  1,5–4 m weiter an eine geprüfte Stelle (`nearSpot`: `SatMgr.getFloor`, `SatMgr.hitCheck`; Boden ±25 cm, kein
+  Absatz über 50 cm, keine Wand in 40 cm und 1 m Höhe, 1,7 m frei, nicht näher als 6 m an Leon, 1 m Abstand zu allen
+  Einträgen des Raums und gewählten Stellen; acht Versuche). Zahl: ab 10 Ganados beim Raumbeginn −1…+1, ab 20 −2…+2;
+  weggelassen nie der letzte einer Art; Kopien eines Ganados, der gerade kommt, neben einem anderen, Tod an einem
+  leeren Eintrag, nur solange die Gegner-Plätze des Raums für das noch Kommende reichen (+4). Protokoll je Raum
+  „enemies: random enemies in r111 (list 1, seed 4242): 8 Ganados at the start, 8 ordinary, 8 spots: 8 at a new place
+  nearby, 0 on another's spot; the number stays (under 10)“ bzw. „12 -> 13: a copy of 0xa4 beside 0xa5 (death at
+  0x9c)“.
+- **App:** Hilfetext `ingame_cheat_random_enemies_help` in 11 Sprachen neu: welche Räume sich ändern (viele, ein paar
+  Meter neben dem eigenen Platz), die Zahl erst ab 10, in Zählräumen nur die Stellen, das Dorf am Anfang von Kapitel 1
+  und Räume mit Ereignissen, die bestimmte Gegner brauchen, bleiben (`check_translations.py` 420 Texte ohne Befund).
+- **Geprüft am PC** (Kern i686 -O2, `whole_build.sh` alle Prüfungen grün; Rundgang aller 126 Räume,
+  `whole_r100_check.sh --rooms all`; Skripte `09913-tours.sh`, `09913-tour_sum.sh`, `09913-em_map.py`, `09913-seeds.sh` im Notizordner):
+  - Debug-Discs ohne Cheat, Seed 4242 (mit Listen-Prüfung), 4242 noch einmal, Seed 777: je **ALLES OK**; US-Discs
+    4242: ALLES OK; EU-Discs 4242: 125 von 126 (r333 stürzt im Prüfprotokoll ab: der bekannte Altbefund, auch ohne Cheat
+    und mit 0.99.11; r333 hat keinen gewöhnlichen Ganado).
+  - Seed 4242: **13 Räume** angepackt (r103, r106, r107, r111, r113, r11a, r20c, r20d, r225, r303, r304, r31d, r330;
+    vorher 10, davon 2 ohne Änderung), **12 sehen anders aus als ohne Cheat** (r20c bringt seine Ganados erst später),
+    z. B. r111 alle 8 an neuen Stellen, r225 9 neue Stellen und 2 getauscht; die 3 Zählräume mit Ganados beim
+    Raumbeginn (r106, r107, r20d) ändern Stellen, nie die Zahl. Seed 777: 12 Räume anders, in r225 ein Ganado mehr
+    (12 → 13). Gleicher Seed zweimal: alle 126 Räume gleich. Listen-Prüfung: nie geschrieben. Keine gescheiterte Kopie,
+    kein „Em set failed“. EU gegen Debug: dieselben Räume (r107 dort mit 10 statt 11 Ganados, in r111 7 statt 8 neue
+    Stellen: die Listen der Discs weichen leicht ab); US gleich Debug.
+  - Die Zahl gezielt (r225 mit 12, r11a mit 11 Ganados, Seeds 1–8, `09913-seeds.sh`): alle 16 Läufe ALLES OK; 5×
+    ein Ganado mehr (Kopie kam), 2× einer weniger, 2× fand die Kopie keinen sicheren Platz (die Zahl blieb), sonst
+    unverändert; Liste nie geschrieben, keine gescheiterte Kopie.
+  - `whole_build_android.sh --abi all` 0 Fehler (Stubs wie erwartet).
+  - Draufsichten (grau Original, rot mit Cheat, Pfeil je Gegner) und Spielbilder in
+    `E:\Development\Android\builds\enemy-random\`: r111 und r225 (dazu r107, r113, r20d, r31d und zum Vergleich r111 mit
+    Stufe 1 aus 0.99.12: dort führten alle Pfeile nur zwischen den alten Plätzen). Die Spielbilder aus Leons Startblick
+    zeigen in r111 und r225 keinen Ganado (sie stehen weiter weg).
+  - App-Tests je 132 grün.
+- **Nicht geprüft:** auf einem Gerät; ein echtes Durchspielen (der Rundgang startet jeden Raum frisch); ob Ganados an
+  neuen Stellen irgendwo hängen bleiben (die Prüfung schließt Wände, Absätze und Kisten aus, nicht jede Eigenheit eines
+  Raums).
+
+### 7. Filmfarben unter Vulkan (Meldung eines Spielers, 13.11.2026)
+
+Bericht `E:\Development\Android\reports\09913-video-colours\` (0.99.12-rc, Xiaomi 25102PCBEG, Adreno 840, Android 17,
+Vulkan-Treiber 0.842.44, Renderer Vulkan): in `demo0.sfd` und anderen Filmen werden helle Haut und helles Metall
+leuchtend grün mit gelben Rändern.
+
+- **Ursache:** dieselbe wie beim Galaxy A36 (0.43.0, Abschnitt „Filmfarben Galaxy A36“ unten): die vierte Film-Stufe
+  `lerp(CPREV, APREV, K3)` mit `a << 8`, die der Treiber nur mit 16 Bit rechnet; Rot und Blau über 127 werden 0, Grün
+  bleibt (die gelben Ränder: Blau ist dort schon über 127, Rot noch nicht). Die GPU-Selbstprüfung lief bisher nur unter
+  GLES (`core_mode.cpp`: nicht bei Vulkan); unter Vulkan blieb immer die Schreibweise mit `a << 8`. Im Protokoll des
+  Berichts fehlt darum jede „GPU check“-Zeile.
+- **Behoben:** `gx_selfcheck.cpp` prüft mit beiden Renderern (`MovieColourCheck(wrong, GxApi)`): Vulkan liest das
+  Ergebnis über eine Bildschirmkopie (`ReadXfb`), GL weiter direkt aus dem EFB. `core_mode.cpp` startet die
+  Vulkan-Prüfung einmal je Lauf direkt nach dem Start des Vulkan-Renderers, auf dessen Gerät (kein zweites Gerät, das
+  wieder abgebaut wird) und bevor der Renderer einen GX-Shader erzeugt; die gewählte Schreibweise gilt für alle Shader
+  danach. Protokollzeile `GPU check (movie colours, Vulkan): …`. Eine zweite Prüfung im selben Lauf (anderer Renderer)
+  beginnt mit der schon gewählten Schreibweise und nennt sie (`; in use: …`). `gx_vk.cpp`: die Marke der vorab gebauten
+  Pipelines (`vk-ahead.done`) enthält die Schreibweise, wenn sie nicht die bisherige ist (betroffene Geräte bauen die
+  Liste einmal neu, alle anderen behalten ihre Marke). SPIR-V-Speicher und GL-Programmspeicher hängen schon am
+  Shadertext, sie brauchen nichts.
+- **Geprüft (PC, WSL, lavapipe/llvmpipe):** `gx_gl_check` 0 Fehler, neu `TestVkTevMath`: unter Vulkan mit der
+  bisherigen Schreibweise 32 von 32 richtig; die 16-Bit-Schreibweise (wie A36 und, nach den Bildern, das Adreno 840)
+  ergibt unter Vulkan genau die sechs Pixel des A36-Berichts (Rot und Blau 0, also grün), die Prüfung wählt dann „ohne
+  Verschiebung“ (0 falsch); jede der drei echten Schreibweisen gibt die Filmfarben richtig; zufällige TEV-Einstellungen
+  (2 × 60 Vierecke) in GL und Vulkan **Byte für Byte gleich** in allen vier Schreibweisen (auch die 16-Bit-Schreibweise
+  gleich falsch). NDK-Bau `externalNativeBuildCoreDebug` ohne Fehler.
+- **Nicht geprüft:** auf dem Adreno 840 selbst (der nächste Bericht muss `GPU check (movie colours, Vulkan): 6 of 32
+  pixels wrong; … in use: the lerp without the shift by 8 (the movies right)` oder ähnlich zeigen und die Filme
+  richtig); das Neubauen der Pipeline-Liste mit geänderter Schreibweise (nur im Code nachgesehen); die Dauer der
+  Prüfung auf einem Telefon (ein paar Shader und Pipelines, einmal je Lauf).
+- **Übergangstipp für den Spieler:** App-Menü (SELECT) → Display → Renderer → OpenGL ES (das Spiel startet neu); dort
+  läuft die Prüfung schon seit 0.43.
+
 ## Branch `textures`: Lader für eigene HD-Texturpakete (12.11.2026)
 
 Wunsch des Projektinhabers (12.11.2026): ein Lader für vom Spieler selbst beschaffte HD-Texturpakete im Dolphin-Format,
@@ -15947,7 +16187,7 @@ die GameCube ließ sie überlaufen (schon vorher so, selten).
 | 0228 `card.cpp` | Krausers Bogen in der Geschichte (0.99.10, Nutzerwunsch über den Projektinhaber, seit dem Retroid-Test bei jedem Raumstart statt Cheat-Knopf 10, `runtime/cheats.cpp` `giveBow`) und Weskers Schalldämpfer (0x3F, `giveSilencer`): `cCard::makeSaveData` lässt im Bild der Spielstand-Datei Bogen (0x52), Pfeile (0x72) und Schalldämpfer weg, macht aus der Pistole mit Schalldämpfer in der Hand die Pistole ohne und aus dem Bogen in der Hand leere Hände (belegter Platz, `weapon_no`/`weapon_type` des Spielblocks), denn ein Spielstand ist immer Leons und Leon hat keine Datei für Waffe 0x1C (`re4_story_char_card_items`). Das laufende Spiel und der Fortsetzungspunkt behalten den Bogen. Port-Funktion |
 | 0229 `ss_model.cpp` | Weskers Pistole im Koffer: `wep43Init(type)` statt immer mit Schalldämpfer (0.99.11, Abschnitt 4a) |
 | 0230 `pl_machine.cpp`, `pl_handgun.cpp`, `pl_rifle.cpp` | Adas Nachladen mit ihren eigenen Waffen auf jeder Stufe mit ihrer Bewegung der Stufe 0 (0.99.11, Abschnitt 1) |
-| 0231 `em_set.cpp` | Cheat „Random enemies“ (0.99.12, Entscheidung des Projektinhabers, `port/docs/gegner-randomizer-plan.md` Stufe 1): `EmSetFromList` fragt `runtime/enemy_random.cpp` beim Raumbeginn, ob ein Eintrag wie er ist, weggelassen oder als Kopie mit der Stelle eines anderen Eintrags des Raums erscheint, und am Ende, ob eine Kopie dazukommt (ihr Tod an einem leeren Eintrag); die gespeicherte Gegnerliste wird nie geschrieben. Port-Merkmal |
+| 0231 `em_set.cpp` | Cheat „Random enemies“ (0.99.12, Entscheidung des Projektinhabers, `port/docs/gegner-randomizer-plan.md` Stufe 1): `EmSetFromList` fragt `runtime/enemy_random.cpp` beim Raumbeginn, ob ein Eintrag wie er ist, weggelassen oder als Kopie mit der Stelle eines anderen Eintrags des Raums erscheint, und am Ende, ob eine Kopie dazukommt (ihr Tod an einem leeren Eintrag); die gespeicherte Gegnerliste wird nie geschrieben. 0.99.13 (Stufe 1.5): am Ende fragt eine Schleife bis -1 (bis zu zwei Kopien). Port-Merkmal |
 
 Neuen Patch erzeugen: Datei aus `whole_prepare.rewrite()` kopieren, ändern,
 `port/tools/whole_make_patch.py NAME pfad/im/repo kopie` ausführen. Mehrere

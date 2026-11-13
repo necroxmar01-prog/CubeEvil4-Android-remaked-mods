@@ -691,6 +691,7 @@ std::atomic<int> optLaserColour{0};  // the menu's laser sight colour (CoreBridg
 std::atomic<int> optMinimap{0};   // the menu's minimap (CoreBridge.setMinimap)
 std::atomic<int> optFlares{0};    // the menu's lens flares: 0 off, 1 lens flares, 2 halos + lens flares (CoreBridge.setFlares; or RE4_GX_FLARES=1)
 std::atomic<int> optCrt{0};       // the menu's CRT (CoreBridge.setCrt: 0 off, 1 light, 2 strong; or RE4_GX_CRT)
+std::atomic<int> optBloom{0};     // the menu's bloom (CoreBridge.setBloom, 0.99.13: 0 off, 1 light, 2 strong; or RE4_GX_BLOOM)
 std::atomic<int> optColour{0};    // the menu's colour (CoreBridge.setColour: mode * 4 + level; or RE4_GX_COLOUR=M,L)
 std::atomic<int> optPsx{0};       // the menu's PSone demake (CoreBridge.setPsx; or RE4_GX_PSX=1)
 // HD textures of the player's pack (CoreBridge.setTexturePack, port/docs/textur-lader-plan.md): the open pack (null:
@@ -713,6 +714,9 @@ std::atomic<long long> displayVsyncAt{0}, displayVsyncPeriod{0};
 re4gx::PictureCadence pictureCadence;
 // 0.99.12: a steady rhythm at 30 pictures a second (picture_cadence.h PictureHold)
 re4gx::PictureHold pictureHold;
+namespace present {
+std::string Summary();  // 0.99.13: the present times of the last window (below)
+}
 // a new picture drawn at this refresh: noted at its vsync, every 10 s a line for the log
 void NotePicture() {
   const long long now = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -723,8 +727,189 @@ void NotePicture() {
   pictureHold.Shown(vsync);
   std::string line;
   if (pictureCadence.Note(vsync, period, period > 0 ? 1e9 / period : 0.0, &line))
-    LOG("%s", line.c_str());
+    LOG("%s%s", line.c_str(), present::Summary().c_str());
 }
+// 0.99.13: a steady rhythm on a screen that stays faster than 60 Hz (picture_cadence.h PresentPacer): each picture of
+// OpenGL ES asked for a vsync of its own (EGL_ANDROID_presentation_time) and, where Android tells (EGL_ANDROID_get_
+// frame_timestamps), the time the GPU was done and the screen showed it: the latency follows that, and every 10 s
+// a line "screen pacing" with the intervals as the screen showed them (the "picture pacing" line has the render
+// thread's). The picture's grid of vsyncs comes from the app (FramePacing, CoreBridge.setPictureEvery). Off with
+// RE4_GX_PRESENT_TIME=0 (a device test's comparison).
+#ifndef EGL_TIMESTAMPS_ANDROID
+#define EGL_TIMESTAMPS_ANDROID 0x3430
+#endif
+#ifndef EGL_RENDERING_COMPLETE_TIME_ANDROID
+#define EGL_RENDERING_COMPLETE_TIME_ANDROID 0x3435
+#endif
+#ifndef EGL_DISPLAY_PRESENT_TIME_ANDROID
+#define EGL_DISPLAY_PRESENT_TIME_ANDROID 0x343A
+#endif
+namespace present {
+using PresentationTime = EGLBoolean (*)(EGLDisplay, EGLSurface, std::int64_t);
+using NextFrameId = EGLBoolean (*)(EGLDisplay, EGLSurface, std::uint64_t *);
+using FrameTimestamps = EGLBoolean (*)(EGLDisplay, EGLSurface, std::uint64_t, EGLint, const EGLint *, std::int64_t *);
+using TimestampSupported = EGLBoolean (*)(EGLDisplay, EGLSurface, EGLint);
+constexpr std::int64_t kPending = -2;  // EGL_TIMESTAMP_PENDING_ANDROID
+std::atomic<int> every{1};             // the app's: the picture drawn at every n-th vsync
+re4gx::PresentPacer pacer;
+re4gx::PictureCadence shownCadence;
+bool probed = false;
+PresentationTime presentationTime = nullptr;
+NextFrameId nextFrameId = nullptr;
+FrameTimestamps frameTimestamps = nullptr;
+EGLSurface stampsSurface = EGL_NO_SURFACE;  // the surface whose timestamps are on
+bool stamps = false;
+struct Pending {
+  std::uint64_t id;
+  long long target;
+  int age;
+};
+constexpr int kRing = 24;
+Pending ring[kRing];
+int pending = 0;
+long long lastShown = 0;
+unsigned shownSeen = 0;
+
+// The functions once, on the GL thread with the app's context current.
+void probe(EGLDisplay display) {
+  probed = true;
+  const char *off = getenv("RE4_GX_PRESENT_TIME");
+  const char *ext = eglQueryString(display, EGL_EXTENSIONS);
+  const std::string list = ext ? ext : "";
+  const bool time = list.find("EGL_ANDROID_presentation_time") != std::string::npos;
+  const bool frames = list.find("EGL_ANDROID_get_frame_timestamps") != std::string::npos;
+  if (off && *off == '0') {
+    LOG("screen pacing: present times off (RE4_GX_PRESENT_TIME=0)");
+    return;
+  }
+  if (time)
+    presentationTime = reinterpret_cast<PresentationTime>(eglGetProcAddress("eglPresentationTimeANDROID"));
+  if (frames) {
+    nextFrameId = reinterpret_cast<NextFrameId>(eglGetProcAddress("eglGetNextFrameIdANDROID"));
+    frameTimestamps = reinterpret_cast<FrameTimestamps>(eglGetProcAddress("eglGetFrameTimestampsANDROID"));
+  }
+  LOG("screen pacing: present times %s, frame timestamps %s", presentationTime ? "there" : "not there",
+      nextFrameId && frameTimestamps ? "there" : "not there");
+}
+
+// The results of the pictures shown some swaps ago (each picture's times come after the screen showed it).
+void collect(EGLDisplay display, EGLSurface surface) {
+  if (!stamps || !pending)
+    return;
+  const EGLint names[] = {EGL_RENDERING_COMPLETE_TIME_ANDROID, EGL_DISPLAY_PRESENT_TIME_ANDROID};
+  int kept = 0;
+  for (int i = 0; i < pending; i++) {
+    Pending p = ring[i];
+    p.age++;
+    if (p.age < 3) {
+      ring[kept++] = p;
+      continue;
+    }
+    std::int64_t values[2] = {kPending, kPending};
+    const bool got = frameTimestamps(display, surface, p.id, 2, names, values) == EGL_TRUE;
+    if (got && (values[0] == kPending || values[1] == kPending) && p.age < 12) {
+      ring[kept++] = p;  // not yet
+      continue;
+    }
+    if (!got)
+      continue;  // (too old for the surface's history, or another surface)
+    const long long done = values[0] > 0 ? values[0] : 0, shown = values[1] > 0 ? values[1] : 0;
+    if (p.target > 0)
+      pacer.Outcome(p.target, done, shown);
+    if (shown > 0) {
+      shownSeen++;
+      std::string line;
+      const long long period = displayVsyncPeriod.load();
+      if (shown != lastShown && shownCadence.Note(shown, period, period > 0 ? 1e9 / period : 0.0, &line)) {
+        line.replace(0, std::strlen("picture pacing"), "screen pacing (as shown)");
+        char tail[160];
+        std::snprintf(tail, sizeof(tail), "; asked %d vsyncs after the drawing's (%u asked, %u judged, %u late, %u "
+                      "up, %u down)", pacer.latency, pacer.asked, pacer.judged, pacer.lateAll, pacer.ups, pacer.downs);
+        LOG("%s%s", line.c_str(), pacer.latency ? tail : "");
+      }
+      lastShown = shown;
+    }
+  }
+  pending = kept;
+}
+
+// For the "picture pacing" line (every 10 s): what the present times did in its window ("" while never asked).
+unsigned summaryAsked = 0, summaryAsides = 0;
+std::string Summary() {
+  if (!pacer.asked && !pacer.asides)
+    return "";
+  char text[200];
+  const unsigned asked = pacer.asked - summaryAsked, asides = pacer.asides - summaryAsides;
+  summaryAsked = pacer.asked;
+  summaryAsides = pacer.asides;
+  if (pacer.Aside() || asides)
+    std::snprintf(text, sizeof(text), "; present times set aside (the device behind), %u pictures asked for their vsync",
+                  asked);
+  else if (asked)
+    std::snprintf(text, sizeof(text), "; present times: %u pictures asked for their vsync, %d after their drawing's",
+                  asked, pacer.latency);
+  else
+    std::snprintf(text, sizeof(text), "; present times: none asked");
+  return text;
+}
+
+// Before the swap of a picture whose drawing began at the vsync `began` (GLSurfaceView swaps after onDrawFrame);
+// `active`: 60 FPS makes in-between pictures (the menu's 30 FPS stays as it was); `dropped`: the in-between pictures
+// left out so far because the render thread was behind (gxBetweenDropped).
+void beforeSwap(long long began, bool active, unsigned dropped) {
+  EGLDisplay display = eglGetCurrentDisplay();
+  EGLSurface surface = eglGetCurrentSurface(EGL_DRAW);
+  if (display == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE)
+    return;
+  if (!probed)
+    probe(display);
+  // only on a screen faster than 60 Hz (the app draws at every n-th vsync): a 60 Hz screen stays as it was
+  const int n = every.load();
+  if (surface != stampsSurface) {
+    stampsSurface = surface;
+    pending = 0;
+    stamps = false;
+    lastShown = 0;
+    shownCadence = re4gx::PictureCadence();
+    pacer.Reset();
+  }
+  if (!stamps && n >= 2 && nextFrameId && frameTimestamps && stampsSurface == surface) {
+    stamps = eglSurfaceAttrib(display, surface, EGL_TIMESTAMPS_ANDROID, EGL_TRUE) == EGL_TRUE;
+    if (!stamps) {
+      nextFrameId = nullptr;  // (not for this surface: no further tries)
+      LOG("screen pacing: frame timestamps not taken by the surface (EGL error 0x%x)", eglGetError());
+    }
+  }
+  collect(display, surface);
+  // the render thread behind the game: a picture left out (60 FPS); three within 2 s and the times step aside
+  static unsigned droppedSeen = 0;
+  if (dropped != droppedSeen) {
+    if (dropped > droppedSeen)
+      pacer.Behind(began);
+    droppedSeen = dropped;
+  }
+  static unsigned asidesLogged = 0;
+  if (pacer.asides != asidesLogged) {
+    asidesLogged = pacer.asides;
+    LOG("screen pacing: present times set aside for 30 s (the GPU or the render thread behind; %u so far)",
+        pacer.asides);
+  }
+  long long target = 0;
+  if (presentationTime) {
+    const long long asked = pacer.Target(began, displayVsyncPeriod.load(), active ? n : 1);
+    if (asked > 0 && presentationTime(display, surface, asked) == EGL_TRUE)
+      target = asked + pacer.period / 2;
+    if (asked > 0 && pacer.asked == 1)
+      LOG("screen pacing: each picture asked for its vsync, %d after its drawing's (every %d vsyncs at %.1f Hz)",
+          pacer.latency, pacer.every, pacer.period > 0 ? 1e9 / pacer.period : 0.0);
+  }
+  if (stamps && pending < kRing) {
+    std::uint64_t id = 0;
+    if (nextFrameId(display, surface, &id) == EGL_TRUE)
+      ring[pending++] = {id, target, 0};
+  }
+}
+}  // namespace present
 // 60 FPS (experimental): the chunk run last, kept for the in-between picture after it (its
 // vertices), and the next one, whose in-between picture is on the screen and which runs at the
 // next refresh; off for this renderer when the GPU does not keep up
@@ -1900,9 +2085,10 @@ bool drawGx() {
     // once per run: does this GPU compute the movie colours like the GameCube (gx_selfcheck.cpp;
     // the Galaxy A36 showed them green and brown)? Before any renderer, on a renderer of its own;
     // on wrong pixels it picks a way of writing the TEV's lerp that this GPU computes right.
-    static bool gpuChecked = false;
-    if (!gpuChecked && !(gxVulkan() && !vulkanFailed)) {
-      gpuChecked = true;
+    // Vulkan's check runs below, after its renderer started (the same device).
+    static bool gpuCheckedGl = false;
+    if (!gpuCheckedGl && !(gxVulkan() && !vulkanFailed)) {
+      gpuCheckedGl = true;
       LOG("%s", re4gx::MovieColourCheck(nullptr).c_str());
     }
     if (benchForcing() && levelBench.phase.load() == 2) {
@@ -1965,6 +2151,15 @@ bool drawGx() {
       if (previous) previous->Release();
       gxMode = 0;
       return false;
+    }
+    // the movie colours under Vulkan, once per run (gx_selfcheck.cpp): its driver compiles the shaders on a way of
+    // its own (an Adreno 840 showed the movies green under Vulkan only, report 13.11.2026). On a renderer of its own
+    // on the device the new one holds (not made and dropped again), before the new one made any GX shader: the way
+    // of writing the lerp it picks holds for every shader after it (and the pipelines made ahead, gx_vk.cpp).
+    static bool gpuCheckedVk = false;
+    if (vulkan && !gpuCheckedVk) {
+      gpuCheckedVk = true;
+      LOG("%s", re4gx::MovieColourCheck(nullptr, re4gx::GxApi::kVulkan).c_str());
     }
     if (previous) {
       previous->HandOverCopies(*gx);
@@ -2130,6 +2325,8 @@ bool drawGx() {
   }
   static const int crtEnv = getenv("RE4_GX_CRT") ? atoi(getenv("RE4_GX_CRT")) : 0;
   gx->SetCrt(crtEnv > 0 ? crtEnv : optCrt.load());
+  static const int bloomEnv = getenv("RE4_GX_BLOOM") ? atoi(getenv("RE4_GX_BLOOM")) : 0;
+  gx->SetBloom(bloomEnv > 0 ? bloomEnv : optBloom.load());
   static int colourEnvMode = -1, colourEnvLevel = 1;
   if (colourEnvMode < 0) {
     colourEnvMode = 0;
@@ -3089,6 +3286,12 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_ast_re4decomp_CoreBridge_audioSur
 
 // A vsync of the display (CoreActivity, the Choreographer's frame time in ns of
 // System.nanoTime = CLOCK_MONOTONIC): the core's retraces follow the display.
+// The app's beat (FramePacing): the picture drawn at every `n`-th vsync (1 at 60 Hz, 2 on a screen that stays at 120
+// Hz); the present times of 0.99.13 (present::beforeSwap) keep that grid.
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setPictureEvery(JNIEnv *, jclass, jint n) {
+  present::every.store(n >= 1 && n <= 8 ? static_cast<int>(n) : 1);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_vsync(JNIEnv *, jclass, jlong ns) {
   if (api.vsync) api.vsync(static_cast<int64_t>(ns));
   // the display's vsyncs for the pictures' cadence (NotePicture)
@@ -3228,7 +3431,13 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_draw(JNIEnv 
                              ? 0.0
                              : std::chrono::duration<double>(now - lastDraw).count();
   lastDraw = now;
-  if (drawGx()) return;
+  // the vsync this drawing began at (the beat asked for it there; PresentPacer keeps it on the beat's grid)
+  const long long began = displayVsyncAt.load();
+  if (drawGx()) {
+    // OpenGL ES: the swap comes after this (GLSurfaceView); Vulkan presents itself
+    if (!gxVulkan()) present::beforeSwap(began, optSmooth.load() != 0 && !smoothTooSlow, gxBetweenDropped);
+    return;
+  }
   if (gxVulkan() && !glContextLive) return;  // the Vulkan surface: no GL context for the bridge
   try {
     s->draw(frame, width, height, seconds);
@@ -3587,6 +3796,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setCrt(JNIEn
   const int want = level < 0 ? 0 : level > 2 ? 2 : level;
   if (optCrt.exchange(want) != want)
     LOG("CRT: %s", want == 2 ? "strong" : want == 1 ? "light" : "off");
+}
+
+// Bloom (the menu, 0.99.13; GxRenderer::SetBloom): 0 off, 1 light, 2 strong (the app sends 0 while a Potato mode
+// switch is on: CoreBridge.bloomSent).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setBloom(JNIEnv *, jclass, jint level) {
+  const int want = level < 0 ? 0 : level > 2 ? 2 : level;
+  if (optBloom.exchange(want) != want)
+    LOG("bloom: %s", want == 2 ? "strong" : want == 1 ? "light" : "off");
 }
 
 // Colour (the menu, 0.99.9; GxRenderer::SetColour): mode 0 off, 1 warm film, 2 survival horror; level 1 light,

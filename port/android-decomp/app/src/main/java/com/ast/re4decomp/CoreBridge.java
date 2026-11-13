@@ -53,6 +53,11 @@ public final class CoreBridge {
    * the game's video retraces follow the display (no drift against 60 Hz).
    */
   public static native void vsync(long frameTimeNanos);
+  /**
+   * The beat's grid (FramePacing.every): the picture drawn at every n-th vsync; on a screen that stays faster than
+   * 60 Hz each picture then asks for its own vsync (0.99.13, core_mode.cpp present::beforeSwap).
+   */
+  public static native void setPictureEvery(int n);
   /** The room the game is in (stage << 8 | room), -1 outside a room. */
   public static native int wantedRoom();
   /** The decoded room archive for a room (RoomRepository), or the error. */
@@ -287,6 +292,12 @@ public final class CoreBridge {
    * what the game draws, not the touch controls nor the app's overlays.
    */
   public static native void setCrt(int level);
+  /** Bloom (0.99.13; core_mode.cpp, GxRenderer::SetBloom): 0 off, 1 light, 2 strong. */
+  public static native void setBloom(int level);
+  /** The bloom the renderer gets: the menu's, off while a Potato mode switch is on (0.99.13). */
+  static int bloomSent(android.content.SharedPreferences g) {
+    return potatoMask(g) == 0 && viewDistance(g) == 0 ? CoreMenu.bloomLevel(g) : 0;
+  }
   /** Colour (0.99.9): mode 0 off, 1 warm film, 2 survival horror; level 1 light, 2 strong. */
   public static native void setColour(int mode, int level);
   /**

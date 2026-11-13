@@ -144,6 +144,69 @@ den Dynamit-Pfosten gibt es in r104 nicht (Dynamit: r223).
 Aufwand Stufe 1: etwa ein bis zwei Arbeitstage einer Sitzung. Stufe 2 (andere Ganado-Arten im selben Raum) erst nach
 Erfahrung mit Stufe 1 und einer Tabelle, welche `set`/`type`-Werte nur Aussehen sind.
 
+## 8. Befund zur Meldung „immer dieselben Gegner“ (0.99.13, 13.11.2026)
+
+Meldung (über den Projektinhaber): „Ein User meldet auch dass der Randomizer der Gegner nicht klappt, und er immer
+dieselben hat.“ Noch ohne Bericht. Ausgewertet: die Rundgänge der 0.99.12 (`~/p09912/tour/*` in WSL, Debug Seed 4242
+und 777, ohne Cheat, EU und US Seed 4242) und die Gegnerlisten der Debug-Disc (`emleon00…07.esl`, Werkzeug
+`09913-esl_scan.py`, Ausgabe `09913-esl-scan.txt` im Notizordner der Sitzungen).
+
+- **Kein Fehler im Weg zum Kern gefunden** (gelesen, nicht auf einem Gerät geprüft): Knopf → `enemyRandomChanged` →
+  `CoreBridge.setEnemyRandom` → `re4_core_set_enemy_random` bzw. Nachricht 44 an den Kernprozess, derselbe Weg wie die
+  übrigen Cheats; beim Start schickt die App den gespeicherten Seed, nachdem der Kern(-prozess) bereit ist
+  (`re4ipc_start` wartet auf „hello“). Der Seed liegt nicht im Spielstand; Laden startet den Raum neu, der Plan läuft
+  dann wie beim Betreten. Jedes Einschalten zieht einen neuen Seed (1 … 2^20 − 1), er bleibt bis zum Ausschalten.
+  Im Bericht zu erkennen an „cheats: random enemies with seed N“ (App), „core: random enemies on …“ und je Raum
+  „enemies: random enemies in rXYZ …“ bzw. „… leave rXYZ as it is (…)“ (Kern).
+- **Die Ursache ist die Bauweise der Stufe 1:** sie verteilt die gewöhnlichen Ganados nur auf Stellen, an denen im
+  selben Raum ein Ganado-Eintrag steht. In fast allen offenen Räumen gibt es **keine freie Stelle** (so viele Stellen
+  wie Ganados): sie tauschen nur untereinander, an denselben Punkten steht ein anderer Dorfbewohner derselben Art. Für
+  den Spieler sieht das wie immer aus. Seed 4242: r111 8 Ganados auf 8 Stellen, r113 8/8, r11a 6/6, r225 11/11, r31d
+  8/8 (alle nur getauscht); echte neue Stellen nur in **r20c** (6 Ganados, 10 Stellen) und **r304** (2 auf 4);
+  r330 einer weniger; r103 und r303 nichts. Seed 777: dieselben Räume, dazu in 6 Räumen einer weniger.
+  Gegnerarten ändern sich nie; „+1“ beim ersten Besuch nie (keine freie Stelle), nur nach Toten bei späteren Besuchen.
+- **Frühes Dorf (r100–r103, Kapitel 1-1):** r100 und r101 ganz geschützt (Skript zählt Tote bzw. nennt die Einträge),
+  r102 ohne Ganados beim Betreten, r103 ein einziger beweglicher Ganado (die übrigen haben Sonder-Auftritte: Feldarbeit,
+  Eimer): **nichts wird verschoben, höchstens fehlt in r103 ein Ganado** (Seed 777). Ebenso r104–r108 (geschützt oder
+  ohne gewöhnliche Ganados). Wer den Cheat am Anfang ausprobiert, sieht also nichts.
+- **Mögliche Wege (dem Inhaber vorgelegt):** (A) klarer Hilfetext; (B) neue Verteilung bei jedem Betreten statt fester
+  je Seed (Tod der Kopie bleibt je Raum an einem festen Eintrag); (C) neue Stellen nahe den alten, mit den eigenen
+  Prüfungen des Spiels (`SatMgr.getFloor`, `SatMgr.hitCheck`: gleicher Boden, keine Wand dazwischen, Abstand zu Leon),
+  damit auch „+1“ immer Platz findet; (D) Räume, deren Skript nur zählt, dürfen Stellen tauschen (ohne ±1: r106, r107,
+  r10c, r200, r20d, r20f, r218, r222 …; r101 bleibt, alle Ganados dort sind benannt); (E) Stufe 2: Waffen
+  (`flag`-Bits Axt, Sichel, Mistgabel, Dynamit, Fackel …) und Verhalten (`Character`) innerhalb des Raums tauschen;
+  echte andere Arten weiter nicht (4er-Grenze, Speicher, Zwischensequenzen).
+
+## 9. Stufe 1.5 (0.99.13, Entscheidung des Projektinhabers 13.11.2026)
+
+Der Inhaber hat r100 nach der Autofahrt selbst getestet („sie sind alle ident zum original“; Bericht
+`E:\Development\Android\reports\09913-randomizer-owner\`: Schalter angekommen, r100 absichtlich geschützt) und die
+empfohlene Kombination gewählt (Bezeichnungen der Hauptsitzung): **A** ehrlicher Hilfetext, **C** Stellen tauschen
+auch in den 11 Räumen, die nur zählen, **D** echte neue Stellen nahe den alten mit Boden- und Wandprüfung, **E** echte
+±10 %. Nicht jetzt: das frühe Dorf r100/r101/r104 öffnen, Arten mischen.
+
+- **C, Raumart „nur zählend“** (`enemy_random_table.py` `kind_of`, Spalte 2 in `enemy_random_rooms.inc`): Skripte,
+  deren einziger Grund war „zählt oder fegt Gegner“ (r106 r107 r117 r206 r207 r20b r20d r210 r21a r30b r30c). Durchsicht:
+  `SceCountEmAlive`/`SceDestroyEm` nach Art, `EmMgr`-Schleifen über Art und Zustand (r107: Fische auf die Wasserhöhe,
+  r206: lebende Ganados zählen), r30b: der Kran greift Gegner aus eigenen Plätzen (`r30b_work->em`), nicht aus der
+  Liste beim Raumbeginn. Dort ändern sich die Stellen, die Zahl nie.
+- **D, neue Stellen** (`nearSpot`): von der getauschten Stelle 1,5–4 m in einer Richtung aus dem Seed; geprüft mit der
+  Kollision des Raums wie bei den Ganados selbst (`SatMgr.getFloor`, `SatMgr.hitCheck`): Boden dort höchstens 25 cm
+  über oder unter dem der Stelle und nicht steil, auf dem Weg kein Absatz über 50 cm, keine Wand zwischen beiden in
+  40 cm und 1 m Höhe, über der Stelle 1,7 m frei, nicht näher als 6 m an Leon (es sei denn, die Stelle war es schon),
+  1 m Abstand zu jedem Eintrag des Raums (auch Türen, Fässer, Kisten, die erst danach entstehen) und zu jeder schon
+  gewählten Stelle; acht Versuche, sonst die getauschte Stelle. Blickrichtung leicht gedreht (±90°).
+- **E, die Zahl:** Räume mit 10 oder mehr Ganados beim Raumbeginn −1/0/+1, mit 20 oder mehr −2…+2 (darunter bleibt die
+  Zahl: das sind die ±10 % des Inhabers); nie in Zählräumen. Weggelassen werden nur Ganados, die gerade kommen, nie
+  der letzte einer Art. Eine Kopie ist ein gewöhnlicher Ganado des Raums, der gerade kommt (seine Art ist geladen), an
+  einer sicheren Stelle neben einem anderen (dieselbe Prüfung), ihr Tod an einem leeren Listeneintrag; nur solange die
+  Gegner-Plätze des Raums (`EmMgr`) Raum lassen für alles, was noch kommt (die Einträge des Raums, die noch nicht da
+  sind, und vier mehr). Patch 0231: die Schleife am Ende fragt bis −1.
+- **A, Hilfetext** in 11 Sprachen: welche Räume sich ändern und welche nicht (das Dorf am Anfang von Kapitel 1, Räume,
+  deren Ereignisse bestimmte Gegner brauchen), die Zahl erst ab 10 Ganados, in Zählräumen nur die Stellen.
+- Unverändert aus Stufe 1: nur beim Erschaffen, die gespeicherte Liste wird nie geschrieben, gleicher Seed gleiches
+  Bild, Bosse, Story-Gegner, Wellen, Ashleys Teil, Ada und Mercenaries bleiben.
+
 ## Quellen der Prüfung
 
 Gegnerliste und Erschaffen: `include/global.h:66-81, 202, 211`, `src/game/em_set.cpp`, `src/game/stage.cpp:57-251`,
