@@ -38,7 +38,10 @@
 //    frames in all, an aim or fire key ends it after the hit. Switched with the third aim word's bit 12. A mod pack's
 //    melee.dat entry 16 stands in for the slash (DevJunior, 12.11.2026: Jake's low kick without the frames where he
 //    raises his hand; uhd_motion_convert.py --box), played from its entry 17's start to its end frame, the box
-//    breaking on its hit frame.
+//    breaking on its hit frame. Reach (wish of DevJunior, 12.11.2026: "in the Remake, depending on how near they are,
+//    a slash or a kick breaks 3 or 2 boxes at once"): on the hit frame up to kBoxMore other intact boxes, barrels or
+//    vases break with the struck one, the nearest first: those whose side lies within kBoxSplash of Leon, in front
+//    of him (kBoxCone) and from his feet up to kBoxHigh (a stack's upper crates).
 // Only Leon (pl_type 0); the other characters keep their moves.
 #include "types.h"
 #include "global.h"
@@ -604,6 +607,12 @@ const int kBoxHit = 7;           // its frame that breaks the box (the blade low
 const int kBoxEnd = 16;          // frames in all (the slash's recovery cut short: "not as long")
 const f32 kBoxReach = 700.0f;    // Leon this near the box's side (its size) for the prompt: the knife reaches
 std::atomic<int> gBoxOn(-1);     // the app's switch; -1 none sent yet (the PC: RE4_BOX_STRIKE, else on)
+const f32 kBoxSplash = 900.0f;   // other boxes whose side lies this near Leon break with the struck one
+const f32 kBoxCone = 1.05f;      // within 60 degrees of where he faces (he turned to the struck box)
+const f32 kBoxLow = 500.0f;      // from this below his feet (a slope) ...
+const f32 kBoxHigh = 1600.0f;    // ... to this above them (the upper crates of a stack)
+const int kBoxMore = 2;          // at most this many besides the struck one (3 in all)
+const int kBoxId = 0x43;         // cEmBox (SetBox: EmMgr.create(0x43))
 
 bool boxOn()
 {
@@ -613,6 +622,58 @@ bool boxOn()
         on = env ? atoi(env) != 0 : 1;
     }
     return on != 0;
+}
+
+// How far `other` lies beyond the strike's reach from Leon (its side's distance; negative: out of reach)
+f32 boxReach(cEmBox* target, cEm* other)
+{
+    if (!pPL || !other || other == target || other->id != kBoxId || other->hp <= 0 || other->type == 4) {
+        return -1.0f;  // type 4: a bird's nest in a tree
+    }
+    const f32 dy = other->pos.y - pPL->pos.y;
+    if (dy < -kBoxLow || dy > kBoxHigh) {
+        return -1.0f;
+    }
+    const FREE_EMBOX* w = EMBOX_WK(other);
+    const f32 dx = other->pos.x - pPL->pos.x;
+    const f32 dz = other->pos.z - pPL->pos.z;
+    const f32 d = sqrtf(dx * dx + dz * dz);
+    const f32 side = w->size.x > w->size.z ? w->size.x : w->size.z;
+    if (d - side > kBoxSplash) {
+        return -1.0f;
+    }
+    if (d > side && fabsf(GetXZAngleLocal(&pPL->pos, &other->pos, pPL->ang.y)) > kBoxCone) {
+        return -1.0f;
+    }
+    return d > side ? d - side : 0.0f;
+}
+
+// The boxes the strike reaches besides the struck one, the nearest first: broken as it is
+int breakNear(cEmBox* target)
+{
+    cEm* pick[kBoxMore] = {};
+    f32 dist[kBoxMore] = {};
+    int n = 0;
+    for (cEm* e = EmMgr.getActiveWork(); e; e = EmMgr.getNext(e)) {
+        const f32 d = boxReach(target, e);
+        if (d < 0.0f) {
+            continue;
+        }
+        int k = n < kBoxMore ? n++ : kBoxMore;
+        while (k > 0 && dist[k - 1] > d) {
+            if (k < kBoxMore) {
+                pick[k] = pick[k - 1], dist[k] = dist[k - 1];
+            }
+            k--;
+        }
+        if (k < kBoxMore) {
+            pick[k] = e, dist[k] = d;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        emBoxSetBreak((cEmBox*) pick[i], 0);
+    }
+    return n;
 }
 
 void plBoxStrike(cPlayer* pl)
@@ -643,6 +704,9 @@ void plBoxStrike(cPlayer* pl)
         if (pl->m_Work0 && --pl->m_Work0 == 0 && box && box->hp > 0) {
             emBoxSetBreak(box, 0);
             say(10, "Leon's box strike broke a box");
+            if (const int more = breakNear(box)) {
+                re4_log("melee: the box strike broke %d more box%s within its reach", more, more > 1 ? "es" : "");
+            }
         }
         if (!pl->m_Work2 || --pl->m_Work2 == 0 || (!pl->m_Work0 && (joyKamae() || (Key.on & 0x10F)))) {
             axeEnd(pl);
@@ -718,6 +782,12 @@ void* re4_box_strike_func(void)
         re4_add_frame_hook(axeWatch);
     }
     return (void*) boxStrikeAction;
+}
+
+// For the tests: whether the box strike on `target` breaks `other` too (its distance beyond the reach, < 0 not)
+float re4_box_reach(void* target, void* other)
+{
+    return boxReach((cEmBox*) target, (cEm*) other);
 }
 
 // For the tests: the active mods' box strike frames (start << 16 | hit << 8 | end), -1 none (the knife's slash)

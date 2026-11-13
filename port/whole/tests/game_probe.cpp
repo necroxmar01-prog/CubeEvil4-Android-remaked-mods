@@ -2750,6 +2750,7 @@ extern "C" void re4_mod_melee_path_set(const char* path);
 extern "C" void* re4_melee_kneel(void* game);
 extern "C" void re4_melee_reset(void);
 extern "C" int re4_box_strike_motion(void);  // runtime/melee.cpp
+extern "C" float re4_box_reach(void* target, void* other);  // runtime/melee.cpp
 
 extern "C" int re4probe_melee(const char* file)
 {
@@ -2859,6 +2860,34 @@ extern "C" int re4probe_melee(const char* file)
         re4_aim_set((int) 0xC0000000u);
         bad |= re4_box_strike(box) != 0 ? 0x2000 : 0;  // switched off
         re4_aim_set((int) (0xC0000000u | 1u << 12));
+        // its reach (DevJunior, 12.11.2026: "2 or 3 boxes at once"): Leon faces the struck box; a crate stacked on it
+        // and one beside it break too, one behind him, a far one, a nest and a broken one do not
+        const f32 face = pPL->ang.y;
+        pPL->ang.y = GetXZAngle(&pPL->pos, &box->pos);
+        static u64 more[6][sizeof(cEmBox) / 8 + 1];
+        memset(more, 0, sizeof(more));
+        cEmBox* o[6];
+        for (int i = 0; i < 6; i++) {
+            o[i] = (cEmBox*) (void*) more[i];
+            o[i]->id = 0x43;
+            o[i]->hp = 1000;
+            o[i]->pos = box->pos;
+            EMBOX_WK(o[i])->size.x = EMBOX_WK(o[i])->size.z = 300.0f;
+        }
+        box->id = 0x43;
+        o[0]->pos.y += 600.0f;                                    // stacked
+        o[1]->pos.z += 500.0f;                                    // beside (Leon stands on its x axis)
+        o[2]->pos.x = pPL->pos.x - 900.0f;                        // behind Leon
+        o[3]->pos.x += 3000.0f;                                   // far
+        o[4]->type = 4;                                           // a nest
+        o[5]->hp = 0;                                             // broken
+        bad |= re4_box_reach(box, o[0]) < 0.0f || re4_box_reach(box, o[1]) < 0.0f ? 0x100000 : 0;
+        for (int i = 2; i < 6; i++) {
+            bad |= re4_box_reach(box, o[i]) >= 0.0f ? 0x200000 : 0;
+        }
+        bad |= re4_box_reach(box, box) >= 0.0f ? 0x200000 : 0;   // the struck one itself
+        bad |= re4_box_reach(box, o[0]) > re4_box_reach(box, o[1]) ? 0x400000 : 0;  // the stacked one is nearer
+        pPL->ang.y = face;
     }
     // the box strike's motion from a mod (entries 16 and 17: the motion, its frames 1 / 3 / 5)
     {
