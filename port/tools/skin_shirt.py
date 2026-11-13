@@ -210,7 +210,7 @@ def smooth_cloth(img, ref):
 
 
 def build(cur, base, base_tex, skin_tex, neck, sleeves, reach, own_uv=False, inside_from=50.0, vee_max=1e9,
-          wings=1e9):
+          wings=1e9, collar_top=(1e9, 0.0)):
     cc = BF.model_corners(cur)
     bc = BF.model_corners(base)
     parts = {cur[p + 0xC]: p for p, *_ in cc}
@@ -264,6 +264,9 @@ def build(cur, base, base_tex, skin_tex, neck, sleeves, reach, own_uv=False, ins
         # with own_uv both draw the same even cloth: the covered base stays under the RE9 neck (in the poses the two
         # bend a little apart; without it the gaps showed through) and only gives way in the V
         in_neck &= vee if own_uv else ((cov & (nrm[:, 1] < 0.5)) | vee)
+        # the base's high round collar above `collar_top` (y, z): its front half stood across the throat right under
+        # the chin, a band that seemed to cut the neck (DevJunior on v14, 13.11.2026)
+        in_neck |= (c[:, 1] > collar_top[0]) & (c[:, 2] > collar_top[1]) & (np.abs(c[:, 0]) < nx)
         torso = (np.abs(c[:, 0]) < sleeves) & ~in_neck
         sleeve = (np.abs(c[:, 0]) >= sleeves) & ~in_neck
         sel = lambda m: (Pc[m], Nc[m], UVc[m], [w for k, w in zip(np.repeat(m, 3), wc) if k])
@@ -277,7 +280,7 @@ def build(cur, base, base_tex, skin_tex, neck, sleeves, reach, own_uv=False, ins
             nproj = 0
             # the base's collar around the neck (above Y + inside_from) also from inside: when the head turns one
             # looks past the neck at the inside of the back collar (else culled: the sky through the shirt)
-            m3 = torso & (c[:, 1] > ny + inside_from) & (np.abs(c[:, 0]) < nx)
+            m3 = torso & (c[:, 1] > ny + inside_from) & (np.abs(c[:, 0]) < (sleeves if inside_from < -1000 else nx))
             rev = [0, 2, 1]
             groups[t].append((Pc[m3][:, rev], -Nc[m3][:, rev], UVc[m3][:, rev],
                               [wc[3 * i + k] for i in np.flatnonzero(m3) for k in rev]))
@@ -363,6 +366,8 @@ def main(argv=None):
     ap.add_argument("--wings", type=float, default=1e9, metavar="X",
                     help="only the RE9 neck's triangles within |x| X come (its collar wings beyond lift off the "
                          "neck in the poses; the base's collar stays there)")
+    ap.add_argument("--collar-top", type=lambda v: [float(x) for x in v.split(":")], default=[1e9, 0.0],
+                    metavar="Y:Z", help="the base's collar above Y and in front of Z gives way (its round top)")
     ap.add_argument("--own-uv", action="store_true",
                     help="the torso keeps the base's texture and coordinates (recoloured with the sleeves)")
     a = ap.parse_args(argv)
@@ -372,7 +377,7 @@ def main(argv=None):
     base = U.Archive(Path(src).read_bytes(), ">").entry(int(be))
     neck = tuple(float(x) for x in a.neck.split(":"))
     entries[a.entry], st = build(entries[a.entry], base, a.base_tex, a.skin_tex, neck, a.sleeves, a.reach,
-                                 a.own_uv, a.inside_from, a.vee_max, a.wings)
+                                 a.own_uv, a.inside_from, a.vee_max, a.wings, tuple(a.collar_top))
     print("torso: %d triangles of the base drawn with texture %d (%d projected from the RE9 shirt near them, the "
           "rest from farther or mapped like its back); sleeves %d; neck: %d of the base's out, %d of the RE9 shirt's "
           "in (%d of them turned, %d of the collar also from inside)" %

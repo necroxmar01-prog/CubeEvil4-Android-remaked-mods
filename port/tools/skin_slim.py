@@ -620,6 +620,41 @@ def neck(model, low, high, scale, axis=None):
     return bytes(model), moved, axis
 
 
+def hug(model, head, low, margin=6.0, fade=40.0, top=1660.0, bins=48, reach=45.0):
+    """A garment's collar drawn in to the neck: positions of `model` above `low` (to `top`) lying farther from the
+    neck's axis than the neck itself in their direction (head positions at that height, +- 12, per angle bin) plus
+    `margin` (at most `reach` beyond it: the collar, not the shoulders) move in to that distance, in full `fade` above
+    `low` (DevJunior, 13.11.2026, on v14: "a little hole
+    inside the collar at some angles": the shirt's opening was wider than the RE9 neck, the sky showed between them
+    when the body leant). Returns (model, positions moved, most)."""
+    import numpy as np
+    model = bytearray(model)
+    P, H = G.positions(model), G.positions(head)
+    band = H[(H[:, 1] > low - 60.0) & (H[:, 1] < low)]
+    ax, az = (band[:, 0].min() + band[:, 0].max()) / 2, (band[:, 2].min() + band[:, 2].max()) / 2
+    ha = np.arctan2(H[:, 2] - az, H[:, 0] - ax)
+    hr = np.hypot(H[:, 0] - ax, H[:, 2] - az)
+    hb = ((ha + np.pi) / (2 * np.pi) * bins).astype(int) % bins
+    moved, most = 0, 0.0
+    for i in np.flatnonzero((P[:, 1] > low) & (P[:, 1] < top)):
+        q = P[i].copy()
+        a = np.arctan2(q[2] - az, q[0] - ax)
+        b = int((a + np.pi) / (2 * np.pi) * bins) % bins
+        near = (np.abs(H[:, 1] - q[1]) < 12.0) & ((hb == b) | (hb == (b + 1) % bins) | (hb == (b - 1) % bins))
+        if not near.any():
+            continue
+        r, want = np.hypot(q[0] - ax, q[2] - az), hr[near].max() + margin
+        if r <= want or r - want > reach:  # the collar only, not the shoulders
+            continue
+        k = min(1.0, (q[1] - low) / fade)
+        nr = r + (want - r) * k
+        q[0], q[2] = ax + (q[0] - ax) * nr / r, az + (q[2] - az) * nr / r
+        G.set_position(model, i, q)
+        moved += 1
+        most = max(most, r - nr)
+    return bytes(model), moved, most
+
+
 def prune(entries, tpl, users):
     """Palette `tpl` with only the textures its models `users` draw; the parts renumbered. Returns (bytes before,
     after)."""
@@ -717,6 +752,8 @@ def main(argv=None):
     ap.add_argument("--girth", action="append", default=[], metavar="ENTRY@MATS=SRC:E@MATS",
                     help="widen ENTRY's parts with MATS around the body's axis to the girth of SRC's model E's parts "
                          "with MATS (see girth; --fit-top: its top, default 1470)")
+    ap.add_argument("--hug", action="append", default=[], metavar="ENTRY:HEAD:LOW[:MARGIN]",
+                    help="draw ENTRY's collar in to HEAD's neck above LOW (after --neck)")
     ap.add_argument("--neck", action="append", default=[], metavar="ENTRY:LOW:HIGH:SCALE",
                     help="thicken the neck: x and z around its axis by SCALE below LOW, fading out at HIGH")
     ap.add_argument("--fit-top", type=float, help="--fit only below this height (fading over 40 units)")
@@ -820,6 +857,12 @@ def main(argv=None):
         entries[int(e)], n, ax = neck(entries[int(e)], float(lo), float(hi), float(sc))
         print("entry %s: neck thickened %s times below y %s (fading out at %s) around x %.0f z %.0f, %d positions" %
               (e, sc, lo, hi, ax[0], ax[1], n))
+    for spec in a.hug:
+        f = spec.split(":")
+        e, h = int(f[0]), int(f[1])
+        entries[e], n, most = hug(entries[e], entries[h], float(f[2]), float(f[3]) if len(f) > 3 else 6.0)
+        print("entry %d: collar drawn in to entry %d's neck above y %s: %d positions, at most %.0f units" %
+              (e, h, f[2], n, most))
     for spec in a.compact:
         e = int(spec)
         before = len(G.positions(entries[e]))

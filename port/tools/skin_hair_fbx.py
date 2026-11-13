@@ -571,6 +571,7 @@ def enc_cmpr(im):
 
 
 def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour_size=(512, 256), thicken=0.5,
+             straighten=0.0,
              fill=0.5, solid=0.0, harden=1.0, contrast=1.0):
     """(colour levels RGBA, alpha levels L), each a full mipmap chain. The alpha: the strand mask (`channel` of
     `alpha`) at `alpha_size`, its strands `thicken`ed (a share of the mask spread one texel: the few cards of a
@@ -580,6 +581,16 @@ def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour
     a_img = Image.open(alpha).convert("RGBA").split()["RGBA".index(channel)]
     m0 = a_img.resize(alpha_size, Image.LANCZOS)
     base = np.asarray(m0, dtype=np.float64) / 255.0
+    if straighten > 0:
+        # the strands combed straight (DevJunior, 13.11.2026, device test of v14: "the hair looks curly"): the RE9
+        # strands wave across their cards (which run top to bottom); averaged along the card over `straighten` of
+        # its height the waves become straight streaks, brought back to the strands' strength
+        from scipy.ndimage import uniform_filter1d
+        n = max(1, int(round(straighten * alpha_size[1])))
+        sm = uniform_filter1d(base, size=n, axis=0, mode="nearest")
+        top = np.percentile(sm[sm > 0.05], 90) if (sm > 0.05).sum() > 100 else 1.0
+        base = np.clip(sm / max(top, 1e-3), 0.0, 1.0)
+        m0 = Image.fromarray((base * 255 + 0.5).astype(np.uint8), "L")
     if thicken > 0:
         grown = np.asarray(m0.filter(ImageFilter.MaxFilter(3)), dtype=np.float64) / 255.0
         base = np.maximum(base, grown * thicken)
@@ -697,7 +708,8 @@ def main(argv=None):
                     help="FBX hair meshes (material names without _Mat) and the share of their cards to keep")
     ap.add_argument("--colour", help="R,G,B of the hair (default: the skin's old hair colour)")
     ap.add_argument("--alpha-ref", type=int, default=64)
-    ap.add_argument("--alpha-size", default="1024x512", help="the alpha texture's size (WxH, default 1024x512)")
+    ap.add_argument("--alpha-size", default="1024x512",
+                    help="the alpha texture's size (WxH, default 1024x512; at most 1024 each: GX's limit)")
     ap.add_argument("--alpha-format", default="I8", choices=("I8", "I4"),
                     help="I4: half the bytes of I8 (16 steps), for a larger --alpha-size")
     ap.add_argument("--colour-size", default="512x256", help="the colour texture's size (WxH, default 512x256)")
@@ -705,6 +717,9 @@ def main(argv=None):
                     "with --streaks, as skin_head_fbx.py --hair-ramp, instead of --colour")
     ap.add_argument("--streaks", type=float, default=0.3, help="lighter streaks with --ramp (default 0.3)")
     ap.add_argument("--thicken", type=float, default=0.5, help="spread this share of the strand mask one texel")
+    ap.add_argument("--straighten", type=float, default=0.0, metavar="SHARE",
+                    help="average the strand mask along the cards over this share of their height (straight "
+                         "streaks instead of the RE9 strands' waves; e.g. 0.02)")
     ap.add_argument("--fill", type=float, default=0.5,
                     help="the smaller mipmap levels cover this share of the gaps more (see coverage_mips)")
     ap.add_argument("--solid", type=float, default=0.0,
@@ -730,6 +745,9 @@ def main(argv=None):
                          "hair's colour (see scalp)")
     ap.add_argument("--physics", type=float, default=1.0,
                     help="the swinging hair bones' shares times this (0: the hair is fixed to the head)")
+    ap.add_argument("--weights-from", metavar="SKIN.drs",
+                    help="take the hair's bone weights from this skin's hair (entry 5) instead of the input's: "
+                         "a hair with the game's swinging hair bones (65..85) brings their physics back")
     ap.add_argument("--no-scalp", action="store_true", help="keep the head's scalp as it is (see scalp())")
     a = ap.parse_args(argv)
 
@@ -759,7 +777,8 @@ def main(argv=None):
     P, N, T = np.concatenate(allP), np.concatenate(allN), np.concatenate(allT)
     tris = np.concatenate(allTris)
     hair = build_hair(template, P, N, T, tris)
-    ne, step, bones = skin_weights(hair, template, physics=a.physics)
+    wref = U.Archive(open(a.weights_from, "rb").read(), ">").entry(HAIR) if a.weights_from else template
+    ne, step, bones = skin_weights(hair, wref, physics=a.physics)
     print("hair: %d positions, %d normals, %d triangles; weights from the skin's hair: %d entries (%d%% steps), "
           "bones %s" % (struct.unpack_from(">H", hair, 0x38)[0], struct.unpack_from(">H", hair, 0x3A)[0], len(tris),
                         ne, step, bones))
@@ -775,9 +794,14 @@ def main(argv=None):
     aw, ah = (int(v) for v in a.alpha_size.lower().split("x"))
     ref = max(0, min(254, a.alpha_ref))
     cw, ch = (int(v) for v in a.colour_size.lower().split("x"))
+    if max(aw, ah, cw, ch) > 1024:
+        # GX textures are at most 1024 x 1024 (TEXIMAGE0 holds width - 1 and height - 1 in 10 bits each): a 2048 wide
+        # one is read 1024 wide, its tile rows interleaved (DevJunior, 13.11.2026, device test of v14 with the 2048 x
+        # 1024 alpha of v11: "the hair looks curly"); the renders here read the TPL header and showed it right
+        raise SystemExit("--alpha-size and --colour-size: GX textures are at most 1024 x 1024")
     cols, masks = textures(a.albedo, a.alpha, a.alpha_channel, colour, ref, alpha_size=(aw, ah),
                            colour_size=(cw, ch), thicken=a.thicken, fill=a.fill, solid=a.solid, harden=a.harden,
-                           contrast=a.shade_contrast)
+                           contrast=a.shade_contrast, straighten=a.straighten)
     if a.ramp:
         import skin_head_fbx as HF  # here: it imports this module
         stops = [tuple(float(c) for c in x.split(",")) for x in a.ramp.split(":")]
