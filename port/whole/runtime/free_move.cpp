@@ -438,8 +438,18 @@ void findLegs(cPlayer* pl, int n)
         }
     }
     if (nRoots == 0) {
+        // a motion without leg IK (a mod's remake walk, runtime/locomotion.cpp): the legs' first parts below the
+        // hips, under the hips or under a part of theirs at hip height (Leon's pelvis, part 17, holds the thighs;
+        // device report 13.11.2026: the legs stood still while he moved aiming or reloading)
         for (cParts* p = hips->pList; p && nRoots < 8; p = p->pList) {
-            if (p->pParent == hips && p->world.y < hips->world.y - 50.0f) {
+            if (p->world.y >= hips->world.y - 50.0f || !p->pParent || p->pParent == (cCoord*) pl) {
+                continue;
+            }
+            cParts* q = (cParts*) p->pParent;
+            const bool underHips = q == hips;
+            const bool underPelvis = q->pParent == hips && q->world.y >= hips->world.y - 50.0f &&
+                                     q->world.y <= hips->world.y + 50.0f;
+            if (underHips || underPelvis) {
                 roots[nRoots++] = p;
             }
         }
