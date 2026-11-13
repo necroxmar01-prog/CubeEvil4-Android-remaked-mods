@@ -146,6 +146,9 @@ class Fit:
         self.frames = frames if frames is not None else list(np.arange(0.0, min(end, motion.frames) + 1e-6, step))
         self.rows = RT.retarget(src, model, mapping, nexts, self.frames, self.scale, root_relative=True)
         self.order = [p for p in sorted(mapping) if mapping[p] in src.by_name and p != 0] + [0]
+        self.map_name = map_name
+        if map_name == "leon":
+            self.rows, self.order = RT.split_hips(self.rows, self.order)
         self.model, self.mapping, self.nexts, self.tol = model, mapping, nexts, tol
         self.root = [r[3] for r in self.rows]  # (position in metres, heading) of the source's root
 
@@ -160,7 +163,10 @@ class Fit:
         return track
 
     def motion(self, world_scale):
-        return RT.build_motion(self.rows, self.order, self.tol, root=self.track(world_scale))
+        fixed = None
+        if self.map_name == "leon":
+            fixed = {p: self.model.parts[p].pos for p in (10, 16, 20, 24) if p in self.order}
+        return RT.build_motion(self.rows, self.order, self.tol, root=self.track(world_scale), fixed_pos=fixed)
 
     def world(self, data, world_scale, frame, part):
         """Where the game's playback puts `part` on `frame`, in the motion's start frame (mm)."""

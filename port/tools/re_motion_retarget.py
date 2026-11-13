@@ -253,7 +253,23 @@ def axis_keys_pos(values, tol):
     return fcv.Axis(frames=ks, keys=[(float(v[k]), float(slope[k]), float(slope[k])) for k in ks])
 
 
-def build_motion(rows, parts_order, tol, root=None):
+def split_hips(rows, order):
+    """Leon's motions never turn part 0 (the hips; 1 of the game's 66 does): the game's own turn its children, the
+    waist (1) and the pelvis (17), and the player's routines pose the body on that (device report 13.11.2026: with the
+    hips turned, the body bent in half while standing and walking). The hips' turn goes to both; part 0 keeps none."""
+    out = []
+    for row in rows:
+        local = dict(row[0])
+        r0 = local.pop(0, None)
+        if r0 is not None:
+            local[1] = r0 @ local[1] if 1 in local else r0
+            local[17] = r0 @ local[17] if 17 in local else r0
+        out.append((local,) + tuple(row[1:]))
+    order = [p for p in order if p not in (0, 1, 17)]
+    return out, [1, 17] + order
+
+
+def build_motion(rows, parts_order, tol, root=None, fixed_pos=None):
     """FCV from per-frame local rotations and hips positions; root: per frame the root motion (x, y, z in mm in the
     motion's start frame, heading in radians from the start), as the game's joints of kind 1 and 0x40 (MotionGetSpeed
     turns their steps into the model's own; MotionSetCore's flags bit 0 plays them)."""
@@ -269,6 +285,12 @@ def build_motion(rows, parts_order, tol, root=None):
         ang = np.unwrap(ang, axis=0)
         j = fcv.Joint(kind=2, channel=0, fcc_type=1, parts_no=part)
         j.axes = [axis_keys(ang[:, a], tol) for a in range(3)]
+        joints.append(j)
+    # fixed_pos {part: its offset in the model}: the game's own motions key the hands' and feet's positions as IK targets
+    # in model space and leave them in the parts; a motion without IK puts the bones' own offsets back
+    for part, pos in sorted((fixed_pos or {}).items()):
+        j = fcv.Joint(kind=4, channel=0, fcc_type=0, parts_no=part)
+        j.axes = [axis_keys_pos(np.full(n, float(pos[a])), 1.0) for a in range(3)]
         joints.append(j)
     if root is not None:
         r = np.array(root, dtype=np.float64)
@@ -322,7 +344,11 @@ def main():
     rows = retarget(src, model, mapping, nexts, frames, scale)
     order = sorted(p for p in mapping if p in src.by_name.values() or True)
     order = [p for p in sorted(mapping) if mapping[p] in src.by_name and p != 0] + ([0] if "Hip" in src.by_name else [])
-    mot = build_motion(rows, order, a.tolerance)
+    fixed = None
+    if a.map == "leon":
+        rows, order = split_hips(rows, order)
+        fixed = {p: model.parts[p].pos for p in (10, 16, 20, 24) if p in order}
+    mot = build_motion(rows, order, a.tolerance, fixed_pos=fixed)
     data = fcv.serialise(mot)
     Path(a.out).write_bytes(data)
     keys = sum(len(ax.frames) for j in mot.joints for ax in j.axes)
