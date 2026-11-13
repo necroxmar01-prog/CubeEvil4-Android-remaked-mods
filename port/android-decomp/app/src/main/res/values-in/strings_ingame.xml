@@ -111,8 +111,8 @@
     <string name="ingame_knife_speed">Kecepatan bidik pisau</string>
     <string name="ingame_motion">Kontrol Gerak</string>
     <string name="ingame_controller_section">Controller, Keyboard dan Mouse</string>
-    <string name="ingame_aim_help">Balik vertikal dan Kecepatan bidik: untuk membidik pisau dan senjata dengan sentuhan atau controller, bukan dengan giroskop. Balik vertikal mengatur opsi bawaan game.</string>
     <string name="ingame_knife_speed_help">Kecepatan bidik pisau: kecepatan stik saat pisau siap, terpisah dari Kecepatan bidik senjata. Sampai Anda mengubahnya, pisau mengikuti Kecepatan bidik.</string>
+    <string name="ingame_aim_help">Balik vertikal dan Kecepatan bidik: untuk membidik pisau dan senjata dengan sentuhan atau controller, bukan dengan giroskop. Balik vertikal juga berlaku untuk mouse (membidik dan teropong); kecepatannya adalah sensitivitas mouse. Balik vertikal mengatur opsi bawaan game.</string>
     <string name="ingame_update">Perbarui</string>
     <string name="ingame_up_to_date">Sudah terbaru</string>
     <string name="ingame_update_page">Rilis terbaru terbuka di GitHub: unduh APK di sana lalu pasang.</string>
@@ -199,7 +199,7 @@
     <string name="ingame_management_summary">Kartu memori, disk, laporan &amp; sumber</string>
     <string name="ingame_audio">Audio</string>
     <string name="ingame_audio_summary">Musik &amp; efek suara</string>
-    <string name="ingame_cheats_summary">Nyawa, amunisi, uang &amp; game tambahan</string>
+    <string name="ingame_cheats_summary">Umum, senjata, uang dan tekstur</string>
     <string name="ingame_experimental">Eksperimental</string>
     <string name="ingame_volume">Volume</string>
     <string name="ingame_music_volume">Musik</string>
@@ -262,7 +262,7 @@
     <string name="ingame_disc_device">Game berhenti di %1$s (Disk %2$d): salinan file ini di perangkat ini rusak (berubah setelah diimpor). Impor lagi Disk %2$d di layar awal. Data simpanan Anda tetap aman.</string>
     <string name="ingame_disc_read">Game berhenti di %1$s (Disk %2$d): file-nya utuh, tetapi gagal dibaca. Silakan kirim laporan kesalahan, lalu mulai game lagi.</string>
     <string name="ingame_disc_unknown">Game berhenti di %1$s (Disk %2$d): file di perangkat ini rusak atau hilang. Impor lagi Disk %2$d di layar awal. Data simpanan Anda tetap aman.</string>
-    <string name="ingame_cheats">Cheat</string>
+    <string name="ingame_cheats">Cheat &amp; Mod</string>
     <string name="ingame_cheat_health">Nyawa tak terbatas</string>
     <string name="ingame_cheat_ammo">Amunisi tak terbatas</string>
     <string name="ingame_cheat_onehit">Sekali pukul mati</string>
@@ -285,6 +285,8 @@
     <string name="ingame_cheat_qte">QTE otomatis</string>
     <string name="ingame_cheat_random_items">Item acak</string>
     <string name="ingame_cheat_random_items_help">Item acak: item yang tergeletak di ruangan cerita (amunisi, herba dan item pemulihan lain, granat, peseta, harta) dibagikan ulang di setiap ruangan yang Anda masuki sejak saat itu, dan satu ruangan selalu memberi item yang sama sampai Anda mematikan lalu menyalakannya lagi. Kunci, senjata, dokumen, dan item cerita lain tetap seperti semula, jadi game selalu bisa diselesaikan. Item yang sudah diambil tetap terambil; musuh, tong, dan peti menyimpan jarahan mereka sendiri. Tidak di Assignment Ada dan The Mercenaries.</string>
+    <string name="ingame_cheat_random_enemies">Musuh acak</string>
+    <string name="ingame_cheat_random_enemies_help">Musuh acak: di ruangan cerita, Ganado biasa berdiri di tempat lain tempat musuh pernah berdiri, dan sebuah ruangan bisa mendapat satu musuh lebih sedikit atau satu lebih banyak; ruangan selalu terlihat sama sampai kamu mematikan dan menyalakan opsi ini lagi. Bos, pedagang, Ashley, Luis, musuh khusus, gelombang, dan ruangan yang kejadiannya menghitung musuh tetap seperti semula, jadi game selalu bisa diselesaikan. Simpanan tetap milik game. Mulai ruangan berikutnya; tidak di Assignment Ada, The Mercenaries, dan bagian Ashley.</string>
     <string name="ingame_cheat_extras">Buka game tambahan</string>
     <string name="ingame_cheat_extras_text">Assignment Ada dan The Mercenaries telah terbuka (juga Professional, seperti setelah menamatkan game). Menu judul menampilkannya setelah dimulai ulang. Kemajuan sejak penyimpanan terakhir akan hilang.</string>
     <string name="ingame_cheat_extras_later">Terbuka: Assignment Ada dan The Mercenaries ada di menu judul setelah dimulai ulang.</string>
@@ -337,7 +339,7 @@
     <string name="ingame_map_hold">Tahan tombol pertama …</string>
     <string name="ingame_map_press">Tekan sebuah tombol …</string>
     <string name="ingame_map_keyboard">Keyboard &amp; Mouse</string>
-    <string name="ingame_mouse_help">Mouse (Android 8 ke atas) dikuasai game selama game berjalan: menggerakkannya memutar kamera, saat membidik menggerakkan bidikan. Menu aplikasi (F1) melepaskan penunjuk.</string>
+    <string name="ingame_mouse_help">Mouse (Android 8 ke atas) dikuasai game selama game berjalan: menggerakkannya memutar kamera, saat membidik menggerakkan bidikan, dan di teropong menggerakkan pandangan. Rodanya mengatur zoom teropong senapan dan teropong (ke atas: mendekat). Menu aplikasi (F1) melepaskan penunjuk.</string>
     <string name="ingame_mouse_sensitivity">Sensitivitas Mouse</string>
     <string name="ingame_map_controller">Controller</string>
     <string name="ingame_map_device">Perangkat</string>
@@ -375,8 +377,11 @@
     <string name="ingame_profile_help">Profil mengatur resolusi, 60 FPS, lewati frame, anti-aliasing, FXAA, filter tekstur, inti performa, dan mode kentang untuk perangkat ini. Jika salah satunya kamu ubah manual, profil menjadi Kustom; Kustom tetap tersimpan selama kamu mencoba profil.</string>
     <string name="ingame_limit_gpu">chip grafis</string>
     <string name="ingame_limit_cpu">prosesor</string>
+    <string name="ingame_limit_both">chip grafis, prosesor mendekati batasnya</string>
     <string name="ingame_limit_none">tidak ada yang mencolok</string>
     <string name="ingame_bench_welcome">Selamat datang di CubeEvil4</string>
+    <string name="ingame_bench_redo">Ukur lagi</string>
+    <string name="ingame_bench_redo_text">Baru: benchmark kini juga mengukur prosesor, agar saran lebih cocok untuk perangkat ini. Pengaturanmu tetap seperti adanya selama kamu tidak menerima saran baru.</string>
     <string name="ingame_bench_text">Aplikasi mengukur kemampuan perangkat ini dan menyarankan pengaturan terbaik. Untuk itu permainan pergi ke dermaga danau (hujan, air, kabut) dan kamera berputar mengelilingi karakter. Butuh sekitar 2–3 menit; suara mati. Setelahnya kamu kembali ke tempat semula. B / Kembali membatalkan.</string>
     <string name="ingame_bench_first_note">Akan ditawarkan lagi saat mulai berikutnya.</string>
     <string name="ingame_bench_start">Mulai mengukur</string>
@@ -414,7 +419,6 @@
     <string name="ingame_shader_cache_help">Game menyimpan shader yang sudah dibuat agar sebuah adegan tidak tersendat untuk kedua kalinya. Kosongkan hanya jika muncul kesalahan grafis setelah pembaruan: game lalu membuatnya lagi, dan adegan pertama bisa tersendat.</string>
     <string name="ingame_shader_clear">Kosongkan cache shader</string>
     <string name="ingame_shader_clear_text">Game dimulai ulang dan menghapus shader yang sudah dibuat. Game membuatnya lagi saat Anda bermain, jadi adegan pertama bisa tersendat. Progres sejak penyimpanan terakhir akan hilang.</string>
-    <string name="ingame_mods">Mod</string>
     <string name="ingame_mods_summary">Gameplay remake, jarak dekat, pakaian &amp; skin</string>
     <string name="ingame_remake_gameplay">Gameplay remake</string>
     <string name="ingame_mod_packs">Paket mod</string>
@@ -483,4 +487,34 @@
     <string name="ingame_cheat_weapon_max">Level tertinggi</string>
     <string name="ingame_cheat_weapon_add">Tambah</string>
     <string name="ingame_cheat_weapons_help">Senjata: pilih senjata, granat, atau bagian senjata Leon mana pun lalu tekan Tambah. «Level tertinggi» aktif: senjata datang dengan peningkatan penuh (senjata yang sudah kamu punya dinaikkan ke sana; pelontar ranjau dengan teropongnya); nonaktif: seperti yang dijual pedagang. Hanya saat bermain sebagai Leon, tidak di koper, peta, atau film.</string>
+    <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
+    <string name="ingame_mods">Mod</string>
+    <string name="ingame_hd_textures">Tekstur HD</string>
+    <string name="ingame_hd_import">Impor paket tekstur</string>
+    <string name="ingame_hd_cancel">Batalkan impor</string>
+    <string name="ingame_hd_sharpness">Ketajaman</string>
+    <string name="ingame_hd_full">Penuh</string>
+    <string name="ingame_hd_half">Setengah</string>
+    <string name="ingame_hd_delete">Hapus paket tekstur</string>
+    <string name="ingame_hd_delete_yes">Hapus</string>
+    <string name="ingame_hd_none">Tekstur HD: belum ada paket tekstur yang diimpor.</string>
+    <string name="ingame_hd_info">Tekstur HD: %1$s · %2$s gambar · %3$s · dibuat %4$s</string>
+    <string name="ingame_hd_in_use">Sedang dipakai: %1$s dari %2$s tekstur diganti (%3$s).</string>
+    <string name="ingame_hd_importing">Mengimpor paket tekstur: %1$s dari %2$s…</string>
+    <string name="ingame_hd_imported">Paket tekstur diimpor: %1$s gambar.</string>
+    <string name="ingame_hd_replace">Ganti paket tekstur?</string>
+    <string name="ingame_hd_replace_text">Paket baru menggantikan “%1$s” setelah tersalin sepenuhnya.</string>
+    <string name="ingame_hd_delete_text">Hanya paket tekstur yang dihapus. Disk, simpanan, dan kartu memorimu tetap seperti semula.</string>
+    <string name="ingame_hd_deleted">Paket tekstur dihapus.</string>
+    <string name="ingame_hd_not_pack">File ini bukan paket tekstur CubeEvil4 (.c4tex). Konversikan dulu paketnya dengan CubeEvil4 Texture Packer (di PC atau dengan aplikasi Android-nya).</string>
+    <string name="ingame_hd_other_version">Paket ini dibuat oleh versi lain CubeEvil4 Texture Packer. Konversikan lagi dengan versi sekarang.</string>
+    <string name="ingame_hd_no_space">Ruang kosong tidak cukup: paket butuh %1$s, yang kosong %2$s.</string>
+    <string name="ingame_hd_incomplete">File tidak lengkap (penyalinan ke perangkat terputus?). Salin lagi.</string>
+    <string name="ingame_hd_damaged">File rusak. Salin lagi ke perangkat atau konversikan lagi.</string>
+    <string name="ingame_hd_cancelled">Impor dibatalkan. Paket tekstur sebelumnya tetap ada.</string>
+    <string name="ingame_hd_read_failed">File tidak bisa dibaca: %1$s</string>
+    <string name="ingame_hd_help">Tekstur HD mengganti gambar game dengan gambar yang lebih tajam dari paket tekstur berformat Dolphin. CubeEvil4 tidak menyertakan tekstur apa pun dan tidak memberi tautan ke mana pun: pakai hanya paket yang kamu dapatkan sendiri dan boleh kamu pakai. Konversikan paketnya dengan CubeEvil4 Texture Packer (di PC atau dengan aplikasi Android-nya), lalu impor file .c4tex di sini; setelah itu file tersebut boleh dihapus. Paket disimpan di folder tersendiri dan tidak pernah mengubah disk, simpanan, atau kartu memorimu; kamu bisa mematikan atau menghapusnya kapan saja. Ketajaman Setengah memakai lebih sedikit memori grafis di perangkat yang lebih lemah. Filter piksel retro tetap memakai tekstur asli game.</string>
+    <string name="ingame_hd_import_from">Impor paket tekstur “%1$s” (%2$s)?</string>
+    <string name="ingame_hd_import_busy">Paket tekstur sedang diimpor. Coba lagi setelah selesai.</string>
+    <string name="ingame_hd_import_on">Tekstur HD menyala. Kamu bisa mematikannya atau menghapus paketnya di menu aplikasi (SELECT), bagian Cheat &amp; Mod.</string>
 </resources>

@@ -859,6 +859,7 @@ const Re4GxChunk* re4ipc_gx_acquire(void)
         v.draws = i.draws;
         v.vertexCount = i.vertexCount;
         v.textureBytes = i.textureBytes;
+        v.coreCpuUs = i.coreCpuUs;
         if (c->check) {
             const uint64_t h = hashChunk(i, v.ops, v.vertices, v.indices, v.blob);
             gChunksChecked++;
@@ -1034,6 +1035,16 @@ void re4ipc_aim_turn(float yaw, float pitch)
     memcpy(&a, &yaw, 4);
     memcpy(&b, &pitch, 4);
     post(kAimTurn, a, b, 0);
+}
+
+void re4ipc_zoom(int notches)
+{
+    post(kZoom, notches, 0, 0);
+}
+
+void re4ipc_set_enemy_random(int seed)
+{
+    post(kSetEnemyRandom, seed, 0, 0);
 }
 
 void re4ipc_touch(float u, float v)

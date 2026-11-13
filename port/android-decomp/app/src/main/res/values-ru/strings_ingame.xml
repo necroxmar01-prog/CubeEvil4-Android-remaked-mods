@@ -110,8 +110,8 @@
     <string name="ingame_knife_speed">Скорость прицеливания ножом</string>
     <string name="ingame_motion">Управление движением</string>
     <string name="ingame_controller_section">Контроллер, клавиатура и мышь</string>
-    <string name="ingame_aim_help">Инвертировать по вертикали и Скорость прицеливания: для прицеливания ножом и оружием касанием или контроллером, не гироскопом. Инвертирование по вертикали меняет собственную настройку игры.</string>
     <string name="ingame_knife_speed_help">Скорость прицеливания ножом: скорость стика, пока нож наготове, отдельно от скорости прицеливания оружием. Пока вы её не измените, нож следует общей скорости прицеливания.</string>
+    <string name="ingame_aim_help">Инвертировать по вертикали и Скорость прицеливания: для прицеливания ножом и оружием касанием или контроллером, не гироскопом. Инвертирование по вертикали действует и для мыши (прицеливание и бинокль); её скорость — чувствительность мыши. Инвертирование по вертикали меняет собственную настройку игры.</string>
     <string name="ingame_update">Обновить</string>
     <string name="ingame_up_to_date">Актуально</string>
     <string name="ingame_update_page">Новый выпуск откроется на GitHub: скачайте там APK и установите его.</string>
@@ -205,7 +205,7 @@
     <string name="ingame_management_summary">Карта памяти, диски, отчёты и исходники</string>
     <string name="ingame_audio">Звук</string>
     <string name="ingame_audio_summary">Музыка и звуковые эффекты</string>
-    <string name="ingame_cheats_summary">Здоровье, патроны, деньги и доп. игры</string>
+    <string name="ingame_cheats_summary">Общее, оружие, деньги и текстуры</string>
     <string name="ingame_experimental">Экспериментальное</string>
     <string name="ingame_volume">Громкость</string>
     <string name="ingame_music_volume">Музыка</string>
@@ -269,7 +269,7 @@
     <string name="ingame_disc_device">Игра остановилась на %1$s (диск %2$d): копия этого файла на устройстве повреждена (она изменилась после импорта). Импортируйте диск %2$d заново на стартовом экране. Ваши сохранения останутся.</string>
     <string name="ingame_disc_read">Игра остановилась на %1$s (диск %2$d): файл в порядке, но прочитать его не удалось. Отправьте отчёт об ошибке и запустите игру снова.</string>
     <string name="ingame_disc_unknown">Игра остановилась на %1$s (диск %2$d): файл на этом устройстве повреждён или отсутствует. Импортируйте диск %2$d заново на стартовом экране. Ваши сохранения останутся.</string>
-    <string name="ingame_cheats">Читы</string>
+    <string name="ingame_cheats">Читы и моды</string>
     <string name="ingame_cheat_health">Бесконечное здоровье</string>
     <string name="ingame_cheat_ammo">Бесконечные патроны</string>
     <string name="ingame_cheat_onehit">Убийство с одного удара</string>
@@ -292,6 +292,8 @@
     <string name="ingame_cheat_qte">Автоматические QTE</string>
     <string name="ingame_cheat_random_items">Случайные предметы</string>
     <string name="ingame_cheat_random_items_help">Случайные предметы: предметы, лежащие в комнатах сюжета (патроны, травы и другие лечебные предметы, гранаты, песеты, сокровища), заново распределяются в каждой комнате, в которую вы входите с этого момента, и комната всегда даёт одни и те же предметы, пока вы не выключите и снова не включите эту функцию. Ключи, оружие, документы и другие сюжетные предметы остаются как есть, поэтому игру всегда можно пройти. Уже подобранное остаётся подобранным; враги, бочки и ящики сохраняют свою добычу. Не в Assignment Ada и The Mercenaries.</string>
+    <string name="ingame_cheat_random_enemies">Случайные враги</string>
+    <string name="ingame_cheat_random_enemies_help">Случайные враги: в комнатах сюжета обычные ганадо стоят в других местах, где стоял враг, и в комнате может быть на одного врага меньше или больше; комната всегда выглядит одинаково, пока вы не выключите и снова не включите опцию. Боссы, торговец, Эшли, Луис, особые враги, волны и комнаты, где события считают врагов, остаются как есть, поэтому игру всегда можно пройти. Сохранения остаются игровыми. Со следующей комнаты; не в Assignment Ada, The Mercenaries и в части за Эшли.</string>
     <string name="ingame_cheat_extras">Открыть доп. игры</string>
     <string name="ingame_cheat_extras_text">Assignment Ada и The Mercenaries открыты (а также Professional, как после прохождения игры). Главное меню покажет их после перезапуска. Прогресс с последнего сохранения будет потерян.</string>
     <string name="ingame_cheat_extras_later">Открыто: Assignment Ada и The Mercenaries появятся в главном меню после следующего перезапуска.</string>
@@ -344,7 +346,7 @@
     <string name="ingame_map_hold">Держите первую кнопку …</string>
     <string name="ingame_map_press">Нажмите кнопку …</string>
     <string name="ingame_map_keyboard">Клавиатура и мышь</string>
-    <string name="ingame_mouse_help">Мышь (Android 8 и новее) принадлежит игре во время игры: движение поворачивает камеру, при прицеливании двигает прицел. Меню приложения (F1) освобождает указатель.</string>
+    <string name="ingame_mouse_help">Мышь (Android 8 и новее) принадлежит игре во время игры: движение поворачивает камеру, при прицеливании двигает прицел, в бинокле — взгляд. Колесо приближает и отдаляет в оптическом прицеле и бинокле (вверх — ближе). Меню приложения (F1) освобождает указатель.</string>
     <string name="ingame_mouse_sensitivity">Чувствительность мыши</string>
     <string name="ingame_map_controller">Контроллер</string>
     <string name="ingame_map_device">Устройство</string>
@@ -382,8 +384,11 @@
     <string name="ingame_profile_help">Профиль задаёт разрешение, 60 FPS, пропуск кадров, сглаживание, FXAA, фильтрацию текстур, производительные ядра и режим Potato для этого устройства. Если изменить что-то из этого вручную, профиль станет «Свой»; «Свой» сохраняется, пока вы пробуете профиль.</string>
     <string name="ingame_limit_gpu">графический чип</string>
     <string name="ingame_limit_cpu">процессор</string>
+    <string name="ingame_limit_both">графический чип, процессор близок к пределу</string>
     <string name="ingame_limit_none">ничего заметного</string>
     <string name="ingame_bench_welcome">Добро пожаловать в CubeEvil4</string>
+    <string name="ingame_bench_redo">Измерить заново</string>
+    <string name="ingame_bench_redo_text">Новое: тест теперь измеряет и процессор, чтобы предложение лучше подходило этому устройству. Ваши настройки не меняются, пока вы не примете новое предложение.</string>
     <string name="ingame_bench_text">Приложение измеряет возможности устройства и предлагает лучшие настройки. Для этого игра переходит к причалу у озера (дождь, вода, туман), а камера вращается вокруг персонажа. Это займёт около 2–3 минут; звук выключен. Затем вы вернётесь туда, где были. B / Назад отменяет.</string>
     <string name="ingame_bench_first_note">Это будет предложено снова при следующем запуске.</string>
     <string name="ingame_bench_start">Начать измерение</string>
@@ -421,7 +426,6 @@
     <string name="ingame_shader_cache_help">Игра сохраняет созданные шейдеры, чтобы сцена не подтормаживала второй раз. Очищайте его, только если после обновления появились графические ошибки: игра создаст шейдеры заново, и первые сцены могут подтормаживать.</string>
     <string name="ingame_shader_clear">Очистить кэш шейдеров</string>
     <string name="ingame_shader_clear_text">Игра перезапустится и удалит созданные шейдеры. Она создаст их заново во время игры, поэтому первые сцены могут подтормаживать. Прогресс с последнего сохранения будет потерян.</string>
-    <string name="ingame_mods">Моды</string>
     <string name="ingame_mods_summary">Геймплей ремейка, ближний бой, одежда и скины</string>
     <string name="ingame_remake_gameplay">Геймплей ремейка</string>
     <string name="ingame_mod_packs">Наборы модов</string>
@@ -496,4 +500,34 @@
     <string name="ingame_cheat_weapon_max">Макс. уровни</string>
     <string name="ingame_cheat_weapon_add">Добавить</string>
     <string name="ingame_cheat_weapons_help">Оружие: выберите любое оружие, гранату или деталь оружия Леона и нажмите «Добавить». «Макс. уровни» включено: оружие приходит полностью улучшенным (имеющееся оружие поднимается до них; миномёт с прицелом); выключено: как его продаёт торговец. Только пока играет Леон, не в кейсе, на карте или в видео.</string>
+    <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
+    <string name="ingame_mods">Моды</string>
+    <string name="ingame_hd_textures">HD-текстуры</string>
+    <string name="ingame_hd_import">Импорт пакета текстур</string>
+    <string name="ingame_hd_cancel">Отменить импорт</string>
+    <string name="ingame_hd_sharpness">Чёткость</string>
+    <string name="ingame_hd_full">Полная</string>
+    <string name="ingame_hd_half">Половинная</string>
+    <string name="ingame_hd_delete">Удалить пакет текстур</string>
+    <string name="ingame_hd_delete_yes">Удалить</string>
+    <string name="ingame_hd_none">HD-текстуры: пакет текстур не импортирован.</string>
+    <string name="ingame_hd_info">HD-текстуры: %1$s · изображений: %2$s · %3$s · создан %4$s</string>
+    <string name="ingame_hd_in_use">Сейчас используется: заменено %1$s из %2$s текстур (%3$s).</string>
+    <string name="ingame_hd_importing">Импорт пакета текстур: %1$s из %2$s…</string>
+    <string name="ingame_hd_imported">Пакет текстур импортирован, изображений: %1$s.</string>
+    <string name="ingame_hd_replace">Заменить пакет текстур?</string>
+    <string name="ingame_hd_replace_text">Новый пакет заменит «%1$s», как только будет полностью скопирован.</string>
+    <string name="ingame_hd_delete_text">Удаляется только пакет текстур. Диски, сохранения и карты памяти остаются как есть.</string>
+    <string name="ingame_hd_deleted">Пакет текстур удалён.</string>
+    <string name="ingame_hd_not_pack">Этот файл — не пакет текстур CubeEvil4 (.c4tex). Сначала преобразуйте пакет с помощью CubeEvil4 Texture Packer (на ПК или в его приложении для Android).</string>
+    <string name="ingame_hd_other_version">Этот пакет создан другой версией CubeEvil4 Texture Packer. Преобразуйте его заново текущей версией.</string>
+    <string name="ingame_hd_no_space">Недостаточно свободного места: пакету нужно %1$s, свободно %2$s.</string>
+    <string name="ingame_hd_incomplete">Файл неполный (копирование на устройство прервалось?). Скопируйте его ещё раз.</string>
+    <string name="ingame_hd_damaged">Файл повреждён. Скопируйте его на устройство ещё раз или преобразуйте заново.</string>
+    <string name="ingame_hd_cancelled">Импорт отменён. Прежний пакет текстур остаётся.</string>
+    <string name="ingame_hd_read_failed">Не удалось прочитать файл: %1$s</string>
+    <string name="ingame_hd_help">HD-текстуры заменяют изображения игры более чёткими из пакета текстур в формате Dolphin. CubeEvil4 не содержит текстур и не даёт ссылок на них: используйте только пакеты, которые вы получили сами и имеете право использовать. Преобразуйте пакет с помощью CubeEvil4 Texture Packer (на ПК или в его приложении для Android) и импортируйте здесь файл .c4tex; после этого этот файл можно удалить. Пакет хранится в отдельной папке и никогда не меняет ваши диски, сохранения и карты памяти; его можно в любой момент выключить или удалить. Половинная чёткость требует меньше графической памяти на слабых устройствах. Ретро-пиксельный фильтр сохраняет собственные текстуры игры.</string>
+    <string name="ingame_hd_import_from">Импортировать пакет текстур «%1$s» (%2$s)?</string>
+    <string name="ingame_hd_import_busy">Пакет текстур уже импортируется. Попробуйте снова, когда импорт закончится.</string>
+    <string name="ingame_hd_import_on">HD-текстуры включены. Выключить их или удалить пакет можно в меню приложения (SELECT), в разделе Читы и моды.</string>
 </resources>

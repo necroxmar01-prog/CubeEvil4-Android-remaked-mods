@@ -187,7 +187,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
    *  extra games kept unlocked, the story's player character << 5 (2 Ada, 3 HUNK, 4 Krauser, 5 Wesker), 256 the
    *  special costume; off). */
   static final String CHEATS = "cheats";
-  private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_MOD = 5;
+  /** The cheat "Random enemies" (0.99.12): its seed, 0 off (CoreBridge.setEnemyRandom). */
+  static final String ENEMY_SEED = "enemySeed";
+  private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_MOD = 5, REQUEST_TEXTURES = 6;
+  // "Import texture pack" (Cheats & Mods, TexturePacks): who hears the import, its cancel switch
+  private TexturePacks.Listener textureListener;
+  private final java.util.concurrent.atomic.AtomicBoolean textureCancel = new java.util.concurrent.atomic.AtomicBoolean();
   /** SELECT held this long: the game's debug menu. */
   private static final long SELECT_HOLD_MS = 1000;
 
@@ -462,6 +467,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setColour(CoreMenu.colourMode(g), CoreMenu.colourLevel(g));
       CoreBridge.setTvFilter(g.getBoolean("tvFilter", false));
       CoreBridge.setPsx(g.getBoolean("psx", false));
+      TexturePacks.apply(this, g);
       CoreBridge.setFlares(CoreBridge.flareMode(g));
       CoreBridge.setViewDistance(CoreBridge.VIEW_PERCENT[CoreBridge.viewDistance(g)]);
       CoreBridge.setMinimap(g.getBoolean("minimap", false));
@@ -489,6 +495,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         if (cheats != 0) Log.i(TAG, "cheats: " + cheats);
         CoreBridge.setCheats(cheats);
       }
+      int enemySeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(ENEMY_SEED, 0);
+      if (enemySeed != 0) Log.i(TAG, "cheats: random enemies with seed " + enemySeed);
+      CoreBridge.setEnemyRandom(enemySeed);
     }
     setContentView(root);
     // Android Automotive: the bars the car keeps stay off the picture (CarDisplay; nothing elsewhere)
@@ -595,6 +604,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     SharedPreferences g = getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE);
     CoreBridge.setGraphics(CoreMenu.scaleHalves(g), g.getInt("samples", 1), g.getInt("anisotropy", 1),
         g.getInt("aspect", 0));
+    TexturePacks.apply(this, g);
   }
 
   private void hideSystemUi() {
@@ -904,6 +914,16 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
 
     @Override public void importDiscs() { openStartScreen("menu: import other discs"); }
 
+    @Override public void importTexturePack(TexturePacks.Listener listener) {
+      textureListener = listener;
+      startForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),
+          REQUEST_TEXTURES);
+    }
+
+    @Override public void textureListener(TexturePacks.Listener listener) { textureListener = listener; }
+
+    @Override public void cancelTexturePackImport() { textureCancel.set(true); }
+
     @Override public void importFiles() {
       Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
           .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -1123,6 +1143,11 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       boolean gone = ModStore.removeAll(gameRoot());
       Log.i(TAG, "menu: mods removed" + (gone ? "" : " (not all)"));
       restartIntoGame("menu: mods removed");
+
+    @Override public void enemyRandomChanged(int seed) {
+      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_SEED, seed).apply();
+      Log.i(TAG, "cheats: random enemies " + (seed != 0 ? "on with seed " + seed : "off"));
+      CoreBridge.setEnemyRandom(seed);
     }
 
     @Override public void restartGame() {
@@ -1305,6 +1330,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     try {
       if (request == REQUEST_EXPORT_ALL && data.getData() != null) {
         exportAllInto(data.getData());
+      } else if (request == REQUEST_TEXTURES && data.getData() != null) {
+        importTextures(data.getData());
       } else if (request == REQUEST_IMPORT) {
         pendingImports.clear();
         pendingTouch = null;
@@ -1366,6 +1393,42 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
             .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mod added")).show();
       });
     }, "mod-copy").start();
+
+  /** The chosen texture pack into the textures folder (TexturePacks.importFrom) on a thread of its own; the menu hears
+   *  its progress and its end; the pack is in use right after. */
+  private void importTextures(Uri uri) {
+    if (TexturePacks.importing) return;
+    TexturePacks.importing = true;
+    TexturePacks.importDone = 0;
+    TexturePacks.importTotal = 0;
+    textureCancel.set(false);
+    final android.content.Context app = getApplicationContext();
+    Thread t = new Thread(() -> {
+      TexturePacks.Info info = null;
+      TexturePacks.PackException failure = null;
+      try {
+        info = TexturePacks.importFrom(app, uri, textureCancel, new TexturePacks.Listener() {
+          @Override public void progress(long done, long total) {
+            main.post(() -> { if (textureListener != null) textureListener.progress(done, total); });
+          }
+          @Override public void done(TexturePacks.Info i, TexturePacks.PackException f) {}
+        });
+      } catch (TexturePacks.PackException e) {
+        failure = e;
+      } catch (java.io.IOException e) {
+        failure = new TexturePacks.PackException(TexturePacks.READ_FAILED, String.valueOf(e.getMessage()));
+      }
+      final TexturePacks.Info result = info;
+      final TexturePacks.PackException problem = failure;
+      main.post(() -> {
+        TexturePacks.importing = false;
+        if (result != null) getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE).edit().putBoolean(TexturePacks.ON, true).apply();
+        TexturePacks.apply(this, getSharedPreferences(GRAPHICS_PREFS, MODE_PRIVATE));
+        Log.i(TAG, "texture pack import: " + (problem == null ? "done" : problem.getMessage()));
+        if (textureListener != null) textureListener.done(result, problem);
+      });
+    }, "texture-import");
+    t.start();
   }
 
   /** Every file of the card as .gci into the chosen folder. */
@@ -1944,6 +2007,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
 
   @Override
   public boolean onGenericMotionEvent(MotionEvent e) {
+    // the mouse wheel while the game has the mouse but has not captured it (Android 7, before the first click)
+    if (e.getActionMasked() == MotionEvent.ACTION_SCROLL && e.isFromSource(InputDevice.SOURCE_CLASS_POINTER)
+        && mouseWanted()) {
+      wheel(e);
+      return true;
+    }
     if (e.getAction() == MotionEvent.ACTION_MOVE && controller(e)) {
       InputDevice d = e.getDevice();
       noteDevice(d);
@@ -2085,7 +2154,14 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   /** Before the first renderer: a fresh install gets the first start's benchmark, an update the menu's question once;
    *  either starts with Custom as the active profile (the settings as they are). */
   private void perfFirstRun(SharedPreferences g) {
-    if (g.contains(PerfProfile.FIRST)) return;
+    if (g.contains(PerfProfile.FIRST)) {
+      // 0.99.12: a benchmark of before (no processor share) is made again once, as on the first start
+      if (PerfProfile.scheduleRedo(g)) {
+        Log.i(TAG, "performance profiles: a benchmark of before 0.99.12 (no processor share): measured again once the "
+            + "title's menu waits");
+      }
+      return;
+    }
     String[] mine = {"scaleHalves", "scale", "aspect", "samples", "anisotropy", "smooth60", "fxaa", "fastCores",
         "weatherEffects", "specialEffects", "particleEffects", "shadowsLight", CoreMenu.FRAME_SKIP, "frameskip",
         CoreMenu.DYN_CAP_30, CoreMenu.DOF_LEVEL, "dof", "minimap", "fps"};
@@ -2324,6 +2400,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       }
     }
     int action = e.getActionMasked();
+    if (action == MotionEvent.ACTION_SCROLL) wheel(e);
     if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_HOVER_MOVE) {
       // relative counts, the batched ones too
       float dx = e.getX(), dy = e.getY();
@@ -2332,16 +2409,46 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         dy += e.getHistoricalY(h);
       }
       if (dx != 0 || dy != 0) {
-        // while aiming the core turns the aim by it (and ignores it otherwise); the camera's C stick as long
-        // as the mouse moves
-        float k = MOUSE_AIM_RADIANS * mouseSensitivity;
-        CoreBridge.aimTurn(-dx * k, -dy * k);
+        // while aiming the core turns the aim by it, in the binoculars their view (0.99.12), and ignores it
+        // otherwise (runtime/gyro.cpp, wheel_zoom.cpp); the camera's C stick as long
+        // as the mouse moves, but not in the scope or the binoculars, where the C stick zooms (the wheel's job
+        // since 0.99.12: moving the mouse up and down zoomed there)
+        // ("Invert vertical" for the mouse too, 0.99.12: aiming, the scope, the binoculars)
+        float[] turn = CoreInput.mouseAim(dx, dy, MOUSE_AIM_RADIANS * mouseSensitivity, aimInvert);
+        CoreBridge.aimTurn(turn[0], turn[1]);
         input.mouseLook(dx * MOUSE_LOOK * mouseSensitivity, dy * MOUSE_LOOK * mouseSensitivity);
         main.removeCallbacks(mouseRest);
         main.postDelayed(mouseRest, 60);
       }
     }
     send();
+  }
+
+  // ---- the mouse wheel (0.99.12, wish of the project owner, 12.11.2026) ----
+  private int wheelLines, zoomViewLines;
+
+  /**
+   * A turn of the mouse wheel (captured or not): whole notches to the core (CoreInput.wheel), which zooms the
+   * scope and the binoculars by them (up zooms in) and drops them anywhere else.
+   */
+  private void wheel(MotionEvent e) {
+    int notches = input.wheel(e.getAxisValue(MotionEvent.AXIS_VSCROLL));
+    if (notches == 0) return;
+    CoreBridge.zoom(notches);
+    if (wheelLines++ < 20) {
+      Log.i(TAG, "mouse wheel: " + notches + " notch(es) " + (notches > 0 ? "up" : "down")
+          + (input.zoomView() ? " (the scope or the binoculars: zoom)" : " (no scope, no binoculars: nothing)"));
+    }
+  }
+
+  /** The scope or the binoculars came up or went (rumbleTick): the mouse keeps off the C stick while they are up. */
+  private void setZoomView(boolean on) {
+    if (on == input.zoomView()) return;
+    input.setZoomView(on);
+    if (zoomViewLines++ < 40) {
+      Log.i(TAG, "mouse: the scope or the binoculars " + (on ? "up (the wheel zooms, the mouse's movement does not)" : "down"));
+    }
+    if (on) send();
   }
 
   @SuppressWarnings("deprecation")
@@ -2442,6 +2549,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         input.setMenu(gameMenu);
         send();
       }
+      // the scope or the binoculars (bit 6, cores since 12.11.2026): the mouse's movement keeps off the C stick
+      setZoomView((r & 0x40) != 0);
       int frames = r >>> 8;
       if (frames != rumbleFrames) {
         rumbleFrames = frames;

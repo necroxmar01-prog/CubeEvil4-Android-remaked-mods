@@ -26,6 +26,7 @@
 #include "re4_cpu_info.h"
 #include "re4_gx_frame.h"
 #include "re4_gx_frame_io.h"
+#include "tex_pack.h"
 
 #include <EGL/egl.h>
 #include <android/log.h>
@@ -116,6 +117,8 @@ struct CoreApi {
   void (*setHudLayout)(int, int, int){};  // optional (cores since 07.11.2026, patch 0215): the life gauge's corner
   void (*touch)(float, float){};  // optional (cores since 22.10.2026): a tap on the picture
   void (*aimTurn)(float, float){};  // optional (cores since 29.10.2026): swipe aiming
+  void (*zoom)(int){};            // optional (cores since 12.11.2026, 0.99.12): the mouse wheel zooms
+  void (*setEnemyRandom)(int){};  // optional (cores since 12.11.2026, 0.99.12): the cheat "Random enemies"
   void (*swipe)(int){};           // optional (cores since 22.10.2026): a swipe across it
   void (*slash)(float){};         // optional (cores since 22.10.2026): the knife by a swipe
   int (*instant)(int, Re4InstantInfo *){};
@@ -465,6 +468,8 @@ void loadCore(JNIEnv *env) {
   api.setHudLayout = reinterpret_cast<void (*)(int, int, int)>(dlsym(api.main, "re4_core_set_hud_layout"));
   api.touch = reinterpret_cast<void (*)(float, float)>(dlsym(api.main, "re4_core_touch"));
   api.aimTurn = reinterpret_cast<void (*)(float, float)>(dlsym(api.main, "re4_core_aim_turn"));
+  api.zoom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_zoom"));
+  api.setEnemyRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_enemy_random"));
   api.swipe = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_swipe"));
   api.slash = reinterpret_cast<void (*)(float)>(dlsym(api.main, "re4_core_slash"));
   api.instant = reinterpret_cast<int (*)(int, Re4InstantInfo *)>(dlsym(api.main, "re4_core_instant"));
@@ -688,6 +693,14 @@ std::atomic<int> optFlares{0};    // the menu's lens flares: 0 off, 1 lens flare
 std::atomic<int> optCrt{0};       // the menu's CRT (CoreBridge.setCrt: 0 off, 1 light, 2 strong; or RE4_GX_CRT)
 std::atomic<int> optColour{0};    // the menu's colour (CoreBridge.setColour: mode * 4 + level; or RE4_GX_COLOUR=M,L)
 std::atomic<int> optPsx{0};       // the menu's PSone demake (CoreBridge.setPsx; or RE4_GX_PSX=1)
+// HD textures of the player's pack (CoreBridge.setTexturePack, port/docs/textur-lader-plan.md): the open pack (null:
+// off), its first level (1: "Sharpness: Half"), the replacements' budget; what the renderer did with it (texturePackUse)
+std::mutex texPackLock;
+std::shared_ptr<re4gx::TexPack> texPack;
+unsigned texPackLevel = 0;
+std::size_t texPackBudget = 256u << 20;
+std::atomic<unsigned> texPackReplaced{0}, texPackLooked{0};
+std::atomic<std::uint64_t> texPackBytes{0};
 std::atomic<int> optTvFilter{0};  // the menu's original TV filter (CoreBridge.setTvFilter; or RE4_GX_TV_FILTER=1)
 std::atomic<int> optSmooth{0};  // the menu's 60 FPS from in-between pictures (CoreBridge.setSmooth)
 std::atomic<int> optMerge{0};   // the menu's merged draw calls (CoreBridge.setMerge; or RE4_GX_MERGE=1)
@@ -698,15 +711,18 @@ std::atomic<long long> picturesMade{0};
 // latest, the period smoothed, a late callback not counted) and the render thread's record of the new pictures
 std::atomic<long long> displayVsyncAt{0}, displayVsyncPeriod{0};
 re4gx::PictureCadence pictureCadence;
+// 0.99.12: a steady rhythm at 30 pictures a second (picture_cadence.h PictureHold)
+re4gx::PictureHold pictureHold;
 // a new picture drawn at this refresh: noted at its vsync, every 10 s a line for the log
 void NotePicture() {
   const long long now = std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::steady_clock::now().time_since_epoch())
                             .count();
   const long long at = displayVsyncAt.load(), period = displayVsyncPeriod.load();
+  const long long vsync = re4gx::PictureCadence::Snap(now, at, period);
+  pictureHold.Shown(vsync);
   std::string line;
-  if (pictureCadence.Note(re4gx::PictureCadence::Snap(now, at, period), period, period > 0 ? 1e9 / period : 0.0,
-                          &line))
+  if (pictureCadence.Note(vsync, period, period > 0 ? 1e9 / period : 0.0, &line))
     LOG("%s", line.c_str());
 }
 // 60 FPS (experimental): the chunk run last, kept for the in-between picture after it (its
@@ -795,6 +811,8 @@ std::atomic<int> optCap30{0}, optCap60{0};
 struct LevelBench {
   std::atomic<int> ask{0};    // 1 start, 2 cancel, 3 end the check (mode 1) (CoreBridge)
   std::atomic<int> mode{0}, top{8}, cpuSign{0};
+  // 0.99.12: the core thread's processor time a game picture at the 30 pass's result, % of 33.37 ms (-1 not known)
+  std::atomic<int> cpuLoad{-1};
   std::atomic<double> warmup{0.0};
   // mode 1: the seconds since the app's last read: count, game pictures, pictures shown, weak seconds (game below 27,
   // with 60 FPS shown below 54), the level (halves) summed
@@ -811,6 +829,8 @@ struct LevelBench {
   std::chrono::steady_clock::time_point since, start, secondAt;
   unsigned long long chunks = 0, chunksAt = 0, shownAt = 0;
   unsigned droppedAt = 0, polls = 0;
+  // the core thread's processor time of the chunks (Re4GxChunk::coreCpuUs, cores since 0.99.12), and their count
+  unsigned long long cpuUs = 0, cpuUsAt = 0, cpuChunks = 0, cpuChunksAt = 0;
 };
 LevelBench levelBench;
 constexpr double kBenchLimit = 360.0;  // seconds for the whole benchmark at most (the way there and back included)
@@ -1610,17 +1630,22 @@ void levelBenchResults(std::chrono::steady_clock::time_point now) {
   b.res60 = s.Result(1);
   b.held = (s.Held(0) ? 1 : 0) | (s.Held(1) ? 2 : 0);
   b.cpuSign = s.CpuSign() ? 1 : 0;
+  b.cpuLoad = s.CpuLoad();
   api.cheatAction(22);
   b.phase = 3;
   b.since = now;
-  LOG("benchmark: result %s with 30 pictures a second (%s), %s with 60 (%s)%s", re4gx::BenchSteps::Name(s.Result(0)).c_str(),
+  char load[96] = "";
+  if (s.CpuLoad() >= 0)
+    std::snprintf(load, sizeof(load), "; the game's thread needs %d %% of a picture's time", s.CpuLoad());
+  LOG("benchmark: result %s with 30 pictures a second (%s), %s with 60 (%s)%s%s", re4gx::BenchSteps::Name(s.Result(0)).c_str(),
       s.Held(0) ? "stable" : "not stable even there", re4gx::BenchSteps::Name(s.Result(1)).c_str(),
       s.Held(1) ? "stable" : "not stable even there",
-      s.CpuSign() ? "; lower levels hardly helped: the processor holds it back" : "");
+      s.CpuSign() ? "; lower levels hardly helped: the processor holds it back" : "", load);
 }
 
-// The benchmark's next step, at every refresh (`chunk`: a real chunk of the game ran in it).
-void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
+// The benchmark's next step, at every refresh (`chunk`: a real chunk of the game ran in it; `cpuUs`: the core thread's
+// processor time for it, 0 not known).
+void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk, unsigned cpuUs = 0) {
   LevelBench &b = levelBench;
   const int ask = b.ask.exchange(0);
   auto finish = [&](int phase) {
@@ -1648,6 +1673,8 @@ void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
     b.level = 0;
     b.res30 = b.res60 = b.rate10 = b.held = 0;
     b.chunks = 0;
+    b.cpuUs = b.cpuUsAt = b.cpuChunks = b.cpuChunksAt = 0;
+    b.cpuLoad = -1;
     b.polls = 0;
     b.failed = false;
     b.touched = false;
@@ -1667,7 +1694,13 @@ void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
     return;
   }
   if (!b.active) return;
-  if (chunk) b.chunks++;
+  if (chunk) {
+    b.chunks++;
+    if (cpuUs) {
+      b.cpuUs += cpuUs;
+      b.cpuChunks++;
+    }
+  }
   if (ask == 2 && b.phase.load() != 6 && b.phase.load() != 3) {
     goBack("cancelled");
     return;
@@ -1701,6 +1734,8 @@ void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
       b.phase = 2;
       b.secondAt = now;
       b.chunksAt = b.chunks;
+      b.cpuUsAt = b.cpuUs;
+      b.cpuChunksAt = b.cpuChunks;
       b.shownAt = picturesMade.load();
       b.droppedAt = gxBetweenDropped;
       LOG("benchmark: at the place; the check counts the seconds");
@@ -1713,6 +1748,8 @@ void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
       b.phase = 2;
       b.secondAt = now;
       b.chunksAt = b.chunks;
+      b.cpuUsAt = b.cpuUs;
+      b.cpuChunksAt = b.cpuChunks;
       b.shownAt = picturesMade.load();
       b.droppedAt = gxBetweenDropped;
       LOG("benchmark: at the place; the 30 FPS pass from %s after %.0f s warm-up",
@@ -1734,6 +1771,12 @@ void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
     const int c = static_cast<int>(std::lround((b.chunks - b.chunksAt) / sec));
     const int sh = static_cast<int>(std::lround((picturesMade.load() - b.shownAt) / sec));
     const unsigned dropped = gxBetweenDropped - b.droppedAt;
+    // the core thread's processor time a game picture in this second (ms; negative: an older core, not known)
+    const unsigned long long cpuChunks = b.cpuChunks - b.cpuChunksAt;
+    const double cpuMs = cpuChunks ? static_cast<double>(b.cpuUs - b.cpuUsAt) / 1000.0 / static_cast<double>(cpuChunks)
+                                   : -1.0;
+    b.cpuUsAt = b.cpuUs;
+    b.cpuChunksAt = b.cpuChunks;
     b.chunksAt = b.chunks;
     b.shownAt = picturesMade.load();
     b.droppedAt = gxBetweenDropped;
@@ -1752,7 +1795,7 @@ void levelBenchTick(std::chrono::steady_clock::time_point now, bool chunk) {
     }
     std::string line;
     const re4gx::BenchSteps::Step step =
-        b.steps.Second(std::chrono::duration<double>(now - b.start).count(), c, sh, dropped, &line);
+        b.steps.Second(std::chrono::duration<double>(now - b.start).count(), c, sh, dropped, &line, cpuMs);
     b.rate10 = b.steps.Rate10();
     if (step != re4gx::BenchSteps::kNone) {
       LOG("%s", line.c_str());
@@ -2055,6 +2098,34 @@ bool drawGx() {
   gx->SetBandwidthSave(optVkBandwidth.load() != 0);
   static const bool psxEnv = getenv("RE4_GX_PSX") && *getenv("RE4_GX_PSX") == '1';
   gx->SetPsx(optPsx.load() != 0 || psxEnv);
+  {
+    std::lock_guard<std::mutex> lock(texPackLock);
+    gx->SetTexturePack(texPack, texPackLevel, texPackBudget);
+  }
+  if (gx->TakeTexturesDropped()) {
+    // another pack, level or the PSone demake: the textures went, the game core sends them all again
+    smoothDrop();
+    api.gxDetach();
+    LOG("HD textures: the game's textures are sent again");
+  }
+  {
+    const re4gx::GxStats &st = gx->Stats();
+    texPackReplaced.store(st.hdTextures);
+    texPackLooked.store(st.hdLookups);
+    texPackBytes.store(st.hdBytesNow);
+    // the error report and the device tests: what the HD textures cost so far, at most every 5 seconds
+    static unsigned loggedLookups = 0;
+    static std::chrono::steady_clock::time_point loggedAt;
+    const auto at = std::chrono::steady_clock::now();
+    if (st.hdLookups != loggedLookups && at - loggedAt > std::chrono::seconds(5)) {
+      loggedLookups = st.hdLookups;
+      loggedAt = at;
+      LOG("HD textures so far: %u of %u replaced, %u over the budget, %u not readable, %.1f MB on the GPU; key %.0f ms, "
+          "reading %.0f ms, GPU upload %.0f ms",
+          st.hdTextures, st.hdLookups, st.hdOverBudget, st.hdReadErrors, st.hdBytesNow / 1048576.0, st.hdKeyUs / 1000.0,
+          st.hdReadUs / 1000.0, st.hdUploadUs / 1000.0);
+    }
+  }
   static const int crtEnv = getenv("RE4_GX_CRT") ? atoi(getenv("RE4_GX_CRT")) : 0;
   gx->SetCrt(crtEnv > 0 ? crtEnv : optCrt.load());
   static int colourEnvMode = -1, colourEnvLevel = 1;
@@ -2100,9 +2171,27 @@ bool drawGx() {
   }
   const Re4GxChunk *deferred = smoothNext;
   smoothNext = nullptr;
+  const bool fresh = !deferred && !skipNext;  // (a chunk taken ahead or held already is never held again)
   const Re4GxChunk *chunk = deferred ? deferred : skipNext ? skipNext : api.gxAcquire();
   if (chunk == skipNext)
     skipNext = nullptr;
+  // A steady rhythm (0.99.12, a user's Helio G85 phone at 30 FPS on 60 Hz: 46 % of the new pictures two vsyncs apart,
+  // the others 1 and 3 in turn, felt as small frame drops): a new game picture that is ready one vsync after the last
+  // one (that one came late) waits for the next vsync, so every picture shows for two. Only at 30 game pictures a
+  // second without 60 FPS on a screen near 60 Hz, and only while the render thread keeps up (this refresh is the vsync
+  // right after the last new picture); never twice for a chunk (skipNext draws it at the next refresh).
+  if (chunk && fresh && !smoothOn) {
+    const long long nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+    const long long at = displayVsyncAt.load(), period = displayVsyncPeriod.load();
+    const double nowSec = std::chrono::duration<double>(now.time_since_epoch()).count();
+    if (!chunkRate.Sixty(nowSec) && pictureHold.Wait(re4gx::PictureCadence::Snap(nowNs, at, period), period)) {
+      skipNext = chunk;
+      chunk = nullptr;
+      if (pictureHold.held == 1 || pictureHold.held % 600 == 0)
+        LOG("picture pacing: %u new pictures held back one vsync so far (a steady two-vsync rhythm at 30 a second)",
+            pictureHold.held);
+    }
+  }
   // Behind: the core has finished the next chunk already. Then the in-between picture (60 FPS) is
   // left out first: it is a picture more for the screen, and drawing it while behind made the game
   // wait for the renderer (Retroid 26.10.2026: 17-19, with the stalls of the blended vertices 3-5
@@ -2191,6 +2280,8 @@ bool drawGx() {
         }
       }
     }
+    // the core thread's processor time for this chunk (the benchmark; the chunk may go back to the core below)
+    const unsigned chunkCpuUs = chunk->coreCpuUs;
     // the in-between picture first when the switch is on and nothing records this chunk's picture;
     // Run(chunk) then at the next refresh
     bool between = false;
@@ -2350,7 +2441,7 @@ bool drawGx() {
       bench.runMs += ms;
       bench.runCount++;
     }
-    levelBenchTick(now, !between);
+    levelBenchTick(now, !between, between ? 0u : chunkCpuUs);
     // the FPS display's level: the one the renderer really draws at (the benchmark's or Dynamic's steps, a new renderer)
     infoScale = gx->Halves();
     // Dynamic: another level from the next chunk on (not while an R3 series or the hit pictures are
@@ -2779,6 +2870,8 @@ void useCoreProcess(const std::string &why) {
   api.setHudLayout = re4ipc_set_hud_layout;
   api.touch = re4ipc_touch;
   api.aimTurn = re4ipc_aim_turn;
+  api.zoom = re4ipc_zoom;
+  api.setEnemyRandom = re4ipc_set_enemy_random;
   api.swipe = re4ipc_swipe;
   api.slash = re4ipc_slash;
   api.instant = re4ipc_instant;
@@ -3338,6 +3431,59 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setTvFilter(
   if (optTvFilter.exchange(want) != want) LOG("original TV filter: %s", want ? "on" : "off");
 }
 
+// HD textures (the menu, Cheats & Mods; port/docs/textur-lader-plan.md): the player's pack file (.c4tex; "" off), its
+// first level (Sharpness Half), the replacements' budget in MB. "" when it is open (or off), else why not.
+extern "C" JNIEXPORT jstring JNICALL Java_com_ast_re4decomp_CoreBridge_setTexturePack(JNIEnv *env, jclass, jstring path,
+                                                                                      jboolean half, jint budgetMb) {
+  std::string file;
+  if (path) {
+    const char *chars = env->GetStringUTFChars(path, nullptr);
+    if (chars) {
+      file = chars;
+      env->ReleaseStringUTFChars(path, chars);
+    }
+  }
+  std::string error;
+  std::shared_ptr<re4gx::TexPack> pack;
+  {
+    std::lock_guard<std::mutex> lock(texPackLock);
+    pack = texPack;
+  }
+  if (file.empty()) {
+    pack.reset();
+  } else if (!pack || pack->Path() != file) {
+    // opened here (the header, the index's checksum, every entry: a few hundred KB), handed to the renderer at its next
+    // picture; the old one stays open until the renderer let go of it
+    auto opened = std::make_shared<re4gx::TexPack>();
+    if (opened->Open(file, &error)) {
+      LOG("HD textures: %s, %zu images (%zu dropped), size %u, %s", opened->Info("name").c_str(), opened->Count(),
+          opened->Dropped(), opened->MaxSide(), file.c_str());
+      pack = std::move(opened);
+    } else {
+      LOG("HD textures: %s cannot be used: %s", file.c_str(), error.c_str());
+      pack.reset();
+    }
+  }
+  {
+    std::lock_guard<std::mutex> lock(texPackLock);
+    if (pack != texPack || texPackLevel != (half ? 1u : 0u))
+      LOG("HD textures: %s%s, budget %d MB", pack ? "on" : "off", pack && half ? ", sharpness half" : "", budgetMb);
+    texPack = std::move(pack);
+    texPackLevel = half ? 1u : 0u;
+    texPackBudget = static_cast<std::size_t>(std::max(16, std::min(4096, static_cast<int>(budgetMb)))) << 20;
+  }
+  return env->NewStringUTF(error.c_str());
+}
+
+// what the renderer did with the HD textures so far: replaced, looked up, the replacements' bytes on the GPU now
+extern "C" JNIEXPORT jlongArray JNICALL Java_com_ast_re4decomp_CoreBridge_texturePackUse(JNIEnv *env, jclass) {
+  const jlong v[3] = {static_cast<jlong>(texPackReplaced.load()), static_cast<jlong>(texPackLooked.load()),
+                      static_cast<jlong>(texPackBytes.load())};
+  jlongArray out = env->NewLongArray(3);
+  if (out) env->SetLongArrayRegion(out, 0, 3, v);
+  return out;
+}
+
 // PSone demake (the menu): the 3D as the PlayStation drew it and a 320-wide, 15-bit picture (GxRenderer::SetPsx).
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setPsx(JNIEnv *, jclass, jboolean on) {
   const int want = on ? 1 : 0;
@@ -3375,10 +3521,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_finishBenchm
 
 extern "C" JNIEXPORT jintArray JNICALL Java_com_ast_re4decomp_CoreBridge_benchmarkState(JNIEnv *env, jclass) {
   const LevelBench &b = levelBench;
-  const jint v[9] = {b.phase.load(), b.run.load(), b.level.load(), b.res30.load(), b.res60.load(), b.rate10.load(),
-                     b.held.load(), b.cpuSign.load(), b.mode.load()};
-  jintArray out = env->NewIntArray(9);
-  if (out) env->SetIntArrayRegion(out, 0, 9, v);
+  const jint v[10] = {b.phase.load(), b.run.load(), b.level.load(), b.res30.load(), b.res60.load(), b.rate10.load(),
+                      b.held.load(), b.cpuSign.load(), b.mode.load(), b.cpuLoad.load()};
+  jintArray out = env->NewIntArray(10);
+  if (out) env->SetIntArrayRegion(out, 0, 10, v);
   return out;
 }
 
@@ -3474,6 +3620,17 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setVertexRin
 // Swipe aiming (CoreInput.takeAimSwipe): the touch area's finger as angles (cores since 29.10.2026).
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_aimTurn(JNIEnv *, jclass, jfloat yaw, jfloat pitch) {
   if (api.aimTurn) api.aimTurn(yaw, pitch);
+}
+
+// The mouse wheel (CoreActivity): notches, up positive; the core zooms the scope and the binoculars by them (cores
+// since 12.11.2026, 0.99.12; older ones: nothing).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_zoom(JNIEnv *, jclass, jint notches) {
+  if (api.zoom) api.zoom(notches);
+}
+
+// The cheat "Random enemies" (CoreMenu): its seed, 0 off (cores since 12.11.2026, 0.99.12; older ones: nothing).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setEnemyRandom(JNIEnv *, jclass, jint seed) {
+  if (api.setEnemyRandom) api.setEnemyRandom(seed);
 }
 
 // Gyro aiming (GyroAim.java): the turn rates to the core (cores since 19.10.2026; older ones: none).

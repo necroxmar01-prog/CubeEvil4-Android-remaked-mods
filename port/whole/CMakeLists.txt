@@ -285,7 +285,8 @@ string(APPEND RE4_LINK_OBJECTS "runtime=$<TARGET_OBJECTS:re4_formats_obj>\n")
 # game's own frame skip (runtime/cpu_skip.cpp, patch 0227) and the free
 # movement / moving while aiming (runtime/free_move.cpp, patch 0900), the D-pad quick slots (runtime/quick_slots.cpp)
 # and Leon's outfit / the weapon on his back (runtime/wardrobe.cpp, patch 0902), Leon's melee moves (runtime/melee.cpp, patch 0904),
-# Ashley's pistol (runtime/ashley_gun.cpp, patch 0911).
+# Ashley's pistol (runtime/ashley_gun.cpp, patch 0911), the mouse wheel's zoom (runtime/wheel_zoom.cpp) and the
+# cheat "Random enemies" (runtime/enemy_random.cpp, patch 0231).
 add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge.cpp runtime/movie_status.cpp
     runtime/dof.cpp runtime/gyro.cpp runtime/menu_touch.cpp runtime/picture.cpp runtime/knife_swipe.cpp
     runtime/qte_touch.cpp runtime/instant_game.cpp runtime/game_language.cpp runtime/cheats.cpp
@@ -293,7 +294,7 @@ add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge
     runtime/sound_volume.cpp runtime/minimap.cpp runtime/laser_colour.cpp runtime/benchmark.cpp
     runtime/glow_check.cpp runtime/view_distance.cpp runtime/cpu_skip.cpp runtime/free_move.cpp
     runtime/quick_slots.cpp runtime/parry.cpp runtime/wardrobe.cpp runtime/melee.cpp runtime/ashley_gun.cpp
-    runtime/lock_on.cpp runtime/blink.cpp)
+    runtime/lock_on.cpp runtime/blink.cpp runtime/wheel_zoom.cpp runtime/enemy_random.cpp)
 target_link_libraries(re4_gamehooks_obj PRIVATE re4_game_flags)
 target_include_directories(re4_gamehooks_obj PRIVATE runtime)
 string(APPEND RE4_LINK_OBJECTS "main=$<TARGET_OBJECTS:re4_gamehooks_obj>\n")

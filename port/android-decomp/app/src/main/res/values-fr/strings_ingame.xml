@@ -112,8 +112,8 @@
     <string name="ingame_knife_speed">Vitesse de visée du couteau</string>
     <string name="ingame_motion">Commandes de mouvement</string>
     <string name="ingame_controller_section">Manette, clavier et souris</string>
-    <string name="ingame_aim_help">Inverser la verticale et Vitesse de visée\u00A0: pour viser avec le couteau et les armes au toucher ou à la manette, pas au gyroscope. Inverser la verticale change l’option du jeu lui-même.</string>
     <string name="ingame_knife_speed_help">Vitesse de visée du couteau\u00A0: la vitesse du stick pendant que le couteau est prêt, à part de la Vitesse de visée des armes. Tant que vous ne la réglez pas, le couteau suit la Vitesse de visée.</string>
+    <string name="ingame_aim_help">Inverser la verticale et Vitesse de visée\u00A0: pour viser avec le couteau et les armes au toucher ou à la manette, pas au gyroscope. Inverser la verticale vaut aussi pour la souris (visée et jumelles)\u00A0; sa vitesse est la sensibilité de la souris. Inverser la verticale change l’option du jeu lui-même.</string>
     <string name="ingame_update">Mettre à jour</string>
     <string name="ingame_up_to_date">À jour</string>
     <string name="ingame_update_page">La dernière version s\'ouvre sur GitHub\u00A0: téléchargez-y l\'APK et installez-le.</string>
@@ -205,7 +205,7 @@
     <string name="ingame_management_summary">Carte mémoire, disques, rapports et sources</string>
     <string name="ingame_audio">Audio</string>
     <string name="ingame_audio_summary">Musique et effets sonores</string>
-    <string name="ingame_cheats_summary">Santé, munitions, argent et jeux bonus</string>
+    <string name="ingame_cheats_summary">Général, armes, argent et textures</string>
     <string name="ingame_experimental">Expérimental</string>
     <string name="ingame_volume">Volume</string>
     <string name="ingame_music_volume">Musique</string>
@@ -269,7 +269,7 @@
     <string name="ingame_disc_device">Le jeu s’est arrêté à %1$s (disque %2$d) : la copie de ce fichier sur cet appareil est endommagée (elle a changé après l’importation). Importez de nouveau le disque %2$d depuis l’écran de démarrage. Vos sauvegardes sont conservées.</string>
     <string name="ingame_disc_read">Le jeu s’est arrêté à %1$s (disque %2$d) : le fichier est intact, mais sa lecture a échoué. Envoyez le rapport d’erreur, puis relancez le jeu.</string>
     <string name="ingame_disc_unknown">Le jeu s’est arrêté à %1$s (disque %2$d) : le fichier sur cet appareil est endommagé ou absent. Importez de nouveau le disque %2$d depuis l’écran de démarrage. Vos sauvegardes sont conservées.</string>
-    <string name="ingame_cheats">Triches</string>
+    <string name="ingame_cheats">Triches et mods</string>
     <string name="ingame_cheat_health">Santé infinie</string>
     <string name="ingame_cheat_ammo">Munitions infinies</string>
     <string name="ingame_cheat_onehit">Tué en un coup</string>
@@ -292,6 +292,8 @@
     <string name="ingame_cheat_qte">QTE automatiques</string>
     <string name="ingame_cheat_random_items">Objets aléatoires</string>
     <string name="ingame_cheat_random_items_help">Objets aléatoires : les objets posés dans les salles de l’histoire (munitions, herbes et autres soins, grenades, pesetas, trésors) sont redistribués dans chaque salle où vous entrez à partir de là, et une salle donne toujours les mêmes objets jusqu’à ce que vous désactiviez puis réactiviez l’option. Les clés, les armes, les documents et les autres objets de l’histoire restent tels quels : le jeu peut toujours être terminé. Ce que vous avez déjà ramassé reste ramassé ; les ennemis, tonneaux et caisses gardent leur propre butin. Pas dans Assignment Ada ni dans The Mercenaries.</string>
+    <string name="ingame_cheat_random_enemies">Ennemis aléatoires</string>
+    <string name="ingame_cheat_random_enemies_help">Ennemis aléatoires : dans les salles de l’histoire, les Ganados ordinaires se tiennent à d’autres endroits où se tenait un ennemi, et une salle peut avoir un ennemi de moins ou de plus ; une salle reste toujours la même jusqu’à ce que vous désactiviez puis réactiviez l’option. Les boss, le marchand, Ashley, Luis, les ennemis spéciaux, les vagues et les salles dont les événements comptent les ennemis restent tels quels : le jeu peut toujours être terminé. Les sauvegardes restent celles du jeu. À partir de la salle suivante ; pas dans Assignment Ada, The Mercenaries ni la partie d’Ashley.</string>
     <string name="ingame_cheat_extras">Débloquer les jeux bonus</string>
     <string name="ingame_cheat_extras_text">Assignment Ada et The Mercenaries sont débloqués (Professional aussi, comme après avoir fini le jeu). Le menu titre les affiche après un redémarrage. La progression depuis votre dernière sauvegarde est perdue.</string>
     <string name="ingame_cheat_extras_later">Débloqués : Assignment Ada et The Mercenaries apparaîtront dans le menu titre au prochain redémarrage.</string>
@@ -344,7 +346,7 @@
     <string name="ingame_map_hold">Maintenez la première touche …</string>
     <string name="ingame_map_press">Appuyez sur une touche …</string>
     <string name="ingame_map_keyboard">Clavier et souris</string>
-    <string name="ingame_mouse_help">La souris (Android 8 et plus) appartient au jeu pendant la partie : la déplacer tourne la caméra, en visant elle déplace la visée. Le menu de l’app (F1) libère le pointeur.</string>
+    <string name="ingame_mouse_help">La souris (Android 8 et plus) appartient au jeu pendant la partie : la déplacer tourne la caméra, en visant elle déplace la visée, aux jumelles le regard. Sa molette zoome avec la lunette et les jumelles (vers le haut : plus près). Le menu de l’app (F1) libère le pointeur.</string>
     <string name="ingame_mouse_sensitivity">Sensibilité de la souris</string>
     <string name="ingame_map_controller">Manette</string>
     <string name="ingame_map_device">Appareil</string>
@@ -382,8 +384,11 @@
     <string name="ingame_profile_help">Un profil règle la résolution, les 60 FPS, le saut d’images, l’anticrénelage, le FXAA, le filtrage des textures, les cœurs performants et le mode Potato pour cet appareil. Modifier l\'un d\'eux à la main passe en Perso ; Perso reste enregistré pendant que tu essaies un profil.</string>
     <string name="ingame_limit_gpu">la puce graphique</string>
     <string name="ingame_limit_cpu">le processeur</string>
+    <string name="ingame_limit_both">la puce graphique, le processeur proche de sa limite</string>
     <string name="ingame_limit_none">rien de notable</string>
     <string name="ingame_bench_welcome">Bienvenue dans CubeEvil4</string>
+    <string name="ingame_bench_redo">Mesurer à nouveau</string>
+    <string name="ingame_bench_redo_text">Nouveau\u00A0: le benchmark mesure maintenant aussi le processeur, pour une proposition mieux adaptée à cet appareil. Tes réglages restent tels quels tant que tu n\'acceptes pas la nouvelle proposition.</string>
     <string name="ingame_bench_text">L\'app mesure ce que cet appareil peut faire et propose les meilleurs réglages. Le jeu se rend pour cela au ponton du lac (pluie, eau, brouillard) et la caméra tourne autour du personnage. Cela prend environ 2 à 3 minutes ; le son est coupé. Ensuite, tu reviens là où tu étais. B / Retour annule.</string>
     <string name="ingame_bench_first_note">Ce sera proposé à nouveau au prochain démarrage.</string>
     <string name="ingame_bench_start">Lancer la mesure</string>
@@ -421,7 +426,6 @@
     <string name="ingame_shader_cache_help">Le jeu conserve les shaders qu\'il a créés, pour qu\'une scène ne saccade pas une seconde fois. Videz-le seulement si des erreurs graphiques apparaissent après une mise à jour : le jeu les recrée alors, et les premières scènes peuvent saccader.</string>
     <string name="ingame_shader_clear">Vider le cache des shaders</string>
     <string name="ingame_shader_clear_text">Le jeu redémarre et supprime les shaders créés. Il les recrée pendant la partie, les premières scènes peuvent donc saccader. La progression depuis la dernière sauvegarde est perdue.</string>
-    <string name="ingame_mods">Mods</string>
     <string name="ingame_mods_summary">Gameplay du remake, corps à corps, tenue et skins</string>
     <string name="ingame_remake_gameplay">Gameplay du remake</string>
     <string name="ingame_mod_packs">Packs de mods</string>
@@ -494,4 +498,34 @@
     <string name="ingame_cheat_weapon_max">Niveaux maximum</string>
     <string name="ingame_cheat_weapon_add">Ajouter</string>
     <string name="ingame_cheat_weapons_help">Armes : choisissez une arme, une grenade ou une pièce d\'arme de Leon et appuyez sur Ajouter. « Niveaux maximum » activé : l\'arme arrive entièrement améliorée (une arme que vous avez y est portée ; le lance-mines avec sa lunette) ; désactivé : telle que le marchand la vend. Seulement quand Leon joue, pas dans la mallette, la carte ou une vidéo.</string>
+    <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_hd_textures">Textures HD</string>
+    <string name="ingame_hd_import">Importer un pack de textures</string>
+    <string name="ingame_hd_cancel">Annuler l’import</string>
+    <string name="ingame_hd_sharpness">Netteté</string>
+    <string name="ingame_hd_full">Pleine</string>
+    <string name="ingame_hd_half">Moitié</string>
+    <string name="ingame_hd_delete">Supprimer le pack de textures</string>
+    <string name="ingame_hd_delete_yes">Supprimer</string>
+    <string name="ingame_hd_none">Textures HD : aucun pack de textures importé.</string>
+    <string name="ingame_hd_info">Textures HD : %1$s · %2$s images · %3$s · créé le %4$s</string>
+    <string name="ingame_hd_in_use">Utilisé maintenant : %1$s textures sur %2$s remplacées (%3$s).</string>
+    <string name="ingame_hd_importing">Import du pack de textures : %1$s sur %2$s…</string>
+    <string name="ingame_hd_imported">Pack de textures importé : %1$s images.</string>
+    <string name="ingame_hd_replace">Remplacer le pack de textures ?</string>
+    <string name="ingame_hd_replace_text">Le nouveau pack remplace « %1$s » dès qu’il est entièrement copié.</string>
+    <string name="ingame_hd_delete_text">Seul le pack de textures est supprimé. Vos disques, sauvegardes et cartes mémoire restent tels quels.</string>
+    <string name="ingame_hd_deleted">Pack de textures supprimé.</string>
+    <string name="ingame_hd_not_pack">Ce fichier n’est pas un pack de textures CubeEvil4 (.c4tex). Convertissez d’abord le pack avec CubeEvil4 Texture Packer (sur un PC ou avec son app Android).</string>
+    <string name="ingame_hd_other_version">Ce pack a été créé par une autre version de CubeEvil4 Texture Packer. Convertissez-le à nouveau avec la version actuelle.</string>
+    <string name="ingame_hd_no_space">Espace libre insuffisant : le pack a besoin de %1$s, %2$s sont libres.</string>
+    <string name="ingame_hd_incomplete">Le fichier est incomplet (la copie vers l’appareil a-t-elle été interrompue ?). Copiez-le à nouveau.</string>
+    <string name="ingame_hd_damaged">Le fichier est endommagé. Copiez-le à nouveau sur l’appareil ou convertissez-le à nouveau.</string>
+    <string name="ingame_hd_cancelled">Import annulé. Le pack de textures précédent reste en place.</string>
+    <string name="ingame_hd_read_failed">Impossible de lire le fichier : %1$s</string>
+    <string name="ingame_hd_help">Les textures HD remplacent les images du jeu par des images plus nettes issues d’un pack de textures au format Dolphin. CubeEvil4 ne contient aucune texture et ne renvoie vers aucune : utilisez uniquement des packs que vous avez obtenus vous-même et que vous avez le droit d’utiliser. Convertissez le pack avec CubeEvil4 Texture Packer (sur un PC ou avec son app Android) et importez ici le fichier .c4tex ; vous pouvez ensuite supprimer ce fichier. Le pack est rangé dans un dossier à part et ne modifie jamais vos disques, sauvegardes ou cartes mémoire ; vous pouvez le désactiver ou le supprimer à tout moment. La netteté Moitié demande moins de mémoire graphique sur les appareils modestes. Le filtre pixels rétro garde les textures d’origine du jeu.</string>
+    <string name="ingame_hd_import_from">Importer le pack de textures « %1$s » (%2$s) ?</string>
+    <string name="ingame_hd_import_busy">Un pack de textures est déjà en cours d’importation. Réessayez quand il sera terminé.</string>
+    <string name="ingame_hd_import_on">Les textures HD sont activées. Vous pouvez les désactiver ou supprimer le pack dans le menu de l’app (SELECT), sous Triches et mods.</string>
 </resources>

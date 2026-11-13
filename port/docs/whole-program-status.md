@@ -3,6 +3,415 @@
 Diese Datei ist das Gedächtnis zwischen den Sitzungen. Jede Sitzung liest sie
 zuerst und aktualisiert sie am Ende (siehe `CLAUDE.md`).
 
+## Branch `textures`: Lader für eigene HD-Texturpakete (12.11.2026)
+
+Wunsch des Projektinhabers (12.11.2026): ein Lader für vom Spieler selbst beschaffte HD-Texturpakete im Dolphin-Format,
+im Menüpunkt „Cheats“, der jetzt „Cheats & Mods“ heißt, dazu ein PC-Programm, das das Paket umwandelt und verkleinert.
+Eigener Meilenstein auf dem Branch `textures` (Basis 5f326f36, 0.99.12 per Merge nachgezogen bis 97e4fe8b); in welche
+Version er kommt, entscheidet der Inhaber später. Plan und Entscheidungen: `port/docs/textur-lader-plan.md`
+(Inhaber: nur eine Windows-`.exe`, Stufen 512/1024, bei schwarzem Bild warten, sonst im Hintergrund nachladen).
+
+- **T1 PC-Programm** (`port/tools/texpack/`, eigener Code, CC0): `CubeEvil4-TexturePacker.exe` (Visual Studio,
+  `build.ps1`, eine Datei ohne DLLs). DDS (BC1–BC5, unkomprimiert, liest nur die Mip-Stufe ab der Zielgröße) und PNG
+  (eigenes Inflate, alle Farbarten, Adam7), Mitchell-Verkleinerung mit Alpha-Gewichtung, Mipmaps (Abdeckung bei
+  „ganz oder gar nicht durchsichtig“ erhalten, `_arb` behält seine Stufen), ETC2/EAC-Umwandler (Einzel-, Differenz-,
+  Planar-Modus; T/H nur im Leser), Paketdatei `.c4tex` (`c4tex.h`, `port/docs/textur-paket-format.md`). Varianten des
+  Ordners `Extra` (HD Project: 5 Koffer, 3 Tastensätze) per Frage oder `-variant`. Ein Bild kann mit und ohne `_m` da
+  sein (216 Paare im HD Project, teils verschieden): beide werden behalten, die App nimmt das passende.
+  Geprüft: `texpack_tests` (816 Prüfungen, 270 PNG-Testbilder aus `make_png_fixtures.py`), `run_e2e.py` (21 Punkte:
+  Varianten, Doppel, Paket-Ordner unverändert, Ausgabe im Paket-Ordner verweigert, gleiche Eingabe gleiche Datei,
+  abgeschnittene/beschädigte Dateien), `etc2_gl_check` gegen Mesa (llvmpipe): alle 24.576 Blöcke aller Modi gleich.
+  Echtes Paket (5.927 Dateien, 11,8 GB): **512 → 701 MB in 4 min 47 s, 1024 → 2,34 GB in 16 min 22 s** (16 Threads),
+  5.916 Bilder, 11 übersprungen (4 Kopien „(1)“/„- Copy“, 7 Doppel), Qualität im Mittel 38,0 / 38,4 dB PSNR;
+  `-check` beider Dateien ohne Befund. Ergebnisse in `E:\Development\Android\builds\textures\`.
+- **T2/T3 Laden (GLES)**: `tex_pack.cpp` (Leser mit Prüfungen, XXH64, Dolphins Kennung inkl. Farbtabellen-Teil),
+  `GxCore::UploadHd` (Nachschlagen, ETC2 hochladen, Grenze `texPackBudget`, PSone-Modus behält die Originale),
+  Sampler verschieben ihre Stufengrenzen um `lodShift` (Spiel ohne Mipmaps: Ersatz bis zur Originalgröße).
+  `gx_chunk_render`: `RE4_TEX_PACK`, `_HALF`, `_MB`, `_LOG`, `_ONLY`, `_DUMP`. Geprüft am PC mit Debug-Dumps
+  (09912-Läufe): r100 41 von 88 Texturen ersetzt (5,6 MB), r101 21/37 (1,8 MB), r103 87/133 (11,6 MB);
+  Vorher/Nachher-Bilder in `builds\textures\pics\`. `gx_gl_check` 0 Fehler.
+  Befund r100 (Fahrt im Polizeiwagen): ein Baum-Schatten (IA4, `26d114511eeb3710`) liegt über dem Wageninneren; im
+  Original grob und kaum sichtbar, das Paket hat ihn scharf neu gemalt (gleiche Form, gleicher Mittelwert): so im
+  Paket, kein Fehler des Laders.
+- **T5 Vulkan**: ETC2-Bilder (`textureCompressionETC2` eingeschaltet, wo vorhanden), sonst ausgepackt als RGBA8
+  (lavapipe am PC: so geprüft, gleiches Bild wie GLES, 0 Validierungsfehler; 85,9 statt 11,6 MB). Der echte
+  ETC2-Weg unter Vulkan ist nur auf dem Gerät prüfbar.
+- **T6 App**: `TexturePacks.java` (Import über die Dateiauswahl in `<Datenordner>/textures/pack.c4tex`, Platzprüfung,
+  Kopie als `.part`, Prüfsummen, erst dann Tausch; Löschen nur dort; Grenze 256/512/768 MB nach Arbeitsspeicher,
+  192 MB bei 32 bit), `CoreBridge.setTexturePack`/`texturePackUse` (`core_mode.cpp`: Paket je Bild an den Renderer,
+  bei Wechsel `gxDetach`, damit der Kern alle Bilder neu schickt), Menü „Cheats & Mods“ → „Mods“ (Import/Abbrechen,
+  An/Aus, Schärfe Voll/Halb, Löschen, Zeile mit Paket und „gerade ersetzt“), 26 neue Texte in 11 Sprachen
+  (`check_translations.py` ohne Befund), README-Abschnitt und Legal-Punkt. `TexturePacksTest` 4/4,
+  `CoreMenuLayoutTest` 15/15.
+- **Startseite (Wunsch des Projektinhabers, 12.11.2026):** „Cheats & Mods“ und „Management“ wieder nebeneinander; der
+  längere Untertext mit den HD-Texturen hatte die Reihe auf dem Retroid umbrechen lassen (`MenuLayout.Buttons` richtet
+  sich nach dem breitesten Knopf). Untertext jetzt „Allgemein, Waffen, Geld und Texturen“ / „General, weapons, money
+  & textures“, in allen 11 Sprachen (Hindi mit „व“ statt „और“). `CoreMenuRowsTest` (echte Schriftbreiten): in allen
+  Sprachen und Schriftgrößen 100–150 % ist „Cheats & Mods“ nicht breiter als „Management“, die Reihe bricht also dort
+  um, wo sie es vorher tat; bei 320–1280 dp beide auf einer Linie, nichts abgeschnitten. Gegenprobe: mit dem alten
+  langen Untertext schlägt der Test an.
+- **Nie unter die Originalgröße, Stufe 256 (Projektinhaber, 12.11.2026: „Ja, plus Stufe 256“):** Der Packer (1.1)
+  verkleinerte jedes Bild auf die Stufe, auch unter das Originalbild des Spiels: im 512er-Paket 134 Einträge kleiner
+  als das Original (107 Originale über 512, davon 84 Vollbilder 640×360 → 512×288; dazu Bilder mit anderem
+  Seitenverhältnis), mit „Schärfe: Halb“ 955. Jetzt: `TargetFor` hält jede Richtung mindestens auf der Größe im
+  Dolphin-Namen (ein schon kleineres Paketbild bleibt, wie es ist; 1 Eintrag), „Half“ (`GxCore::UploadHd`) nimmt die
+  nächste Stufe nur, solange sie mindestens so groß ist. Neue Sparstufe 256 (Abfrage 1 = 256, 2 = 512 Vorgabe,
+  3 = 1024). Paket neu umgewandelt: **256 → 271 MB (2 min 13 s; 41 % der Bilder nicht schärfer als das Original, 866
+  über 256 gehalten), 512 → 716 MB (6 min 18 s; 133 Einträge größer als vorher, z. B. 640×360 statt 512×288),
+  1024 → 2,34 GB (16 min 31 s; nur 1 Eintrag größer als in 1.0, sonst gleich)**; `-check` ohne Befund. Die alten 1.0-Dateien bleiben lesbar, sind aber bei den großen
+  Bildern unschärfer: ersetzen. Geprüft: `run_e2e.py` 27 Punkte (640×360 bleibt, anderes Seitenverhältnis, kleineres
+  Paketbild, Stufe 256), `texpack_tests` 816; App mit „Half“ an Debug-Dumps (r100/r101/r103): kein Ersatzbild kleiner
+  als das Original, in r103 74 von 87 auf der halben Stufe, 13 bleiben voll; `gx_gl_check` 0 Fehler; App-Tests beider
+  Varianten je 120 grün (1 übersprungen: Bilder).
+- **BC7 und JPG im Packer (1.2; Projektinhaber, 12.11.2026: „Ja, nachrüsten“):** `bc7.cpp` (alle 8 Modi,
+  Partitions- und Ankertabellen) für DDS mit DX10-Kopf (DXGI 97–99), BC6H (94–96) mit Begründung abgelehnt (HDR, nicht
+  „billig“: eigene Gleitkomma-Modi, in Texturpaketen nicht üblich). `jpeg.cpp`: Baseline, erweitert sequentiell und
+  Progressive (auch Verfeinerungsdurchgänge), 8 bit, Grau/YCbCr/RGB (Adobe-Transform), beliebige Unterabtastung,
+  Restart-Marker; CMYK, 12 bit, arithmetisch, verlustfrei mit klarer Meldung. Namen und Ordner nehmen `.jpg`/`.jpeg`,
+  bei Doppeln gilt DDS vor PNG vor JPG. Geprüft: `make_bc7_jpeg_fixtures.py` (Pillow 12 als Bezug): 10 BC7-Dateien
+  (je Modus 1.024 Zufallsblöcke, gemischt, angeschnittene Blöcke, Mip-Stufen) exakt gleich; 82 JPG-Dateien (Grau,
+  4:4:4/4:2:2/4:2:0, Baseline/Progressive/optimiert, Qualität 30–85, Restart-Marker, Größen 1×1 bis 200×120) im Mittel
+  höchstens 0,16 Stufen von libjpeg-turbo entfernt; CMYK abgelehnt. `etc2_gl_check`: BC7 gegen Mesa (llvmpipe,
+  `GL_EXT_texture_compression_bptc`) alle 36.864 Zufallsblöcke gleich. `texpack_tests` 910, `run_e2e.py` 32 Punkte
+  (BC7, JPG, `.jpeg`, PNG vor JPG, BC6H abgelehnt). Das Paket des Inhabers (ohne BC7/JPG) ergibt mit 1.2 dieselben
+  Dateien wie mit 1.1: 256, 512 und 1024 je gleich groß, nur 2 Bytes im Info-Text anders (Version 1.1 → 1.2, Datum).
+- **Texture Packer für Android (Wunsch des Projektinhabers, 12.11.2026; Antworten 13.11.2026: ZIP direkt lesen, nur
+  ZIP und Ordner, Knopf „In CubeEvil4 importieren“): gebaut, Gerätetest offen.** Plan und Umsetzung:
+  `port/docs/textur-packer-android-plan.md`. PC-Programm 1.3: Bedienung und Umwandeln getrennt (`packer.h/.cpp`,
+  `texpack.cpp` nur Fenster), ZIP-Leser `zip.h/.cpp` (ZIP64, gespeichert/Deflate); das PC-Programm nimmt jetzt auch
+  ZIPs. Paket des Inhabers mit 1.3: 256/512 bis auf die Versionsnummer (1 Byte) gleich wie 1.2; als 11,9-GB-ZIP Byte
+  für Byte dieselbe Datei wie der Ordner. App `port/android-decomp/packer/` (`com.ast.cubeevil4.texturepacker`,
+  Debug-APK 1,2 MB): ZIP oder Ordner über die Dateiauswahl, Varianten, Stufe mit Größe und Dauer auf dem Gerät,
+  Speicher mit freiem Platz, Umwandeln als Vordergrunddienst in Download (unfertig unsichtbar, bei Abbruch gelöscht),
+  Bericht, „In CubeEvil4 importieren“. CubeEvil4: `TextureImportActivity` (fragt, importiert, schaltet ein), 3 Texte
+  und Hilfetext in 11 Sprachen. Geprüft: Packer 7 Tests, Lint ohne Fehler, beide `check_translations` ohne Befund,
+  `TextureImportActivityTest` 3/3, App-Tests beider Varianten je 123 ohne Fehler; nicht auf einem Gerät.
+  Nachtrag (Wunsch des Projektinhabers, 13.11.2026: größerer Text, Knöpfe je auf eine Bildschirmhälfte): Fließtext 17 statt
+  15 sp, Überschriften 19, Titel 24; helle Schrift #EDEDED auf #121212 (etwa 16:1), gesperrte Zeilen #8E8E8E (etwa 5,6:1);
+  Knopf-Paare ZIP/Ordner, Start/Abbruch, Bericht/Import nebeneinander, lange Texte zweizeilig. `PackerScreenTest`: 11
+  Sprachen bei 360 dp, Schrift 100 und 130 %, drei Zustände: nichts abgeschnitten, gekürzt oder außerhalb, Paare gleich
+  breit (Gegenprobe mit einzeiligen Knöpfen schlägt an). Bilder `builds\textures\pics\packer-*.png`.
+- **Noch offen:** T4 (Nachladen im Hintergrund, Gedächtnis je Raum; bisher lädt die App beim ersten Gebrauch sofort),
+  T7 (Test-APK, Retroid), Messungen auf dem Gerät, Packer-App auf dem Retroid (ZIP und Ordner, Dauer, Übergabe).
+
+## Version 0.99.12-rc: Zoom mit dem Mausrad, die Maus im Fernglas, Benchmark mit Prozessor, gleichmäßiger Bildtakt, Maus mit „Vertikal umkehren“, Benchmark nach dem Update neu, Zufällige Gegner, HD-Texturen, Texture Packer für Android (12.–13.11.2026, Branch `09912`)
+
+Version 0.99.12-rc (versionCode 114), Releasetext `port/android-decomp/docs/releases/v0.99.12-rc.md` („Changes since
+v0.99.11.“, Known issues aus 0.99.11 übernommen). Basis 45ac5a8e = master = 0.99.11-rc mit der README des Inhabers.
+Nächste freie Patchnummer weiter 0231 (0.99.12 braucht keinen Patch unter `src/`).
+
+### 1. Zoom mit dem Mausrad in Zielfernrohr und Fernglas (Wunsch des Projektinhabers)
+
+„Wenn jemand mit Tastatur und Maus spielt, soll mit dem Mausrad gezoomt werden können, wenn man ein Fernglas oder
+Zielfernrohr nutzt.“
+
+- **Wie das Spiel zoomt (`src/game/cam_extra.cpp`):** `CameraScope::move` (Gewehr, halbautomatisches Gewehr,
+  Raketenwerfer, alle Figuren; nur solange Zielen gehalten wird, `Key.on & 0x10`) und `CameraBinocular::move` (r101,
+  auch wieder nach dem Koffer) addieren je Spielbild `substickY * 0,001` auf ihren Zoom (0 … 1), C-Stick hoch zoomt
+  hinein; das Sichtfeld geht linear von 45° bis 9° (Zielfernrohr, mit dem aufgerüsteten Zielfernrohr bis 3°) bzw. 3°
+  (Fernglas). Sonst liest nur noch die Debug-Kamera den C-Stick so. Die Fernglas-Schnitte in r10b und r214 zeigen nur
+  den Rahmen des Fernglases über einer Ereigniskamera und zoomen nicht (dort ändert das Rad nichts, wie der C-Stick).
+- **Kern (`runtime/wheel_zoom.cpp`, neu, mit den Spiel-Flags in libre4_main; `re4_core_zoom`):** die App gibt jede
+  Rastung des Rads weiter (oben +1). Eine Rastung ist ein **Achtel des Zooms** (acht Rastungen von ganz weit bis ganz
+  nah): 125 Einheiten C-Stick, als kurzer Stoß gerade nach oben oder unten in `PADRead` an das Spiel gegeben
+  (`re4_pad_substick` in `runtime/pad.cpp`: 50, 50, 25 nach dem `PADClamp` des SDK, drei Spielbilder; das Spiel nullt
+  10 und weniger), so zoomt das Spiel mit seinem eigenen Code (Sichtfeld, Zoom-Leiste, die Unschärfe beim Zoomen) und
+  jede Rastung gleich weit. Rastungen stauen sich bis zum ganzen Zoom (8); eine Rastung in die andere Richtung wirft
+  die noch wartenden weg; am Ende des Zooms wird der Rest verworfen. Nur solange Zielfernrohr (`STA_SCOPE_CAMERA`,
+  `CamCtrl.r0` 0x10) oder Fernglas (`STA_BINOCULAR`, `r0` 0xC) im Spiel offen sind; sonst wird eine Rastung
+  verworfen und ändert nichts (kein C-Stick, keine Kamera). Weg zur App wie beim Wischen: `CoreBridge.zoom`,
+  `core_mode.cpp`, im eigenen Kern-Prozess Nachricht `kZoom` 43 (`core_ipc_client.cpp`, `host/coreproc.cpp`;
+  ältere Kerne: nichts). Prüfhilfe `RE4_TEST_WHEEL="N@F …"` (Bild F) bzw. `"N@vF"` (F Bilder nach dem Öffnen),
+  Protokollzeilen „wheel: the scope zoomed to 0.250 …“, „wheel: … dropped: neither the scope nor the binoculars up“.
+- **Dabei gefunden und behoben (Maus bewegen zoomte):** die Maus bewegte außer dem Ziel (`aimTurn`) immer auch den
+  C-Stick (`mouseLook`, die Kamera). Im Zielfernrohr und im Fernglas ist der C-Stick aber der Zoom: Maus hoch und runter
+  zoomte mit, im Fernglas tat sie sonst nichts. Jetzt meldet der Kern „Zielfernrohr oder Fernglas offen“ im Wort
+  `re4_core_rumble` als **Bit 6** (`pad.cpp` über `re4_pad_zoom_probe`, wie das Menü-Bit 4; Protokoll „pad: the scope
+  or the binoculars up …“), die App fragt es wie das Menü-Bit alle 16 ms ab (`CoreActivity.rumbleTick` →
+  `CoreInput.setZoomView`), und solange es gesetzt ist, gibt die Maus keinen C-Stick (`CoreInput.mouseLook`); das Ziel
+  im Zielfernrohr dreht sie weiter. Controller, Touch und Gyro unverändert (ihr C-Stick zoomt wie bisher).
+- **App:** `CoreActivity.capturedMouse` nimmt `ACTION_SCROLL` (eingefangene Maus), `onGenericMotionEvent` dasselbe,
+  solange das Spiel die Maus hat, sie aber nicht eingefangen ist (Android 7, vor dem ersten Klick).
+  `CoreInput.wheel`: ganze Rastungen aus `AXIS_VSCROLL`; Teile feiner Räder zählen zusammen, die andere Richtung wirft
+  den Rest weg. Protokoll „mouse wheel: 1 notch(es) up …“ (höchstens 20 Zeilen). Die Tastenbelegung ändert sich nicht.
+  Menü (Tastenbelegung → Tastatur & Maus): der Hilfetext unter „Mausempfindlichkeit“ nennt jetzt das Rad („Das Mausrad
+  zoomt mit Zielfernrohr und Fernglas (nach oben: näher heran).“), in allen 11 Sprachen (`ingame_mouse_help`).
+- **Geprüft am PC (i686 -O2, `~/p09912/scope.sh`, `bino.sh`, `series.sh`, Protokoll `~/p09912/series.log`, Bilder
+  `~/p09912/pics/`):** mit Debug-, EU- und US-Discs je Fernglas (r101, Leon an den Aussichtspunkt gesetzt, A) und
+  Zielfernrohr von Gewehr (9), halbautomatischem Gewehr (10) und Raketenwerfer (13) in r103: Rastungen 1, 1, 3, −2, 8, 2,
+  −8, −1 ergeben Zoom 0,125 / 0,250 / 0,625 / 0,375 / 1,000 / (am Ende verworfen) / 0,000 / (am Anfang verworfen),
+  Sichtfeld 40,5° … 9° bzw. 39,8° … 3°; zwei Rastungen vor dem Zielfernrohr (Leon geht) verworfen, der Zoom blieb 0.
+  Bilder: Zielfernrohr und Fernglas bei 0, 1, 2, 5 Rastungen und ganz nah. `CoreInputTests` (1843 Prüfungen, neu: kein
+  C-Stick der Maus bei offenem Zielfernrohr, der eines Controllers bleibt, Rastungen feiner Räder), `ActionMapTests`,
+  `CoreTouchTests`, `check_translations.py` ohne Befund, App-Tests beider Varianten (`testCoreDebugUnitTest`,
+  `testClassicDebugUnitTest`, JDK von Android Studio) je 112 grün (1 übersprungen: Bilder). `whole_build.sh` i686 -O2
+  alle Prüfungen grün; `whole_build_android.sh --abi all` (armeabi-v7a und arm64-v8a, 0 Fehler, Stubs wie erwartet)
+  und `gradlew externalNativeBuildCoreDebug` (`core_mode.cpp`, beide ABIs) ohne neue Warnung übersetzt.
+- **Nicht geprüft:** auf einem Gerät mit echter Maus (ob Android das Rad bei eingefangener Maus wirklich als
+  `ACTION_SCROLL` liefert, ist nur nach der Android-Quelle angenommen; das Protokoll zeigt es mit „mouse wheel:“), die
+  Abschaltung des Maus-C-Sticks im Spiel selbst (die App-Seite ist nur in `CoreInputTests` geprüft), JP-Discs, das
+  aufgerüstete Zielfernrohr des halbautomatischen Gewehrs (Typ 1, gleicher Code), die Minenwerfer mit Zielfernrohr.
+
+### 2. Die Maus bewegt den Blick im Fernglas (Entscheidung des Projektinhabers)
+
+Auf die Frage aus Abschnitt 1 („Soll die Maus im Fernglas auch den Blick bewegen?“) der Projektinhaber: „Ja, Maus
+bewegt Blick“; dazu: gleiche Regeln wie beim Zielen mit der Maus, das Rad zoomt weiter, Bewegen zoomt nicht, WASD und
+Pfeiltasten wie bisher, auch die Fernglas-Zwischensequenzen, falls das Spiel dort Umsehen erlaubt.
+
+- **Wie das Fernglas sich dreht (`CameraBinocular::move`):** mit dem Hauptstick (und dem Steuerkreuz),
+  `gain * stickX * −0,05°` um die Hochachse und `gain * stickY * 0,05°` hoch/runter je Spielbild (`gain` = 1 − 0,9 ×
+  Zoom; mit der Spiel-Option „Umkehren“ hoch/runter vertauscht), innerhalb der Grenzen des Raums (r101:
+  `SetBinocularRange` −0,060 … 0,265 hoch/runter, −0,253 … 0,149 seitlich). Die Maus kam bisher dort gar nicht an (die
+  Ziel-Drehung `turnAim` kennt nur Waffen, Messer und Harpune).
+- **Kern (`runtime/wheel_zoom.cpp` `re4_binocular_look`, `runtime/gyro.cpp`, `runtime/pad.cpp`):** die Mausbewegung
+  kommt wie beim Zielen als Winkel (`CoreBridge.aimTurn`, mit der Mausempfindlichkeit); `gyroHook` gibt die Summe eines
+  Spielbilds zuerst dem Fernglas. Ist es offen (`STA_BINOCULAR`, `CamCtrl.r0` 0xC), werden die Winkel zu Einheiten des
+  Hauptsticks für genau dieses Bild (`re4_pad_stick_add`, nach dem `PADClamp` gerechnet, zu WASD bzw. einem
+  Controller-Stick addiert), und das Spiel dreht mit seinem eigenen Code: gezoomt langsamer wie die Maus im
+  Zielfernrohr, an den Grenzen Schluss. Höchstens so weit wie der Stick am Anschlag je Bild (72 Einheiten = 3,6°, im
+  Achteck des `PADClamp`); mehr verfällt, Bruchteile einer Einheit werden mitgenommen. Hoch/runter wie beim Zielen mit
+  der Maus: die Spiel-Option „Umkehren“ (= „Invert vertical“ der App) wird ausgeglichen, denn auch beim Zielen folgt
+  die Maus ihr nicht (`turnAim` liest sie nicht). Gyro und Touch-Ziel wie bisher (das Gyro geht nicht über diesen Weg;
+  ein Wisch der Touch-Zielfläche käme nur mit gehaltenem L/R an, im Fernglas dreht er dann mit). Prüfhilfe
+  `RE4_TRACE_LOOK=1`: „look: frame … binoculars yaw … pitch …“ alle 10 Bilder.
+- **Fernglas-Zwischensequenzen:** r10b (Bootsfahrt, der Boss zeigt sich, Schnitte 1/3/7) und r214 (Katapulte, Schnitte
+  1–4) legen nur den Rahmen `IdBinocular` über die Kamera der Zwischensequenz; nichts im Spiel liest dort Stick oder
+  C-Stick, Umsehen und Zoomen gibt es dort auch mit dem Controller nicht. Darum nichts eingebaut.
+- **App:** keine neue Logik (die Maus schickt ihre Bewegung schon immer an den Kern, ihr C-Stick ist im Fernglas seit
+  Abschnitt 1 aus); Hilfetext `ingame_mouse_help` in 11 Sprachen: „… beim Zielen bewegt sie das Ziel, im Fernglas den
+  Blick.“
+- **Geprüft am PC (i686 -O2, Debug-Start r101 wie Abschnitt 1, Maus als `RE4_TEST_SWIPE`, `~/p09912/look.sh`):**
+  0,01 rad je Bild nach links für 10 Bilder: Blick 0,0995 rad nach links (die fehlenden 0,0005 sind der mitgenommene
+  Bruchteil); nach oben: 0,0995 hoch; voll gezoomt: 0,010 (ein Zehntel); sehr schnell (0,2 rad je Bild): 3,6° je Bild,
+  Stopp an der linken Grenze (+0,149); nach rechts und unten an den Grenzen (−0,253, −0,060); mit „Umkehren“
+  (`RE4_TEST_AIM=1`) weiter nach oben. Debug-, EU- und US-Discs: links und hoch zugleich je 0,0995 / 0,0593, Bilder vorher
+  und nachher (`~/p09912/pics/look-eu`, `look-us`). Gegenprobe Zielfernrohr (Gewehr, r103): die Maus dreht Leon wie
+  vorher (+0,100). Rad-Test (Abschnitt 1) unverändert. `whole_build.sh` i686 -O2 alle Prüfungen grün,
+  `whole_build_android.sh --abi all` 0 Fehler, `check_translations.py` ohne Befund.
+- **Nicht geprüft:** auf einem Gerät mit Maus; das Fernglas nach dem Koffer (dort mit `m_flag` 1, derselbe Stick-Weg);
+  WASD und Maus gleichzeitig (die Summe ist dann nur angenähert, der `PADClamp` begrenzt sie).
+- **„Invert vertical“ und die Maus:** zunächst folgte die Maus dem Schalter nirgends; entschieden und gebaut in
+  Abschnitt 4.
+
+
+### 3. Benchmark zu optimistisch auf einem Helio-G85-Handy, ungleicher Bildtakt (Nutzerbericht über den Projektinhaber)
+
+Bericht `E:\Development\Android\reports\09912-benchmark-too-good\cubeevil4-report-20261112-090052\` (Xiaomi
+25078RA3EL „dew“, Android 16, mt6768 Helio G85: 2 große A75 bis 2,0 GHz und 6 kleine bis 1,7 GHz, Mali-G52 MC2, 3,6 GB,
+Vulkan, 60,1 Hz, 0.99.11-rc): Vorschlag „Mittel“, damit kleine Ruckler.
+
+- **Aus dem Protokoll:** Benchmark 1 am Steg: 30 FPS 2,5× 17,0, 2× 24,6, 1,5× 30,1 „stable“; 60 FPS nicht einmal bei 1×;
+  Vorschlag Mittel (Dynamisch bis 1,5×, Frame-Skip Normal, Effekte, Schatten & Licht an), `benchCpu=false`. Benchmark 2
+  vorher/nachher je 30,1, 0 schwache Sekunden: angenommen. **Der Spiel-Thread** (Zeile „GX core“: Prozessorzeit je
+  Bild) brauchte am Steg **25,4–25,5 ms von 33,4 (76 %)**, im Dorf danach 18–24 ms (r100–r10e, r118); die großen
+  Kerne liefen meist mit 850–1000 MHz („cores now: 6 998/998“: das Handy erlaubte nur noch 1 GHz). Der Steg war für
+  den Prozessor also nicht leichter als das Dorf (die Annahme des Plans); der Benchmark sah es nur nicht, weil er
+  allein Bilder je Sekunde zählte. Vergleich Retroid am Steg: 8–9,5 ms (27 %). Andere Berichte ohne Steg-Messung
+  im Spiel: moto g15 14–23 ms, realme RMX3710 18 ms, Redmi 10 18 ms, Galaxy A24 10–11 ms, Mobicel (PowerVR) 34 ms.
+  **Bildtakt** („picture pacing“) schon am Steg bei 1,5×: 1 Takt 63-mal, 2 Takte 131-mal, 3 Takte 91-mal, 54 % neben
+  dem Median; Retroid an derselben Stelle 1: 13, 2: 275, 3: 13 (7–10 %). Die Bilder wurden mal kurz vor, mal kurz nach
+  einem Takt fertig (Spiel-Thread am Limit plus GPU), der Bildschirm zeigte sie 1 und 3 Takte im Wechsel: das
+  gespürte Ruckeln bei vollen 30 Bildern je Sekunde.
+- **(a) Prozessor messen (Kern + App):** `Re4GxChunk::coreCpuUs` neu (`runtime/re4_gx_frame.h`): `gx_decode.cpp`
+  `chunkBoundary` trägt die Prozessorzeit des Kern-Threads seit dem letzten Bildpaket ein (`re4cpu::ThreadNs`); im
+  eigenen Kernprozess über `GxInfo::coreCpuUs` (`re4_core_ipc.h` `kVersion` 5, `core_ipc.cpp fillInfo`,
+  `core_ipc_client.cpp`). `core_mode.cpp`: der Benchmark summiert sie je Sekunde (`LevelBench::cpuUs`), `BenchSteps`
+  (`gx_bench_steps.h`) mittelt je Stufe und nimmt beim Ende des 30er-Durchgangs die Stufe des Ergebnisses:
+  `CpuLoad()` in % von 33,37 ms; Logzeile je Stufe „…; the game's thread 25.4 ms of processor time a picture (76 %)“,
+  Ergebnis „… the game's thread needs 76 % of a picture's time“; `benchmarkState` hat 10 Werte. App: `BenchmarkFlow`
+  speichert `benchCpuLoad`, `PerfProfile`: **ab 75 % bremst der Prozessor** (`cpuWeak`, wie das alte Zeichen: Niedrig,
+  Frame-Skip Aggressiv, Sichtweite Kurz), **60–75 % nahe an der Grenze** (`cpuTight`): Empfehlung eine Stufe tiefer,
+  als der Grafikchip erlaubt; Popup 2 „Bremst: der Grafikchip, der Prozessor nahe an seiner Grenze“ (neuer Text
+  `ingame_limit_both`, 11 Sprachen).
+- **(b) Grenzfall:** über (a): das Handy hielt 30 FPS genau bei 1,5× (Schwelle für Mittel), sein Spiel-Thread lag bei
+  76 % → Niedrig; wäre es kühler (z. B. 70 %), gäbe „nahe an der Grenze“ ebenfalls Niedrig (Mittel − 1). Effekte bleiben
+  in Mittel und Hoch an: Schatten & Licht und Partikel sparen dem Spiel-Thread nur wenige Prozent (Potato-Messung
+  0.99.3: zusammen −6,5 %), sie entlasten den Grafikchip. Ein Grenzfall nur beim Grafikchip (Prozessor ruhig) bleibt
+  wie bisher: „Dynamisch“ fängt Schwankungen des Grafikchips auf, Benchmark 2 prüft den Vorschlag.
+- **(c) Frame-Skip:** bremst der Prozessor oder ist er nahe an der Grenze, setzt jedes Profil **Aggressiv** (Patch
+  0227, das Spiel lässt ein Bild aus, wenn es hinterherhängt), nicht Normal (hilft nur einem Grafikchip); kein 60 FPS
+  ab 60 % (jedes Bild müsste rechtzeitig kommen); Mittel/Hoch mit Sichtweite Mittel.
+- **(d) Bildtakt, gebaut (eindeutig im Protokoll und in der Simulation):** `picture_cadence.h` `PictureHold`,
+  `core_mode.cpp drawGx`: bei 30 Spielbildern je Sekunde ohne 60 FPS auf einem Bildschirm mit 54–66 Hz wartet ein
+  neues Spielbild, das schon einen Takt nach dem letzten fertig ist, einen Takt (`skipNext`, nie zweimal); nicht bei 60
+  Spielbildern je Sekunde (Titel, Filme: `chunkRate.Sixty`), nicht, wenn der Zeichen-Thread selbst einen Takt verpasst
+  hat (dann ist der Abstand schon 2). Nach einem späten Bild bleibt so der 2er-Takt, eine Sechzigstelsekunde später
+  (im Mittel +0,5 Takte Verzögerung), statt sofort aufzuholen. Logzeile „picture pacing: N new pictures held back one
+  vsync so far …“ beim ersten und je 600.
+- **Geprüft am PC:** `gx_gl_check` (WSL, `port/build/app-host-gl`) 0 Fehler, neu: `TestBenchSteps` mit den Zahlen des
+  Berichts (17 / 25 / 30 Bilder je Sekunde, 25,4 ms → 30 FPS bei 1,5×, 76 %, das alte Zeichen sah nichts; 9 ms →
+  27 %; ohne Angabe −1); `TestPictureHold`: Bildfertigstellung 1,6–2,4 Takte nach Bildbeginn (wie im Bericht) gibt
+  ohne Halten 1: 82, 2: 137, 3: 82, 54 % daneben (Bericht: 63/131/91, 54 %), mit Halten 2: 301, 0 % daneben, alle 330
+  Bilder gezeigt, 162 einen Takt gehalten; ruhiges Gerät (1,2–1,5): nichts gehalten; 120 Hz und unbekannter Takt:
+  nie. `PerfProfileTest.theProcessorAtThePlaceDecides` (das Handy: ohne Last Mittel wie bisher, 76 % Niedrig mit
+  Aggressiv und Sichtweite Kurz, „Mittel“ von Hand dann Aggressiv, Sichtweite Mittel, kein 60 FPS; 70 % Niedrig;
+  ein Hoch-Gerät mit 65 % Mittel; 50 % Mittel mit Normal; Retroid 27 % Hoch mit 60 FPS; die Einstellung gespeichert).
+  App-Tests beider Varianten je 113 grün (1 übersprungen: Bilder), `check_translations.py` ohne Befund (385 Texte),
+  `whole_build.sh` i686 -O2 alle Prüfungen grün (auch `re4_core_remote_test`: Bildpakete über den Kernprozess mit
+  `kVersion` 5), `whole_build_android.sh --abi all` 0 Fehler, `gradlew externalNativeBuildCoreDebug` übersetzt.
+  Plan `port/docs/leistungsprofil-plan.md` nachgetragen (Gerätezeile, Regel, Tabelle).
+- **Nicht geprüft:** auf einem Gerät (das Handy des Nutzers: neuer Benchmark, Vorschlag Niedrig, Bildtakt im Dorf;
+  der Retroid: dass das Halten dort nie greift oder nicht stört); ob die Prozessorzeit auf anderen Handys am Steg so
+  eindeutig trennt (außer dem Bericht nur Retroid-Werte vom Steg). Wer schon einen Benchmark hat, behält seinen
+  Vorschlag (ohne Messwert gilt die alte Regel); ein neuer Benchmark zeigt den neuen.
+
+### 4. „Vertikal umkehren“ auch für die Maus (Entscheidung des Projektinhabers)
+
+„Vertikal umkehren soll auch für die Maus gelten.“ (Antwort auf die offene Frage aus Abschnitt 2.)
+
+- **Vorher:** der Schalter „Invert vertical“ (Menü Steuerung, Zielen; er stellt die Option „Umkehren“ des Spiels,
+  `CFG_AIM_REVERSE`, Patch 0188) galt für das Zielen per Touch und Controller; die Maus drehte das Ziel immer gleich
+  (`turnAim` liest die Option nicht, das Fernglas hob sie seit Abschnitt 2 eigens auf).
+- **Jetzt (App):** `CoreInput.mouseAim` (statisch): die Mausbewegung als Drehung des Ziels, mit dem Schalter hoch und
+  runter vertauscht; `CoreActivity.capturedMouse` schickt sie mit `aimInvert` (dem Wert des Schalters, wie beim
+  Wischen der Touch-Zielfläche). Damit gilt die Umkehr für normales Zielen, das Zielfernrohr und das Fernglas gleich,
+  denn der Kern gibt in allen dreien die Richtung der App unverändert weiter. Die Kamera mit der Maus (ohne Zielen)
+  bleibt, wie sie ist: der Schalter gilt dem Zielen. **Waagerecht umkehren** gibt es nur beim Gyro (eigene Schalter),
+  nicht für Touch und Controller: für die Maus also nichts. Hilfetext `ingame_aim_help` (11 Sprachen) um einen Satz
+  ergänzt: „Vertikal umkehren gilt auch für die Maus (Zielen und Fernglas); ihr Tempo ist die Mausempfindlichkeit.“
+- **Geprüft am PC:** `CoreInputTests` (1846 Prüfungen, neu `mouseAim`: Maus nach unten zielt nach unten, mit dem
+  Schalter nach oben, Empfindlichkeit), `ActionMapTests`, `CoreTouchTests`; im Kern (i686 -O2, Debug-Discs r103/r101,
+  `RE4_TEST_SWIPE` wie eine Maus, `RE4_TEST_AIM` 0/1 für die Option des Spiels, `RE4_TRACE_LOOK` jetzt auch für das
+  Zielfernrohr): Gewehr-Zielfernrohr +0,1 rad nach oben mit und ohne „Umkehren“ gleich (+0,1026), TMP-Zielen m3r
+  −0,007 → 0,119 mit und ohne gleich, Fernglas mit „Umkehren“ und −0,1 rad: 0,0995 nach unten. Die Richtung bestimmt
+  also allein die App, die die Maus jetzt mit dem Schalter umdreht. App-Tests beider Varianten je 113 grün,
+  `check_translations.py` ohne Befund, `whole_build.sh` i686 -O2 alle Prüfungen grün.
+- **Nicht geprüft:** auf einem Gerät mit Maus; der Wechsel des Schalters im Spiel selbst (Optionen des Spiels) gilt für
+  die Maus wie für das Wischen erst, wenn die App ihn übernimmt (beim Öffnen des App-Menüs, `keepGameAimInvert`).
+
+### 5. Gegner-Randomizer: nur geprüft, Plan (Wunsch des Projektinhabers, nichts gebaut)
+
+„Prüfe ob auch ein ‚Randomizer' wie bei den Objekten auch für Gegner möglich wäre … Mit einer Menge +/- 10%. Für die
+Story oder Filmszenen wichtige Gegner müssen bleiben.“ Plan und Begründung: `port/docs/gegner-randomizer-plan.md`.
+Kurz: die Gegnerliste gilt je Kapitelabschnitt (256 Plätze), steht im Spielstand und merkt Tote nach Platznummer;
+Raumskripte sprechen Plätze und Arten direkt an (90 von 122 Raumskripten), höchstens 4 Gegnerarten je Raum, kein
+Merkmal „Boss“. Vorschlag Stufe 1: nur beim Raumbeginn erschaffene gewöhnliche Ganados, Stellen anderer Einträge
+desselben Raums, je Raum −1/0/+1 Gegner außerhalb der Räume, die Gegner zählen, Schutzliste aus den Skripten, die
+gespeicherte Liste unverändert. Andere Gegnerarten (a) und zufällige neue Positionen nicht. Gebaut: Abschnitt 7.
+
+### 6. Benchmark nach dem Update einmal neu (Entscheidung des Projektinhabers)
+
+„Ja nach einem Update einer älteren Version soll der Benchmark neu gemacht werden.“ (Frage aus Abschnitt 3.)
+
+- **Wann:** ein fertiger Benchmark ohne Prozessor-Anteil (`benchDate` gesetzt, `benchCpuLoad` fehlt, also 0.99.10 und
+  0.99.11) und kein anderer Benchmark ausstehend (`benchFirst` 0): `CoreActivity.perfFirstRun` setzt beim Start
+  `benchFirst` = 1 (wie beim allerersten Start) und `benchRedo` = 12 (`PerfProfile.redoDue`/`scheduleRedo`), so
+  kommt es einmal je Gerät. Danach derselbe Ablauf wie beim ersten Start: sobald das Titelmenü wartet, Popup 1,
+  Benchmark 1, Popup 2 mit Ignorieren/Übernehmen, beim Übernehmen Benchmark 2 und Popup 3; B/Zurück verschiebt auf
+  den nächsten Start, bis er einmal durchlief (`benchFirst` geht erst mit dem Ergebnis auf 0, dabei wird
+  `benchCpuLoad` gespeichert). Wer nie gemessen hat, bekommt wie bisher nur die Frage im Menü.
+- **Popup 1** (`BenchmarkFlow.offerFirst`, `PerfProfile.redo`): Titel „Neu messen“ statt „Willkommen“, darunter in Gold
+  „Neu: Der Benchmark misst jetzt auch den Prozessor, damit der Vorschlag besser zu diesem Gerät passt. Deine
+  Einstellungen bleiben, wie sie sind, solange du den neuen Vorschlag nicht annimmst.“ (`ingame_bench_redo`,
+  `ingame_bench_redo_text`, 11 Sprachen), dann der bekannte Text. Aufwärmen 5 s statt 15 s (die Grafikprogramme sind
+  schon gebaut). **„Ignorieren“** lässt bei der Wiederholung auch die Auflösung des Spielers stehen (beim ersten Start
+  stellt es wie bisher auf „Dynamisch“); nur die gemessenen Stufen für „Dynamisch“ werden neu.
+- **Geprüft (PC, Robolectric):** `BenchmarkRedoTest`: neue Installation, kein Benchmark, alter Benchmark (fällig,
+  einmal geplant, Auflösung unberührt, nicht doppelt), nach dem Lauf nie wieder, auch ohne Anteil nicht, ein Benchmark
+  von 0.99.12 (auch mit −1) nicht; Popup 1 mit Titel und Grund, B/Zurück lässt ihn fällig, beim ersten Start der
+  Willkommenstext ohne Grund. App-Tests beider Varianten je 115 grün, `check_translations.py` ohne Befund (387 Texte).
+- **Nicht geprüft:** auf einem Gerät (der ganze Ablauf nach einem echten Update von 0.99.11).
+
+### 7. Cheat „Zufällige Gegner“, Stufe 1 (Entscheidung des Projektinhabers, Patch 0231)
+
+„Ok den Randomizer Schalter wie von dir vorgeschlagen ‚Stufe 1' und als Button neben dem Item Randomizer.“
+
+- **Menü (Cheats → Spiel):** Knopf „Random enemies“ / „Zufällige Gegner“ neben „Random items“ (dieselbe Reihe), eigener
+  Seed (20 Bit, bei jedem Einschalten neu, `core_game` `enemySeed`, 0 aus), Hilfetext darunter; Texte
+  `ingame_cheat_random_enemies(_help)` in 11 Sprachen. Weg zum Kern: `CoreMenu.Host.enemyRandomChanged` →
+  `CoreBridge.setEnemyRandom` → `core_mode.cpp` → `re4_core_set_enemy_random` (im Kernprozess Nachricht
+  `kSetEnemyRandom` 44); beim Start schickt die App den gespeicherten Seed. Wirkt ab dem nächsten Raum.
+- **Kern (`runtime/enemy_random.cpp`, Patch 0231 in `em_set.cpp EmSetFromList`):** beim Raumbeginn ein Plan
+  (`re4_enemy_random_room`): die **gewöhnlichen Ganados** des Raums (ids 0x10–0x20 ohne Händler 0x18, `set` 0 „Normal“,
+  keine Kettensäge-, Händler-, Garrador- oder Gatling-Form) tauschen ihre Stellen untereinander und mit Stellen von
+  Ganado-Einträgen des Raums, die gerade nicht benutzt werden (spätere Wellen, andere Abschnitte); Art, Modell,
+  Verhalten, Leben, Wachradius bleiben. Je Raum −1, 0 oder +1: weggelassen wird einer, der gerade erscheint, und nur,
+  wenn ein anderer seiner Art im Raum ist (Ereignisse brauchen den Code der Art); eine Kopie kommt an eine Stelle,
+  die keiner nahm, sonst an die eines gerade abwesenden, nur von einer Art, die gerade lebt; ihr Tod steht an einem
+  leeren Eintrag der Liste (id 0). `EmSetWork` bekommt eine Kopie des Eintrags, **die Liste selbst wird nie
+  geschrieben** (ein weggelassener bleibt in der Liste ungesetzt und erscheint ohne Cheat wieder). Alles aus Seed,
+  Liste, Raum: gleicher Seed, gleiches Bild. Protokoll je Raum „enemies: random enemies in r111 (list 1, seed 4242): 8
+  ordinary Ganados, 8 spots: 6 placed elsewhere …“ bzw. „… leave r101 as it is (…)“.
+- **Unangetastet:** Adas Spiel, Mercenaries, Ashleys Teil, Stufe 4; Räume, deren Skript Gegner zählt oder fegt, einen
+  Boss hat oder Einträge über Variablen anspricht, und Räume ohne eigenes Skript (**63 von 108** Story-Skripten, darunter
+  r101, r104, r11c, r11d, r208, r224, r327 und alle Bossräume); in den übrigen 45 Räumen die Einträge, die das Skript
+  mit Nummer nennt, und die, auf deren Tod ein Bereich des Raums wartet (`waiting_type` 1: Türen, Gegenstände). Die
+  Schutzliste erzeugt `port/tools/enemy_random_table.py` aus `src/st1..st3/rXYZ.cpp` (`runtime/enemy_random_rooms.inc`,
+  `--check` meldet, wenn sie nicht mehr zu den Skripten passt).
+- **Geprüft am PC (i686 -O2, Raum-Rundgang `whole_r100_check.sh --rooms all`, je 126 Räume, Leon läuft, rennt,
+  schießt, drückt A; `RE4_ENEMY_RANDOM` = Seed, `RE4_ENEMY_RANDOM_CHECK=1` vergleicht die Liste vor und nach dem
+  Erschaffen; Skripte `~/p09912/tourseries.sh`, Vergleich `em_compare.py` im Notizordner):**
+  - Debug-Discs Seed 4242: **ALLES OK**; geändert wird in 10 Räumen beim Betreten (r103, r111, r113, r11a, r20c, r225,
+    r303, r304, r31d, r330; die übrigen offenen Räume haben beim Betreten keine gewöhnlichen Ganados), z. B. r113 8 von 8
+    an anderen Stellen, r330 Eintrag 0xa4 weggelassen. Listen-Prüfung in allen Räumen „the list's entries unchanged“.
+  - Derselbe Seed zweimal: alle 126 Räume mit genau denselben Gegnern an denselben Stellen. Ohne Cheat gegen mit:
+    120 Räume gleich (alle geschützten), nur die 6 mit veränderten Gegnern verschieden. Seed 777: andere Stellen, 6
+    Räume mit einem weggelassenen. EU- und US-Discs Seed 4242: dieselben Änderungen wie Debug, Listen unverändert, US
+    ALLES OK; EU 125 von 126 (r333 stürzt im Prüfprotokoll `state_trace.cpp playerLog` ab, **auch ohne Cheat und mit
+    dem Stand 0.99.11**: Altbefund, eigener Punkt).
+  - Türen und Ereignisse: im Rundgang starb Leon in r11a vor der Tür (die Gegner standen anders), mit Unsichtbarkeit
+    (`RE4_CHEATS=513`) werden alle 9 veränderten Räume mit und ohne Cheat gleich beurteilt, r11a → r11b in beiden.
+  - `CoreMenuLayoutTest` (Knopf neben „Random items“, eigener Seed gespeichert, Schalter unverändert, Hilfetext), App-Tests
+    beider Varianten je 115 grün, `check_translations.py` ohne Befund (389 Texte), `whole_build.sh` i686 -O2 alle
+    Prüfungen grün, `whole_build_android.sh --abi all` 0 Fehler.
+- **Nicht geprüft:** auf einem Gerät; ein echtes Durchspielen mit dem Cheat (der Rundgang startet jeden Raum frisch per
+  Debug-Start, Spielstände aus dem Spiel heraus nicht); „+1“ kam im Rundgang nicht vor (beim frischen Betreten ist keine
+  Stelle frei; nach Toten oder bei späteren Besuchen schon).
+
+### 8. HD-Textur-Lader übernommen (Wunsch des Projektinhabers)
+
+„Danach kannst du den HD-Textur-Import auch übernehmen in 0.99.12.“ `09912` auf `origin/textures` (132a02a4, enthält
+97e4fe8b) vorgespult, ohne Zusammenführen; Inhalt und Prüfungen siehe den Abschnitt „Branch `textures`“ oben und
+`port/docs/textur-lader-plan.md` (T1–T3, T5, T6 und die Startseite fertig; **T4** Nachladen im Hintergrund und **T7**
+Test-APK/Retroid bleiben auf `textures` und kommen später nach `09912`).
+
+- **Releasetext:** Punkt „HD textures“ unter New, „Cheats“ heißt „Cheats & Mods“ unter Changed, Known issue: beim ersten
+  Zeigen eines Raums mit HD-Texturen kann es kurz ruckeln (die App lädt sie bisher beim ersten Gebrauch sofort, T4
+  fehlt); unter Update der Hinweis, dass `CubeEvil4-TexturePacker.exe` als eigene Datei mit dem Release kommt
+  (Entscheidung des Projektinhabers, Plan Abschnitt 9). Keine Texturen und keine Links (Plan Abschnitt 8).
+- **Geprüft am PC mit dem vereinten Stand:** `whole_build.sh` i686 -O2 alle Prüfungen grün, `gx_gl_check` 0 Fehler,
+  `whole_build_android.sh --abi all` 0 Fehler (Stubs wie erwartet), App-Tests beider Varianten je 120 grün
+  (1 übersprungen: Bilder), `gradlew externalNativeBuildCoreDebug` übersetzt, `check_translations.py` ohne Befund
+  (415 Texte).
+- **Nachtrag (Wunsch des Projektinhabers „Ja, plus Stufe 256“):** `origin/textures` (1aa4c685: nie kleiner als das
+  Originalbild, Packer 1.1 mit Stufe 256, „Half“ nie unter das Original) in `09912` zusammengeführt (7ded5d52, ohne
+  Konflikte); Releasetext mit den Stufen 256/512/1024 und „no image gets smaller than the game's own“. Geprüft wie
+  oben mit dem neuen Stand (Zahlen im Abschnitt „Branch `textures`“).
+- **Nachtrag 2 (Wunsch des Projektinhabers „Ja, nachrüsten“):** `origin/textures` (be38fd0f: Texture Packer 1.2 liest
+  BC7-DDS und JPG, eigener Code `bc7.cpp`, `jpeg.cpp`) in `09912` zusammengeführt (a6eb6589, ohne Konflikte); nur das
+  PC-Programm, README und Doku ändern sich, App und Kern nicht (keine neue APK nötig). Releasetext: der Packer liest
+  DDS mit BC7, PNG und JPG; mit dem Release kommt die 1.2. Geprüft: `texpack_tests` 910 Prüfungen ohne Fehler (BC7
+  10 Dateien bitgleich, JPG 82 Dateien, größte mittlere Abweichung 0,16 gegen Pillow), `run_e2e.py` ohne Fehler
+  (Testbilder am PC frisch erzeugt), dazu die üblichen Prüfungen wie oben.
+- **Nicht geprüft:** auf einem Gerät (Import, Anzeige, Vulkan-ETC2, Speicher auf schwachen Geräten).
+
+### 9. Texture Packer für Android übernommen (Wunsch des Projektinhabers)
+
+„Der Android Textur Lader soll noch zu 0.99.12.“ `09912` auf `origin/textures` (25000c54) vorgespult, ohne
+Zusammenführen (textures enthielt 55ccbeb6 über 365699e4). Neu:
+- PC-Programm 1.3: Kern `packer.h/.cpp` vom Konsolenteil getrennt, liest auch eine ZIP-Datei (`zip.cpp`).
+- Modul `port/android-decomp/packer`: eigene App `com.ast.cubeevil4.texturepacker` 1.3 mit demselben Kern über JNI,
+  46 Texte in 11 Sprachen (`check_translations.py packer`).
+- CubeEvil4: `TextureImportActivity` für den Knopf „Import into CubeEvil4“ des Packers, 3 Texte und Hilfetext in
+  11 Sprachen.
+- Inhalt und Prüfungen des Textur-Laders: Abschnitt „Branch `textures`“ oben und `port/docs/textur-packer-android-plan.md`.
+
+Releasetext: Packer für Android unter New, die HD-Texturen-Zeile nennt ZIP oder Ordner und PC oder Android-App. Unter
+Update stehen beide Packer-Dateien 1.3 (`CubeEvil4-TexturePacker.exe`, `CubeEvil4-TexturePacker-1.3.apk`). Version
+unverändert 0.99.12-rc / 114; ob die APK als neue Version erscheint, entscheidet der Inhaber.
+
+- **Geprüft am PC mit dem Stand 25000c54:**
+  - PC-Packer 1.3 in WSL gebaut: `texpack_tests` 910 Prüfungen ohne Fehler, `run_e2e.py` 36 Punkte ohne Fehler.
+  - `whole_build.sh` i686 -O2 0 Fehler; `whole_build_android.sh --abi all` 0 Fehler (Stubs wie erwartet).
+  - `gx_gl_check` 0 Fehler.
+  - App-Tests: core 123 und classic 123 grün.
+  - Packer: 7 Tests grün, `lintDebug` ohne Fehler (14 Warnungen), `:packer:assembleDebug` gebaut.
+  - `check_translations.py` ohne Befund: 418 Texte in der App, 46 im Packer.
+  - `:app:assembleCoreDebug` (wie Android Studio „Run coreDebug“) mit den frisch gebauten Kern-Bibliotheken gebaut:
+    240 Bibliotheken (je 120 für 32 und 64 bit), `TextureImportActivity` enthalten.
+- **Nicht geprüft:** auf einem Gerät (beide APKs, der Knopf „Import into CubeEvil4“, Android 7–9 mit dem Speicherdialog,
+  SD-Karte, die Zeitschätzung des Packers).
+
 ## Version 0.99.11-rc: Menü-Fokus, Information HUD, Ada mit der TMP (12.11.2026, Branch `09911`)
 
 Version 0.99.11-rc (versionCode 113), Releasetext `port/android-decomp/docs/releases/v0.99.11-rc.md` („Changes since
@@ -15532,6 +15941,9 @@ die GameCube ließ sie überlaufen (schon vorher so, selten).
 | — `port/tools/skin_hair_fbx.py` `split_shared_normals`, `skin_fix_normals.py`, `skin_slim.py --back` | Skin-Nachträge (Gerätetest von DevJunior, 12.11.2026: „Pünktchen in der Gesichtstextur“, „die Augen rendern nicht gut“, „noch der blaue Punkt des Hemds hinten“, Haare mit Lücken). Ursache der Pünktchen: die s8-Normalen werden über das ganze Modell nach Richtung zusammengelegt, das Spiel häutet eine Normale aber mit dem Gewichtseintrag in ihrem eigenen vierten Byte (der erste Punkt, mit dem sie gezeichnet wird); im RE9-Kopf (Eintrag 2) trugen 982 Normalen Punkte verschiedener Gewichte (Gesicht, Kiefer, Augen): bewegte sich ein Knochen, drehte sich die Normale falsch (dunkle Flecken, die Augen ein Mosaik). `split_shared_normals` (am Ende von `write_weights`, also für alle neu gebauten Modelle: Köpfe, Haare, Kleidung, Waffen) gibt jeder Kombination Normale × Gewichtseintrag eine eigene Kopie hinter dem Normalenfeld; die Abschnitte danach rücken um ein Vielfaches von 32, die Kopf-Versätze mit; Punkte, Formen und Gewichte bleiben. `skin_fix_normals.py IN OUT` wendet es auf ein fertiges Archiv an (v5 → v6: pl08 Eintrag 2 1055, Eintrag 12 127; pl00 Eintrag 2 1053, Eintrag 6 49). `skin_slim.py --back ENTRY:Z:Y` wirft die Dreiecke weg, die ganz hinter z Z und unter y Y liegen (der Rücken des Hemds unter dem geschlossenen Mantel; `--hide`/`--inside` ließen Stücke stehen): pl00 `--back 6:-10:1520`, 409 von 1901. Haare: Alpha-Vergleich der Haarteile 40 → 18 (dichter). Geprüft: `re4_format_compare --data` beide Archive OK, keine Ecke mehr mit einer Normalen fremden Gewichts, Datenteil pl08 6 171 616 / pl00 5 829 696 Byte (Platz 6 291 456). Blinzeln nicht geändert (die Formen schließen das Lid nur 3–5 mm; erst nach dem Gerätetest der Normalen). Im Spiel nicht geprüft. |
 | 0174 `pl_wep.cpp` | Auto-Zielen: Startwinkel von der Waffenhand zum Zielpunkt im Maß von `PlWepAutoTrack` statt von den Füßen (Laser über dem Gegner); dazu `gyro.cpp`: Handzittern beendet die Zielhilfe nicht. Bericht des Projektinhabers 01.11.2026. Port-Patch |
 | 0228 `card.cpp` | Krausers Bogen in der Geschichte (0.99.10, Nutzerwunsch über den Projektinhaber, seit dem Retroid-Test bei jedem Raumstart statt Cheat-Knopf 10, `runtime/cheats.cpp` `giveBow`) und Weskers Schalldämpfer (0x3F, `giveSilencer`): `cCard::makeSaveData` lässt im Bild der Spielstand-Datei Bogen (0x52), Pfeile (0x72) und Schalldämpfer weg, macht aus der Pistole mit Schalldämpfer in der Hand die Pistole ohne und aus dem Bogen in der Hand leere Hände (belegter Platz, `weapon_no`/`weapon_type` des Spielblocks), denn ein Spielstand ist immer Leons und Leon hat keine Datei für Waffe 0x1C (`re4_story_char_card_items`). Das laufende Spiel und der Fortsetzungspunkt behalten den Bogen. Port-Funktion |
+| 0229 `ss_model.cpp` | Weskers Pistole im Koffer: `wep43Init(type)` statt immer mit Schalldämpfer (0.99.11, Abschnitt 4a) |
+| 0230 `pl_machine.cpp`, `pl_handgun.cpp`, `pl_rifle.cpp` | Adas Nachladen mit ihren eigenen Waffen auf jeder Stufe mit ihrer Bewegung der Stufe 0 (0.99.11, Abschnitt 1) |
+| 0231 `em_set.cpp` | Cheat „Random enemies“ (0.99.12, Entscheidung des Projektinhabers, `port/docs/gegner-randomizer-plan.md` Stufe 1): `EmSetFromList` fragt `runtime/enemy_random.cpp` beim Raumbeginn, ob ein Eintrag wie er ist, weggelassen oder als Kopie mit der Stelle eines anderen Eintrags des Raums erscheint, und am Ende, ob eine Kopie dazukommt (ihr Tod an einem leeren Eintrag); die gespeicherte Gegnerliste wird nie geschrieben. Port-Merkmal |
 
 Neuen Patch erzeugen: Datei aus `whole_prepare.rewrite()` kopieren, ändern,
 `port/tools/whole_make_patch.py NAME pfad/im/repo kopie` ausführen. Mehrere

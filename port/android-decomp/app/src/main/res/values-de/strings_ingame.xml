@@ -110,8 +110,8 @@
     <string name="ingame_knife_speed">Zielgeschwindigkeit Messer</string>
     <string name="ingame_motion">Bewegungssteuerung</string>
     <string name="ingame_controller_section">Controller, Tastatur und Maus</string>
-    <string name="ingame_aim_help">Vertikal umkehren und Zielgeschwindigkeit: für das Zielen mit Messer und Waffen per Touch oder Controller, nicht mit dem Gyro. Vertikal umkehren stellt die Option des Spiels selbst um.</string>
     <string name="ingame_knife_speed_help">Zielgeschwindigkeit Messer: wie schnell der Stick zielt, während das Messer bereit ist, getrennt von der Zielgeschwindigkeit der Waffen. Solange du sie nicht verstellst, folgt das Messer der Zielgeschwindigkeit.</string>
+    <string name="ingame_aim_help">Vertikal umkehren und Zielgeschwindigkeit: für das Zielen mit Messer und Waffen per Touch oder Controller, nicht mit dem Gyro. Vertikal umkehren gilt auch für die Maus (Zielen und Fernglas); ihr Tempo ist die Mausempfindlichkeit. Vertikal umkehren stellt die Option des Spiels selbst um.</string>
     <string name="ingame_update">Update</string>
     <string name="ingame_up_to_date">Aktuell</string>
     <string name="ingame_update_page">Das neueste Release öffnet sich auf GitHub: Lade dort die APK herunter und installiere sie.</string>
@@ -201,7 +201,7 @@
     <string name="ingame_management_summary">Speicherkarte, Discs, Berichte &amp; Quelle</string>
     <string name="ingame_audio">Audio</string>
     <string name="ingame_audio_summary">Musik &amp; Soundeffekte</string>
-    <string name="ingame_cheats_summary">Gesundheit, Munition, Geld &amp; Extraspiele</string>
+    <string name="ingame_cheats_summary">Allgemein, Waffen, Geld und Texturen</string>
     <string name="ingame_experimental">Experimentell</string>
     <string name="ingame_volume">Lautstärke</string>
     <string name="ingame_music_volume">Musik</string>
@@ -265,7 +265,7 @@
     <string name="ingame_disc_device">Das Spiel hält bei %1$s (Disc %2$d) an: Die Kopie dieser Datei auf diesem Gerät ist beschädigt (sie hat sich nach dem Import verändert). Importiere Disc %2$d auf dem Startbildschirm neu. Deine Spielstände bleiben erhalten.</string>
     <string name="ingame_disc_read">Das Spiel hält bei %1$s (Disc %2$d) an: Die Datei ist in Ordnung, aber das Lesen ist fehlgeschlagen. Bitte schicke den Fehlerbericht und starte das Spiel dann neu.</string>
     <string name="ingame_disc_unknown">Das Spiel hält bei %1$s (Disc %2$d) an: Die Datei auf diesem Gerät ist beschädigt oder fehlt. Importiere Disc %2$d auf dem Startbildschirm neu. Deine Spielstände bleiben erhalten.</string>
-    <string name="ingame_cheats">Cheats</string>
+    <string name="ingame_cheats">Cheats &amp; Mods</string>
     <string name="ingame_cheat_health">Unendlich Gesundheit</string>
     <string name="ingame_cheat_ammo">Unendlich Munition</string>
     <string name="ingame_cheat_onehit">One-Hit-Kill</string>
@@ -288,6 +288,8 @@
     <string name="ingame_cheat_qte">Automatische QTEs</string>
     <string name="ingame_cheat_random_items">Zufällige Gegenstände</string>
     <string name="ingame_cheat_random_items_help">Zufällige Gegenstände: Die Gegenstände, die in den Räumen der Story liegen (Munition, Kräuter und andere Heilmittel, Granaten, Peseten, Schätze), werden ab dann in jedem Raum, den du betrittst, neu verteilt; ein Raum gibt immer dieselben Gegenstände, bis du den Schalter aus- und wieder einschaltest. Schlüssel, Waffen, Dokumente und andere Story-Gegenstände bleiben, wie sie sind, das Spiel ist also immer schaffbar. Schon Aufgehobenes bleibt aufgehoben; Gegner, Fässer und Kisten behalten ihre eigene Beute. Nicht in Assignment Ada und The Mercenaries.</string>
+    <string name="ingame_cheat_random_enemies">Zufällige Gegner</string>
+    <string name="ingame_cheat_random_enemies_help">Zufällige Gegner: In den Räumen der Story stehen die gewöhnlichen Ganados an anderen Stellen, an denen ein Gegner stand, und ein Raum bekommt vielleicht einen Gegner weniger oder einen mehr; ein Raum sieht immer gleich aus, bis du den Schalter aus- und wieder einschaltest. Bosse, der Händler, Ashley, Luis, besondere Gegner, Wellen und Räume, deren Ereignisse Gegner zählen, bleiben, wie sie sind, das Spiel ist also immer schaffbar. Spielstände bleiben die des Spiels. Ab dem nächsten Raum; nicht in Assignment Ada, The Mercenaries und Ashleys Teil.</string>
     <string name="ingame_cheat_extras">Extra-Spiele freischalten</string>
     <string name="ingame_cheat_extras_text">Assignment Ada und The Mercenaries sind freigeschaltet (dazu Professional, wie nach dem Durchspielen). Das Titelmenü zeigt sie nach einem Neustart. Fortschritt seit dem letzten Speichern geht verloren.</string>
     <string name="ingame_cheat_extras_later">Freigeschaltet: Assignment Ada und The Mercenaries stehen nach dem nächsten Neustart im Titelmenü.</string>
@@ -340,7 +342,7 @@
     <string name="ingame_map_hold">Erste Taste halten …</string>
     <string name="ingame_map_press">Taste drücken …</string>
     <string name="ingame_map_keyboard">Tastatur &amp; Maus</string>
-    <string name="ingame_mouse_help">Die Maus (ab Android 8) gehört im laufenden Spiel dem Spiel: Bewegen dreht die Kamera, beim Zielen bewegt sie das Ziel. Das App-Menü (F1) gibt den Mauszeiger frei.</string>
+    <string name="ingame_mouse_help">Die Maus (ab Android 8) gehört im laufenden Spiel dem Spiel: Bewegen dreht die Kamera, beim Zielen bewegt sie das Ziel, im Fernglas den Blick. Das Mausrad zoomt mit Zielfernrohr und Fernglas (nach oben: näher heran). Das App-Menü (F1) gibt den Mauszeiger frei.</string>
     <string name="ingame_mouse_sensitivity">Maus-Empfindlichkeit</string>
     <string name="ingame_map_controller">Controller</string>
     <string name="ingame_map_device">Gerät</string>
@@ -378,8 +380,11 @@
     <string name="ingame_profile_help">Ein Profil stellt Auflösung, 60 FPS, Frame-Skip, Kantenglättung, FXAA, Texturfilter, Leistungskerne und den Potato-Modus für dieses Gerät ein. Änderst du eine davon von Hand, wird daraus „Benutzer“; „Benutzer“ bleibt gespeichert, während du ein Profil ausprobierst.</string>
     <string name="ingame_limit_gpu">der Grafikchip</string>
     <string name="ingame_limit_cpu">der Prozessor</string>
+    <string name="ingame_limit_both">der Grafikchip, der Prozessor nahe an seiner Grenze</string>
     <string name="ingame_limit_none">nichts Auffälliges</string>
     <string name="ingame_bench_welcome">Willkommen bei CubeEvil4</string>
+    <string name="ingame_bench_redo">Neu messen</string>
+    <string name="ingame_bench_redo_text">Neu: Der Benchmark misst jetzt auch den Prozessor, damit der Vorschlag besser zu diesem Gerät passt. Deine Einstellungen bleiben, wie sie sind, solange du den neuen Vorschlag nicht annimmst.</string>
     <string name="ingame_bench_text">Die App misst, was dieses Gerät schafft, und schlägt die besten Einstellungen vor. Das Spiel springt dafür an den Steg am See (Regen, Wasser, Nebel), die Kamera dreht sich um die Spielfigur. Das dauert etwa 2–3 Minuten, der Ton ist aus. Danach bist du wieder dort, wo du warst. B / Zurück bricht ab.</string>
     <string name="ingame_bench_first_note">Die Messung wird beim nächsten Start wieder angeboten.</string>
     <string name="ingame_bench_start">Messung starten</string>
@@ -417,7 +422,6 @@
     <string name="ingame_shader_cache_help">Das Spiel behält die gebauten Shader, damit eine Szene kein zweites Mal ruckelt. Leeren ist nur nötig, wenn nach einem Update Grafikfehler auftreten: Das Spiel baut sie dann neu, und die ersten Szenen können ruckeln.</string>
     <string name="ingame_shader_clear">Shader-Speicher leeren</string>
     <string name="ingame_shader_clear_text">Das Spiel startet neu und löscht die gebauten Shader. Es baut sie beim Spielen neu, die ersten Szenen können darum ruckeln. Fortschritt seit dem letzten Speichern geht verloren.</string>
-    <string name="ingame_mods">Mods</string>
     <string name="ingame_mods_summary">Remake-Gameplay, Nahkampf, Kleidung &amp; Skins</string>
     <string name="ingame_remake_gameplay">Remake-Gameplay</string>
     <string name="ingame_mod_packs">Mod-Pakete</string>
@@ -488,4 +492,34 @@
     <string name="ingame_cheat_weapon_max">Höchste Stufen</string>
     <string name="ingame_cheat_weapon_add">Hinzufügen</string>
     <string name="ingame_cheat_weapons_help">Waffen: wähle eine von Leons Waffen, Granaten oder Waffenteilen und tippe auf Hinzufügen. „Höchste Stufen“ an: die Waffe kommt voll aufgerüstet (eine Waffe, die du hast, wird darauf gehoben; der Minenwerfer mit Zielfernrohr); aus: so, wie der Händler sie verkauft. Nur während Leon spielt, nicht im Koffer, auf der Karte oder in einem Film.</string>
+    <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_hd_textures">HD-Texturen</string>
+    <string name="ingame_hd_import">Texturpaket importieren</string>
+    <string name="ingame_hd_cancel">Import abbrechen</string>
+    <string name="ingame_hd_sharpness">Schärfe</string>
+    <string name="ingame_hd_full">Voll</string>
+    <string name="ingame_hd_half">Halb</string>
+    <string name="ingame_hd_delete">Texturpaket löschen</string>
+    <string name="ingame_hd_delete_yes">Löschen</string>
+    <string name="ingame_hd_none">HD-Texturen: kein Texturpaket importiert.</string>
+    <string name="ingame_hd_info">HD-Texturen: %1$s · %2$s Bilder · %3$s · erstellt %4$s</string>
+    <string name="ingame_hd_in_use">Gerade in Gebrauch: %1$s von %2$s Texturen ersetzt (%3$s).</string>
+    <string name="ingame_hd_importing">Texturpaket wird importiert: %1$s von %2$s …</string>
+    <string name="ingame_hd_imported">Texturpaket importiert: %1$s Bilder.</string>
+    <string name="ingame_hd_replace">Texturpaket ersetzen?</string>
+    <string name="ingame_hd_replace_text">Das neue Paket ersetzt „%1$s“, sobald es vollständig kopiert ist.</string>
+    <string name="ingame_hd_delete_text">Gelöscht wird nur das Texturpaket. Deine Discs, Spielstände und Speicherkarten bleiben, wie sie sind.</string>
+    <string name="ingame_hd_deleted">Texturpaket gelöscht.</string>
+    <string name="ingame_hd_not_pack">Diese Datei ist kein CubeEvil4-Texturpaket (.c4tex). Wandle das Paket zuerst mit dem CubeEvil4 Texture Packer um (am PC oder mit seiner Android-App).</string>
+    <string name="ingame_hd_other_version">Dieses Paket stammt von einer anderen Version des CubeEvil4 Texture Packer. Wandle es mit der aktuellen neu um.</string>
+    <string name="ingame_hd_no_space">Nicht genug freier Speicher: Das Paket braucht %1$s, frei sind %2$s.</string>
+    <string name="ingame_hd_incomplete">Die Datei ist unvollständig (wurde das Kopieren aufs Gerät abgebrochen?). Kopiere sie noch einmal.</string>
+    <string name="ingame_hd_damaged">Die Datei ist beschädigt. Kopiere sie noch einmal aufs Gerät oder wandle sie neu um.</string>
+    <string name="ingame_hd_cancelled">Import abgebrochen. Das bisherige Texturpaket bleibt.</string>
+    <string name="ingame_hd_read_failed">Die Datei ließ sich nicht lesen: %1$s</string>
+    <string name="ingame_hd_help">HD-Texturen ersetzen die Bilder des Spiels durch schärfere aus einem Texturpaket im Dolphin-Format. CubeEvil4 enthält keine Texturen und verlinkt auf keine: Nutze nur Pakete, die du selbst beschafft hast und nutzen darfst. Wandle das Paket mit dem CubeEvil4 Texture Packer um (am PC oder mit seiner Android-App) und importiere die .c4tex-Datei hier; danach kannst du diese Datei löschen. Das Paket liegt in einem eigenen Ordner und verändert nie deine Discs, Spielstände oder Speicherkarten; du kannst es jederzeit ausschalten oder löschen. Schärfe „Halb“ braucht auf schwächeren Geräten weniger Grafikspeicher. Der Retro-Pixel-Filter behält die Texturen des Spiels.</string>
+    <string name="ingame_hd_import_from">Texturpaket „%1$s“ (%2$s) importieren?</string>
+    <string name="ingame_hd_import_busy">Es wird schon ein Texturpaket importiert. Versuch es noch einmal, wenn es fertig ist.</string>
+    <string name="ingame_hd_import_on">HD-Texturen sind an. Ausschalten oder das Paket löschen kannst du im App-Menü (SELECT) unter Cheats &amp; Mods.</string>
 </resources>

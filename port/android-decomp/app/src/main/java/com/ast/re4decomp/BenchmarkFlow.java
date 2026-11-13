@@ -68,9 +68,11 @@ final class BenchmarkFlow {
   private final Handler main = new Handler(Looper.getMainLooper());
   private int state = IDLE;
   private boolean first, offeredThisRun;
+  private boolean redo;  // this first start's benchmark is the redo of a benchmark of before 0.99.12 (PerfProfile.redo)
   // benchmark 1's outcome
   private int cap30, cap60;
   private boolean cpuSign;
+  private int cpuLoad = -1;  // the game's thread at the place, % of a picture's time (0.99.12; -1 not known)
   private PerfProfile.Device device;
   private int recommended;
   private int[] before, proposal, firstProposal;
@@ -103,9 +105,12 @@ final class BenchmarkFlow {
   void offerFirst() {
     offeredThisRun = true;
     state = FIRST;
+    redo = PerfProfile.redo(host.graphics());
     host.hold(true);
     LinearLayout box = box();
-    title(box, s(R.string.ingame_bench_welcome));
+    title(box, s(redo ? R.string.ingame_bench_redo : R.string.ingame_bench_welcome));
+    // the redo after an update (0.99.12): why, and that the settings stay
+    if (redo) paragraph(box, s(R.string.ingame_bench_redo_text), GOLD);
     paragraph(box, s(R.string.ingame_bench_text), INK);
     final AlertDialog[] d = new AlertDialog[1];
     Button go = button(s(R.string.ingame_bench_start), true, v -> { d[0].dismiss(); host.hold(false); start(true); });
@@ -114,7 +119,7 @@ final class BenchmarkFlow {
       // B / Back: later (at the next start)
       state = IDLE;
       host.hold(false);
-      Log.i(TAG, "benchmark: the first start's offer put off (B / Back)");
+      Log.i(TAG, "benchmark: the " + (redo ? "redo's" : "first start's") + " offer put off (B / Back)");
       message(s(R.string.ingame_bench_first_note));
     });
   }
@@ -125,6 +130,7 @@ final class BenchmarkFlow {
   void start(boolean firstStart) {
     if (running()) return;
     first = firstStart;
+    if (!firstStart) redo = false;
     device = host.device();
     before = PerfProfile.current(host.graphics());
     state = PASS1;
@@ -132,8 +138,10 @@ final class BenchmarkFlow {
     host.applyClean();
     int top = PerfProfile.benchTop(device);
     host.progress(s(R.string.ingame_benchmark_starting));
-    CoreBridge.startBenchmark(0, top, first ? WARMUP_FIRST : WARMUP);
-    Log.i(TAG, "benchmark 1: started (" + (first ? "the first start, " : "") + "the 30 FPS pass from " + top
+    // (the redo after an update: the programs are made already, the short warm-up)
+    CoreBridge.startBenchmark(0, top, first && !redo ? WARMUP_FIRST : WARMUP);
+    Log.i(TAG, "benchmark 1: started (" + (redo ? "the redo after an update, " : first ? "the first start, " : "")
+        + "the 30 FPS pass from " + top
         + " halves; " + PerfProfile.gpuName(device.gpu) + ", " + device.cores + " cores, " + device.ramMb + " MB, "
         + Math.round(device.hz) + " Hz)");
     main.removeCallbacks(poll);
@@ -166,9 +174,11 @@ final class BenchmarkFlow {
         cap30 = st[3];
         cap60 = st[4];
         cpuSign = st[7] != 0;
+        cpuLoad = st.length >= 10 ? st[9] : -1;
         SharedPreferences g = host.graphics();
         g.edit().putInt(CoreMenu.DYN_CAP_30, cap30).putInt(CoreMenu.DYN_CAP_60, cap60)
             .putLong(PerfProfile.BENCH_DATE, System.currentTimeMillis()).putBoolean(PerfProfile.BENCH_CPU, cpuSign)
+            .putInt(PerfProfile.BENCH_CPU_LOAD, cpuLoad)
             .putInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE).apply();
         CoreBridge.setDynamicCaps(cap30, cap60);
         host.mute(false);
@@ -180,7 +190,11 @@ final class BenchmarkFlow {
         firstProposal = proposal.clone();
         Log.i(TAG, "benchmark 1: " + PerfProfile.level(cap30) + " with 30 FPS" + ((st[6] & 1) == 0 ? " (not held)" : "")
             + ", " + PerfProfile.level(cap60) + " with 60 FPS" + ((st[6] & 2) == 0 ? " (not held)" : "")
-            + (cpuSign ? ", the processor holds it back" : "") + "; suggested: " + name(recommended) + " "
+            + (cpuSign ? ", the processor holds it back" : "")
+            + (cpuLoad >= 0 ? ", the game's thread " + cpuLoad + " % of a picture's time"
+                + (cpuLoad >= PerfProfile.CPU_BUSY ? " (the processor holds it back)"
+                    : cpuLoad >= PerfProfile.CPU_TIGHT ? " (the processor near its end)" : "") : "")
+            + "; suggested: " + name(recommended) + " "
             + describe(proposal));
         askApply((st[6] & 1) == 0, (st[6] & 2) == 0);
         return;
@@ -219,7 +233,7 @@ final class BenchmarkFlow {
     String ghz = String.format(Locale.getDefault(), "%.1f", d.maxMhz / 1000.0);
     String lines = s(R.string.ingame_bench_device_lines, PerfProfile.gpuName(d.gpu), d.cores, d.fastCores, ghz,
         Math.max(1, Math.round(d.ramMb / 1024f)), (int) Math.round(d.hz), PerfProfile.level(cap30),
-        PerfProfile.level(cap60), limit(d, new PerfProfile.Bench(cap30, cap60, cpuSign, true)));
+        PerfProfile.level(cap60), limit(d, new PerfProfile.Bench(cap30, cap60, cpuSign, true, cpuLoad)));
     TextView table = paragraph(box, lines, INK);
     table.setBackground(shape(BOX, BORDER, 6));
     table.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -233,12 +247,14 @@ final class BenchmarkFlow {
     paragraph(box, s(R.string.ingame_bench_apply_note), MUTED);
     final AlertDialog[] dlg = new AlertDialog[1];
     Runnable ignore = () -> {
-      // only the levels for "Dynamic" (stored already), the resolution Dynamic as the benchmark of before did
-      host.graphics().edit().putInt("scaleHalves", 0).apply();
+      // only the levels for "Dynamic" (stored already), the resolution Dynamic as the benchmark of before did; the
+      // redo after an update leaves the player's resolution as it is (0.99.12: the settings stay unless accepted)
+      if (!redo) host.graphics().edit().putInt("scaleHalves", 0).apply();
       host.applyOptions();
       host.hold(false);
       state = IDLE;
-      Log.i(TAG, "popup 2: ignored (only the levels for Dynamic)");
+      Log.i(TAG, "popup 2: ignored (" + (redo ? "the redo: the settings as they were" : "only the levels for Dynamic")
+          + ")");
     };
     Button no = button(s(R.string.ingame_bench_ignore), false, v -> { dlg[0].dismiss(); ignore.run(); });
     Button yes = button(s(R.string.ingame_bench_apply), true, v -> { dlg[0].dismiss(); host.hold(false); check(); });
@@ -297,7 +313,7 @@ final class BenchmarkFlow {
             settle(now, 3);
           } else if (stage == 4) {
             measureAfter = CoreBridge.benchmarkMeasure();
-            int room = PerfProfile.headroom(proposal, device, new PerfProfile.Bench(cap30, cap60, cpuSign, true));
+            int room = PerfProfile.headroom(proposal, device, new PerfProfile.Bench(cap30, cap60, cpuSign, true, cpuLoad));
             boolean holds = PerfProfile.holds(measureAfter, proposal[PerfProfile.SMOOTH] != 0, room);
             boolean keeps = PerfProfile.keepsUp(measureAfter, measureBefore, room);
             Log.i(TAG, "benchmark 2: with " + name(recommended) + " " + describe(proposal) + ": " + window(measureAfter)
@@ -370,7 +386,7 @@ final class BenchmarkFlow {
     List<String> extra = newlyOn(before, proposal);
     if (!extra.isEmpty()) paragraph(box, s(R.string.ingame_bench_extra, join(extra)), INK);
     if (stepNote != null) paragraph(box, stepNote, MUTED);
-    int room = PerfProfile.headroom(proposal, device, new PerfProfile.Bench(cap30, cap60, cpuSign, true));
+    int room = PerfProfile.headroom(proposal, device, new PerfProfile.Bench(cap30, cap60, cpuSign, true, cpuLoad));
     boolean holds = PerfProfile.holds(measureAfter, proposal[PerfProfile.SMOOTH] != 0, room);
     // as smooth as before, not its full rate: said; less smooth than before: said, and "Ignore" has the focus (the
     // Retroid's check 11.11.2026 offered a last step that did not hold as if it were fine)
@@ -414,6 +430,7 @@ final class BenchmarkFlow {
 
   static int limitText(PerfProfile.Device d, PerfProfile.Bench b) {
     if (PerfProfile.cpuWeak(d, b)) return R.string.ingame_limit_cpu;
+    if (PerfProfile.cpuTight(d, b)) return R.string.ingame_limit_both;
     if (b.cap30 >= 8 && b.cap60 >= 8) return R.string.ingame_limit_none;
     return R.string.ingame_limit_gpu;
   }

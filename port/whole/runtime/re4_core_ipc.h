@@ -32,7 +32,7 @@
 namespace re4ipc {
 
 const uint32_t kMagic = 0x43344552;  // "RE4C"
-const uint32_t kVersion = 4;
+const uint32_t kVersion = 5;  // 5: GxInfo::coreCpuUs (0.99.12)
 // the socket in the core process: file 3, inherited
 const int kSocketFd = 3;
 
@@ -81,6 +81,8 @@ enum MsgType : uint32_t {
     kSetHudLayout = 40,    // a = rows, b = stretch x 10000, c = flags (no reply; re4_core_set_hud_layout)
     kSetViewDistance = 41, // a = percent of the room's view (no reply; re4_core_set_view_distance, patch 0223)
     kSetCpuSkip = 42,      // a = on: the game's own frame skip (no reply; re4_core_set_cpu_skip, patch 0227)
+    kZoom = 43,            // a = notches of the mouse wheel, up positive (no reply; re4_core_zoom, 0.99.12)
+    kSetEnemyRandom = 44,  // a = the seed of "Random enemies", 0 off (no reply; re4_core_set_enemy_random, 0.99.12)
 };
 
 struct MsgHeader {
@@ -110,6 +112,7 @@ struct GxInfo {
     uint32_t opWords, vertexBytes, indexCount, blobBytes;
     uint32_t xfbAddress, xfbWidth, xfbHeight;
     uint32_t draws, vertexCount, textureBytes;
+    uint32_t coreCpuUs;  // Re4GxChunk::coreCpuUs (0.99.12)
 };
 
 struct alignas(64) GxSlot {

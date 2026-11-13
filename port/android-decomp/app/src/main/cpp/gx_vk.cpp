@@ -2047,13 +2047,16 @@ struct VkRenderer final : GxCore {
     }
     vkUpdateDescriptorSets(dev, n, w, 0, nullptr);
   }
-  VkSampler SamplerOf(std::uint32_t mode0, std::uint32_t mode1, unsigned levels, bool point) {
+  // lodShift: an HD replacement's (Bound::lodShift), in sixteenths in the key
+  VkSampler SamplerOf(std::uint32_t mode0, std::uint32_t mode1, unsigned levels, bool point, float lodShift = 0.0f) {
+    const std::uint64_t shift16 = static_cast<std::uint64_t>(std::lround(std::min(15.0f, lodShift) * 16.0f)) & 0xFF;
     const std::uint64_t k = (static_cast<std::uint64_t>(mode1 & 0xFFFF) << 32) | (mode0 & 0x1FF) |
-                            (static_cast<std::uint64_t>(levels > 1) << 48) | (static_cast<std::uint64_t>(point) << 49);
+                            (static_cast<std::uint64_t>(levels > 1) << 48) | (static_cast<std::uint64_t>(point) << 49) |
+                            shift16 << 50;
     auto it = samplers.find(k);
     if (it != samplers.end())
       return it->second;
-    const GxSamplerDesc d = SamplerFor(mode0, mode1, levels, point);
+    const GxSamplerDesc d = SamplerFor(mode0, mode1, levels, point, static_cast<float>(shift16) / 16.0f);
     auto sci = Make<VkSamplerCreateInfo>(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO);
     static const VkSamplerAddressMode wrap[3] = {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT,
                                                  VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT};
@@ -2714,7 +2717,7 @@ struct VkRenderer final : GxCore {
       views[m] = img->view;
       if (k.texMaps & (1u << m)) {
         const std::uint32_t mode0 = bp[(m < 4 ? 0x80 : 0xA0) + (m & 3)], mode1 = bp[(m < 4 ? 0x84 : 0xA4) + (m & 3)];
-        samp[m] = SamplerOf(mode0, mode1, bound[m].levels, (k.centroid & 2) != 0);
+        samp[m] = SamplerOf(mode0, mode1, bound[m].levels, (k.centroid & 2) != 0, bound[m].lodShift);
       } else {
         samp[m] = nearestClamp;
       }
@@ -2806,6 +2809,43 @@ struct VkRenderer final : GxCore {
     if (!Alloc(f.staging, bytes, 16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &b, &at))
       return;
     std::memcpy(f.staging[b].map + at, rgba, bytes);
+    VkBufferImageCopy region{};
+    region.bufferOffset = at;
+    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+    region.imageExtent = {w, h, 1};
+    vkCmdCopyBufferToImage(f.upload, f.staging[b].buffer, img->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+  }
+  // an HD replacement (GxCore::UploadHd): its ETC2 / EAC levels as they are; 0 without the device's ETC2 (the
+  // game's texture stays)
+  unsigned BeginCompressed(unsigned encoding, unsigned w, unsigned h, unsigned levels) override {
+    static const VkFormat formats[4] = {VK_FORMAT_UNDEFINED, VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK,
+                                        VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK, VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK};
+    if (!vk.enabled.textureCompressionETC2 || encoding < 1 || encoding > 3)
+      return 0;
+    Begin();
+    auto img = std::make_unique<Image>();
+    if (!MakeImage(*img, w, h, std::max(1u, levels), formats[encoding],
+                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT)) {
+      Destroy(*img);
+      return 0;
+    }
+    vkDestroyImageView(dev, img->view, nullptr);
+    img->view = VK_NULL_HANDLE;
+    Transition(F().upload, *img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    F().uploads = true;
+    return NewId(std::move(img));
+  }
+  void CompressedLevel(unsigned id, unsigned level, unsigned w, unsigned h, const std::uint8_t *data,
+                       std::size_t bytes) override {
+    Image *img = ImageOf(id);
+    if (!img || level >= img->levels)
+      return;
+    Frame &f = F();
+    std::size_t b = 0;
+    VkDeviceSize at = 0;
+    if (!Alloc(f.staging, bytes, 16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &b, &at))
+      return;
+    std::memcpy(f.staging[b].map + at, data, bytes);
     VkBufferImageCopy region{};
     region.bufferOffset = at;
     region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};

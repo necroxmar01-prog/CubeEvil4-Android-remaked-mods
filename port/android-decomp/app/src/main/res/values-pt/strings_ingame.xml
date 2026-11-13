@@ -111,8 +111,8 @@
     <string name="ingame_knife_speed">Velocidade da mira da faca</string>
     <string name="ingame_motion">Controles de movimento</string>
     <string name="ingame_controller_section">Controle, teclado e mouse</string>
-    <string name="ingame_aim_help">Inverter vertical e Velocidade da mira: para mirar com a faca e as armas por toque ou com um controle, não com o giroscópio. Inverter vertical muda a opção do próprio jogo.</string>
     <string name="ingame_knife_speed_help">Velocidade da mira da faca: a velocidade do analógico enquanto a faca está pronta, separada da Velocidade da mira das armas. Até você mudá-la, a faca segue a Velocidade da mira.</string>
+    <string name="ingame_aim_help">Inverter vertical e Velocidade da mira: para mirar com a faca e as armas por toque ou com um controle, não com o giroscópio. Inverter vertical também vale para o mouse (mira e binóculos); a velocidade dele é a sensibilidade do mouse. Inverter vertical muda a opção do próprio jogo.</string>
     <string name="ingame_update">Atualizar</string>
     <string name="ingame_up_to_date">Atualizado</string>
     <string name="ingame_update_page">A versão mais recente abre no GitHub: baixe o APK lá e instale-o.</string>
@@ -204,7 +204,7 @@
     <string name="ingame_management_summary">Cartão, discos, relatórios e código-fonte</string>
     <string name="ingame_audio">Áudio</string>
     <string name="ingame_audio_summary">Música e efeitos sonoros</string>
-    <string name="ingame_cheats_summary">Saúde, munição, dinheiro e jogos extras</string>
+    <string name="ingame_cheats_summary">Geral, armas, dinheiro e texturas</string>
     <string name="ingame_experimental">Experimental</string>
     <string name="ingame_volume">Volume</string>
     <string name="ingame_music_volume">Música</string>
@@ -268,7 +268,7 @@
     <string name="ingame_disc_device">O jogo parou em %1$s (disco %2$d): a cópia deste arquivo neste aparelho está danificada (mudou depois da importação). Importe o disco %2$d novamente na tela inicial. Seus jogos salvos são mantidos.</string>
     <string name="ingame_disc_read">O jogo parou em %1$s (disco %2$d): o arquivo está intacto, mas a leitura falhou. Envie o relatório de erros e depois inicie o jogo de novo.</string>
     <string name="ingame_disc_unknown">O jogo parou em %1$s (disco %2$d): o arquivo neste aparelho está danificado ou não existe. Importe o disco %2$d novamente na tela inicial. Seus jogos salvos são mantidos.</string>
-    <string name="ingame_cheats">Trapaças</string>
+    <string name="ingame_cheats">Trapaças e mods</string>
     <string name="ingame_cheat_health">Saúde infinita</string>
     <string name="ingame_cheat_ammo">Munição infinita</string>
     <string name="ingame_cheat_onehit">Morte com um golpe</string>
@@ -291,6 +291,8 @@
     <string name="ingame_cheat_qte">QTEs automáticos</string>
     <string name="ingame_cheat_random_items">Itens aleatórios</string>
     <string name="ingame_cheat_random_items_help">Itens aleatórios: os itens que ficam nas salas da história (munição, ervas e outros itens de cura, granadas, pesetas, tesouros) são redistribuídos em cada sala em que você entrar a partir daí, e uma sala sempre dá os mesmos itens até você desligar e ligar de novo. Chaves, armas, documentos e outros itens da história continuam como estão, então o jogo sempre pode ser terminado. O que você já pegou continua pego; inimigos, barris e caixas mantêm o próprio saque. Não no Assignment Ada nem no The Mercenaries.</string>
+    <string name="ingame_cheat_random_enemies">Inimigos aleatórios</string>
+    <string name="ingame_cheat_random_enemies_help">Inimigos aleatórios: nas salas da história os ganados comuns ficam em outros lugares onde havia um inimigo, e uma sala pode ter um inimigo a menos ou a mais; uma sala fica sempre igual até você desligar e ligar a opção de novo. Chefes, o mercador, Ashley, Luis, inimigos especiais, ondas e salas cujos eventos contam inimigos ficam como estão, então o jogo sempre pode ser terminado. Os saves continuam sendo os do jogo. A partir da próxima sala; não em Assignment Ada, The Mercenaries e na parte da Ashley.</string>
     <string name="ingame_cheat_extras">Desbloquear jogos extras</string>
     <string name="ingame_cheat_extras_text">Assignment Ada e The Mercenaries estão desbloqueados (Professional também, como depois de terminar o jogo). O menu principal os mostra depois de reiniciar. O progresso desde o seu último save será perdido.</string>
     <string name="ingame_cheat_extras_later">Desbloqueados: Assignment Ada e The Mercenaries aparecem no menu principal após o próximo reinício.</string>
@@ -343,7 +345,7 @@
     <string name="ingame_map_hold">Segure a primeira tecla …</string>
     <string name="ingame_map_press">Pressione uma tecla …</string>
     <string name="ingame_map_keyboard">Teclado e mouse</string>
-    <string name="ingame_mouse_help">O mouse (Android 8 ou mais recente) pertence ao jogo enquanto você joga: movê-lo gira a câmera, ao mirar ele move a mira. O menu do app (F1) libera o ponteiro.</string>
+    <string name="ingame_mouse_help">O mouse (Android 8 ou mais recente) pertence ao jogo enquanto você joga: movê-lo gira a câmera, ao mirar ele move a mira e nos binóculos a visão. A rodinha dá zoom na luneta e nos binóculos (para cima: mais perto). O menu do app (F1) libera o ponteiro.</string>
     <string name="ingame_mouse_sensitivity">Sensibilidade do mouse</string>
     <string name="ingame_map_controller">Controle</string>
     <string name="ingame_map_device">Dispositivo</string>
@@ -381,8 +383,11 @@
     <string name="ingame_profile_help">Um perfil ajusta a resolução, 60 FPS, salto de quadros, antisserrilhamento, FXAA, filtro de texturas, núcleos de desempenho e o modo Potato para este dispositivo. Se você mudar um deles à mão, vira Usuário; Usuário fica salvo enquanto você testa um perfil.</string>
     <string name="ingame_limit_gpu">o chip gráfico</string>
     <string name="ingame_limit_cpu">o processador</string>
+    <string name="ingame_limit_both">o chip gráfico, o processador perto do seu limite</string>
     <string name="ingame_limit_none">nada notável</string>
     <string name="ingame_bench_welcome">Bem-vindo ao CubeEvil4</string>
+    <string name="ingame_bench_redo">Medir de novo</string>
+    <string name="ingame_bench_redo_text">Novo: o benchmark agora também mede o processador, para que a sugestão combine melhor com este dispositivo. Suas configurações ficam como estão enquanto você não aceitar a nova sugestão.</string>
     <string name="ingame_bench_text">O app mede o que este dispositivo consegue e sugere as melhores configurações. Para isso o jogo vai ao cais do lago (chuva, água, neblina) e a câmera gira ao redor do personagem. Leva cerca de 2–3 minutos; o som fica desligado. Depois você volta para onde estava. B / Voltar cancela.</string>
     <string name="ingame_bench_first_note">Será oferecido de novo na próxima inicialização.</string>
     <string name="ingame_bench_start">Começar a medir</string>
@@ -420,7 +425,6 @@
     <string name="ingame_shader_cache_help">O jogo guarda os shaders que criou, para que uma cena não trave uma segunda vez. Limpe só se aparecerem erros gráficos depois de uma atualização: o jogo os cria de novo, e as primeiras cenas podem travar.</string>
     <string name="ingame_shader_clear">Limpar cache de shaders</string>
     <string name="ingame_shader_clear_text">O jogo reinicia e apaga os shaders criados. Ele os cria de novo enquanto você joga, então as primeiras cenas podem travar. O progresso desde o último salvamento é perdido.</string>
-    <string name="ingame_mods">Mods</string>
     <string name="ingame_mods_summary">Jogabilidade do remake, corpo a corpo, roupa e skins</string>
     <string name="ingame_remake_gameplay">Jogabilidade do remake</string>
     <string name="ingame_mod_packs">Pacotes de mods</string>
@@ -493,4 +497,34 @@
     <string name="ingame_cheat_weapon_max">Níveis máximos</string>
     <string name="ingame_cheat_weapon_add">Adicionar</string>
     <string name="ingame_cheat_weapons_help">Armas: escolha qualquer arma, granada ou acessório do Leon e toque em Adicionar. «Níveis máximos» ligado: a arma vem totalmente melhorada (uma arma que você já tem sobe até eles; o lança-minas com sua mira); desligado: como o mercador a vende. Só enquanto você joga com o Leon, não na maleta, no mapa ou num vídeo.</string>
+    <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
+    <string name="ingame_mods">Mods</string>
+    <string name="ingame_hd_textures">Texturas HD</string>
+    <string name="ingame_hd_import">Importar pacote de texturas</string>
+    <string name="ingame_hd_cancel">Cancelar importação</string>
+    <string name="ingame_hd_sharpness">Nitidez</string>
+    <string name="ingame_hd_full">Total</string>
+    <string name="ingame_hd_half">Metade</string>
+    <string name="ingame_hd_delete">Excluir pacote de texturas</string>
+    <string name="ingame_hd_delete_yes">Excluir</string>
+    <string name="ingame_hd_none">Texturas HD: nenhum pacote de texturas importado.</string>
+    <string name="ingame_hd_info">Texturas HD: %1$s · %2$s imagens · %3$s · criado em %4$s</string>
+    <string name="ingame_hd_in_use">Em uso agora: %1$s de %2$s texturas substituídas (%3$s).</string>
+    <string name="ingame_hd_importing">Importando o pacote de texturas: %1$s de %2$s…</string>
+    <string name="ingame_hd_imported">Pacote de texturas importado: %1$s imagens.</string>
+    <string name="ingame_hd_replace">Substituir o pacote de texturas?</string>
+    <string name="ingame_hd_replace_text">O novo pacote substitui “%1$s” assim que estiver totalmente copiado.</string>
+    <string name="ingame_hd_delete_text">Só o pacote de texturas é excluído. Seus discos, jogos salvos e cartões de memória continuam como estão.</string>
+    <string name="ingame_hd_deleted">Pacote de texturas excluído.</string>
+    <string name="ingame_hd_not_pack">Este arquivo não é um pacote de texturas do CubeEvil4 (.c4tex). Primeiro converta o pacote com o CubeEvil4 Texture Packer (em um PC ou com o app para Android).</string>
+    <string name="ingame_hd_other_version">Este pacote foi feito por outra versão do CubeEvil4 Texture Packer. Converta-o de novo com a versão atual.</string>
+    <string name="ingame_hd_no_space">Espaço livre insuficiente: o pacote precisa de %1$s e há %2$s livres.</string>
+    <string name="ingame_hd_incomplete">O arquivo está incompleto (a cópia para o dispositivo foi interrompida?). Copie-o de novo.</string>
+    <string name="ingame_hd_damaged">O arquivo está danificado. Copie-o de novo para o dispositivo ou converta-o novamente.</string>
+    <string name="ingame_hd_cancelled">Importação cancelada. O pacote de texturas anterior continua.</string>
+    <string name="ingame_hd_read_failed">Não foi possível ler o arquivo: %1$s</string>
+    <string name="ingame_hd_help">As texturas HD substituem as imagens do jogo por outras mais nítidas de um pacote de texturas no formato do Dolphin. O CubeEvil4 não inclui texturas nem links para elas: use apenas pacotes que você mesmo obteve e pode usar. Converta o pacote com o CubeEvil4 Texture Packer (em um PC ou com o app para Android) e importe aqui o arquivo .c4tex; depois você pode excluir esse arquivo. O pacote fica numa pasta própria e nunca altera seus discos, jogos salvos ou cartões de memória; você pode desligá-lo ou excluí-lo a qualquer momento. A nitidez Metade usa menos memória gráfica em dispositivos mais fracos. O filtro de píxeis retro mantém as texturas originais do jogo.</string>
+    <string name="ingame_hd_import_from">Importar o pacote de texturas “%1$s” (%2$s)?</string>
+    <string name="ingame_hd_import_busy">Já há um pacote de texturas sendo importado. Tente de novo quando terminar.</string>
+    <string name="ingame_hd_import_on">As texturas HD estão ativadas. Você pode desativá-las ou excluir o pacote no menu do app (SELECT), em Trapaças e mods.</string>
 </resources>
