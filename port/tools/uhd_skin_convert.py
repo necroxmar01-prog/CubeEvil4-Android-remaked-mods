@@ -686,8 +686,11 @@ def gc_triangles(blob, tex_index, by_part=False):
             s += 3 + cnt * per * 2
             if mat != tex_index:
                 continue
-            if op == 0x98:
-                tris = [(idx[k], idx[k + 1], idx[k + 2]) for k in range(cnt - 2)]
+            if op == 0x98:  # a strip turns every second triangle round (until 12.11.2026 not: the RE9 head kept the
+                # Lite head's eyeballs, drawn as strips, with every second triangle facing inwards: the game culled
+                # them and showed the eyeballs' insides, grey noise without iris)
+                tris = [(idx[k], idx[k + 1], idx[k + 2]) if k % 2 == 0 else (idx[k + 1], idx[k], idx[k + 2])
+                        for k in range(cnt - 2)]
             elif op == 0x90:
                 tris = [(idx[k], idx[k + 1], idx[k + 2]) for k in range(0, cnt, 3)]
             elif op == 0x80:

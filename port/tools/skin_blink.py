@@ -26,6 +26,8 @@ positions, so up to three quarters of an eyeball followed the eye part (whose jo
 eyeball's centre: the game turns it 18 degrees as the eyes wander) and the blink shapes (slots 10..12) dragged parts
 of it by up to 4.5 units: the iris smeared over the eye. Now every eyeball position is on the head part alone and no
 shape moves it (the eyes look ahead; the lids still blink). --no-blink leaves the lid weights as they are.
+--orient-eyes turns every eyeball triangle to face outwards (fourth device test: still grey noise; half of them faced
+inwards, see orient_eyes).
 
 --sclera F darkens the eye texture outside the iris to F (the white glared in the game's light); --iris S scales the
 iris about the texture's middle (its edge found as the strongest dark ring). Every other entry stays. Skins never go
@@ -185,6 +187,48 @@ def blink(blob, eye_mat, notes):
     return bytes(out)
 
 
+def orient_eyes(blob, eye_mat, notes):
+    """Every eyeball triangle facing out of its eyeball (two corners swapped in the drawing list, which keeps its
+    size). The RE9 head kept the old head's eyeballs through uhd_skin_convert.gc_triangles, which until 12.11.2026 read
+    strips without turning every second triangle: half of them faced inwards, the game culled them and drew the
+    eyeballs' insides (fourth device test: grey noise, no iris)."""
+    _, per = S.record_sizes(blob)
+    P = G.positions(blob)
+    out = bytearray(blob)
+    turned = total = 0
+    for p in G.parts(blob):
+        if blob[p + 0xC] != eye_mat:
+            continue
+        size = S.be32(blob, p + 0x18)
+        s, e = p + 0x20, p + 0x20 + size
+        tris = []
+        while s < e and blob[s] != 0:
+            op, cnt = blob[s], S.be16(blob, s + 1)
+            if op & 0xF8 != 0x90:
+                raise SystemExit("the eyeball part is drawn with primitive %#x: only triangle lists are turned" % op)
+            for k in range(0, cnt - 2, 3):
+                offs = [s + 3 + (k + j) * per * 2 for j in range(3)]
+                tris.append(offs)
+            s += 3 + cnt * per * 2
+        if not tris:
+            continue
+        idx = np.array([[S.be16(blob, o) for o in t] for t in tris])
+        T = P[idx].astype(float)
+        c = T.mean(1)
+        side = np.sign(c[:, 0])
+        mid = {sd: (T[side == sd].reshape(-1, 3).min(0) + T[side == sd].reshape(-1, 3).max(0)) / 2
+               for sd in (-1.0, 1.0) if (side == sd).any()}
+        n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+        outward = np.array([np.dot(n[i], c[i] - mid[side[i]]) for i in range(len(T))])
+        for i in np.where(outward < 0)[0]:
+            a, b = tris[i][1], tris[i][2]
+            out[a:a + per * 2], out[b:b + per * 2] = blob[b:b + per * 2], blob[a:a + per * 2]
+        turned += int((outward < 0).sum())
+        total += len(T)
+    notes.append("eyeballs: %d of %d triangles turned to face outwards" % (turned, total))
+    return bytes(out)
+
+
 def still_eyes(blob, eye_mat, notes):
     """Every position of the eyeball parts on the head part alone, their face shape offsets zero."""
     P = G.positions(blob)
@@ -263,6 +307,7 @@ def main(argv=None):
     ap.add_argument("--iris", type=float, default=1.0)
     ap.add_argument("--still-eyes", action="store_true", help="the eyeballs on the head part, no shape moves them")
     ap.add_argument("--no-blink", action="store_true", help="the lid weights stay as they are")
+    ap.add_argument("--orient-eyes", action="store_true", help="every eyeball triangle facing outwards")
     a = ap.parse_args(argv)
     gc = U.Archive(Path(a.inp).read_bytes(), ">")
     entries = [gc.entry(i) for i in range(len(gc.offsets))]
@@ -271,6 +316,8 @@ def main(argv=None):
         entries[a.entry] = blink(entries[a.entry], a.eye_mat, notes)
     if a.still_eyes:
         entries[a.entry] = still_eyes(entries[a.entry], a.eye_mat, notes)
+    if a.orient_eyes:
+        entries[a.entry] = orient_eyes(entries[a.entry], a.eye_mat, notes)
     if a.sclera != 1.0 or a.iris != 1.0:
         images = W.tpl_images(entries[a.palette])
         disc = U.disc_textures(entries[a.palette])
