@@ -3,7 +3,8 @@
 the harness, its texture is not the same all over, it still has holes"; he wants the RE9 shirt's V neck):
 
     skin_shirt.py SKIN.drs OUT.drs --entry 12 --base LITE.drs:12 --base-tex 16 --skin-tex 20
-                  [--neck Y:Z:X] [--sleeves X] [--reach 30] [--smooth-sleeves]
+                  [--neck Y:Z:X] [--sleeves X] [--reach 30] [--smooth-sleeves] [--own-uv] [--inside-from DY]
+                  [--vee-max X] [--wings X]
 
 The base model's garment (the Lite shirt, texture --base-tex: whole, its back and shoulders included, the harness
 made for it) is the shirt's shape. Its torso (|x| below --sleeves) takes the RE9 shirt's look: every triangle draws
@@ -20,7 +21,14 @@ triangles wound against their normals are turned (the game culls them otherwise)
 also drawn from inside, seen through the V. Best with the RE9 shirt widened to the base's girth first
 (skin_slim.py --girth). The base's other parts (the harness) come as they are; the sleeves keep --base-tex, and
 with --smooth-sleeves that texture is smoothed and coloured like the RE9 cloth (the Lite's cloth is a blotchy
-camouflage). Positions, normals and weights are the base's (the RE9 neck's its own); the model is built anew
+camouflage).
+With --own-uv (v14, DevJunior on v13: "still holes, the texture is not even, the neck is not in proportion") the
+torso keeps the base's own texture and coordinates (one continuous layout, no seams) and the RE9 neck draws with it
+too; the base's texture becomes the RE9 cloth's colour, even (the RE9 atlas is compressed in 4 x 4 blocks: its fine
+detail is block noise, and its collar region holds the label: the light patches). The base stays under the RE9 neck
+and only gives way in the V (--vee-max caps its width), the RE9 neck takes the nearest base corner's weights (both
+bend alike in every pose), and the base's collar is also drawn from inside (--inside-from). --wings limits the RE9
+neck to |x| X. Positions, normals and weights are the base's (the RE9 neck's its own); the model is built anew
 (skin_head_fbx build_model, skin_hair_fbx.write_weights). Every other entry stays. Skins never go into the
 repository; this tool only reads and writes the paths given.
 """
@@ -156,16 +164,43 @@ def project_uv(Pc, Nc, R, RN, RUV, reach, fallback):
     return uv, int(projected.sum())
 
 
-def smooth_cloth(img, like):
-    """The sleeves' texture smoothed (the blotches gone, the folds' shading kept) and coloured like `like` (the RE9
-    cloth's mean and spread of brightness)."""
+def cloth_samples(img, UV, n=24, seed=1):
+    """RGB samples (k x 3) of `img` at n random points in each triangle of UV (m x 3 x 2; v up, as model_corners
+    gives them), as the game samples it."""
+    a = np.asarray(img.convert("RGB"), dtype=np.float64)
+    h, w = a.shape[:2]
+    r = np.random.default_rng(seed).dirichlet((1, 1, 1), size=(len(UV), n))
+    q = np.einsum("mnk,mkj->mnj", r, UV).reshape(-1, 2)
+    return a[np.clip(((1.0 - q[:, 1]) % 1) * h, 0, h - 1).astype(int), np.clip((q[:, 0] % 1) * w, 0, w - 1).astype(int)]
+
+
+def uniform_cloth(ref, size, vary=0.0, seed=7):
+    """An even cloth texture of `size` (w, h): the RE9 cloth's colour (median of the RGB samples `ref`: its texture is
+    compressed in 4 x 4 blocks of two colours, so its fine detail is block noise, not weave), its brightness varying
+    by `vary` in broad soft patches (default none: the shirt's dark blue in 5-6-5 bit steps showed every variation as
+    a blotch). The base's coordinates draw the whole shirt with it; the
+    folds' shading is the game's light on the shape."""
+    ref = ref[(ref @ [0.3, 0.59, 0.11]) > 4]
+    colour = np.median(ref, 0)
+    W, H = size
+    rng = np.random.default_rng(seed)
+    noise = Image.fromarray((rng.random((H // 16 + 1, W // 16 + 1)) * 255).astype(np.uint8)).resize(
+        (W, H), Image.BICUBIC).filter(ImageFilter.GaussianBlur(12))
+    n = np.asarray(noise, dtype=np.float64)
+    n = (n - n.mean()) / max(n.std(), 1e-6)
+    out = colour[None, None, :] * (1.0 + vary * np.clip(n, -2, 2))[..., None]
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB").convert("RGBA"), colour
+
+
+def smooth_cloth(img, ref):
+    """The base's cloth texture smoothed (the blotches gone, the folds' shading kept) and coloured like `ref` (RGB
+    samples of the RE9 cloth: their mean and spread of brightness)."""
     a = np.asarray(img.convert("RGBA"), dtype=np.float64)
     rgb = a[..., :3]
     lum = rgb @ [0.3, 0.59, 0.11]
     big = np.asarray(Image.fromarray(np.clip(lum, 0, 255).astype(np.uint8)).filter(
         ImageFilter.GaussianBlur(max(img.size) / 40.0)), dtype=np.float64)
-    ref = np.asarray(like.convert("RGB"), dtype=np.float64).reshape(-1, 3)
-    ref = ref[(ref @ [0.3, 0.59, 0.11]) > 8]  # the cloth, not the atlas's black gaps
+    ref = ref[(ref @ [0.3, 0.59, 0.11]) > 4]  # the cloth, not a stray black texel
     mean_c = ref.mean(0)
     mean_l, std_l = (ref @ [0.3, 0.59, 0.11]).mean(), (ref @ [0.3, 0.59, 0.11]).std()
     shade = (big - big.mean()) / max(big.std(), 1e-6) * std_l * 0.8 + mean_l
@@ -174,7 +209,8 @@ def smooth_cloth(img, like):
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
-def build(cur, base, base_tex, skin_tex, neck, sleeves, reach):
+def build(cur, base, base_tex, skin_tex, neck, sleeves, reach, own_uv=False, inside_from=50.0, vee_max=1e9,
+          wings=1e9):
     cc = BF.model_corners(cur)
     bc = BF.model_corners(base)
     parts = {cur[p + 0xC]: p for p, *_ in cc}
@@ -196,7 +232,18 @@ def build(cur, base, base_tex, skin_tex, neck, sleeves, reach):
     # the RE9 shirt's triangles that come in front of the neck (a little beyond the box: they overlap the base's edge)
     vneck = (ac[:, 1] > ny - 10.0) & (ac[:, 2] > nz - 5.0) & (np.abs(ac[:, 0]) < nx + 10.0)
     groups = {t: [] for t in parts}
-    stats = {}
+    stats = {"ref_uv": RUV}
+    # the base garment's corners and weights: the RE9 neck takes the weights of the nearest (so both bend alike in
+    # every pose; with their own weights gaps opened between them)
+    from scipy.spatial import cKDTree
+    bP = np.concatenate([Pc.reshape(-1, 3) for p, Pc, *_ in bc if base[p + 0xC] == base_tex])
+    bW = [w for p, _P, _N, _U, wc in bc if base[p + 0xC] == base_tex for w in wc]
+    bUV = np.concatenate([UVc.reshape(-1, 2) for p, _P, _N, UVc, _w in bc if base[p + 0xC] == base_tex])
+    # with own_uv the RE9 neck draws with the base's (recoloured) texture too, at the nearest base corner's
+    # coordinates: the RE9 atlas around its collar holds the label and other pieces (light patches in the poses) and
+    # its compressed blocks never matched the even cloth
+    neck_tex = base_tex if own_uv else skin_tex
+    btree = cKDTree(bP)
     for p, Pc, Nc, UVc, wc in bc:
         t = base[p + 0xC]
         if t != base_tex:
@@ -211,10 +258,12 @@ def build(cur, base, base_tex, skin_tex, neck, sleeves, reach):
         cov = np.ones(len(c), bool)
         for q in [c] + [(c + Pc[:, k]) / 2 for k in range(3)] + [0.1 * c + 0.9 * Pc[:, k] for k in range(3)]:
             cov &= covered(q, nrm, A[vneck], AN[vneck])
-        vee = np.abs(c[:, 0]) < 0.6 * (c[:, 1] - ny - 10.0)
+        vee = np.abs(c[:, 0]) < np.minimum(0.6 * (c[:, 1] - ny - 10.0), vee_max)
         # surfaces facing upwards (the shoulders' tops) stay: seen from the front at a grazing angle they show more
         # than the RE9 shirt below them covers
-        in_neck &= (cov & (nrm[:, 1] < 0.5)) | vee
+        # with own_uv both draw the same even cloth: the covered base stays under the RE9 neck (in the poses the two
+        # bend a little apart; without it the gaps showed through) and only gives way in the V
+        in_neck &= vee if own_uv else ((cov & (nrm[:, 1] < 0.5)) | vee)
         torso = (np.abs(c[:, 0]) < sleeves) & ~in_neck
         sleeve = (np.abs(c[:, 0]) >= sleeves) & ~in_neck
         sel = lambda m: (Pc[m], Nc[m], UVc[m], [w for k, w in zip(np.repeat(m, 3), wc) if k])
@@ -223,10 +272,21 @@ def build(cur, base, base_tex, skin_tex, neck, sleeves, reach):
         # again farther before the back's map would put the back's cloth on the front
         far = lambda X: project_uv(X, np.repeat(np.array([[[0.0, 0.0, 1.0]]]), len(X), 0).repeat(3, 1), R, RN, RUV,
                                    reach * 3, fallback)[0]
-        uv, nproj = project_uv(Pc[torso], Nc[torso], R, RN, RUV, reach,
-                               lambda X: np.where((X.mean(1)[:, 2] > 0)[:, None, None], far(X), fallback(X)))
-        P_, N_, _uv, w_ = sel(torso)
-        groups[skin_tex].append((P_, N_, uv, w_))
+        if own_uv:  # the base's own texture and coordinates (no seams at all), the texture recoloured in main
+            groups[t].append(sel(torso))
+            nproj = 0
+            # the base's collar around the neck (above Y + inside_from) also from inside: when the head turns one
+            # looks past the neck at the inside of the back collar (else culled: the sky through the shirt)
+            m3 = torso & (c[:, 1] > ny + inside_from) & (np.abs(c[:, 0]) < nx)
+            rev = [0, 2, 1]
+            groups[t].append((Pc[m3][:, rev], -Nc[m3][:, rev], UVc[m3][:, rev],
+                              [wc[3 * i + k] for i in np.flatnonzero(m3) for k in rev]))
+            stats["base_inside"] = int(m3.sum())
+        else:
+            uv, nproj = project_uv(Pc[torso], Nc[torso], R, RN, RUV, reach,
+                                   lambda X: np.where((X.mean(1)[:, 2] > 0)[:, None, None], far(X), fallback(X)))
+            P_, N_, _uv, w_ = sel(torso)
+            groups[skin_tex].append((P_, N_, uv, w_))
         stats.update(torso=int(torso.sum()), projected=nproj, sleeves=int(sleeve.sum()), neck_out=int(in_neck.sum()))
     # the RE9 neck's triangles themselves
     vn = flipped = inside = 0
@@ -234,20 +294,23 @@ def build(cur, base, base_tex, skin_tex, neck, sleeves, reach):
         if cur[p + 0xC] != skin_tex:
             continue
         c = Pc.mean(1)
-        m = (c[:, 1] > ny - 10.0) & (c[:, 2] > nz - 5.0) & (np.abs(c[:, 0]) < nx + 10.0)
+        m = (c[:, 1] > ny - 10.0) & (c[:, 2] > nz - 5.0) & (np.abs(c[:, 0]) < min(nx, wings) + 10.0)
         # turned the way their normals face (the FBX has some wound backwards: the game would cull them, holes)
         g = np.einsum("ij,ij->i", np.cross(Pc[:, 1] - Pc[:, 0], Pc[:, 2] - Pc[:, 0]), Nc.mean(1))
         order = np.where((g < 0)[:, None], [0, 2, 1], [0, 1, 2])
         ii = np.arange(len(Pc))[:, None]
         Pc, Nc, UVc = Pc[ii, order], Nc[ii, order], UVc[ii, order]
-        wc = [wc[3 * i + k] for i in range(len(order)) for k in order[i]]
+        near = btree.query(Pc.reshape(-1, 3))[1]
+        wc = [bW[j] for j in near]
+        if own_uv:
+            UVc = bUV[near].reshape(-1, 3, 2)
         flipped += int((m & (g < 0)).sum())
-        groups[skin_tex].append((Pc[m], Nc[m], UVc[m], [w for k, w in zip(np.repeat(m, 3), wc) if k]))
+        groups[neck_tex].append((Pc[m], Nc[m], UVc[m], [w for k, w in zip(np.repeat(m, 3), wc) if k]))
         # the collar (above Y + 50) also from inside: through the V one looks at the inside of its back, which the
         # game culls when drawn one-sided (holes beside the neck)
-        m2 = m & (c[:, 1] > ny + 50.0)
+        m2 = m & (c[:, 1] > ny + inside_from)
         rev = [0, 2, 1]
-        groups[skin_tex].append((Pc[m2][:, rev], -Nc[m2][:, rev], UVc[m2][:, rev],
+        groups[neck_tex].append((Pc[m2][:, rev], -Nc[m2][:, rev], UVc[m2][:, rev],
                                  [wc[3 * i + k] for i in np.flatnonzero(m2) for k in rev]))
         inside += int(m2.sum())
         vn += int(m.sum())
@@ -292,27 +355,45 @@ def main(argv=None):
     ap.add_argument("--sleeves", type=float, default=165.0)
     ap.add_argument("--reach", type=float, default=30.0)
     ap.add_argument("--smooth-sleeves", action="store_true")
+    ap.add_argument("--inside-from", type=float, default=50.0, metavar="DY",
+                    help="the RE9 collar above Y + DY is also drawn from inside (default 50)")
+    ap.add_argument("--vee-max", type=float, default=1e9, metavar="X",
+                    help="the V opens at most |x| X (narrower than the neck: the base's collar keeps hugging its "
+                         "sides in every pose)")
+    ap.add_argument("--wings", type=float, default=1e9, metavar="X",
+                    help="only the RE9 neck's triangles within |x| X come (its collar wings beyond lift off the "
+                         "neck in the poses; the base's collar stays there)")
+    ap.add_argument("--own-uv", action="store_true",
+                    help="the torso keeps the base's texture and coordinates (recoloured with the sleeves)")
     a = ap.parse_args(argv)
     gc = U.Archive(Path(a.inp).read_bytes(), ">")
     entries = [gc.entry(i) for i in range(len(gc.offsets))]
     src, _, be = a.base.rpartition(":")
     base = U.Archive(Path(src).read_bytes(), ">").entry(int(be))
     neck = tuple(float(x) for x in a.neck.split(":"))
-    entries[a.entry], st = build(entries[a.entry], base, a.base_tex, a.skin_tex, neck, a.sleeves, a.reach)
+    entries[a.entry], st = build(entries[a.entry], base, a.base_tex, a.skin_tex, neck, a.sleeves, a.reach,
+                                 a.own_uv, a.inside_from, a.vee_max, a.wings)
     print("torso: %d triangles of the base drawn with texture %d (%d projected from the RE9 shirt near them, the "
           "rest from farther or mapped like its back); sleeves %d; neck: %d of the base's out, %d of the RE9 shirt's "
           "in (%d of them turned, %d of the collar also from inside)" %
           (st["torso"], a.skin_tex, st["projected"], st["sleeves"], st["neck_out"], st["neck_in"],
            st["flipped"], st["inside"]))
-    if a.smooth_sleeves:
+    if a.smooth_sleeves or a.own_uv:
         imgs = G.tpl_images(entries[a.palette])
         h16, h20 = imgs[a.base_tex][0], imgs[a.skin_tex][0]
         import struct
         sl = U.decode_gx(*struct.unpack_from(">HHI", h16), imgs[a.base_tex][1])
         like = U.decode_gx(*struct.unpack_from(">HHI", h20), imgs[a.skin_tex][1])
-        imgs[a.base_tex] = G.encode_image(smooth_cloth(sl, like), h16)
+        if a.own_uv:
+            cloth, colour = uniform_cloth(cloth_samples(like, st["ref_uv"]), sl.size)
+            imgs[a.base_tex] = G.encode_image(cloth, h16)
+            print("shirt: texture %d replaced by the RE9 cloth's colour (%d,%d,%d, from texture %d's front piece)" %
+                  (a.base_tex, *[int(round(c)) for c in colour], a.skin_tex))
+        else:
+            imgs[a.base_tex] = G.encode_image(smooth_cloth(sl, cloth_samples(like, st["ref_uv"])), h16)
+            print("sleeves: texture %d smoothed and coloured like the RE9 shirt's front piece (texture %d)" %
+                  (a.base_tex, a.skin_tex))
         entries[a.palette] = G.build_tpl(imgs)
-        print("sleeves: texture %d smoothed and coloured like texture %d" % (a.base_tex, a.skin_tex))
     body = U.build_body(entries, gc.types)
     out = U.build_archive(gc, body)
     Path(a.out).write_bytes(out)

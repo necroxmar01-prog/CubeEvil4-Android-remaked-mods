@@ -595,6 +595,31 @@ def back(model, z, top):
     return (rebuild(model, kept) if after < before else model), before, after
 
 
+def neck(model, low, high, scale, axis=None):
+    """The neck thickened: positions below `high` move away from the neck's axis (x, z; by default the middle of the
+    positions between `low` and `high`) in x and z by `scale`, in full below `low`, fading to nothing at `high`
+    (DevJunior, 12.11.2026, on v13: "the neck is not in proportion": the RE9 head's neck stood thin over the Lite's
+    wide shoulders). Only the front and sides (from 10 behind the axis, in full 20 in front of it): the nape stays.
+    Shapes are offsets and move along. Returns (model, positions moved, axis)."""
+    import numpy as np
+    model = bytearray(model)
+    P = G.positions(model)
+    if axis is None:
+        band = P[(P[:, 1] > low - 60.0) & (P[:, 1] < low)]
+        axis = ((band[:, 0].min() + band[:, 0].max()) / 2, (band[:, 2].min() + band[:, 2].max()) / 2)
+    # front and sides only: the nape stays (thickened, it came through the back of the shirt's collar)
+    k = 1.0 + (scale - 1.0) * np.clip((high - P[:, 1]) / max(high - low, 1e-6), 0.0, 1.0) * \
+        np.clip((P[:, 2] - axis[1] + 10.0) / 30.0, 0.0, 1.0)
+    moved = 0
+    for i in np.flatnonzero(k > 1.0 + 1e-4):
+        q = P[i].copy()
+        q[0] = axis[0] + (q[0] - axis[0]) * k[i]
+        q[2] = axis[1] + (q[2] - axis[1]) * k[i]
+        G.set_position(model, i, q)
+        moved += 1
+    return bytes(model), moved, axis
+
+
 def prune(entries, tpl, users):
     """Palette `tpl` with only the textures its models `users` draw; the parts renumbered. Returns (bytes before,
     after)."""
@@ -692,6 +717,8 @@ def main(argv=None):
     ap.add_argument("--girth", action="append", default=[], metavar="ENTRY@MATS=SRC:E@MATS",
                     help="widen ENTRY's parts with MATS around the body's axis to the girth of SRC's model E's parts "
                          "with MATS (see girth; --fit-top: its top, default 1470)")
+    ap.add_argument("--neck", action="append", default=[], metavar="ENTRY:LOW:HIGH:SCALE",
+                    help="thicken the neck: x and z around its axis by SCALE below LOW, fading out at HIGH")
     ap.add_argument("--fit-top", type=float, help="--fit only below this height (fading over 40 units)")
     ap.add_argument("--most", type=float, default=70.0, help="--fit's largest push (default 70)")
     ap.add_argument("--passes", type=int, default=2, help="--fit's rounds (default 2: the smoothing leaves some of the "
@@ -788,6 +815,11 @@ def main(argv=None):
         e, z, y = spec.split(":")
         entries[int(e)], before, after = back(entries[int(e)], float(z), float(y))
         print("entry %s: %d of %d triangles behind z %s below y %s dropped" % (e, before - after, before, z, y))
+    for spec in a.neck:
+        e, lo, hi, sc = spec.split(":")
+        entries[int(e)], n, ax = neck(entries[int(e)], float(lo), float(hi), float(sc))
+        print("entry %s: neck thickened %s times below y %s (fading out at %s) around x %.0f z %.0f, %d positions" %
+              (e, sc, lo, hi, ax[0], ax[1], n))
     for spec in a.compact:
         e = int(spec)
         before = len(G.positions(entries[e]))
