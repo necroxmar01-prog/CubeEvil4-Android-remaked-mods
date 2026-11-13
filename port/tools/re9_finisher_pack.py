@@ -188,7 +188,7 @@ class Fit:
         from tools.motion import evalhost
         pl = evalhost.Player(self.model, fcv.parse(data), ik=False)
         errs = []
-        for fi in range(0, len(self.frames), max(1, len(self.frames) // 30)):
+        for fi in range(len(self.frames)):  # every frame: the curves between the keys too
             pose = pl.frame(fi)
             target = self.rows[fi][2]
             for part, nx in self.nexts.items():

@@ -1024,7 +1024,9 @@ int re4_knife_slash(void* p)
     if (pl->pMotionB) {
         pl->pMotionB->Brate = 0.0f;
     }
-    pl->Wep->setTrans(0, 0);
+    // the knife routine's own way (setDisp 1): its end shows the gun again with setWepTrans(pl, 1); cPlWep::setTrans
+    // hides through setDisp 2, which nothing there undoes (device report 13.11.2026: the pistol gone after a strike)
+    setWepTrans(pl, 0);
     pl->Body->setKnife(true);
     gComboLen = pl->Motion.Seq_frame_num;
     MotionMove(pl, 0);

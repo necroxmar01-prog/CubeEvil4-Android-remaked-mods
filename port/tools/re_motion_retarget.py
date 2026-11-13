@@ -54,6 +54,19 @@ for side, base in (("R_", 34), ("L_", 49)):
 # direction of each mapped part at rest: towards this part (its first child on the chain)
 LEON_NEXT = {0: 1, 1: 2, 2: 3, 3: 4, 5: 7, 7: 8, 8: 10, 10: 40, 11: 13, 13: 14, 14: 16, 16: 55,
              18: 19, 19: 20, 20: 21, 22: 23, 23: 24, 24: 25}
+# The hands' roll: their direction alone (to the middle finger) leaves the turn round it open, and the minimal turn
+# put Leon's hands 36 (right) / 72 (left) degrees off the source's (device report 13.11.2026: the free hand palm up
+# while striking); the thumb's root gives the second direction. Parts the model lacks (the Ganados') are skipped.
+SECOND = {10: (34, "R_Thumb1"), 16: (49, "L_Thumb1")}
+
+
+def frame_of(primary, secondary):
+    a = primary / np.linalg.norm(primary)
+    b = secondary - np.dot(secondary, a) * a
+    b = b / np.linalg.norm(b)
+    return np.column_stack([a, b, np.cross(a, b)])
+
+
 # The Ganados (em10.drs bodies: 34..61 parts) share Leon's parts 0..25 and their rest pose; no finger parts.
 GANADO_NEXT = {k: v for k, v in LEON_NEXT.items() if k not in (10, 16)}
 MAPS = {"leon": (LEON, LEON_FINGERS, LEON_NEXT), "ganado": (LEON, {}, GANADO_NEXT)}
@@ -174,6 +187,11 @@ def retarget(src, model, mapping, nexts, frames, scale, root_relative=False):
         d_re = bind_pos[idx[nxt]] - bind_pos[bi]
         if np.linalg.norm(d_gc) > 1e-6 and np.linalg.norm(d_re) > 1e-9:
             A[part] = align(d_gc, d_re) @ Q
+            sec = SECOND.get(part)
+            if sec and sec[0] in rest_world and sec[1] in src.by_name:
+                s_gc = Q @ (rest_world[sec[0]] - rest_world[part])
+                s_re = bind_pos[src.by_name[sec[1]]] - bind_pos[bi]
+                A[part] = frame_of(d_re, s_re) @ frame_of(d_gc, s_gc).T @ Q
     inv_bind = {part: bind_rot[bi].T for part, bi in idx.items()}
     out = []
     for f in frames:
@@ -238,19 +256,31 @@ def thin(values, tol):
     return keys
 
 
-def axis_keys(values, tol):
-    v = np.asarray(values, dtype=np.float64)
+def tangents(v, ks):
+    """Per key (in, out) tangents as the game reads them: math_sub.cpp hermite() takes them as they are, over the
+    segment's 0..1, so each is the slope per frame times the length of its segment (the in-tangent the one before the
+    key, the out-tangent the one after). Until 13.11.2026 they were stored per frame: every curve slowed to nearly
+    nothing at each key (device report: Leon jerked back and forth while walking and running)."""
     slope = np.gradient(v) if len(v) > 1 else np.zeros(len(v))
+    out = []
+    for i, k in enumerate(ks):
+        span_in = k - ks[i - 1] if i > 0 else (ks[1] - k if len(ks) > 1 else 1)
+        span_out = ks[i + 1] - k if i + 1 < len(ks) else span_in
+        out.append((float(slope[k] * span_in), float(slope[k] * span_out)))
+    return out
+
+
+def axis_keys(values, tol):
+    """Rotation keys (Fcc layout 0: f32 tangents; the s16 ones of layout 1 cap a segment's turn at 3.27 rad)."""
+    v = np.asarray(values, dtype=np.float64)
     ks = thin(v, tol)
-    return fcv.Axis(frames=ks, keys=[(float(v[k]), int(round(max(-3.2767, min(3.2767, slope[k])) * 10000)),
-                                      int(round(max(-3.2767, min(3.2767, slope[k])) * 10000))) for k in ks])
+    return fcv.Axis(frames=ks, keys=[(float(v[k]), t_in, t_out) for k, (t_in, t_out) in zip(ks, tangents(v, ks))])
 
 
 def axis_keys_pos(values, tol):
     v = np.asarray(values, dtype=np.float64)
-    slope = np.gradient(v) if len(v) > 1 else np.zeros(len(v))
     ks = thin(v, tol)
-    return fcv.Axis(frames=ks, keys=[(float(v[k]), float(slope[k]), float(slope[k])) for k in ks])
+    return fcv.Axis(frames=ks, keys=[(float(v[k]), t_in, t_out) for k, (t_in, t_out) in zip(ks, tangents(v, ks))])
 
 
 def split_hips(rows, order):
@@ -316,7 +346,7 @@ def build_motion(rows, parts_order, tol, root=None, fixed_pos=None):
     for part in parts_order:
         ang = np.array([euler(r[0][part]) for r in rows])
         ang = np.unwrap(ang, axis=0)
-        j = fcv.Joint(kind=2, channel=0, fcc_type=1, parts_no=part)
+        j = fcv.Joint(kind=2, channel=0, fcc_type=0, parts_no=part)
         j.axes = [axis_keys(ang[:, a], tol) for a in range(3)]
         joints.append(j)
     # fixed_pos {part: its offset in the model}: the game's own motions key the hands' and feet's positions as IK targets
