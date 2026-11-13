@@ -2751,6 +2751,7 @@ extern "C" void* re4_melee_kneel(void* game);
 extern "C" void re4_melee_reset(void);
 extern "C" int re4_box_strike_motion(void);  // runtime/melee.cpp
 extern "C" float re4_box_reach(void* target, void* other);  // runtime/melee.cpp
+extern "C" int re4_axe_done(float frame, int hit_at, int end);  // runtime/melee.cpp
 
 extern "C" int re4probe_melee(const char* file)
 {
@@ -2887,6 +2888,9 @@ extern "C" int re4probe_melee(const char* file)
         }
         bad |= re4_box_reach(box, box) >= 0.0f ? 0x200000 : 0;   // the struck one itself
         bad |= re4_box_reach(box, o[0]) > re4_box_reach(box, o[1]) ? 0x400000 : 0;  // the stacked one is nearer
+        // the axe strike ends 6 frames after its hit (no sway back up), before it at kAxeEnd or the motion's end
+        bad |= re4_axe_done(20.0f, -1, 0) || !re4_axe_done(50.0f, -1, 0) || !re4_axe_done(10.0f, -1, 1) ? 0x800000 : 0;
+        bad |= re4_axe_done(17.0f, 12, 0) || !re4_axe_done(18.0f, 12, 0) ? 0x800000 : 0;
         pPL->ang.y = face;
     }
     // the box strike's motion from a mod (entries 16 and 17: the motion, its frames 1 / 3 / 5)

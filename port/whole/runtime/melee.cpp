@@ -267,11 +267,21 @@ const int kAxeLead = 3;          // frames of the Ganado's wind-up Leon keeps be
                                  // animation": the Ganados hold the axe up a while, a warning to the player; 8 / 7
                                  // until the third device test: "Leon still points up, stuck with the axe": the blend
                                  // of 4 frames reaches the raised axe and the swing follows at once)
+const int kAxeFollow = 6;        // frames after the hit Leon keeps: the blade goes on down to its lowest, then he returns
+                                 // to his stance (DevJunior, 13.11.2026: "after the cut it sways": the Ganado's motion
+                                 // swings the axe back up and rocks before kAxeEnd; a downward cut ends low)
 const f32 kRootMax = 350.0f;     // the root's step forward at most (Leon's own knee kick: 325)
 const int kWindUp = 9;           // the knife's fallback: frames of the wind-up (the up stance, blended in over 6)
 const int kHitFrame = 8;         // frame of its chop (0x86) that hits: the blade at its lowest
 const int kCancel = 18;          // frames of its chop before an aim or fire key may end it
 bool gAxeLive = false;           // the knife is out for the axe strike (the gun hidden)
+
+// whether the axe strike's swing (step 1) is over at `frame`: the motion's end, kAxeEnd, or kAxeFollow frames after
+// the hit (`hitAt`, the frame it landed on; negative before it)
+bool axeDone(f32 frame, int hitAt, bool end)
+{
+    return end || frame >= (f32) kAxeEnd || (hitAt >= 0 && frame >= (f32) (hitAt + kAxeFollow));
+}
 
 // A key value of a motion curve: they stay big-endian in memory (formats_model.cpp; motion.cpp reads them byte-wise,
 // FccF32 of patch 0018), counts and frame numbers are host order
@@ -469,7 +479,7 @@ void axeFinish(cPlayer* pl)
     pl->dmg.set(0, 0xF);
 }
 
-// Steps in r_no_2: 0 start, 1 the Ganado's swing (m_Work0 the hit frames seen, m_Work2 1 once hit), 10 / 11 the
+// Steps in r_no_2: 0 start, 1 the Ganado's swing (m_Work0 the hit frames seen, m_Work2 the hit's frame + 1), 10 / 11 the
 // knife's wind-up and chop (m_Work0 the frames left); m_Work1 the frames of the turn to the enemy
 void plAxeStrike(cPlayer* pl)
 {
@@ -532,10 +542,11 @@ void plAxeStrike(cPlayer* pl)
         }
         // the third hit frame, or the first after fewer
         if (!pl->m_Work2 && pl->m_Work0 && (pl->m_Work0 >= (u32) kAxeHitAt || !(free & 1))) {
-            pl->m_Work2 = 1;
+            pl->m_Work2 = (u32) pl->Motion.Seq_frame + 1;
             axeHit(pl);
+            re4_log("melee: the axe strike hit on frame %d, ends %d frames later", (int) pl->m_Work2 - 1, kAxeFollow);
         }
-        if (end || pl->Motion.Seq_frame >= (f32) kAxeEnd) {
+        if (axeDone(pl->Motion.Seq_frame, (int) pl->m_Work2 - 1, end != 0)) {
             axeFinish(pl);
         } else if (pl->Motion.Seq_frame >= (f32) kAxeCancel && (joyKamae() || (Key.on & 0x10F))) {
             axeFinish(pl);
@@ -782,6 +793,12 @@ void* re4_box_strike_func(void)
         re4_add_frame_hook(axeWatch);
     }
     return (void*) boxStrikeAction;
+}
+
+// For the tests: whether the axe strike's swing is over at `frame` with the hit on `hit_at` (< 0: not yet)
+int re4_axe_done(float frame, int hit_at, int end)
+{
+    return axeDone(frame, hit_at, end != 0) ? 1 : 0;
 }
 
 // For the tests: whether the box strike on `target` breaks `other` too (its distance beyond the reach, < 0 not)
