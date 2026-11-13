@@ -4,7 +4,8 @@
 // (port/tools/re9_finisher_pack.py --move: one seamless cycle of each movement from the PC mod's cha0_general).
 //
 // Patch 0923 (pl_wep.cpp cPlayer::weaponInit, after the weapon's module filled the motion table m_MotTbl) asks
-// re4_move_table: with bare hands (weapon 0, the quick slots' "weapon put away") or a handgun (em_sub.cpp HandgunCk) the
+// re4_move_table: with bare hands (weapon 0, the quick slots' "weapon put away"), a handgun (em_sub.cpp HandgunCk) or a
+// grenade the
 // table's stand (0 / 1), walk (2 / 3), run (6 / 7) and back step (8 / 9) take the remake's motion and a sequence made
 // here. The remake's motions are unarmed ones: with a rifle or shotgun in both hands the game's own stay, and so do the
 // hurt motions (life under two thirds: m_MotTbl 0x5F..), the turns in place and everything else.
@@ -321,9 +322,16 @@ void fit(int k, void* mot, void* seq)
             kNames[k], (int) pG->weapon_no, (double) pace, (double) own, (double) time, keys, (double) scale);
 }
 
+// The throwables (read.cpp groups them for the other characters: hand, incendiary and flash grenades, the eggs), held in
+// one hand as a handgun is (wish of DevJunior, 13.11.2026: "with grenades the remake's movements go away")
+bool throwable(int no)
+{
+    return no == 0x13 || no == 0x16 || no == 0x17 || no == 0x19 || no == 0x1F || no == 0x20;
+}
+
 bool fits()
 {
-    return pG && pG->pl_type == 0 && (pG->weapon_no == 0 || HandgunCk(pG->weapon_no));
+    return pG && pG->pl_type == 0 && (pG->weapon_no == 0 || HandgunCk(pG->weapon_no) || throwable(pG->weapon_no));
 }
 
 // The table's four movements: the remake's (the game's kept aside) or the game's back

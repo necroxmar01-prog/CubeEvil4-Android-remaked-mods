@@ -227,7 +227,28 @@ def fastest_hand(motion):
     return at
 
 
-def kicks(root, model, tol, out_path, no_fingers):
+BOX_KICK = "9904"  # the box strike's own kick when no other pack's is given: RE9's low kick
+BOX_END = 10       # game frames it plays after the hit
+
+
+def box_from(path):
+    """Entries 16 and 17 (the box strike's motion and frames) of another pack's melee.dat (uhd_motion_convert.py --box;
+    wish of DevJunior, 13.11.2026: the kick for boxes and barrels "we had", Jake's low kick, kept with the RE9 pack,
+    since only the last pack's melee.dat counts)."""
+    d = Path(path).read_bytes()
+    n = struct.unpack_from(">I", d, 0)[0]
+    if n < 18:
+        raise SystemExit("%s: no box strike (entries 16 and 17)" % path)
+    at = list(struct.unpack_from(">%dI" % n, d, 16)) + [len(d)]
+    tag = d[16 + 4 * n + 4 * 17:16 + 4 * n + 4 * 18]
+    mot, frames = d[at[16]:at[17]], d[at[17]:at[18]]
+    if not mot or tag[:3] != b"BXF" or len(frames) < 3 or not frames[0] < frames[1] < frames[2]:
+        raise SystemExit("%s: no box strike (entries 16 and 17)" % path)
+    # the motion's own size: the next entry starts at a 32-byte boundary
+    return mot, frames[:3] + bytes(13)
+
+
+def kicks(root, model, tol, out_path, no_fingers, box=None):
     """The melee archive with the mod's kicks (see --kicks)."""
     _v, mots = R.read_motlist(root / CHA0)
     entries = []
@@ -243,7 +264,17 @@ def kicks(root, model, tol, out_path, no_fingers):
             entries.append(data)
             print("kick %-28s on a %s enemy: %d game frames, %d bytes; check mean/worst %.1f/%.1f deg" % (
                 m.name, "kneeling" if kind else "standing", len(fit.frames), len(data), c[0], c[1]))
-    entries += [b"", b""]  # 16 / 17: the box strike's place (none)
+    # 16 / 17: the box strike (patch 0916): another pack's (--box-from) or RE9's low kick, the box breaking on its hit
+    if box:
+        entries += list(box_from(box))
+        print("box strike from %s: frames %d..%d, the box breaks on %d" % (box, entries[-1][0], entries[-1][2],
+                                                                            entries[-1][1]))
+    else:
+        m = next(x for x in mots if "_%s_" % BOX_KICK in x.name)
+        frames = kick_frames(m.frames)[:KICK_HIT + BOX_END + 1]
+        fit = Fit(m, model, "leon", 2.0, tol, m.frames, no_fingers, frames=frames)
+        entries += [fcv.serialise(fit.motion(fit.scale)), bytes([0, KICK_HIT, KICK_HIT + BOX_END]) + bytes(13)]
+        print("box strike: %s, frames 0..%d, the box breaks on %d" % (m.name, KICK_HIT + BOX_END, KICK_HIT))
     _v, knife = R.read_motlist(root / WP5000H)
     for name in KNIFE_COMBO:
         m = next(x for x in knife if x.name.endswith(name))
@@ -263,7 +294,9 @@ def kicks(root, model, tol, out_path, no_fingers):
         entries.append(data)
         print("parry   %-28s %d game frames, %d bytes; check %.1f/%.1f deg" % (m.name, len(fit.frames), len(data),
                                                                           c[0], c[1]))
-    body = U.build_body(entries, [b"FCV\x00"] * len(entries))
+    tags = [b"FCV\x00"] * len(entries)
+    tags[17] = b"BXF\x00"  # the box strike's frames: read as bytes
+    body = U.build_body(entries, tags)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(body)
@@ -381,6 +414,8 @@ def main(argv=None):
     ap.add_argument("--no-fingers", action="store_true")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--kicks", help="also write the mod's kicks as the pack's melee archive (melee/melee.dat)")
+    ap.add_argument("--box-from", help="the box strike's kick from another pack's melee.dat (entries 16 / 17); "
+                    "default RE9's low kick")
     ap.add_argument("--move", help="also write Leon's movements of the 2023 game (melee/move.dat)")
     a = ap.parse_args(argv)
 
@@ -403,7 +438,7 @@ def main(argv=None):
 
     leon_model, ganado_model = model_of(a.leon), model_of(a.ganado)
     if a.kicks:
-        kicks(root, leon_model, a.tolerance, a.kicks, a.no_fingers)
+        kicks(root, leon_model, a.tolerance, a.kicks, a.no_fingers, a.box_from)
     if a.move:
         moves(root, leon_model, a.tolerance, a.move)
     want = set(a.only.split(",")) if a.only else None
