@@ -79,9 +79,24 @@ def back_uv_fit(cc, cur, tex):
     return M
 
 
-def patch(cur, old, mats, cover_mats, reach=30.0, behind=6.0, back_only=False, as_tex=None):
-    """Returns (new model, triangles added per texture)."""
+def patch(cur, old, mats, cover_mats, reach=30.0, behind=6.0, back_only=False, as_tex=None, shoulders=None):
+    """Returns (new model, triangles added per texture). shoulders (TEX, X, Y): the current triangles of TEX whose
+    middle lies beyond |x| X and above y Y go first, and the old ones there come with their own texture, also in
+    front (DevJunior, 12.11.2026: the RE9 shirt's shoulder edges stood up as jagged flaps over the Lite sleeves)."""
     cc = BF.model_corners(cur)
+    dropped = 0
+    if shoulders:
+        st, sx, sy = shoulders
+        keep_cc = []
+        for p, Pc, Nc, UVc, wc in cc:
+            if cur[p + 0xC] == st:
+                c = Pc.mean(1)
+                k = ~((np.abs(c[:, 0]) > sx) & (c[:, 1] > sy))
+                dropped += int((~k).sum())
+                Pc, Nc, UVc = Pc[k], Nc[k], UVc[k]
+                wc = [w for kk, w in zip(np.repeat(k, 3), wc) if kk]
+            keep_cc.append((p, Pc, Nc, UVc, wc))
+        cc = keep_cc
     cover = np.concatenate([Pc for p, Pc, _n, _t, _w in cc if cur[p + 0xC] in cover_mats])
     fit = None
     if as_tex is not None:
@@ -105,8 +120,16 @@ def patch(cur, old, mats, cover_mats, reach=30.0, behind=6.0, back_only=False, a
             open_ |= ~ray_hit_dist(q - n, n, cover, reach + 1.0)
             over |= ray_hit_dist(q - n, -n, cover, behind - 1.0)
         take = open_ & ~over
+        shoulder = np.zeros(len(cen), bool)
+        if shoulders:
+            shoulder = (np.abs(cen[:, 0]) > shoulders[1]) & (cen[:, 1] > shoulders[2]) & open_
         if back_only:
             take &= (cen[:, 2] < 0) & (n[:, 2] < -0.3)
+        take &= ~shoulder
+        if shoulder.any():  # with their own texture (the Lite sleeves' cloth)
+            extra.setdefault(tex, []).append((Pc[shoulder], Nc[shoulder], UVc[shoulder],
+                                              [w for k, w in zip(np.repeat(shoulder, 3), wc) if k]))
+            added[tex] = added.get(tex, 0) + int(shoulder.sum())
         if not take.any():
             continue
         to = tex if as_tex is None else as_tex
@@ -116,8 +139,10 @@ def patch(cur, old, mats, cover_mats, reach=30.0, behind=6.0, back_only=False, a
             uv = (np.stack([P[..., 0], P[..., 1], np.ones(P.shape[:2])], -1) @ fit)
         extra.setdefault(to, []).append((Pc[take], Nc[take], uv, [w for k, w in zip(np.repeat(take, 3), wc) if k]))
         added[tex] = added.get(tex, 0) + int(take.sum())
-    if not added:
+    if not added and not dropped:
         return cur, added
+    if dropped:
+        print("  %d current triangles of texture %d on the shoulders left out" % (dropped, shoulders[0]))
     Ps, Ns, Ts, Ws, groups = [], [], [], [], []
 
     def take(hdr, Pc, Nc, UVc, wc):
@@ -160,6 +185,8 @@ def main(argv=None):
     ap.add_argument("--behind", type=float, default=6.0)
     ap.add_argument("--back-only", action="store_true",
                     help="only triangles on the back that face backwards (the V neck in front stays open)")
+    ap.add_argument("--shoulders", metavar="TEX:X:Y",
+                    help="the current triangles of TEX beyond |x| X and above y Y give way to the old model's there")
     ap.add_argument("--as-tex", type=int, help="draw the added triangles with this current texture, their texture "
                     "coordinates fitted (affine in x, y) to its triangles on the back")
     a = ap.parse_args(argv)
@@ -171,7 +198,10 @@ def main(argv=None):
     mats = {int(x) for x in a.mats.split(",")}
     cover = ({int(x) for x in a.cover_mats.split(",")} if a.cover_mats else
              {cur[p + 0xC] for p, *_ in BF.model_corners(cur)})
-    entries[a.entry], added = patch(cur, old, mats, cover, a.reach, a.behind, a.back_only, a.as_tex)
+    sh = tuple(float(x) for x in a.shoulders.split(":")) if a.shoulders else None
+    if sh:
+        sh = (int(sh[0]), sh[1], sh[2])
+    entries[a.entry], added = patch(cur, old, mats, cover, a.reach, a.behind, a.back_only, a.as_tex, sh)
     body = U.build_body(entries, gc.types)
     out = U.build_archive(gc, body)
     Path(a.out).write_bytes(out)

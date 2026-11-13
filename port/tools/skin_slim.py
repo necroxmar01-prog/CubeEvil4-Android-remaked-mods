@@ -257,21 +257,43 @@ def outward(P):
     return d, w
 
 
-def fit(target, ref, most=70.0, smooth=30.0):
+def fit(target, ref, most=70.0, smooth=30.0, target_mats=None, ref_mats=None, top=None):
     """Moves target's positions out to ref's surface along `outward` (see --fit); returns (new model, the push per
-    position)."""
+    position). target_mats / ref_mats: only the positions of target's parts with these textures move, only ref's
+    parts with these textures are its surface (DevJunior, 12.11.2026: the RE9 shirt as full as the Lite shirt under
+    the same harness: the harness's parts stay, and are no surface to push to)."""
     from scipy.spatial import cKDTree
     P = G.positions(target)
     Q = G.positions(ref)
     # ref's surface: its positions and the centres of its triangles, dense enough to stand for it
-    cents = []
-    for _, tris in part_lists(ref):
-        if tris:
+    cents, used = [], set()
+    for p, tris in part_lists(ref):
+        if tris and (ref_mats is None or ref[p + 0xC] in ref_mats):
             idx = np.array([[r[0] for r in t] for t in tris])
             cents.append(Q[idx].mean(1))
-    S = np.concatenate([Q] + cents)
+            used.update(idx.ravel().tolist())
+    S = np.concatenate([Q[sorted(used)] if ref_mats is not None else Q] + cents)
     tree = cKDTree(S)
     dirs, w = outward(P)
+    if top is not None:  # only below this height (fading over 40): the shoulders' tops and the collar keep their shape
+        w = w * np.clip((top - P[:, 1]) / 40.0, 0.0, 1.0)
+    if target_mats is not None:
+        mine = np.zeros(len(P), bool)
+        own = []
+        for p, tris in part_lists(target):
+            if tris and target[p + 0xC] in target_mats:
+                idx = np.array([[r[0] for r in t] for t in tris])
+                mine[idx.ravel()] = True
+                own.append(P[idx].astype(float))
+        # only the outer layer: a position with more of these parts outside it along its direction lies inside (the
+        # RE9 shirt's inner fans behind the collar, pushed out, stood out as flaps)
+        import skin_patch as SP
+        cand = np.nonzero(mine & (w > 0))[0]
+        inner = SP.ray_hit_dist(P[cand] + dirs[cand] * 2.0, dirs[cand], np.concatenate(own), 300.0)
+        moves = mine.copy()  # these move (by the smoothed push of the outer ones around them) ...
+        fade = w.copy()
+        mine[cand[inner]] = False
+        w = w * mine  # ... these find the push
     push = np.zeros(len(P))
     # how far out ref's surface lies along the direction: the nearest surface point's distance along it, if it lies
     # roughly that way (a point sideways is another limb or a fold)
@@ -291,12 +313,91 @@ def fit(target, ref, most=70.0, smooth=30.0):
         push[i] = min(best, most) * w[i]
     # smoothed: each position takes the mean of the pushes around it
     ptree = cKDTree(P)
-    smoothed = np.array([push[ptree.query_ball_point(P[i], smooth)].mean() for i in range(len(P))])
+    if target_mats is None:
+        smoothed = np.array([push[ptree.query_ball_point(P[i], smooth)].mean() for i in range(len(P))])
+    else:
+        # a push field of the outer positions' pushes, the same for every layer at a place (the shirt's layers move
+        # together, no tears); only these parts' positions move, by their own fade
+        samples = np.nonzero(w > 0)[0]
+        stree = cKDTree(P[samples])
+        smoothed = np.zeros(len(P))
+        for i in np.nonzero(moves & (fade > 0))[0]:
+            near_s = stree.query_ball_point(P[i], smooth)
+            if near_s:
+                smoothed[i] = push[samples[near_s]].mean() / max(w[samples[near_s]].mean(), 1e-6) * fade[i]
     out = bytearray(target)
     for i in range(len(P)):
         if smoothed[i] > 0.05:
             G.set_position(out, i, P[i] + dirs[i] * smoothed[i])
     return bytes(out), P, dirs * smoothed[:, None]
+
+
+def far_hit(origins, dirs, T, chunk=128):
+    """Per ray the distance to its farthest hit among triangles T (n x 3 x 3), 0 for none."""
+    e1 = T[:, 1] - T[:, 0]
+    e2 = T[:, 2] - T[:, 0]
+    out = np.zeros(len(origins))
+    for c in range(0, len(origins), chunk):
+        o, d = origins[c:c + chunk, None, :], dirs[c:c + chunk, None, :]
+        p = np.cross(d, e2[None])
+        det = np.einsum("rtk,tk->rt", p, e1)
+        ok = np.abs(det) > 1e-9
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        s_ = o - T[None, :, 0]
+        u = np.einsum("rtk,rtk->rt", s_, p) * inv
+        q = np.cross(s_, e1[None])
+        v = np.einsum("rtk,rtk->rt", d, q) * inv
+        t = np.einsum("tk,rtk->rt", e2, q) * inv
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0)
+        out[c:c + chunk] = np.where(hit, t, 0.0).max(1)
+    return out
+
+
+def girth(target, ref, target_mats, ref_mats, top=1470.0, fade=40.0, reach=175.0, most=1.45, smooth=35.0):
+    """Widens the torso of target's parts with target_mats to the girth of ref's parts with ref_mats (DevJunior,
+    12.11.2026: "more bulk" for the RE9 shirt under the Lite harness, the harness sat out from it): for every position
+    of these parts, from the body's axis (x 0, z -12) at its height, the direction through it, and along it the outer
+    radius of both models (their farthest triangle there); the position moves out from the axis by the ratio (at
+    least 1, at most `most`), smoothed over the positions within `smooth`: the layers of the shirt at a place move
+    alike (no tears). In full below `top`, fading to nothing over `fade` above it (the collar and the V neck keep
+    their shape), and only within |x| `reach` (the sleeves are the Lite's). Returns (model, positions moved, ratios)."""
+    from scipy.spatial import cKDTree
+    P = G.positions(target).astype(float)
+    Q = G.positions(ref).astype(float)
+
+    def tris_of(m, X, mats):
+        T, k = [], np.zeros(len(X), bool)
+        for p, tris in part_lists(m):
+            if tris and m[p + 0xC] in mats:
+                idx = np.array([[r[0] for r in t] for t in tris])
+                T.append(X[idx])
+                k[idx.ravel()] = True
+        return np.concatenate(T), k
+
+    TT, mine = tris_of(target, P, target_mats)
+    TR, _ = tris_of(ref, Q, ref_mats)
+    TR = TR[np.abs(TR.mean(1)[:, 0]) < reach]
+    idx = np.nonzero(mine & (np.abs(P[:, 0]) < reach + 20.0) & (P[:, 1] < top + fade))[0]
+    A = np.stack([np.zeros(len(idx)), P[idx, 1], np.full(len(idx), -12.0)], 1)
+    d = P[idx] - A
+    d[:, 1] = 0.0
+    r = np.linalg.norm(d, axis=1)
+    d /= np.maximum(r, 1e-6)[:, None]
+    rt, rr = far_hit(A, d, TT), far_hit(A, d, TR)
+    ratio = np.where((rt > 1.0) & (rr > 1.0), rr / np.maximum(rt, 1.0), 1.0)
+    ratio = np.clip(ratio, 1.0, most)
+    tree = cKDTree(P[idx])
+    sm = np.array([ratio[tree.query_ball_point(P[i], smooth)].mean() for i in idx])
+    wgt = np.clip((top + fade - P[idx, 1]) / fade, 0, 1) * np.clip((reach + 20.0 - np.abs(P[idx, 0])) / 20.0, 0, 1)
+    k = 1.0 + (sm - 1.0) * wgt
+    out = bytearray(target)
+    moved = 0
+    for n, i in enumerate(idx):
+        if k[n] > 1.002:
+            x, y, z = P[i]
+            G.set_position(out, i, np.array([x * k[n], y, (z + 12.0) * k[n] - 12.0]))
+            moved += 1
+    return bytes(out), moved, k
 
 
 def collar(target, ref, low=1545.0, full=1580.0, most=60.0, smooth=20.0):
@@ -566,7 +667,9 @@ def main(argv=None):
     ap.add_argument("out")
     ap.add_argument("--take", action="append", default=[], metavar="SRC:ENTRIES")
     ap.add_argument("--cards", action="append", default=[], metavar="ENTRY:KEEP")
-    ap.add_argument("--fit", action="append", default=[], metavar="ENTRY=SRC:E")
+    ap.add_argument("--fit", action="append", default=[], metavar="ENTRY[@MATS]=SRC:E[@MATS]",
+                    help="push ENTRY's positions (of its parts with MATS) out to the surface of SRC's model E (of its "
+                         "parts with MATS)")
     ap.add_argument("--collar", action="append", default=[], metavar="ENTRY=SRC:E")
     ap.add_argument("--tuck", action="append", default=[], metavar="HEAD:BODY",
                     help="keep the base of head HEAD's neck under the collar of model BODY")
@@ -586,6 +689,10 @@ def main(argv=None):
                          "skin_graft.py --drop emptied parts)")
     ap.add_argument("--prune", action="append", default=[], metavar="TPL",
                     help="keep only the textures of palette TPL that its models draw (Leon's 1: 0, 6, 9, 12; 3: 2, 4, 5)")
+    ap.add_argument("--girth", action="append", default=[], metavar="ENTRY@MATS=SRC:E@MATS",
+                    help="widen ENTRY's parts with MATS around the body's axis to the girth of SRC's model E's parts "
+                         "with MATS (see girth; --fit-top: its top, default 1470)")
+    ap.add_argument("--fit-top", type=float, help="--fit only below this height (fading over 40 units)")
     ap.add_argument("--most", type=float, default=70.0, help="--fit's largest push (default 70)")
     ap.add_argument("--passes", type=int, default=2, help="--fit's rounds (default 2: the smoothing leaves some of the "
                     "way after the first)")
@@ -613,16 +720,30 @@ def main(argv=None):
     moved = {}
     for spec in a.fit:
         e, ref = spec.split("=")
+        e, _, tm = e.partition("@")
         src, re_ = ref.rsplit(":", 1)
+        re_, _, rm = re_.partition("@")
+        tmats = {int(x) for x in tm.split(",")} if tm else None
+        rmats = {int(x) for x in rm.split(",")} if rm else None
         P0 = G.positions(entries[int(e)])
         for _ in range(max(1, a.passes)):
-            entries[int(e)], _, _ = fit(entries[int(e)], arc(src).entry(int(re_)), a.most)
+            entries[int(e)], _, _ = fit(entries[int(e)], arc(src).entry(int(re_)), a.most, target_mats=tmats,
+                                        ref_mats=rmats, top=a.fit_top)
         push = G.positions(entries[int(e)]) - P0
         P = P0
         moved[int(e)] = (P, push)
         n = np.linalg.norm(push, axis=1)
         print("entry %s fitted to %s's %s: %d of %d positions pushed out, at most %.0f, mean %.0f" %
               (e, src, re_, (n > 0.05).sum(), len(n), n.max(), n[n > 0.05].mean() if (n > 0.05).any() else 0))
+    for spec in a.girth:
+        e, ref = spec.split("=")
+        e, _, tm = e.partition("@")
+        src, re_ = ref.rsplit(":", 1)
+        re_, _, rm = re_.partition("@")
+        entries[int(e)], n, ratio = girth(entries[int(e)], arc(src).entry(int(re_)), {int(x) for x in tm.split(",")},
+                                          {int(x) for x in rm.split(",")}, top=a.fit_top or 1470.0)
+        print("entry %s widened to the girth of %s's %s: %d positions, ratio up to %.2f (mean %.2f where > 1)" %
+              (e, src, re_, n, ratio.max(), ratio[ratio > 1.001].mean() if (ratio > 1.001).any() else 1.0))
     for spec in a.collar:
         e, ref = spec.split("=")
         src, re_ = ref.rsplit(":", 1)
