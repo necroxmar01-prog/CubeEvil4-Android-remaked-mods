@@ -3,7 +3,7 @@
 writes it as the game's MotionData ("FCV", tools/motion/fcv.py), for the RE9 melee finishers DevJunior brought
 (13.11.2026: "these animations for executions and melee attacks, turn this into the remake, its controls too").
 
-    re_motion_retarget.py MOTLIST [--motion N] --model SKIN.drs[:ENTRY] --map leon|ganado OUT.fcv
+    re_motion_retarget.py MOTLIST OUT.fcv [--motion N] --model SKIN.drs[:ENTRY] --map leon|ganado
                           [--start F] [--end F] [--step 2] [--tolerance 0.004] [--no-fingers] [--check]
 
 How: the source skeleton's bones are played forward (the tracks' local translations and rotations); for every
@@ -54,7 +54,9 @@ for side, base in (("R_", 34), ("L_", 49)):
 # direction of each mapped part at rest: towards this part (its first child on the chain)
 LEON_NEXT = {0: 1, 1: 2, 2: 3, 3: 4, 5: 7, 7: 8, 8: 10, 10: 40, 11: 13, 13: 14, 14: 16, 16: 55,
              18: 19, 19: 20, 20: 21, 22: 23, 23: 24, 24: 25}
-MAPS = {"leon": (LEON, LEON_FINGERS, LEON_NEXT)}
+# The Ganados (em10.drs bodies: 34..61 parts) share Leon's parts 0..25 and their rest pose; no finger parts.
+GANADO_NEXT = {k: v for k, v in LEON_NEXT.items() if k not in (10, 16)}
+MAPS = {"leon": (LEON, LEON_FINGERS, LEON_NEXT), "ganado": (LEON, {}, GANADO_NEXT)}
 
 
 # ---------------------------------------------------------------- quaternions (x, y, z, w) and matrices
