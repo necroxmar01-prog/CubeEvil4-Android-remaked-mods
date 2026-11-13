@@ -1143,6 +1143,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       boolean gone = ModStore.removeAll(gameRoot());
       Log.i(TAG, "menu: mods removed" + (gone ? "" : " (not all)"));
       restartIntoGame("menu: mods removed");
+    }
 
     @Override public void enemyRandomChanged(int seed) {
       getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_SEED, seed).apply();
@@ -1393,6 +1394,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
             .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mod added")).show();
       });
     }, "mod-copy").start();
+  }
 
   /** The chosen texture pack into the textures folder (TexturePacks.importFrom) on a thread of its own; the menu hears
    *  its progress and its end; the pack is in use right after. */
