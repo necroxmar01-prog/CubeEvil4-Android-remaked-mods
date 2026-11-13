@@ -1809,7 +1809,7 @@ void bindMap(u32 map)
     Re4GxTexture t;
     memset(&t, 0, sizeof(t));
     t.map = map;
-    t.address = (image3 & 0x1FFFFF) << 5;
+    t.address = (image3 & 0xFFFFFF) << 5;  // 24 bits: the mods' place lies above 64 MB (patch 0920)
     t.width = (image0 & 0x3FF) + 1;
     t.height = ((image0 >> 10) & 0x3FF) + 1;
     t.format = (image0 >> 20) & 0xF;
@@ -2041,7 +2041,7 @@ void tlutLoad()
 {
     gStats.tlutLoads++;
     gTexturesDirty = true;
-    u32 source = (gGp.bp[0x64] & 0x1FFFFF) << 5;
+    u32 source = (gGp.bp[0x64] & 0xFFFFFF) << 5;  // 24 bits (patch 0920)
     u32 offset = (gGp.bp[0x65] & 0x3FF) << 9;
     u32 bytes = ((gGp.bp[0x65] >> 10) & 0x7FF) * 32;
     if (offset + bytes > kTlutBytes) {

@@ -1240,6 +1240,7 @@ static void testStream()
 
 extern "C" int re4probe_gx_test(void* fifo, void* list);
 extern "C" int re4probe_gx_frame_test(void* fifo, void* mem);
+extern "C" int re4probe_gx_modplace_test(void* fifo, void* mem);
 extern "C" void re4probe_gx_produce(void* fifo, void* xfb, int frames, int init);
 extern "C" unsigned long long re4probe_gx_fingerprint(void* fifo, void* mem, void* xfb, int frames);
 extern "C" int re4_gx_threads(int n);
@@ -1399,6 +1400,15 @@ static void testGx()
             re4_log("  gx still: %u of %u chunks marked, the last 0x%x", still, chunks, last);
         }
         re4_core_gx_detach();
+    }
+    // a texture and a palette in the mods' place reach the chunk with their data (patch 0920)
+    {
+        const int failed = re4probe_gx_modplace_test((void*) (unsigned long) 0x82800000u,
+                                                     (void*) (unsigned long) 0x82830000u);
+        if (failed) {
+            re4_log("  gx mods' place checks failed: 0x%x", failed);
+        }
+        CHECK(failed == 0);
     }
     // RE4_GX_BENCH=N: the decoder's time for N village-like frames (120 000 vertices each)
     if (const char* bench = getenv("RE4_GX_BENCH")) {

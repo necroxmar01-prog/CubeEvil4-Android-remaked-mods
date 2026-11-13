@@ -1,0 +1,93 @@
+# Patch 0920 (device test of DevJunior, 12.11.2026: skin v14 "comes out like this", every texture of Leon colourful
+# noise, with Vulkan as with GLES). Not a bug of the prototype: a port fix for the mods' place of patch 0914.
+# The graphics processor sees the mods' place at the physical addresses 0x04000000..0x057FFFFF (re4_gx_physical,
+# runtime/mod_place.cpp), but the texture registers kept the GameCube's 21 bits of address / 32 (64 MB): a texture,
+# palette or preload from the place wrapped to 0x00000000.. and the decoder read MEM1 there. The registers' 24-bit
+# value has room (bits 21..23 are unused on the GameCube): GXInitTexObj, GXInitTexObjData, GXInitTlutObj and the
+# preloads write 24 bits, the getters read 24; runtime/gx_decode.cpp (bindMap, tlutLoad) reads 24 bits. Every address
+# below 64 MB keeps its value.
+--- a/src/lib/GXTexture.c
++++ b/src/lib/GXTexture.c
+@@ -229,7 +229,7 @@
+     SET_REG_FIELD(648, t->image0, 4, 20, format & 0xF);
+     ASSERTMSGLINEV(654, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObj", "image");
+     imageBase = (re4_gx_physical(image_ptr) >> 5) & 0x01FFFFFF; /* port: patch 0031 */
+-    SET_REG_FIELD(656, t->image3, 21, 0, imageBase);
++    SET_REG_FIELD(656, t->image3, 24, 0, imageBase); /* port: patch 0920 */
+ 
+     switch (format & 0xF) {
+     case GX_TF_I4:
+@@ -338,7 +338,7 @@
+     CHECK_GXBEGIN(837, "GXInitTexObjData");
+     ASSERTMSGLINEV(840, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObjData", "image");
+     imageBase = (re4_gx_physical(image_ptr) >> 5) & 0x01FFFFFF; /* port: patch 0031 */
+-    SET_REG_FIELD(843, t->image3, 21, 0, imageBase);
++    SET_REG_FIELD(843, t->image3, 24, 0, imageBase); /* port: patch 0920 */
+ }
+ 
+ void GXInitTexObjWrapMode(GXTexObj* obj, GXTexWrapMode sm, GXTexWrapMode tm) {
+@@ -465,7 +465,7 @@
+     const __GXTexObjInt* t = (const __GXTexObjInt *)obj;
+ 
+     ASSERTMSGLINE(1095, obj, "Texture Object Pointer is null");
+-    *image_ptr = (void *)(GET_REG_FIELD(t->image3, 21, 0) << 5);
++    *image_ptr = (void *)(GET_REG_FIELD(t->image3, 24, 0) << 5); /* port: patch 0920 */
+     *width = (u32)GET_REG_FIELD(t->image0, 10, 0) + 1;
+     *height = (u32)GET_REG_FIELD(t->image0, 10, 10) + 1;
+     *format = t->fmt;
+@@ -478,7 +478,7 @@
+     const __GXTexObjInt* t = (const __GXTexObjInt *)to;
+ 
+     ASSERTMSGLINE(1108, to, "Texture Object Pointer is null");
+-    return (void*)(GET_REG_FIELD(t->image3, 21, 0) << 5);
++    return (void*)(GET_REG_FIELD(t->image3, 24, 0) << 5); /* port: patch 0920 */
+ }
+ 
+ u16 GXGetTexObjWidth(const GXTexObj* to) {
+@@ -676,7 +676,7 @@
+     ASSERTMSGLINEV(1356, ((u32)lut & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTlutObj", "Tlut");
+     t->tlut = 0;
+     SET_REG_FIELD(1359, t->tlut, 2, 10, fmt);
+-    SET_REG_FIELD(1360, t->loadTlut0, 21, 0, re4_gx_physical(lut) >> 5); /* port: patch 0031 */
++    SET_REG_FIELD(1360, t->loadTlut0, 24, 0, re4_gx_physical(lut) >> 5); /* port: patches 0031, 0920 */
+     SET_REG_FIELD(1361, t->loadTlut0, 8, 24, 0x64);
+     t->numEntries = n_entries;
+ }
+@@ -685,7 +685,7 @@
+     const __GXTlutObjInt* t = (const __GXTlutObjInt *)tlut_obj;
+ 
+     ASSERTMSGLINE(1382, tlut_obj, "TLut Object Pointer is null");
+-    *data = (void *)(GET_REG_FIELD(t->loadTlut0, 21, 0) << 5);
++    *data = (void *)(GET_REG_FIELD(t->loadTlut0, 24, 0) << 5); /* port: patch 0920 */
+     *format = GET_REG_FIELD(t->tlut, 2, 10);
+     *numEntries = t->numEntries;
+ }
+@@ -694,7 +694,7 @@
+     const __GXTlutObjInt* t = (const __GXTlutObjInt *)tlut_obj;
+ 
+     ASSERTMSGLINE(1391, tlut_obj, "TLut Object Pointer is null");
+-    return (void *)(GET_REG_FIELD(t->loadTlut0, 21, 0) << 5);
++    return (void *)(GET_REG_FIELD(t->loadTlut0, 24, 0) << 5); /* port: patch 0920 */
+ }
+ 
+ GXTlutFmt GXGetTlutObjFmt(const GXTlutObj* tlut_obj) {
+@@ -1003,8 +1003,8 @@
+ 
+     loadImage0 = 0;
+     SET_REG_FIELD(0, loadImage0, 8, 24, 0x60);
+-    base = t->image3 & 0x1FFFFF;
+-    SET_REG_FIELD(1831, loadImage0, 21, 0, base);
++    base = t->image3 & 0xFFFFFF; /* port: patch 0920 */
++    SET_REG_FIELD(1831, loadImage0, 24, 0, base);
+ 
+     loadImage1 = 0;
+     SET_REG_FIELD(0, loadImage1, 8, 24, 0x61);
+@@ -1106,7 +1106,7 @@
+             tmem2 = (i & 1) ? tmemGB : tmemAR;
+             __GetImageTileCount(t->fmt, (u16) (wd >> (i + 1)), (u16) (ht >> (i + 1)), &rowTiles, &colTiles, &cmpTiles);
+             nTiles = rowTiles * colTiles;
+-            SET_REG_FIELD(1957, loadImage0, 21, 0, base);
++            SET_REG_FIELD(1957, loadImage0, 24, 0, base); /* port: patch 0920 */
+             SET_REG_FIELD(1958, loadImage1, 15, 0, tmem1);
+             SET_REG_FIELD(1959, loadImage2, 15, 0, tmem2);
+             SET_REG_FIELD(1960, loadImage3, 15, 0, nTiles);

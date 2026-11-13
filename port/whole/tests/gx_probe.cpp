@@ -22,6 +22,8 @@ void re4_gx_stats(unsigned out[11]);
 unsigned re4_gx_bp(unsigned reg);
 unsigned re4_gx_xf(unsigned address);
 void re4_gx_deliver_interrupts(void);
+void* re4_mod_place_alloc(unsigned long size, const char* what);
+int re4_mod_em_release(const void* p);
 }
 
 namespace {
@@ -1116,4 +1118,70 @@ extern "C" unsigned re4probe_gx_bench(void* fifo, void* mem, void* xfb, int fram
     }
     re4_core_gx_detach();
     return frames ? (unsigned) (total / frames) : 0;
+}
+
+// A texture and a palette in the mods' place (patch 0914), above the GameCube's 64 MB: the texture registers carry
+// 24 bits of address / 32 (patch 0920; with 21 they wrapped to MEM1 and a skin's textures came out as noise). Its own
+// test, after the fingerprint: the decoder keeps texture keys from one test to the next.
+extern "C" int re4probe_gx_modplace_test(void* fifo, void* mem)
+{
+    int failed = 0;
+    u8* xfb = (u8*) mem;
+    GXInit(fifo, 0x10000);
+    re4_core_gx_acquire();  // attach
+    copyDisp(xfb);          // the chunk starts at this frame boundary
+    {
+        u8* modTex = (u8*) re4_mod_place_alloc(64, "gx probe");
+        bool ok = modTex != 0 && re4_gx_physical(modTex) >= 0x04000000u;
+        if (ok) {
+            for (int i = 0; i < 64; i++) {
+                modTex[i] = (u8) (0xA0 + i);
+            }
+            GXTlutObj modTlut;
+            GXInitTlutObj(&modTlut, modTex + 32, 2, 16);
+            GXLoadTlut(&modTlut, 2);
+            GXTexObj modObj;
+            GXInitTexObj(&modObj, modTex, 4, 4, 5, 0, 0, 0);
+            GXLoadTexObj(&modObj, 0);
+            triangle();
+            copyDisp(xfb);
+            // the chunk with the draw (one before it, from the boundary that started the recording, may come first)
+            const Re4GxChunk* c8 = re4_core_gx_acquire();
+            Parsed q;
+            for (int tries = 0; c8 && tries < 4; tries++) {
+                parse(c8, q);
+                if (q.drawCount) {
+                    break;
+                }
+                re4_core_gx_release(c8);
+                c8 = re4_core_gx_acquire();
+            }
+            ok = c8 != 0;
+            if (ok) {
+                parse(c8, q);
+                bool tex = false, pal = false;
+                for (int i = 0; i < q.textureCount; i++) {
+                    const Re4GxTexture* t = q.textures[i];
+                    tex |= t->address == re4_gx_physical(modTex) && t->dataBytes == 32 &&
+                           memcmp(c8->blob + t->dataOffset, modTex, 32) == 0;
+                }
+                // every palette range of the chunk (a reset chunk starts with TMEM's loaded ones, more than Parsed
+                // keeps): the 32 bytes at the start of one
+                for (uint32_t at = 0; at < c8->opWords; at += 1 + (c8->ops[at] >> 8)) {
+                    const uint32_t* t = c8->ops + at + 1;
+                    pal |= (c8->ops[at] & 0xFF) == RE4_GX_OP_TLUT && t[1] >= 32 &&
+                           memcmp(c8->blob + t[2], modTex + 32, 32) == 0;
+                }
+                ok = tex && pal;
+                re4_core_gx_release(c8);
+            }
+            re4_mod_em_release(modTex);
+        }
+        if (!ok) {
+            failed |= 0x1;
+            re4_log("  gx: a texture or palette in the mods' place did not reach the chunk with its data");
+        }
+    }
+    re4_core_gx_detach();
+    return failed;
 }
