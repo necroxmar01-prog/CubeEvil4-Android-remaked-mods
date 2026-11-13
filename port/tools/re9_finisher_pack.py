@@ -35,6 +35,15 @@ The archive: a DAT (u32 count, three zero words, u32 offsets, 4-byte tags) whose
       Leon's (radians),
   char name[16].
 
+--kicks OUT/melee/melee.dat also writes the mod's kicks as the melee archive of the pack (runtime/melee.cpp, patch 0904;
+uhd_motion_convert.py's layout): its eight "fatal" kicks of a standing stunned Ganado (the 2023 game's cha0_general
+0900..0907, which the mod ships) in the even places, its two low kicks of a kneeling one (9904 / 9905, RE9_Low_45 / 47)
+in the odd ones. The game's kick routine (plem10Kick) hits on its frame 17: each kick is retimed so that the middle of
+its contact window (the mod's lua: source frames 22..28) falls there, the rest at 30 frames per second. Entries 18..20:
+the free hatchet attacks, the combo of the mod's knife moves (cha0_wp5000H 0630 / 0640 / 0650, attack 1st, 2nd, 3rd),
+for the knife's slash (patch 0922, pl_knife.cpp knife_r3_fire00): retimed so the blade's fastest frame falls on the
+slash's game frame 8 (its hits run on 6..10), cut KNIFE_TAIL source frames after it (the stance comes back sooner).
+
 Game files and the PC mod's files never go into the repository; this tool only reads and writes the paths given.
 """
 import argparse
@@ -64,6 +73,15 @@ KNEE = (("knee-a", "1020", dict(contact=44, kill=88, down=136, cancel=140)),
         ("knee-b", "1025", dict(contact=64, kill=100, down=144, cancel=150)),
         ("knee-c", "1030", dict(contact=60, kill=108, down=196, cancel=200)))
 CHC0 = "_chainsaw/animation/ch/chc0/motlist/0th"
+CHA0 = "_chainsaw/animation/ch/cha0/motlist/cha0_general.motlist.663"
+KICKS_STANDING = ["0900", "0901", "0902", "0903", "0904", "0905", "0906", "0907"]
+KICKS_KNEELING = ["9904", "9905"]
+KICK_CONTACT = 25.0   # source frame: the middle of the mod's contact window (22..28)
+KICK_HIT = 17         # plem10Kick's hit frame (m_Work0 0x11)
+WP5000H = "_chainsaw/animation/ch/cha0/motlist/cha0_wp5000h.motlist.663"
+KNIFE_COMBO = ["0630_attack_1st", "0640_attack_2nd", "0650_attack_3rd"]
+KNIFE_HIT = 8         # knife_r3_fire10: hits on frames 6..10, full damage on 7..8
+KNIFE_TAIL = 30       # source frames kept after the blade's fastest one
 
 HANDGUNS = [1, 2, 3, 4, 0x11]  # item.cpp wep_info: the handguns' weapon numbers (em_sub.cpp HandgunCk)
 
@@ -103,7 +121,7 @@ def find_motion(path, key):
 class Fit:
     """One motion fitted to a skeleton, its root kept apart (the root motion)."""
 
-    def __init__(self, motion, model, map_name, step, tol, end, no_fingers=False):
+    def __init__(self, motion, model, map_name, step, tol, end, no_fingers=False, frames=None):
         body, fingers, nexts = RT.MAPS[map_name]
         mapping = dict(body)
         if not no_fingers:
@@ -113,7 +131,7 @@ class Fit:
         self.motion_src = motion
         _r, bpos = src.pose(None)
         self.scale = model.parts[0].pos[1] / bpos[src.by_name["Hip"]][1]
-        self.frames = list(np.arange(0.0, min(end, motion.frames) + 1e-6, step))
+        self.frames = frames if frames is not None else list(np.arange(0.0, min(end, motion.frames) + 1e-6, step))
         self.rows = RT.retarget(src, model, mapping, nexts, self.frames, self.scale, root_relative=True)
         self.order = [p for p in sorted(mapping) if mapping[p] in src.by_name and p != 0] + [0]
         self.model, self.mapping, self.nexts, self.tol = model, mapping, nexts, tol
@@ -165,6 +183,66 @@ class Fit:
         return float(np.mean(errs)), float(np.max(errs))
 
 
+def kick_frames(total, contact=KICK_CONTACT, hit=KICK_HIT):
+    """Source frames for the game's: `contact` on game frame `hit`, every second one after it up to `total`."""
+    step = contact / hit
+    out = [i * step for i in range(hit)]
+    f = contact
+    while f <= total + 1e-6:
+        out.append(f)
+        f += 2.0
+    return out
+
+
+def fastest_hand(motion):
+    """The source frame of the right hand's fastest move (the blade's swing)."""
+    src = RT.Source(motion)
+    best, at, prev = -1.0, 0, None
+    for f in range(int(motion.frames) + 1):
+        _r, pos = src.pose(f)
+        h = pos[src.by_name["R_Hand"]]
+        if prev is not None and np.linalg.norm(h - prev) > best:
+            best, at = float(np.linalg.norm(h - prev)), f
+        prev = h
+    return at
+
+
+def kicks(root, model, tol, out_path, no_fingers):
+    """The melee archive with the mod's kicks (see --kicks)."""
+    _v, mots = R.read_motlist(root / CHA0)
+    entries = []
+    for i in range(8):
+        for kind, names in ((0, KICKS_STANDING), (1, KICKS_KNEELING)):
+            if i >= len(names):
+                entries.append(b"")
+                continue
+            m = next(x for x in mots if "_%s_" % names[i] in x.name)
+            fit = Fit(m, model, "leon", 2.0, tol, m.frames, no_fingers, frames=kick_frames(m.frames))
+            data = fcv.serialise(fit.motion(fit.scale))
+            c = fit.check(data)
+            entries.append(data)
+            print("kick %-28s on a %s enemy: %d game frames, %d bytes; check mean/worst %.1f/%.1f deg" % (
+                m.name, "kneeling" if kind else "standing", len(fit.frames), len(data), c[0], c[1]))
+    entries += [b"", b""]  # 16 / 17: the box strike's place (none)
+    _v, knife = R.read_motlist(root / WP5000H)
+    for name in KNIFE_COMBO:
+        m = next(x for x in knife if x.name.endswith(name))
+        peak = fastest_hand(m)
+        fit = Fit(m, model, "leon", 2.0, tol, m.frames, no_fingers,
+                  frames=kick_frames(min(m.frames, peak + KNIFE_TAIL), peak, KNIFE_HIT))
+        data = fcv.serialise(fit.motion(fit.scale))
+        c = fit.check(data)
+        entries.append(data)
+        print("hatchet %-28s blade fastest on source frame %d: %d game frames, %d bytes; check %.1f/%.1f deg" % (
+            m.name, peak, len(fit.frames), len(data), c[0], c[1]))
+    body = U.build_body(entries, [b"FCV\x00"] * len(entries))
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(body)
+    print("%s: %d bytes, %d kicks on a standing enemy, %d on a kneeling one" % (out, len(body), len(KICKS_STANDING),
+                                                                           len(KICKS_KNEELING)))
+
+
 def sequence(frames, kill, down):
     keys = []
     for f in range(frames):
@@ -201,6 +279,7 @@ def main(argv=None):
     ap.add_argument("--tolerance", type=float, default=0.004)
     ap.add_argument("--no-fingers", action="store_true")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--kicks", help="also write the mod's kicks as the pack's melee archive (melee/melee.dat)")
     a = ap.parse_args(argv)
 
     # the mod's natives/stm folder (its _re9_melee_proto and _chainsaw)
@@ -221,6 +300,8 @@ def main(argv=None):
         return m
 
     leon_model, ganado_model = model_of(a.leon), model_of(a.ganado)
+    if a.kicks:
+        kicks(root, leon_model, a.tolerance, a.kicks, a.no_fingers)
     want = set(a.only.split(",")) if a.only else None
     entries = [("FIN", b"")]
     made = {}

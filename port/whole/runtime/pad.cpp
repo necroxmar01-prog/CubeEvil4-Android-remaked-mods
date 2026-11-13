@@ -270,11 +270,18 @@ static void noteRumble()
 // state trace (runtime/state_trace.cpp, re4_set_frame_hook replaces it) and
 // the core bridge (runtime/core_api.cpp, re4_add_frame_hook).
 static void (*g_frameHook)(unsigned);
-static void (*g_moreHooks[16])(unsigned);  // (8 until 29.10.2026: with the automatic QTEs nearly full)
+static void (*g_moreHooks[32])(unsigned);  // (8 until 29.10.2026: with the automatic QTEs nearly full; 16 until
+                                           // 13.11.2026: the mods' hooks filled them)
 
 void re4_set_frame_hook(void (*hook)(unsigned))
 {
     g_frameHook = hook;
+}
+
+// The pad's frame number (the frame hooks get it too): runtime/melee.cpp's knife combo
+unsigned re4_pad_frame(void)
+{
+    return gFrame;
 }
 
 void re4_add_frame_hook(void (*hook)(unsigned))

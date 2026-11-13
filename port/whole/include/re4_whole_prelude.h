@@ -120,6 +120,9 @@ void* re4_melee_kneel(void* game);
 /* Patch 0904: re4_melee_neck gives 2 for the axe execution of a standing stunned Ganado (it kneels, then the axe
  * strike); this is Leon's routine for it. */
 void* re4_melee_execute(void);
+/* Patch 0922 (pl_knife.cpp knife_r3_fire00; runtime/melee.cpp): 1 when Leon's knife slash plays a mod's hatchet combo
+ * (it set the motion), 0 the game's three-way slash. */
+int re4_knife_slash(void* pl);
 /* Patch 0921 (em10.cpp Dm_NeckBreak; runtime/finisher.cpp): 1 when a finisher is armed and has put Leon in its place
  * with its own routine (EmCatchPLSet), 0 leaves the neck break's catch. */
 int re4_finish_catch(void* em);

@@ -1,0 +1,17 @@
+# Patch 0922 (wish of DevJunior, 13.11.2026: "the hatchet attacks seen freely" in the PC mod "RE9 Melee - Hatchet -
+# Finishers for Leon"). Not a bug of the prototype: a port feature of the mods.
+# pl_knife.cpp knife_r3_fire00, the knife's slash: with a mod pack's hatchet combo (melee/melee.dat entries 18..20,
+# port/tools/re9_finisher_pack.py --kicks) re4_knife_slash (runtime/melee.cpp) sets the next slash of the combo in
+# place of the three-way slash (high, middle, low by the aim); the slash's own steps (hits on frames 6..10, the end)
+# stay the game's. Declared in re4_whole_prelude.h.
+--- a/src/game/pl_knife.cpp
++++ b/src/game/pl_knife.cpp
+@@ -326,7 +326,7 @@
+ // slash effect 0x2B.
+ void knife_r3_fire00(cPlayer* pl)
+ {
+-    PlArc* arc = pG->pPlayer;
++    PlArc* arc = pG->pPlayer; if (re4_knife_slash(pl)) { pl->r_no_3 = 1; return; } /* port: patch 0922 */
+ 
+     mot3.set(pl, PL_ARC_PTR(arc, 0x82), PL_ARC_PTR(arc, 0x84), PL_ARC_PTR(arc, 0x86), 0, 3, 0, 4, 0);
+     m3r.move();

@@ -7,7 +7,8 @@
 //    files) is a DAT of FCV entries, the even ones moves on a standing stunned Ganado (the kick, the enemy
 //    archives' entry 0x29D), the odd ones on a kneeling one (Leon's archive, entry 0x25), up to kVariants of
 //    each; an empty entry is none. It is
-//    read once to RE4_MEM1_MELEE_ADDR and converted as a read archive is (under the name mods/melee.drs: the
+//    read once to RE4_MEM1_MELEE_ADDR (one larger than its RE4_MEM1_MELEE_MAX, up to kBigMax: to the mods' place, the
+//    RE9 mod's kicks, port/tools/re9_finisher_pack.py --kicks) and converted as a read archive is (under the name mods/melee.drs: the
 //    converters go by the name). Only the animation changes: the hit
 //    (frame 0x11, the sweep around Leon) stays the kick's.
 //  - Neck break: Leon finishes a standing stunned Ganado as HUNK does in the Mercenaries (em10.cpp Dm_NeckBreak and
@@ -42,6 +43,8 @@
 //    a slash or a kick breaks 3 or 2 boxes at once"): on the hit frame up to kBoxMore other intact boxes, barrels or
 //    vases break with the struck one, the nearest first: those whose side lies within kBoxSplash of Leon, in front
 //    of him (kBoxCone) and from his feet up to kBoxHigh (a stack's upper crates).
+//  - Hatchet combo (wish of DevJunior, 13.11.2026: "the hatchet attacks seen freely" in the RE9 mod): melee.dat entries
+//    18..20 replace the knife's slash with the mod's three-slash combo (patch 0922, re4_knife_slash).
 //  - Finishers (wish of DevJunior, 13.11.2026: the PC mod "RE9 Melee - Hatchet - Finishers for Leon"): a mod pack's
 //    melee/finish.dat (runtime/finisher.cpp) adds the hatchet finisher on a kneeling Ganado and the guns' finishers
 //    on a standing one to the moves drawn (with the mix off they go first); they play through the neck break's enemy
@@ -79,6 +82,7 @@ extern "C" int re4_finish_arm(int kind);
 extern "C" void* re4_finish_kneel_routine(void* kick);
 extern "C" void* re4_finish_motion(int kind);
 extern "C" void re4_finish_clear(void);
+extern "C" unsigned re4_pad_frame(void);                      // runtime/pad.cpp
 extern cPlayer* pPL;
 
 namespace {
@@ -100,6 +104,16 @@ int gPick[2] = {kGame, kGame};
 int gLast[2] = {-2, -2};
 bool gDrawn[2];
 u32 gSeed = 0x2545F491u;
+const int kCombo = 3;                    // the knife's combo of a mod (entries 18..20): the slashes in turn
+void* gCombo[kCombo];
+int gCombos;
+int gComboStep = -1;                     // the last slash of the combo played, and when it started (pad frame)
+unsigned gComboAt;
+unsigned gComboLen;                      // its frames
+const unsigned kComboGap = 10;           // a slash within this many frames after the last one's end goes on with it
+const unsigned long kBigMax = 0x100000;  // a melee archive in the mods' place at most (16 moves of 64 KB)
+u8* gBig;                                // that place, once taken (given back with no pack's archive)
+unsigned long gBigSize;
 
 u32 be32At(const u8* p)
 {
@@ -124,19 +138,48 @@ void load()
     memset(gMod, 0, sizeof(gMod));
     gMods[0] = gMods[1] = 0;
     gBoxMot = nullptr;
+    gCombos = 0;
+    gComboStep = -1;
     gSaid &= ~3;
     if (!*path) {
+        if (gBig) {
+            re4_mod_em_release(gBig);
+            gBig = 0;
+            gBigSize = 0;
+        }
         return;
     }
-    u8* const base = (u8*) (unsigned long) RE4_MEM1_MELEE_ADDR;
     FILE* f = fopen(path, "rb");
-    const size_t size = f ? fread(base, 1, RE4_MEM1_MELEE_MAX, f) : 0;
+    long fileSize = -1;
+    if (f && fseek(f, 0, SEEK_END) == 0) {
+        fileSize = ftell(f);
+        fseek(f, 0, SEEK_SET);
+    }
+    // a larger archive (the RE9 mod's kicks: 0.4 MB, port/tools/re9_finisher_pack.py --kicks) goes to the place for the
+    // mods' character archives, at most kBigMax bytes; the fixed place stays for the small ones
+    u8* base = (u8*) (unsigned long) RE4_MEM1_MELEE_ADDR;
+    size_t room = RE4_MEM1_MELEE_MAX;
+    if (fileSize > (long) RE4_MEM1_MELEE_MAX && fileSize <= (long) kBigMax) {
+        if (!gBig || gBigSize < (unsigned long) fileSize) {
+            if (gBig) {
+                re4_mod_em_release(gBig);
+            }
+            gBig = (u8*) re4_mod_place_alloc((unsigned long) fileSize, "the mods' melee motions (melee/melee.dat)");
+            gBigSize = gBig ? (unsigned long) fileSize : 0;
+        }
+        if (gBig) {
+            base = gBig;
+            room = (size_t) gBigSize;
+        }
+    }
+    const size_t size = f ? fread(base, 1, room, f) : 0;
     const bool whole = f && fgetc(f) == EOF;
     if (f) {
         fclose(f);
     }
     const u32 count = size >= 0x20 ? be32At(base) : 0;
-    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 };  // the moves, the box strike's motion and its frames
+    // the moves, the box strike's motion and its frames, the hatchet's combo (entries 18..20, patch 0922)
+    enum { kMoves = 2 * kVariants, kMax = kMoves + 2 + kCombo };
     u32 at[kMax], len[kMax];
     bool ok = whole && count >= 1 && count <= kMax && 0x10 + count * 8 <= size;
     for (u32 i = 0; ok && i < count; i++) {
@@ -152,16 +195,16 @@ void load()
     if (!ok) {
         re4_log("melee: %s is no melee archive of at most %u bytes and %d entries (%u read, %u entries): the game's "
                 "moves",
-                path, (unsigned) RE4_MEM1_MELEE_MAX, (int) kMax, (unsigned) size, (unsigned) count);
+                path, (unsigned) kBigMax, (int) kMax, (unsigned) size, (unsigned) count);
         return;
     }
     DvdHeader h;
     memset(&h, 0, sizeof(h));
     h.type = TRANS_MRAM;
     h.size = (u32) size;
-    h.dest = RE4_MEM1_MELEE_ADDR;
-    re4_formats_part_loaded("mods/melee.drs", 0, 0, &h, RE4_MEM1_MELEE_ADDR);
-    if (count == kMax && len[kMoves] && len[kMoves + 1] >= 3) {  // the box strike's motion and frames
+    h.dest = (u32) (unsigned long) base;
+    re4_formats_part_loaded("mods/melee.drs", 0, 0, &h, (unsigned) (unsigned long) base);
+    if (count >= kMoves + 2 && len[kMoves] && len[kMoves + 1] >= 3) {  // the box strike's motion and frames
         const u8* fr = base + at[kMoves + 1];
         const unsigned last = get16(base + at[kMoves]);  // converted: host order
         if (fr[0] < fr[1] && fr[1] < fr[2] && fr[2] <= last) {
@@ -174,6 +217,13 @@ void load()
                     (unsigned) fr[0], (unsigned) fr[1], (unsigned) fr[2], last);
         }
     }
+    for (u32 i = kMoves + 2; i < count; i++) {  // the hatchet's combo: Leon's knife slashes (patch 0922)
+        if (len[i]) {
+            gCombo[gCombos++] = base + at[i];
+            re4_log("melee: %s entry %u: the knife's slash %d of the combo, %u frames", path, (unsigned) i, gCombos,
+                    (unsigned) get16(base + at[i]));
+        }
+    }
     for (u32 i = 0; i < count && i < kMoves; i++) {
         if (len[i]) {
             const int k = (int) (i & 1);
@@ -184,7 +234,7 @@ void load()
         }
     }
     re4_log("melee: %s read to 0x%08x: %d moves on a standing enemy, %d on a kneeling one", path,
-            (unsigned) RE4_MEM1_MELEE_ADDR, gMods[0], gMods[1]);
+            (unsigned) (unsigned long) base, gMods[0], gMods[1]);
 }
 
 bool leon()
@@ -904,6 +954,49 @@ int re4_melee_neck(int special)
     gDrawn[0] = false;
     say(4, "Leon breaks a stunned Ganado's neck (HUNK's motions from em/em60.drs)");
     return 1;
+}
+
+// Patch 0922 (pl_knife.cpp knife_r3_fire00): 1 when Leon's knife slash plays the mod's hatchet combo (melee.dat entries
+// 18..20, port/tools/re9_finisher_pack.py --kicks): the next slash of it when he slashes again within kComboGap frames
+// after the last one, else the first; its hits stay the knife's (knife_r3_fire10: frames 6..10, the blade's fastest
+// frame put on 8). The aim's three-way blend (high, middle, low) gives way to it, as in the 2023 remake. Root motion
+// on: the combo steps forward.
+int re4_knife_slash(void* p)
+{
+    cPlayer* pl = (cPlayer*) p;
+    if (!leon() || !pl || (gBits.load() & 2)) {
+        return 0;
+    }
+    load();
+    if (!gCombos) {
+        return 0;
+    }
+    const unsigned now = re4_pad_frame();
+    int step = 0;
+    if (gComboStep >= 0 && now - gComboAt <= gComboLen + kComboGap) {
+        step = (gComboStep + 1) % gCombos;
+    }
+    gComboStep = step;
+    gComboAt = now;
+    MotionSetCore(pl, &pl->Motion, gCombo[step], 0, 3, 1, 0);
+    gComboLen = pl->Motion.Seq_frame_num;
+    MotionMove(pl, 0);
+    pl->Waist->set(pl->m_Fwork0, 0.4f);
+    EstSet(pl, -1, 0, 0, EFF_CORE, 0x2B, 0, ESP_CORE_KIND_PL_WEP, 0, 0);
+    pl->Body->waistMove();
+    pl->partsWorldCalc();
+    if (!(gSaid & (1 << 13))) {
+        gSaid |= 1 << 13;
+        re4_log("melee: the knife's slash plays the mod's hatchet combo (%d slashes)", gCombos);
+    }
+    return 1;
+}
+
+// For the tests: the combo's slashes the active archive holds
+int re4_knife_combo_count(void)
+{
+    load();
+    return gCombos;
 }
 
 void* re4_melee_execute(void)
