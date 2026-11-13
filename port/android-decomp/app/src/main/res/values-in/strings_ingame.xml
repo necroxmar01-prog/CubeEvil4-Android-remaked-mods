@@ -455,6 +455,7 @@
     <string name="ingame_melee_axe">Tebasan kapak dan eksekusi</string>
     <string name="ingame_melee_random">Campuran acak</string>
     <string name="ingame_melee_box">Pukul peti</string>
+    <string name="ingame_melee_finish">Serangan pamungkas</string>
     <string name="ingame_skip_intro">Lewati logo awal</string>
     <string name="ingame_skip_intro_help">Lewati logo awal: game langsung dimulai di menu judul, tanpa logo Nintendo, Capcom, dan lainnya (mulai peluncuran berikutnya).</string>
     <string name="ingame_ashley_gun">Pistol Ashley</string>

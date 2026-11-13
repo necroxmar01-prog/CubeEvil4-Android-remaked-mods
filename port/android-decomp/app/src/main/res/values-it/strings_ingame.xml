@@ -464,6 +464,7 @@
     <string name="ingame_melee_axe">Colpo d\'ascia ed esecuzione</string>
     <string name="ingame_melee_random">Mix casuale</string>
     <string name="ingame_melee_box">Colpo alle casse</string>
+    <string name="ingame_melee_finish">Colpi di grazia</string>
     <string name="ingame_skip_intro">Salta i loghi iniziali</string>
     <string name="ingame_skip_intro_help">Salta i loghi iniziali: il gioco parte dal menu del titolo, senza i loghi di Nintendo, Capcom e altri (dal prossimo avvio).</string>
     <string name="ingame_ashley_gun">Pistola di Ashley</string>

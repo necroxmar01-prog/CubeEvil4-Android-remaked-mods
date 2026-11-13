@@ -137,8 +137,22 @@ class Source:
         return rot, pos
 
 
-def retarget(src, model, mapping, nexts, frames, scale):
-    """Per frame: {part: local rotation matrix} and the hips' position (model space, mm)."""
+def yaw_of(m):
+    """The heading of a rotation (y up): the angle of where it turns +z, as the game's RotMatrix measures ang.y."""
+    f = m @ np.array([0.0, 0.0, 1.0])
+    return math.atan2(f[0], f[2])
+
+
+def rot_y(a):
+    c, s = math.cos(a), math.sin(a)
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+
+
+def retarget(src, model, mapping, nexts, frames, scale, root_relative=False):
+    """Per frame: {part: local rotation matrix}, the hips' position (model space, mm), the mapped bones' positions
+    (for --check) and the source root's (position in metres, heading). root_relative: the model space follows the
+    source's root bone (its heading and its place on the floor), which the game moves as its own root motion (joint
+    kinds 1 / 0x40, MotionGetSpeed); otherwise the source's world is the model space."""
     parts = model.parts
     rest_world = {}
     for p in parts:
@@ -174,8 +188,17 @@ def retarget(src, model, mapping, nexts, frames, scale):
             else:
                 g = par
             G[p.no] = g
-        hip = pos[idx[0]] * scale if 0 in idx else np.zeros(3)
-        out.append((local, hip, {part: pos[bi] * scale for part, bi in idx.items()}))
+        rp, ry = pos[root], yaw_of(rot[root])
+        if root_relative:
+            turn = rot_y(ry).T
+            floor = np.array([rp[0], 0.0, rp[2]])
+            if 0 in local:
+                local[0] = turn @ local[0]
+            hip = turn @ (pos[idx[0]] - floor) * scale if 0 in idx else np.zeros(3)
+            out.append((local, hip, {part: turn @ (pos[bi] - floor) * scale for part, bi in idx.items()}, (rp, ry)))
+        else:
+            hip = pos[idx[0]] * scale if 0 in idx else np.zeros(3)
+            out.append((local, hip, {part: pos[bi] * scale for part, bi in idx.items()}, (rp, ry)))
     return out
 
 
@@ -230,8 +253,10 @@ def axis_keys_pos(values, tol):
     return fcv.Axis(frames=ks, keys=[(float(v[k]), float(slope[k]), float(slope[k])) for k in ks])
 
 
-def build_motion(rows, parts_order, tol):
-    """FCV from per-frame local rotations and hips positions."""
+def build_motion(rows, parts_order, tol, root=None):
+    """FCV from per-frame local rotations and hips positions; root: per frame the root motion (x, y, z in mm in the
+    motion's start frame, heading in radians from the start), as the game's joints of kind 1 and 0x40 (MotionGetSpeed
+    turns their steps into the model's own; MotionSetCore's flags bit 0 plays them)."""
     n = len(rows)
     joints = []
     # part 0: position (kind 4), f32 keys and slopes
@@ -245,6 +270,17 @@ def build_motion(rows, parts_order, tol):
         j = fcv.Joint(kind=2, channel=0, fcc_type=1, parts_no=part)
         j.axes = [axis_keys(ang[:, a], tol) for a in range(3)]
         joints.append(j)
+    if root is not None:
+        r = np.array(root, dtype=np.float64)
+        j = fcv.Joint(kind=1, channel=0, fcc_type=0, parts_no=0)
+        j.axes = [axis_keys_pos(r[:, a], tol * 250.0) for a in range(3)]
+        joints.append(j)
+        yaw = np.unwrap(r[:, 3])
+        if np.max(np.abs(yaw)) > 1e-4:
+            j = fcv.Joint(kind=0x40, channel=0, fcc_type=0, parts_no=0)
+            zero = np.zeros(n)
+            j.axes = [axis_keys_pos(zero, 1.0), axis_keys_pos(yaw, tol), axis_keys_pos(zero, 1.0)]
+            joints.append(j)
     return fcv.Motion(max_frame=n - 1, joints=joints, layout=list(range(len(joints))))
 
 

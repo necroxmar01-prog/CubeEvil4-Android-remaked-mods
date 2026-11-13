@@ -1974,6 +1974,9 @@ final class CoreMenu extends Dialog {
     MenuLayout.Buttons third = buttonsRow(body);
     toggle(third, R.string.ingame_melee_box, input.getBoolean(CoreActivity.BOX_STRIKE, true),
         on -> { input.edit().putBoolean(CoreActivity.BOX_STRIKE, on).apply(); CoreBridge.setBoxStrike(on); });
+    // the RE9 finishers of a mod pack's melee/finish.dat (wish of DevJunior, 13.11.2026; the core's runtime/finisher.cpp)
+    toggle(third, R.string.ingame_melee_finish, input.getBoolean(CoreActivity.FINISHERS, true),
+        on -> { input.edit().putBoolean(CoreActivity.FINISHERS, on).apply(); CoreBridge.setFinishers(on); });
     help(R.string.ingame_melee_help);
   }
   /** The weapon on the back to taste (wish of DevJunior, 09.11.2026: "rotate it as I like, show it in cutscenes; it

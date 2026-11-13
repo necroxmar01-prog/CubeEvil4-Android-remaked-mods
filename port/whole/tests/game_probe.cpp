@@ -2937,3 +2937,144 @@ extern "C" int re4probe_melee(const char* file)
     remove(file);
     return bad;
 }
+
+// Leon's finishers (runtime/finisher.cpp, patch 0921): a synthetic melee/finish.dat (port/tools/re9_finisher_pack.py's
+// layout) with one finisher on a kneeling enemy: read and converted, drawn by the kneeling prompt (always with the mix
+// off), its motions handed to Dm_NeckBreak, off by the third word's bit 13; a broken table is no archive.
+extern "C" void re4_mod_finish_path_set(const char* path);
+extern "C" int re4_finish_probe(int i);
+extern "C" int re4_finish_armed(void);
+extern "C" void re4_finish_reset(void);
+
+static void putBe16(u8* p, unsigned v)
+{
+    p[0] = (u8) (v >> 8);
+    p[1] = (u8) v;
+}
+
+static void putBe32(u8* p, u32 v)
+{
+    putBe16(p, v >> 16);
+    putBe16(p + 2, v & 0xFFFF);
+}
+
+extern "C" int re4probe_finish(const char* file)
+{
+    if (!pG) {
+        return 0x8000;
+    }
+    const u8 keepType = pG->pl_type;
+    int bad = 0;
+    int game;
+    pG->pl_type = 0;
+    re4_melee_reset();
+    re4_finish_reset();
+    // entries: 0 FIN (8 + 60 bytes) at 0x40, 1 and 2 motions (last frame 6, one float joint) at 0xA0 / 0xE0, 3 the
+    // sequence (7 keys) at 0x120
+    u8 dat[0x140];
+    memset(dat, 0, sizeof(dat));
+    dat[3] = 4;
+    const u32 at[4] = {0x40, 0xA0, 0xE0, 0x120};
+    const char* tags[4] = {"FIN", "FCV", "FCV", "SEQ"};
+    for (int i = 0; i < 4; i++) {
+        putBe32(dat + 0x10 + i * 4, at[i]);
+        memcpy(dat + 0x20 + i * 4, tags[i], 3);
+    }
+    u8* fin = dat + 0x40;
+    memcpy(fin, "FIN1", 4);
+    putBe32(fin + 4, 1);
+    u8* r = fin + 8;
+    r[0] = 1;                       // a kneeling enemy
+    r[1] = 1;                       // the knife
+    putBe16(r + 8, 1);
+    putBe16(r + 10, 2);
+    putBe16(r + 12, 3);
+    putBe16(r + 16, 6);             // Leon's end
+    putBe16(r + 18, 6);             // the enemy's end
+    putBe16(r + 22, 3);             // the kill
+    putBe16(r + 24, 5);             // down
+    putBe16(r + 26, 4);             // cancel
+    const f32 zf = 1200.0f, pi = 3.14159265f;
+    u32 u;
+    memcpy(&u, &zf, 4);
+    putBe32(r + 32, u);
+    memcpy(&u, &pi, 4);
+    putBe32(r + 40, u);
+    memcpy(r + 44, "test", 4);
+    for (int k = 0; k < 2; k++) {
+        u8* m = dat + at[1 + k];
+        m[1] = 6;
+        m[2] = 1;
+        m[4] = 1;
+        m[0xF] = 0x10;
+        for (int axis = 0; axis < 3; axis++) {
+            m[0x10 + axis * 16 + 1] = 1;
+        }
+    }
+    u8* seq = dat + at[3];
+    seq[1] = 7;
+    for (int i = 0; i < 7; i++) {
+        putBe16(seq + 4 + i * 4, (unsigned) i * 64);
+        seq[4 + i * 4 + 3] = (u8) (i == 3 ? 1 : i >= 5 ? 0x80 : 0);
+    }
+    FILE* f = fopen(file, "wb");
+    if (!f || fwrite(dat, 1, sizeof(dat), f) != sizeof(dat)) {
+        bad |= 0x4000;
+    }
+    if (f) {
+        fclose(f);
+    }
+    re4_mod_finish_path_set(file);
+    bad |= re4_finish_probe(-1) != 1 || re4_finish_probe(0) != (1 << 8 | 1) ? 1 : 0;
+    re4_aim_set((int) (0xC0000000u | 1u << 13));
+    if (pPL && pPL->Body) {
+        // the mix on: the kneeling prompt draws the game's kick or the finisher, both over 40 prompts
+        int fins = 0, kicks = 0;
+        for (int i = 0; i < 40; i++) {
+            void* routine = re4_melee_kneel(&game);
+            if (routine == &game) {
+                kicks++;
+                bad |= re4_finish_armed() >= 0 || re4_melee_motion(3, &game) != &game ? 2 : 0;
+            } else {
+                fins++;
+                const u8* em = (const u8*) re4_melee_motion(3, &game);
+                const u8* sq = (const u8*) re4_melee_motion(4, &game);
+                bad |= re4_finish_armed() != 0 || !em || em == (const u8*) &game || *(const u16*) em != 6 || em[2] != 1 ? 4 : 0;
+                bad |= !sq || *(const u16*) sq != 7 ? 8 : 0;  // converted: host order
+            }
+        }
+        bad |= !fins || !kicks ? 0x10 : 0;
+        re4_aim_set((int) (0x80000000u | 8u << 24));  // the mix off: the finisher first
+        for (int i = 0; i < 4; i++) {
+            bad |= re4_melee_kneel(&game) == &game ? 0x20 : 0;
+        }
+        re4_aim_set((int) 0xC0000000u);                // switched off: the kick
+        bad |= re4_melee_kneel(&game) != &game || re4_finish_armed() >= 0 ? 0x40 : 0;
+        re4_aim_set((int) (0xC0000000u | 1u << 13));
+        pG->pl_type = 3;                               // not for HUNK
+        bad |= re4_melee_kneel(&game) != &game ? 0x80 : 0;
+        pG->pl_type = 0;
+        // no finisher on a standing enemy in this archive: the neck break's draw stays the game's
+        bad |= re4_melee_neck(0) != 0 ? 0x100 : 0;
+        re4_aim_set((int) 0x80000000u);
+    }
+    // a table that names an entry beyond the archive: none
+    putBe16(r + 10, 9);
+    f = fopen(file, "wb");
+    if (f) {
+        fwrite(dat, 1, sizeof(dat), f);
+        fclose(f);
+    }
+    re4_mod_finish_path_set("");
+    re4_finish_probe(-1);
+    re4_mod_finish_path_set(file);
+    bad |= re4_finish_probe(-1) != 0 ? 0x200 : 0;
+    re4_mod_finish_path_set("");
+    bad |= re4_finish_probe(-1) != 0 ? 0x200 : 0;
+    re4_finish_reset();
+    re4_melee_reset();
+    re4_aim_set((int) (0xC0000000u | 1u << 12 | 1u << 13));
+    pG->pl_type = keepType;
+    remove(file);
+    return bad;
+}

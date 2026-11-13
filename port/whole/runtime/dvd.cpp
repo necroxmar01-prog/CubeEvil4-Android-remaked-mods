@@ -516,6 +516,9 @@ char** listDir(const char* path, int* count)
 // A mod's melee motions (mods/<pack>/melee/melee.dat, port/tools/uhd_motion_convert.py; patch 0904): no file
 // of the disc, read by runtime/melee.cpp. The last pack's in the folder's order.
 char gMeleePath[1600];
+// A mod's finishers (mods/<pack>/melee/finish.dat, port/tools/re9_finisher_pack.py; patch 0921): read by
+// runtime/finisher.cpp. The last pack's in the folder's order.
+char gFinishPath[1600];
 
 void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int depth, int no)
 {
@@ -536,6 +539,14 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
             if (strcmp(gMeleePath, path) != 0) {
                 snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
                 re4_log("DVD: mod %s: %s holds its melee motions", pack, name);
+            }
+            free(names[k]);
+            continue;
+        }
+        if (strcmp(name, "melee/finish.dat") == 0) {
+            if (strcmp(gFinishPath, path) != 0) {
+                snprintf(gFinishPath, sizeof(gFinishPath), "%s", path);
+                re4_log("DVD: mod %s: %s holds its finishers", pack, name);
             }
             free(names[k]);
             continue;
@@ -910,6 +921,18 @@ const char* re4_mod_melee_path(void)
 void re4_mod_melee_path_set(const char* path)
 {
     snprintf(gMeleePath, sizeof(gMeleePath), "%s", path);
+}
+
+// The active mods' finishers (see gFinishPath), "" without them.
+const char* re4_mod_finish_path(void)
+{
+    return gFinishPath;
+}
+
+// The runtime test's: the finishers' archive as a mod pack would name it
+void re4_mod_finish_path_set(const char* path)
+{
+    snprintf(gFinishPath, sizeof(gFinishPath), "%s", path);
 }
 
 // Patch 0914 (runtime/mod_place.cpp): the bytes a read of `name` writes (its size, or its body's when larger) when a

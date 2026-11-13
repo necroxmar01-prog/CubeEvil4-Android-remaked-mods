@@ -42,6 +42,10 @@
 //    a slash or a kick breaks 3 or 2 boxes at once"): on the hit frame up to kBoxMore other intact boxes, barrels or
 //    vases break with the struck one, the nearest first: those whose side lies within kBoxSplash of Leon, in front
 //    of him (kBoxCone) and from his feet up to kBoxHigh (a stack's upper crates).
+//  - Finishers (wish of DevJunior, 13.11.2026: the PC mod "RE9 Melee - Hatchet - Finishers for Leon"): a mod pack's
+//    melee/finish.dat (runtime/finisher.cpp) adds the hatchet finisher on a kneeling Ganado and the guns' finishers
+//    on a standing one to the moves drawn (with the mix off they go first); they play through the neck break's enemy
+//    routine (patch 0921).
 // Only Leon (pl_type 0); the other characters keep their moves.
 #include "types.h"
 #include "global.h"
@@ -70,6 +74,11 @@
 extern "C" void re4_log(const char* fmt, ...);
 extern "C" void* re4_melee_hunk_entry(unsigned no);  // runtime/cheats.cpp
 extern "C" void re4_add_frame_hook(void (*hook)(unsigned));  // runtime/pad.cpp
+extern "C" int re4_finish_ready(int kind);                    // runtime/finisher.cpp
+extern "C" int re4_finish_arm(int kind);
+extern "C" void* re4_finish_kneel_routine(void* kick);
+extern "C" void* re4_finish_motion(int kind);
+extern "C" void re4_finish_clear(void);
 extern cPlayer* pPL;
 
 namespace {
@@ -86,7 +95,7 @@ int gSaid;                    // what the log told already (bits by kind)
 
 // What the last prompt drew (re4_melee_neck / re4_melee_kneel), for the routine that plays it: -1 the game's own,
 // 0..kVariants-1 a mod's, kNeck / kAxe; gDrawn the prompt's (cleared when taken)
-enum { kGame = -1, kNeck = 100, kAxe = 101, kExec = 102 };
+enum { kGame = -1, kNeck = 100, kAxe = 101, kExec = 102, kFinish = 103 };
 int gPick[2] = {kGame, kGame};
 int gLast[2] = {-2, -2};
 bool gDrawn[2];
@@ -213,18 +222,18 @@ int draw(int k, const int* cand, int count)
 }
 
 // The move of kind k (0 on a standing enemy, 1 on a kneeling one) for this prompt; `extra` / `extra2` the neck break,
-// the axe strike or the axe execution when switched on and possible
-int pick(int k, int extra, int extra2 = kGame)
+// the axe strike or the axe execution when switched on and possible, `finish` a finisher (runtime/finisher.cpp)
+int pick(int k, int extra, int extra2 = kGame, int finish = kGame)
 {
     const int bits = gBits.load();
     if (!(bits & 2)) {
         load();
     }
     const int mods = (bits & 2) ? 0 : gMods[k];
-    int cand[kVariants + 3];
+    int cand[kVariants + 4];
     int n = 0;
     if (bits & 8) {  // the mix off: the app's choice
-        cand[n++] = extra != kGame ? extra : extra2 != kGame ? extra2 : mods ? 0 : kGame;
+        cand[n++] = finish != kGame ? finish : extra != kGame ? extra : extra2 != kGame ? extra2 : mods ? 0 : kGame;
     } else {
         cand[n++] = kGame;
         for (int i = 0; i < mods; i++) {
@@ -235,6 +244,9 @@ int pick(int k, int extra, int extra2 = kGame)
         }
         if (extra2 != kGame) {
             cand[n++] = extra2;
+        }
+        if (finish != kGame) {
+            cand[n++] = finish;
         }
     }
     const int c = draw(k, cand, n);
@@ -248,7 +260,7 @@ int pick(int k, int extra, int extra2 = kGame)
         }
         re4_log("melee: on a %s enemy: %s%s (%d to draw from)", k ? "kneeling" : "standing",
                 c == kGame ? "the game's" : c == kNeck ? "the neck break" : c == kAxe ? "the axe strike"
-                : c == kExec ? "the axe execution" : "the mod's move",
+                : c == kExec ? "the axe execution" : c == kFinish ? "a finisher" : "the mod's move",
                 mod, n);
     }
     return c;
@@ -758,7 +770,13 @@ void* re4_melee_kneel(void* game)
         return game;
     }
     const bool axe = (gBits.load() & 4) && pPL && pPL->Body;
-    if (pick(1, axe ? kAxe : kGame) != kAxe) {
+    re4_finish_clear();
+    const int c = pick(1, axe ? kAxe : kGame, kGame, re4_finish_ready(1) ? kFinish : kGame);
+    if (c == kFinish && re4_finish_arm(1)) {
+        gDrawn[1] = false;
+        return re4_finish_kneel_routine(game);
+    }
+    if (c != kAxe) {
         return game;
     }
     static bool hooked = false;
@@ -848,6 +866,9 @@ void* re4_melee_motion(int kind, void* game)
         return gMod[kind][c];
     }
     if (kind >= 2 && kind <= 4) {
+        if (void* fin = re4_finish_motion(kind)) {  // a finisher armed (patch 0921)
+            return fin;
+        }
         void* own = re4_melee_hunk_entry(0x2B9 + (unsigned) (kind - 2));
         return own ? own : game;
     }
@@ -865,7 +886,13 @@ int re4_melee_neck(int special)
         neck = false;
     }
     const bool exec = (gBits.load() & 4) && !special && pPL && pPL->Body;
-    const int c = pick(0, neck ? kNeck : kGame, exec ? kExec : kGame);
+    re4_finish_clear();
+    const int c = pick(0, neck ? kNeck : kGame, exec ? kExec : kGame, !special && re4_finish_ready(0) ? kFinish : kGame);
+    if (c == kFinish && re4_finish_arm(0)) {
+        gDrawn[0] = false;
+        say(12, "a finisher on a standing stunned Ganado (runtime/finisher.cpp)");
+        return 1;
+    }
     if (c == kExec) {
         gDrawn[0] = false;
         say(7, "Leon's axe execution: a standing stunned Ganado drops to its knees and takes the axe strike");

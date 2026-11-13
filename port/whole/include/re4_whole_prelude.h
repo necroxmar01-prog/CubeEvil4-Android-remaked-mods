@@ -120,6 +120,9 @@ void* re4_melee_kneel(void* game);
 /* Patch 0904: re4_melee_neck gives 2 for the axe execution of a standing stunned Ganado (it kneels, then the axe
  * strike); this is Leon's routine for it. */
 void* re4_melee_execute(void);
+/* Patch 0921 (em10.cpp Dm_NeckBreak; runtime/finisher.cpp): 1 when a finisher is armed and has put Leon in its place
+ * with its own routine (EmCatchPLSet), 0 leaves the neck break's catch. */
+int re4_finish_catch(void* em);
 /* Patch 0916 (embox.cpp emBoxActEvtCk; runtime/melee.cpp): 1 when the action button makes Leon strike the box he
  * faces (the app's "Box strike", the knife's reach), and the prompt's routine for it. */
 int re4_box_strike(void* em);

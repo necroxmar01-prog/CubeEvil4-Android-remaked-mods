@@ -183,6 +183,10 @@ int re4_player_modded(void);
 #define RE4_MEM1_MELEE_AXE_MAX 0x00006000u
 const char* re4_mod_melee_path(void);
 void re4_mod_melee_path_set(const char* path);
+/* The active mods' finishers (mods/<pack>/melee/finish.dat, patch 0921, runtime/finisher.cpp), "" without them; read to
+ * the place for the mods' character archives (re4_mod_place_alloc). */
+const char* re4_mod_finish_path(void);
+void re4_mod_finish_path_set(const char* path);
 /* A mod's sound for the D-pad quick slots (mods/<pack>/sound/quickslot.wav, runtime/mod_sound.cpp): its path ("" none),
  * a press (volume: the effects' percent; 1 = it plays) and the mixer of ai.cpp (stereo frames L, R). */
 void re4_mod_sound_path_set(const char* path);

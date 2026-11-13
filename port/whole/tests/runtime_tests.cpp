@@ -1484,6 +1484,10 @@ int re4probe_lock_on(void);
 int re4probe_parry(void);
 int re4probe_wardrobe(void);
 int re4probe_melee(const char* file);
+int re4probe_finish(const char* file);
+void re4_mod_finish_path_set(const char* path);
+int re4_finish_probe(int i);
+void re4_finish_reset(void);
 int re4probe_qte_touch(void);
 int re4probe_qte_auto(void);
 int re4probe_cheat_extras(void);
@@ -2481,6 +2485,28 @@ static void testMelee()
     report("melee", bad == 0);
 }
 
+// Leon's finishers (runtime/finisher.cpp, patch 0921; game_probe.cpp re4probe_finish)
+static void testFinish()
+{
+    char file[64];
+    snprintf(file, sizeof(file), "/tmp/re4-finish-test-%d.dat", (int) getpid());
+    int bad = re4probe_finish(file);
+    if (bad) {
+        re4_log("  finishers: failed checks 0x%x", bad);
+    }
+    // a real archive of port/tools/re9_finisher_pack.py (RE4_TEST_FINISH_DAT=path): read, converted, every finisher kept
+    if (const char* real = getenv("RE4_TEST_FINISH_DAT")) {
+        re4_mod_finish_path_set(real);
+        const int n = re4_finish_probe(-1);
+        const int want = getenv("RE4_TEST_FINISH_COUNT") ? atoi(getenv("RE4_TEST_FINISH_COUNT")) : 1;
+        re4_log("  finishers: %s holds %d (expected %d)", real, n, want);
+        bad |= n != want ? 0x10000 : 0;
+        re4_mod_finish_path_set("");
+        re4_finish_reset();
+    }
+    report("finishers", bad == 0);
+}
+
 // "Skip intro logos" (patch 0905; runtime/aim_options.cpp): the second settings word's bit 28 switches it, the other
 // bits of that word leave it alone
 extern "C" void re4_aim_set(int bits);
@@ -3039,6 +3065,7 @@ int re4_runtime_tests()
     testParry();
     testWardrobe();
     testMelee();
+    testFinish();
     testSkipIntro();
     testKnifeSpeed();
     testAshleyGun();

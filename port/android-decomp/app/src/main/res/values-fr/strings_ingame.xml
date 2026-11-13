@@ -466,6 +466,7 @@
     <string name="ingame_melee_axe">Coup de hache et exécution</string>
     <string name="ingame_melee_random">Mélange aléatoire</string>
     <string name="ingame_melee_box">Frappe de caisse</string>
+    <string name="ingame_melee_finish">Coups de grâce</string>
     <string name="ingame_skip_intro">Passer les logos</string>
     <string name="ingame_skip_intro_help">Passer les logos : le jeu démarre au menu titre, sans les logos Nintendo, Capcom et autres (au prochain démarrage).</string>
     <string name="ingame_ashley_gun">Pistolet d\'Ashley</string>

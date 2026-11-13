@@ -464,6 +464,7 @@
     <string name="ingame_melee_axe">Hachazo y ejecución</string>
     <string name="ingame_melee_random">Mezcla aleatoria</string>
     <string name="ingame_melee_box">Golpe a cajas</string>
+    <string name="ingame_melee_finish">Remates</string>
     <string name="ingame_skip_intro">Saltar logos iniciales</string>
     <string name="ingame_skip_intro_help">Saltar logos iniciales: el juego empieza en el menú principal, sin los logos de Nintendo, Capcom y otros (desde el próximo inicio).</string>
     <string name="ingame_ashley_gun">Pistola de Ashley</string>

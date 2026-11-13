@@ -1,0 +1,18 @@
+# Patch 0921 (wish of DevJunior, 13.11.2026: the PC mod "RE9 Melee - Hatchet - Finishers for Leon", "turn this into the
+# remake, its controls too"). Not a bug of the prototype: a port feature of the mods.
+# em10.cpp Dm_NeckBreak (R1 0x15, the neck break's enemy routine: always fatal, its motion, the body down into
+# Die_Cramp) also plays Leon's finishers (runtime/finisher.cpp, a mod pack's melee/finish.dat): with one armed by the
+# prompt on a stunned Ganado (runtime/melee.cpp), re4_finish_catch puts Leon at the pair's distance with the
+# finisher's own routine instead of the neck break's catch; re4_melee_motion (patch 0904) gives the motions. Declared
+# in re4_whole_prelude.h.
+--- a/src/em10/em10.cpp
++++ b/src/em10/em10.cpp
+@@ -14570,7 +14570,7 @@
+         }
+         MotionSetCore(em, &em->Motion, re4_melee_motion(3, PL_ARC_PTR(em->subArc, 0x2BA)), re4_melee_motion(4, PL_ARC_PTR(em->subArc, 0x2BB)), 0, 1, 0);
+         EstSet(em, -1, 0, 0, EFF_EM10, 0x90, 0, ESP_CORE_KIND_NONE, em, 0);
+-        EmCatchPLSet(em, 0.0f, 2, -75.21f, 0.0f, 1076.1f, plem10NeckBreak);
++        if (!re4_finish_catch(em)) EmCatchPLSet(em, 0.0f, 2, -75.21f, 0.0f, 1076.1f, plem10NeckBreak); /* port: patch 0921 */
+         em10SetDmWaterEff(em, 1);
+         SndStop(w->Seid_csaw, 0);
+         em->hp = 0;

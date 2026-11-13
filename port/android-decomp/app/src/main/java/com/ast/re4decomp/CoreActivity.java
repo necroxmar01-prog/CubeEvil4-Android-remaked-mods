@@ -154,6 +154,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // "Box strike" (wish of DevJunior, 12.11.2026; patch 0916): the action button breaks the box, barrel or vase Leon
   // faces with his knife (CoreBridge.setBoxStrike, bit 12 of the third aim word; on by default)
   static final String BOX_STRIKE = "boxStrike";
+  /** The menu's "Finishers" (a mod pack's RE9 finishers on stunned Ganados, patch 0921), on by default. */
+  static final String FINISHERS = "finishers";
   // "Skip intro logos" (wish of DevJunior, 10.11.2026; patch 0905): the title starts at its main menu (bit 28 of the
   // placement word, on by default)
   static final String SKIP_INTRO = "skipIntro";
@@ -427,6 +429,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     knifeSpeed = inputPrefs.contains(KNIFE_SPEED) ? clampAimSpeed(inputPrefs.getFloat(KNIFE_SPEED, 1f)) : 0f;
     CoreBridge.setKnifeSpeed(knifeSpeed);
     CoreBridge.setBoxStrike(inputPrefs.getBoolean(BOX_STRIKE, true));
+    CoreBridge.setFinishers(inputPrefs.getBoolean(FINISHERS, true));
     input.setStickShape(inputPrefs.getInt(STICK_DEAD_ZONE, 0), inputPrefs.getInt(STICK_RANGE, 100));
     stickWatch.setShape(input.deadZone(), input.range());
     if (input.deadZone() != 0 || input.range() != 100) {

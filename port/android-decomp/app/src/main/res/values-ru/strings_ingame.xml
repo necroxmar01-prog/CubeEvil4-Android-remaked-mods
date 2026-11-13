@@ -468,6 +468,7 @@
     <string name="ingame_melee_axe">Удар топором и казнь</string>
     <string name="ingame_melee_random">Случайный выбор</string>
     <string name="ingame_melee_box">Удар по ящикам</string>
+    <string name="ingame_melee_finish">Добивания</string>
     <string name="ingame_skip_intro">Пропустить логотипы</string>
     <string name="ingame_skip_intro_help">Пропустить логотипы: игра начинается сразу с главного меню, без логотипов Nintendo, Capcom и других (со следующего запуска).</string>
     <string name="ingame_ashley_gun">Пистолет Эшли</string>

@@ -465,6 +465,7 @@
     <string name="ingame_melee_axe">Machadada e execução</string>
     <string name="ingame_melee_random">Mistura aleatória</string>
     <string name="ingame_melee_box">Golpe em caixas</string>
+    <string name="ingame_melee_finish">Finalizações</string>
     <string name="ingame_skip_intro">Pular logos iniciais</string>
     <string name="ingame_skip_intro_help">Pular logos iniciais: o jogo começa no menu do título, sem os logos da Nintendo, Capcom e outros (a partir do próximo início).</string>
     <string name="ingame_ashley_gun">Pistola da Ashley</string>
