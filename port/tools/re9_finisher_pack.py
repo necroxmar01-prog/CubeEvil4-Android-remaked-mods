@@ -133,7 +133,7 @@ def find_motion(path, key):
 class Fit:
     """One motion fitted to a skeleton, its root kept apart (the root motion)."""
 
-    def __init__(self, motion, model, map_name, step, tol, end, no_fingers=False, frames=None):
+    def __init__(self, motion, model, map_name, step, tol, end, no_fingers=False, frames=None, loop=False):
         body, fingers, nexts = RT.MAPS[map_name]
         mapping = dict(body)
         if not no_fingers:
@@ -147,6 +147,8 @@ class Fit:
         self.rows = RT.retarget(src, model, mapping, nexts, self.frames, self.scale, root_relative=True)
         self.order = [p for p in sorted(mapping) if mapping[p] in src.by_name and p != 0] + [0]
         self.map_name = map_name
+        if loop:
+            self.rows = RT.close_loop(self.rows)
         if map_name == "leon":
             self.rows, self.order = RT.split_hips(self.rows, self.order)
         self.model, self.mapping, self.nexts, self.tol = model, mapping, nexts, tol
@@ -324,7 +326,7 @@ def moves(root, model, tol, out_path):
         m = next(x for x in mots if x.name.endswith(name))
         first, length = find_loop(m, lengths)
         fit = Fit(m, model, "leon", 2.0, tol, m.frames, True,
-                  frames=list(np.arange(first, first + length + 1e-6, 2.0)))
+                  frames=list(np.arange(first, first + length + 1e-6, 2.0)), loop=True)
         data = fcv.serialise(fit.motion(fit.scale))
         c = fit.check(data)
         entries.append(data)

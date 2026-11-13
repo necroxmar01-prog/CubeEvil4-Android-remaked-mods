@@ -1078,12 +1078,14 @@ void re4_knife_tap_input(void* p)
         gTapQueued = 0;  // hurt or in an event
         return;
     }
-    if (pl->r_no_1 == 0xB && (pl->r_no_2 == 0 || pl->r_no_2 == 1)) {
+    // only from the stance itself (step 1): its first step draws the knife and puts the gun away (device video
+    // 13.11.2026: a tap's slash came with the pistol still in the hand)
+    if (pl->r_no_1 == 0xB && pl->r_no_2 == 1) {
         pl->r_no_2 = 2;  // the slash, as pl_knife's stance step sets it on the fire key
         pl->r_no_3 = 0;
         gTapSlash = true;
         gTapQueued = 0;
-    } else if (pl->r_no_1 != 0xB) {
+    } else if (pl->r_no_1 != 0xB || pl->r_no_2 == 0) {
         Key.on |= 0x800;  // the knife key held until his stance is up
         Joy[0].on |= 0x40;
     }

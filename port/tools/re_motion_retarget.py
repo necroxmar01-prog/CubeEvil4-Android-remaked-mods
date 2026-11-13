@@ -265,8 +265,41 @@ def split_hips(rows, order):
             local[1] = r0 @ local[1] if 1 in local else r0
             local[17] = r0 @ local[17] if 17 in local else r0
         out.append((local,) + tuple(row[1:]))
+    # the forearms' twist bones (9, 15) and part 32: the game's motions turn them (its arm IK the twists); left out, they
+    # keep the turn of the motion before (device report 13.11.2026: an arm twisted round during the strikes)
+    rest = [p for p in REST_PARTS if p not in order]
+    for row in out:
+        for p in rest:
+            row[0][p] = np.eye(3)
     order = [p for p in order if p not in (0, 1, 17)]
-    return out, [1, 17] + order
+    return out, [1, 17] + order + rest
+
+
+REST_PARTS = (9, 15, 32)
+
+
+def close_loop(rows, window=None):
+    """A cycle whose last frame is its first: over the last `window` frames (a third of it by default) every part's
+    turn and the hips' place ease into the first frame's, so the loop has no jump (device report 13.11.2026: the stand
+    cut back to its start, the walk hitched once a cycle)."""
+    from scipy.spatial.transform import Rotation
+    n = len(rows)
+    window = window or max(2, n // 3)
+    first, last = rows[0], rows[-1]
+    diff = {p: Rotation.from_matrix(first[0][p] @ last[0][p].T).as_rotvec() for p in first[0] if p in last[0]}
+    dhip = np.array(first[1]) - np.array(last[1])
+    out = []
+    for i, row in enumerate(rows):
+        t = (i - (n - 1 - window)) / float(window)
+        if t <= 0.0:
+            out.append(row)
+            continue
+        w = t * t * (3.0 - 2.0 * t)
+        local = dict(row[0])
+        for p, rv in diff.items():
+            local[p] = Rotation.from_rotvec(rv * w).as_matrix() @ local[p]
+        out.append((local, np.array(row[1]) + dhip * w) + tuple(row[2:]))
+    return out
 
 
 def build_motion(rows, parts_order, tol, root=None, fixed_pos=None):
