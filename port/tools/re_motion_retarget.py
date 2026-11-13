@@ -344,7 +344,7 @@ def main():
                     continue
                 g = np.array(pose.world[nx]) - np.array(pose.world[part])
                 r = target[nx] - target[part]
-                if np.linalg.norm(g) < 1e-6 or np.linalg.norm(r) < 1e-6:
+                if np.linalg.norm(g) < 1e-6 or np.linalg.norm(r) < 1.0:  # a bone on its parent (the stock Spine_0)
                     continue
                 ang = math.degrees(math.acos(max(-1.0, min(1.0, float(np.dot(g, r) / np.linalg.norm(g) /
                                                                        np.linalg.norm(r))))))

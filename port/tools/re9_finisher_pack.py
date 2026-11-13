@@ -15,6 +15,9 @@ PC game, from where the catch puts them (the enemy's start in front of Leon, as 
 runs at 60 frames per second, this one at 30: every second frame.
 
   h4         the hatchet finisher on a kneeling enemy (any weapon: Leon draws his knife, a skin's axe)
+  knee-a/b/c the 2023 game's own knife decapitations of a kneeling Ganado (verA..C; the mod ships them in its
+             _chainsaw folder, Leon's chc0_jack_pl_0th_com_1020/1025/1030 and the Ganado's chc0_grapple_0th_com_*):
+             the kill on the cut (the hand's fastest frame after the grab), aligned on the grab
   c2         the handgun finisher on a standing stunned enemy
   c3c-*      the shotguns' and machine guns' (shotgun, riot gun, striker, TMP, Chicago Typewriter)
   c4b2-*     the rifles' (rifle, semi-auto rifle)
@@ -56,6 +59,12 @@ C2 = dict(shot=46, kill=48, down=122, cancel=130)
 C3 = dict(shot=53, kill=56, down=116, cancel=130)
 C5 = dict(shot=62, kill=64, down=90, cancel=155)
 
+# the 2023 game's knife decapitations (60 per second; found from the motions: the grab, the cut, the body down)
+KNEE = (("knee-a", "1020", dict(contact=44, kill=88, down=136, cancel=140)),
+        ("knee-b", "1025", dict(contact=64, kill=100, down=144, cancel=150)),
+        ("knee-c", "1030", dict(contact=60, kill=108, down=196, cancel=200)))
+CHC0 = "_chainsaw/animation/ch/chc0/motlist/0th"
+
 HANDGUNS = [1, 2, 3, 4, 0x11]  # item.cpp wep_info: the handguns' weapon numbers (em_sub.cpp HandgunCk)
 
 
@@ -64,6 +73,10 @@ def finishers():
                 enemy="ch4000g1000_enemy_preview", frames=H4),
            dict(name="c2", kind=0, flags=2, weapons=HANDGUNS, dir="gun_pair_c2", leon="ch4000g1110_leon_preview",
                 enemy="ch4000g1110_enemy_preview", frames=C2)]
+    for name, no, frames in KNEE:
+        out.append(dict(name=name, kind=1, flags=1, weapons=[], dir=CHC0, leon="chc0_jack_pl_0th_com",
+                        enemy="chc0_grapple_0th_com", leon_motion="_%s_knife" % no, enemy_motion="_%s_knife" % no,
+                        frames=frames))
     # (weapon of the 2023 game, clip of the enemy, the game's weapon numbers)
     for group, frames, rows in (
             ("c3c", C3, (("wp4100", 1320, [7]), ("wp4101", 1300, [8]), ("wp4102", 1340, [0x21]),
@@ -145,7 +158,7 @@ class Fit:
                     continue
                 g = np.array(pose.world[nx]) - np.array(pose.world[part])
                 r = target[nx] - target[part]
-                if np.linalg.norm(g) < 1e-6 or np.linalg.norm(r) < 1e-6:
+                if np.linalg.norm(g) < 1e-6 or np.linalg.norm(r) < 1.0:  # a bone on its parent (the stock Spine_0)
                     continue
                 c = float(np.dot(g, r) / np.linalg.norm(g) / np.linalg.norm(r))
                 errs.append(math.degrees(math.acos(max(-1.0, min(1.0, c)))))
@@ -190,11 +203,15 @@ def main(argv=None):
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
 
+    # the mod's natives/stm folder (its _re9_melee_proto and _chainsaw)
     root = Path(a.mod)
-    for sub in ("natives/stm/_re9_melee_proto", "_re9_melee_proto"):
-        if (root / sub).is_dir():
+    for sub in ("natives/stm", "stm", "."):
+        if (root / sub / "_re9_melee_proto").is_dir():
             root = root / sub
             break
+    else:
+        if root.name == "_re9_melee_proto":
+            root = root.parent
 
     def model_of(spec):
         path, _, ent = spec.partition(":")
@@ -219,7 +236,7 @@ def main(argv=None):
     for f in finishers():
         if want and f["name"] not in want and f["name"].split("-")[0] not in want:
             continue
-        d = root / f["dir"]
+        d = root / (f["dir"] if f["dir"].startswith("_") else "_re9_melee_proto/" + f["dir"])
         lpath = d / (f["leon"] + ".motlist.663")
         epath = d / (f["enemy"] + ".motlist.663")
         lm = find_motion(lpath, f.get("leon_motion"))
@@ -236,7 +253,8 @@ def main(argv=None):
         fr = f["frames"]
         # the bodies' proportions differ from the PC characters': the enemy's start moved so that on the contact
         # frame (the kill) Leon's hand is where it was against the enemy's head in the PC game
-        k = min(int(round(fr.get("shot", fr["kill"]) / 2.0)), len(lf.frames) - 1, len(ef.frames) - 1)
+        k = min(int(round(fr.get("contact", fr.get("shot", fr["kill"])) / 2.0)), len(lf.frames) - 1,
+                len(ef.frames) - 1)
         lpart, epart = f.get("contact", (10, 4))
         goal = ef.source(k, epart, lf.root[0], world) - lf.source(k, lpart, lf.root[0], world)
         have = (o + RT.rot_y(heading) @ ef.world(edata, world, k, epart)) - lf.world(ldata, world, k, lpart)
@@ -244,7 +262,7 @@ def main(argv=None):
         o = o + np.array([shift[0], 0.0, shift[2]])
         ang = -math.atan2(o[0], o[2])
         ne = len(ef.frames)
-        g = {k: int(round(v / 2.0)) for k, v in fr.items()}
+        g = {key: int(round(v / 2.0)) for key, v in fr.items()}
         seq = sequence(ne, min(g["kill"], ne - 1), min(g["down"], ne - 1))
         li = add("FCV", ("L", f["dir"], lm.name), ldata)
         ei = add("FCV", ("E", f["dir"], em.name), edata)
