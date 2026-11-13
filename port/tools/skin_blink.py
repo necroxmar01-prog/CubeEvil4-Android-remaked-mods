@@ -3,7 +3,7 @@
 "the eyes still look bad and it does not blink correctly"):
 
     skin_blink.py SKIN.drs OUT.drs [--entry 2] [--palette 3] [--eye-mat 2] [--sclera 0.8] [--iris 1.15]
-                  [--preview DIR]
+                  [--still-eyes] [--no-blink]
 
 In play the game blinks by turning the eyelid part (0x1C) about x, at most 0.349 rad (pl_class.cpp
 cPlayer::moveEyeNormal); the head's shapes play only in cutscenes (patch 0907). The RE9 head took its weights from
@@ -19,6 +19,13 @@ not blink (and the cheeks would have moved). Here, per eye:
   rim's positions down onto the lower rim (80 % of them), plus 2 degrees, over the game's 0.349 is the factor patch
   0919 applies (the model's byte
   0x29, in tenths, 0.5 .. 4.0).
+
+--still-eyes keeps the eyeballs whole (third device test of the RE9 head, 12.11.2026: in the opening cutscene the eyes
+were grey noise without iris): their positions took their weights and the face shapes from the old head's nearest
+positions, so up to three quarters of an eyeball followed the eye part (whose joint lies 20 units behind the RE9
+eyeball's centre: the game turns it 18 degrees as the eyes wander) and the blink shapes (slots 10..12) dragged parts
+of it by up to 4.5 units: the iris smeared over the eye. Now every eyeball position is on the head part alone and no
+shape moves it (the eyes look ahead; the lids still blink). --no-blink leaves the lid weights as they are.
 
 --sclera F darkens the eye texture outside the iris to F (the white glared in the game's light); --iris S scales the
 iris about the texture's middle (its edge found as the strongest dark ring). Every other entry stays. Skins never go
@@ -41,6 +48,7 @@ import skin_slim as S  # noqa: E402
 import uhd_skin_convert as U  # noqa: E402
 
 LID, HEAD = 0x1C, 4
+EYES = (0x20, 0x21)  # the eye parts (cPlayer::moveEyeNormal turns them)
 GAME_MAX = 0.3490658402442932
 FULL, FADE = 2.5, 6.5  # the upper lid on the lid part fully up to FULL above its rim, nothing from FADE
 
@@ -177,6 +185,51 @@ def blink(blob, eye_mat, notes):
     return bytes(out)
 
 
+def still_eyes(blob, eye_mat, notes):
+    """Every position of the eyeball parts on the head part alone, their face shape offsets zero."""
+    P = G.positions(blob)
+    weights = G.model_weights(blob)
+    vo = struct.unpack_from(">I", blob, 0x30)[0]
+    per = [tuple(weights[struct.unpack_from(">H", blob, vo + i * 8 + 6)[0]]) for i in range(len(P))]
+    eye = set()
+    for p, tris in S.part_lists(blob):
+        if blob[p + 0xC] == eye_mat:
+            eye.update(c[0] for t in tris for c in t)
+    if not eye:
+        raise SystemExit("no eyeball part drawing with texture %d" % eye_mat)
+    moved = sum(1 for i in eye if per[i] != ((HEAD, 100.0),))
+    out = bytearray(blob)
+    so = struct.unpack_from(">I", blob, 0x2C)[0]
+    cleared = 0
+    if so:
+        for k in range(struct.unpack_from(">I", blob, so)[0]):
+            ofs, cnt = struct.unpack_from(">Ii", blob, so + 4 + k * 8)
+            for j in range(cnt):
+                o = so + 4 + ofs + j * 8
+                if struct.unpack_from(">H", blob, o)[0] in eye and any(out[o + 2:o + 8]):
+                    out[o + 2:o + 8] = bytes(6)
+                    cleared += 1
+    new, skin = [], 0
+    for i in range(len(P)):
+        if i in eye:
+            new.append(((HEAD, 100.0),))
+        elif any(b in EYES for b, _r in per[i]):
+            # the skin round the eyes took eye part shares too: on the head part (the eye parts turn about a joint
+            # far behind the RE9 eyes)
+            d = {}
+            for b, r in per[i]:
+                b = HEAD if b in EYES else b
+                d[b] = d.get(b, 0.0) + r
+            new.append(tuple(sorted(d.items(), key=lambda x: -x[1])))
+            skin += 1
+        else:
+            new.append(per[i])
+    H.write_weights(out, new)
+    notes.append("eyeballs: %d positions, %d of them off other parts, %d shape offsets cleared; %d skin positions "
+                 "off the eye parts" % (len(eye), moved, cleared, skin))
+    return bytes(out)
+
+
 def eye_texture(img, sclera, iris):
     a = np.asarray(img.convert("RGBA"), dtype=np.float64)
     h, w = a.shape[:2]
@@ -208,11 +261,16 @@ def main(argv=None):
     ap.add_argument("--eye-mat", type=int, default=2)
     ap.add_argument("--sclera", type=float, default=1.0)
     ap.add_argument("--iris", type=float, default=1.0)
+    ap.add_argument("--still-eyes", action="store_true", help="the eyeballs on the head part, no shape moves them")
+    ap.add_argument("--no-blink", action="store_true", help="the lid weights stay as they are")
     a = ap.parse_args(argv)
     gc = U.Archive(Path(a.inp).read_bytes(), ">")
     entries = [gc.entry(i) for i in range(len(gc.offsets))]
     notes = []
-    entries[a.entry] = blink(entries[a.entry], a.eye_mat, notes)
+    if not a.no_blink:
+        entries[a.entry] = blink(entries[a.entry], a.eye_mat, notes)
+    if a.still_eyes:
+        entries[a.entry] = still_eyes(entries[a.entry], a.eye_mat, notes)
     if a.sclera != 1.0 or a.iris != 1.0:
         images = W.tpl_images(entries[a.palette])
         disc = U.disc_textures(entries[a.palette])

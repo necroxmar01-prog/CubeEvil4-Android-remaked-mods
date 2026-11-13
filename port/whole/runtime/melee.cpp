@@ -258,10 +258,12 @@ const int kAxeSeq = 0x81;
 const int kAxeEnd = 50;          // Leon's last frame of it: the swing is over, the Ganado's recovery follows
 const int kAxeCancel = 34;       // from this frame an aim or fire key ends it
 const int kAxeHitAt = 3;         // the hit on the third of the sequence's hit frames
-const int kAxeHitLead = 7;       // and at most this many before its first hit mark (Free 1)
-const int kAxeLead = 8;          // frames of the Ganado's wind-up Leon keeps before the swing (its swing mark, Free 0x20:
+const int kAxeHitLead = 3;       // and at most this many before its first hit mark (Free 1)
+const int kAxeLead = 3;          // frames of the Ganado's wind-up Leon keeps before the swing (its swing mark, Free 0x20:
                                  // the sequence's first; DevJunior, 12.11.2026: "it pauses at the start of the axe
-                                 // animation": the Ganados hold the axe up a while, a warning to the player)
+                                 // animation": the Ganados hold the axe up a while, a warning to the player; 8 / 7
+                                 // until the third device test: "Leon still points up, stuck with the axe": the blend
+                                 // of 4 frames reaches the raised axe and the swing follows at once)
 const f32 kRootMax = 350.0f;     // the root's step forward at most (Leon's own knee kick: 325)
 const int kWindUp = 9;           // the knife's fallback: frames of the wind-up (the up stance, blended in over 6)
 const int kHitFrame = 8;         // frame of its chop (0x86) that hits: the blade at its lowest
@@ -573,9 +575,10 @@ void plAxeStrike(cPlayer* pl)
 }
 
 // The axe execution of a standing stunned Ganado (patch 0904, em10KickAction: the Ganado drops to its knees as when
-// shot in the leg): Leon draws the knife in its up stance, turns to it and waits for it to kneel (the knee motion's
-// kneel mark, Free 2, as Dm_Small reads it; at most kExecWait frames), then swings the axe strike (plAxeStrike)
-const int kExecWait = 8;          // 24 until 12.11.2026 (the pause DevJunior saw before the swing)
+// shot in the leg): Leon swings the axe strike (plAxeStrike) at once while it drops. Until 12.11.2026 he drew the knife
+// in its up stance first and waited for the knee motion's kneel mark (Free 2, at most 24, then 8 frames): DevJunior saw
+// that wait, the knife up, as a stuck pose in three device tests; the Ganado did not kneel in time anyway, and the
+// strike's own wind-up (kAxeLead) covers its drop
 bool gExecSwing = false;
 
 bool gExecSwing_reset()
@@ -587,40 +590,11 @@ bool gExecSwing_reset()
 
 void plAxeExec(cPlayer* pl)
 {
-    cEm* em = pl->pEmCatch;
-    if (gExecSwing) {
-        plAxeStrike(pl);
-        return;
+    if (!gExecSwing) {
+        gExecSwing = true;
+        pl->r_no_2 = 0;
     }
-    pl->dmg.set(0, 0x1E);
-    StaFlagOn(pG, STA_PL_EM_ACTION);
-    switch (pl->r_no_2) {
-    case 0:
-        setWepTrans(pl, 0);
-        pl->Body->setKnife(true);
-        gAxeLive = true;
-        MotionSetCore(pl, &pl->Motion, PL_ARC_PTR(pG->pPlayer, 0x83), 0, 6, 1, 0);
-        pl->m_Work0 = 0;
-        pl->m_Work1 = 12;
-        pl->r_no_2 = 30;
-        break;
-    case 30:
-        MotionMove(pl, 0);
-        pl->m_Work0++;
-        if ((em->Motion.Seq_old.Free & 2) || pl->m_Work0 >= (u32) kExecWait) {
-            if (pl->m_Work0 >= (u32) kExecWait) {
-                say(9, "the axe execution: the Ganado did not kneel in time; the axe strike swings anyway");
-            }
-            gExecSwing = true;
-            pl->r_no_2 = 0;
-        }
-        break;
-    }
-    if (pl->m_Work1 > 0) {
-        pl->m_Work1--;
-        pl->ang.y += Muku(&pl->pos, &em->pos, pl->ang.y, 0.19634955f);
-        pl->ang.y = LIMIT_ANGLE(pl->ang.y);
-    }
+    plAxeStrike(pl);
 }
 
 // ---- The box strike (see the head) ----
