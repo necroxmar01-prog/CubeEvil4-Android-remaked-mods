@@ -1,10 +1,39 @@
 # Patch 0952 (wish of DevJunior, 23.11.2026: "that she at least dodges the blows, depending on the situation, so that
-# she is not overpowered"). Not a bug of the prototype: a port feature of the mods with runtime/ashley_gun.cpp.
+# she is not overpowered"; 25.11.2026: "that she can still keep firing and does not crouch if I aim at her").
+# Not a bug of the prototype: a port feature of the mods with runtime/ashley_gun.cpp.
 # src/game/pl_npc.cpp cSubChar::setDamage (an enemy's blow on the partner): re4_ashley_dodge may let Ashley duck it
-# (her crouch, routine 4, as when Leon aims at her) instead: then no damage, no damage motion.
+# (her crouch, routine 4) instead: then no damage, no damage motion. cSubChar::cautionCheck (Leon aiming at her) and
+# moveKagamu (held down while Leon aims): not while re4_ashley_no_caution (she carries a pistol): she stays up.
 --- a/src/game/pl_npc.cpp
 +++ b/src/game/pl_npc.cpp
-@@ -3461,8 +3461,13 @@
+@@ -50,6 +50,7 @@
+ 
+ extern "C" void re4_ashley_behind(cSubChar* a, Vec* t); /* port (patch 0951): runtime/ashley_gun.cpp */
+ extern "C" int re4_ashley_behind_mot(int no);           /* port (patch 0951) */
++extern "C" int re4_ashley_no_caution(cSubChar* a);      /* port (patch 0952): runtime/ashley_gun.cpp */
+ const Vec cSubChar::atckPos = { -100.0f, 0.0f, -500.0f };
+ const Vec cSubChar::atckPos2 = { 300.0f, 0.0f, -500.0f };
+ 
+@@ -892,7 +893,7 @@
+         break;
+     case 4:
+         pEm->motionMove();
+-        if (Key.on & 0x810) {
++        if ((Key.on & 0x810) && !re4_ashley_no_caution(this)) { /* port (patch 0952): armed, up again */
+             pEm->m_Work0 = 0;
+         } else {
+             if (++pEm->m_Work0 > 30) {
+@@ -2258,6 +2259,9 @@
+     } else {
+         ret = 1;
+     }
++    if (ret == 1 && re4_ashley_no_caution(this)) {
++        ret = 0; /* port (patch 0952, mods): armed, she stays up and keeps firing when Leon aims at her */
++    }
+     if (ret == 1) {
+         status.on(S_WEPCAUTION);
+     } else {
+@@ -3461,8 +3465,13 @@
  }
  
  // Scenario damage area hit (sce_at sceAtFunc_damage): `power` is the hit direction (123 = none).

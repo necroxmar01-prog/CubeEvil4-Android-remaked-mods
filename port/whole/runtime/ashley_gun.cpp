@@ -1174,6 +1174,14 @@ int re4_ashley_dodge(cSubChar* a, int kind, int arg)
     return 1;
 }
 
+// Patch 0952: 1 = Ashley (id 3) carries her pistol: she does not crouch when Leon aims at her, and stands up from a
+// duck after its second even while he aims (DevJunior, 25.11.2026: "that she can still keep firing and does not
+// crouch if I aim at her")
+int re4_ashley_no_caution(cSubChar* a)
+{
+    return a && ((cModel*) a)->id == 3 && armed() ? 1 : 0;
+}
+
 // Patch 0951: her motion `no` behind the aiming player (0x1D..0x1F covering her ears, 0x20 flinching): armed, her
 // alert stand instead (0x12; DevJunior, 23.11.2026: "she still hides or gets scared every time I reload, instead of
 // being alert")
