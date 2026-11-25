@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
     if (!std::strcmp(argv[i], "--tex")) o.tex = std::atoi(argv[i + 1]);
     else if (!std::strcmp(argv[i], "--transfer")) o.transfer = std::atof(argv[i + 1]);
     else if (!std::strcmp(argv[i], "--head")) o.keepHead = std::atoi(argv[i + 1]) != 0;
+    else if (!std::strcmp(argv[i], "--inner")) o.innerLayer = std::atoi(argv[i + 1]) != 0;
   Bytes out;
   std::string log, why;
   const std::string gc = argv[1];

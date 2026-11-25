@@ -560,7 +560,8 @@ public final class StudioActivity extends Activity {
           who.addView(b, chip());
         }
         content.addView(who);
-        content.addView(note("Auto: RE4 Remake outfits go on whom they were made for (Leon, Ashley or Ada), GTA skins on Leon."));
+        content.addView(note("Auto: RE4 Remake outfits go on whom they were made for (Leon, Ashley or Ada), GTA skins by "
+            + "their name (Ashley, Ada, else Leon)."));
         LinearLayout head = row();
         head.addView(text("The character's head ", 12, DIM, false));
         for (boolean on : new boolean[] {false, true}) {
@@ -843,7 +844,8 @@ public final class StudioActivity extends Activity {
     for (String[] u : udasFiles) {
       List<String> targets = new ArrayList<>();
       if (u[0].endsWith(".dff") || u[0].endsWith(REMAKE)) {
-        String who = skinFor.isEmpty() && u[0].endsWith(REMAKE) ? whoFor(u[1].split("\n")[0]) : skinFor;
+        String who = !skinFor.isEmpty() ? skinFor
+            : u[0].endsWith(REMAKE) ? whoFor(u[1].split("\n")[0]) : whoByName(u[0] + " " + u[1]);
         targets.addAll(java.util.Arrays.asList(
             who.equals("ashley") ? ASHLEY_ON : who.equals("ada") ? ADA_ON : GTA_ON));
       }
@@ -877,6 +879,15 @@ public final class StudioActivity extends Activity {
   }
 
   // whom an RE4 Remake outfit was made for: its meshes' folder (character/ch/cha1NN Ashley, cha2NN Ada, else Leon)
+  // Auto for a GTA skin (DevJunior, 25.11.2026: an Ashley skin went on Leon): by its file and folder names, "ashley"
+  // -> Ashley, "ada" as a word -> Ada, else Leon
+  static String whoByName(String names) {
+    String n = names.toLowerCase(Locale.ROOT);
+    if (n.contains("ashley")) return "ashley";
+    if (n.matches("(?s).*(^|[^a-z])ada([^a-z]|$).*") || n.contains("adawong")) return "ada";
+    return "";
+  }
+
   private String whoFor(String base) {
     String known = remakeWho.get(base);
     if (known != null) return known;

@@ -1919,11 +1919,25 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
 
     log += fmt("%s: %zu vertices, %zu triangles, %zu materials, %zu bones, %zu textures\n", what, m.pos.size(),
                m.tris.size(), m.matTex.size(), m.boneAt.size(), images.size());
-    // the inner layer doubles the triangles: half the model's room for the skin then
-    const std::size_t room = o.innerLayer ? 10900 : 21800;
+    // the inner layer doubles the triangles: half the model's room for the skin then. Leon and Ashley lend the skin a
+    // second model, their outfit's (entry 6, drawn with the body's TPL; DevJunior, 25.11.2026: "the Studio does not
+    // convert the skins well": a 62798-triangle skin cut to 10900 lost 8.4 % of its shape, spiky hands, holes in the
+    // hair; in two models 21800, 3.0 %)
+    const std::size_t second = (stem == "pl0b" || stem == "pl0c") ? 0 : 6;
+    const std::size_t room = (o.innerLayer ? 10900 : 21800) * (second ? 2 : 1);
     reduceSkin(m, o.maxSkinTris ? std::min(o.maxSkinTris, room) : room, log);
     const std::size_t nb = m.boneAt.size(), nv = m.pos.size();
 
+    // Some rigs name the back "Spine 1" / "Spine 2" for GTA's "Spine" / "Spine1" (DevJunior, 25.11.2026: Sergio Van
+    // Dyk's Ashley: the back then moved with the hips, stiff)
+    {
+      bool spine = false, spine1 = false;
+      for (const auto &n : m.boneName) spine |= gtaKey(n) == "spine", spine1 |= gtaKey(n) == "spine 1";
+      if (!spine && spine1)
+        for (auto &n : m.boneName)
+          if (gtaKey(n) == "spine 1") n = "spine";
+          else if (gtaKey(n) == "spine 2") n = "spine1";
+    }
     // the bones by name, each to its disc bone
     std::map<std::string, int> byName;
     for (std::size_t k = 0; k < nb; ++k)
@@ -1963,7 +1977,35 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
       hips = at("pelvis"), h = skel.at(17).at;
     }
     if (gtaTrunk <= 0) fail("the skin's head (or shoulders) is not above its hips");
-    const double scale = leonTrunk / gtaTrunk;
+    double scale = leonTrunk / gtaTrunk;
+    // A GTA skin whose limbs come out much shorter than the character's at the trunk's size (DevJunior, 25.11.2026:
+    // Sergio Van Dyk's Ashley on Ashley: every limb stretched by 1.22..1.53, thin and spiky): the whole skin a little
+    // larger, halfway (the square root of the limbs' middle stretch), so trunk and limbs share the difference. Only
+    // on Ashley and Ada: on Leon the GTA skins stay as DevJunior took them (20.11.2026: "theirs looked best").
+    const bool onLeon = stem == "pl00" || stem == "pl08" || stem == "pl09" || stem == "pl10";
+    if (!shoulderFit && !onLeon) {
+      std::vector<double> ks;
+      const std::pair<const char *, const char *> limbs[] = {{"l upperarm", "l forearm"}, {"l forearm", "l hand"},
+          {"r upperarm", "r forearm"}, {"r forearm", "r hand"}, {"l thigh", "l calf"}, {"l calf", "l foot"},
+          {"r thigh", "r calf"}, {"r calf", "r foot"}};
+      for (const auto &lb : limbs) {
+        int da = -1, db = -1;
+        for (const auto &e : kLeon)
+          if (std::string(e.gta) == lb.first) da = e.disc, db = e.discTo;
+        if (da < 0 || db < 0 || !byName.count(lb.first) || !byName.count(lb.second)) continue;
+        const double sk = len(at(lb.second) - at(lb.first)) * scale, dk = len(skel.at(db).at - skel.at(da).at);
+        if (sk > 1e-6) ks.push_back(dk / sk);
+      }
+      if (ks.size() >= 4) {
+        std::sort(ks.begin(), ks.end());
+        const double mid = ks[ks.size() / 2];
+        if (mid > 1.12 || mid < 0.88) {
+          scale *= std::sqrt(mid);
+          log += fmt("its limbs %.2f times the character's at the trunk's size: the whole skin %.2f times larger\n", mid,
+                     std::sqrt(mid));
+        }
+      }
+    }
     auto G = [&](V3 v) {  // the skin's hips on Leon's
       const V3 d = v - hips;
       return V3{h.x + scale * dot(d, left), h.y + scale * dot(d, up), h.z + scale * dot(d, fwd)};
@@ -2451,6 +2493,26 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
     }
     std::size_t corners = 0;
     for (const auto &[mat, list] : byMat) corners += list.size() * 3;
+    // more than one model holds: the materials shared out over the body and the second model (a material that does
+    // not fit cut in two)
+    std::map<unsigned, std::vector<std::array<unsigned, 3>>> byMatB;
+    if (corners > 0xFFFF && second) {
+      const std::size_t kOne = 21845;
+      std::size_t inA = 0;
+      std::map<unsigned, std::vector<std::array<unsigned, 3>>> a;
+      for (auto &[mat, list] : byMat) {
+        const std::size_t fit = inA < kOne ? std::min(list.size(), kOne - inA) : 0;
+        if (fit) a[mat].assign(list.begin(), list.begin() + long(fit));
+        if (fit < list.size()) byMatB[mat].assign(list.begin() + long(fit), list.end());
+        inA += fit;
+      }
+      byMat.swap(a);
+      std::size_t inB = 0;
+      for (const auto &[mat, list] : byMatB) inB += list.size();
+      log += fmt("the skin in two models: %zu triangles in the body, %zu in entry %zu\n", inA, inB, second);
+      corners = inA * 3;
+      if (inB > kOne) fail(fmt("%zu triangles: at most 21845 fit the second model", inB));
+    }
     if (corners > 0xFFFF) fail(fmt("%zu triangles: at most 21845 fit one model", corners / 3));
 
     // textures behind Leon's own in the body's TPL; a material without one gets its colour
@@ -2459,7 +2521,10 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
     std::vector<std::tuple<unsigned, unsigned, unsigned, Bytes>> add;
     std::map<std::string, unsigned> slotOf;
     std::map<unsigned, unsigned> matSlot;
-    for (const auto &[mat, list] : byMat) {
+    std::set<unsigned> mats;
+    for (const auto &[mat, list] : byMat) mats.insert(mat);
+    for (const auto &[mat, list] : byMatB) mats.insert(mat);
+    for (const unsigned mat : mats) {
       const std::string name = m.matTex[mat];
       const auto c = m.matColour[mat];
       const std::string key = images.count(name) ? name : fmt("#%02x%02x%02x", c[0], c[1], c[2]);
@@ -2490,6 +2555,11 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
     // the model in the PC release's layout, then the disc's (convertModel, Leon's skeleton kept)
     const Converted conv = buildModel(body, byMat, P, N, m.uv, W, matSlot, n0 + add.size(), std::size_t(o.palette));
     log += "entry   0 BIN: " + conv.stats + "\n";
+    Converted convB;
+    if (!byMatB.empty()) {
+      convB = buildModel(body, byMatB, P, N, m.uv, W, matSlot, n0 + add.size(), std::size_t(o.palette));
+      log += fmt("entry %3zu BIN: ", second) + convB.stats + "\n";
+    }
 
     // a skin without a head of its own (a mod that leaves the head to the game) keeps the character's
     bool keepHead = o.keepHead;
@@ -2524,6 +2594,7 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
     for (std::size_t i = 0; i < gc.count(); ++i) {
       if (i == 0) entries.push_back(conv.blob);
       else if (i == 1) entries.push_back(appendTpl(tpl, add));
+      else if (i == second && !byMatB.empty()) entries.push_back(convB.blob);
       else if (fold.count(i) && gc.kind(i) == "BIN" && !gc.entry(i).empty()) {
         entries.push_back(foldModel(gc.entry(i), skel));
         folded += (folded.empty() ? "" : ", ") + std::to_string(i);
