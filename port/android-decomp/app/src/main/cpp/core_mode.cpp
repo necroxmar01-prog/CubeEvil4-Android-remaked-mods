@@ -1175,9 +1175,6 @@ std::atomic<int> optHealthBars{0};
 // the cheat "Stack items" (CoreBridge.setStackItems, 1.1.0): its step in bits 20..21 of the third aim word (0 Standard, 1 250,
 // 2 500, 3 999; runtime/cheats.cpp, patch 0254)
 std::atomic<int> optStackItems{0};
-// the Mods page's "Arrange the case" (CoreBridge.arrangeCase, mods): each press toggles bit 22 of the third aim word,
-// the core arranges the case the next time it opens (runtime/case_arrange.cpp, patch 0953)
-std::atomic<int> optCaseArrange{0};
 // the menu's "Field of view" (CoreBridge.setFov, -15 .. +15 degrees, patch 0205): bits 24..29 of the aim bits as
 // degrees + 32 (0: as the game; the core's runtime/aim_options.cpp)
 std::atomic<int> optFov{0};
@@ -3054,8 +3051,7 @@ bool drawGx() {
         // (the mods' fork: upstream's 1.1.0 bits of the first word moved here, the first word is full with the mods')
         | (vibration < 0 ? 0 : vibration ? 3 << 17 : 2 << 17)  // bits 17/18 the game's vibration (1.1.0)
         | (optHealthBars.load() ? 1 << 19 : 0)                 // bit 19 the enemy health bars (1.1.0)
-        | (optStackItems.load() & 3) << 20                     // bits 20..21 the cheat "Stack items" (1.1.0)
-        | (optCaseArrange.load() & 1) << 22;                   // bit 22 toggled by "Arrange the case" (mods, patch 0953)
+        | (optStackItems.load() & 3) << 20;                    // bits 20..21 the cheat "Stack items" (1.1.0)
     if (api.setAim && knife != knifeSpeedSent) {
       api.setAim(static_cast<int>(0xC0000000u | static_cast<unsigned>(knife)));  // the third aim word
       knifeSpeedSent = knife;
@@ -4280,12 +4276,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setHealthBar
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setStackItems(JNIEnv *, jclass, jint max) {
   const int want = max >= 999 ? 3 : max >= 500 ? 2 : max >= 250 ? 1 : 0;
   if (optStackItems.exchange(want) != want) LOG("stack items: step %d (the menu, %d a slot)", want, (int) max);
-}
-
-// The Mods page's "Arrange the case" (patch 0953): each press toggles bit 22 of the third aim word.
-extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_arrangeCase(JNIEnv *, jclass) {
-  optCaseArrange.fetch_add(1);
-  LOG("case arrange: asked (the menu)");
 }
 
 // 1.1.0: "vibration" changed in the game's own options since the last call (-1: no; with the core in its own

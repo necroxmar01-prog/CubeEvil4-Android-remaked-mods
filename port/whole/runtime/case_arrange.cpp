@@ -1,22 +1,19 @@
 // Mods: "Arrange the case" (wish of DevJunior, 25.11.2026: "an option to arrange the case automatically, so that the
-// things fall into place"; 16:40: "when the user wants, with an option": a button on the app's Mods page, each press
-// toggles bit 22 of the third aim word, runtime/aim_options.cpp, and asks for one arrangement).
+// things fall into place"; "when the user wants, with an option"; "it has to be an option inside the inventory").
 //
-// Patch 0953 (Sscrn/ss_pzzl.cpp SsPzzlMain::init) calls re4_case_arrange each time the case screen opens, before it
-// lays the items out from their places: the case's items (those inside the case, not the ones on the side space) are
-// taken out and put back the largest first, each at the first place from the top left that takes it, upright or
-// turned a quarter (as PutInCase puts a picked-up item, puzzle.cpp), so that the free room ends up together at the
-// bottom right. Nothing changes when they do not all fit back (they did before: then the old places stay).
+// Patch 0953 (Sscrn/ss_pzzl.cpp PieceSelect::move): on the case screen, with the cursor free (no item in hand), Z
+// (R1 on the Retroid) calls re4_case_arrange on the live pzlPlayer: the case's items are taken out and put back the
+// largest first, each at the first place from the top left that takes it, upright or turned a quarter (as PutInCase
+// puts a picked-up item, puzzle.cpp), so that the free room ends up together at the bottom right; then the items left
+// on the side space go into the case where they fit. Nothing changes when the case's own items do not all fit back
+// (then the old places stay). The models follow by themselves: pieceModelDisp places every piece each frame.
 #include "re4_runtime.h"
 
-#include <atomic>
 #include <string.h>
 
 #include "puzzle.h"
 
 namespace {
-
-std::atomic<bool> gOn(false);
 
 struct Was {
     pzlPiece* p;
@@ -59,40 +56,37 @@ int putFirst(pzlBoard* b, pzlPiece* p)
 
 }  // namespace
 
-extern "C" {
-
-// asked for (the button): the next opening arranges the case, once
-void re4_case_arrange_set(int on)
+// 1 = something moved
+int re4_case_arrange(pzlPlayer* pl)
 {
-    gOn.store(on != 0);
-    re4_log("case: %s", on ? "to be put in order when it opens next" : "no arrangement asked");
-}
-
-void re4_case_arrange(int size)
-{
-    if (!gOn.exchange(false)) {
-        return;
-    }
-    pzlPlayer* pl = new pzlPlayer;
-    if (!pl->init(size)) {
-        delete pl;
-        return;
+    if (pl == 0 || pl->pieceInHand()) {
+        return 0;
     }
     pzlBoard* b = pl->boardPtr();
+    pzlBoard* space = pl->spacePtr();
     Was was[64];
-    int n = 0;
-    for (int i = 0; i < pl->pieceMax() && n < 64; i++) {
+    Was side[64];
+    int n = 0, ns = 0;
+    for (int i = 0; i < pl->pieceMax(); i++) {
         pzlPiece* p = pl->pieceAt(i);
-        if (p->isAlive() && b->search(p)) {
-            was[n].p = p;
-            was[n].x = p->m_pos_x;
-            was[n].y = p->m_pos_y;
-            was[n].orient = p->m_orientation;
-            was[n].area = areaOf(p);
-            n++;
+        if (p->isEmpty() || !p->isAlive()) {
+            continue;
         }
+        Was* w = 0;
+        if (b->search(p) && n < 64) {
+            w = &was[n++];
+        } else if (space->search(p) && ns < 64) {
+            w = &side[ns++];
+        } else {
+            continue;
+        }
+        w->p = p;
+        w->x = p->m_pos_x;
+        w->y = p->m_pos_y;
+        w->orient = p->m_orientation;
+        w->area = areaOf(p);
     }
-    // the largest first (ties: the taller, then as they were)
+    // the largest first (ties: as they were)
     for (int i = 1; i < n; i++) {
         Was w = was[i];
         int j = i - 1;
@@ -121,12 +115,22 @@ void re4_case_arrange(int size)
             b->putPiece(was[i].p);
         }
         re4_log("case: %d items, %d did not fit back in order: left as they were", n, n - put);
-    } else {
-        pl->save();
-        re4_log("case: %d items put in order", n);
+        return 0;
     }
-    pl->quit();
-    delete pl;
+    // the side space's items into the free room, where they fit
+    int in = 0;
+    for (int i = 0; i < ns; i++) {
+        space->rmPiece(side[i].p);
+        if (putFirst(b, side[i].p)) {
+            in++;
+        } else {
+            side[i].p->orientation(side[i].orient);
+            side[i].p->m_pos_x = side[i].x;
+            side[i].p->m_pos_y = side[i].y;
+            space->putPiece(side[i].p);
+        }
+    }
+    pl->rehash();
+    re4_log("case: %d items put in order, %d of %d from the side space put in", n, in, ns);
+    return 1;
 }
-
-}  // extern "C"
