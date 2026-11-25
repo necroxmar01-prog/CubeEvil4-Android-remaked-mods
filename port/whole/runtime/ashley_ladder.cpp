@@ -150,8 +150,28 @@ void stop(cSubChar* a, const char* why)
 
 }  // namespace
 
+// (25.11.2026, DevJunior's report "noedcaleras": still no ladder taken, and not one "ashley ladder" line: the waits
+// never reached findLadder) every 10 s while Leon is a metre or more below her, her state to the log
+static void sayState(cSubChar* a)
+{
+    static int last = -100000;
+    const int now = (int) pG->Frame_cnt;
+    if (!pPL || pPL->pos.y > a->pos.y - kBelow || now - last < 300) {
+        return;
+    }
+    last = now;
+    re4_log("ashley ladder: %.1f m above Leon, routine %x/%x/%x, stay %d, move-to %d, sleep %d, event %d, window %d, "
+            "Leon's routine %x/%x", (a->pos.y - pPL->pos.y) / 1000.0f, (unsigned) a->r_no_0, (unsigned) a->r_no_1,
+            (unsigned) a->r_no_2, a->flg.check(cSubChar::F_STAY) ? 1 : 0, a->flg.check(cSubChar::F_MOVE_TO) ? 1 : 0,
+            a->flg.check(cSubChar::F_SLEEP) ? 1 : 0, StaFlagChk(pG, STA_EVENT) ? 1 : 0,
+            a->status.check(cSubChar::S_FALL_WINDOW) ? 1 : 0, (unsigned) pPL->r_no_0, (unsigned) pPL->r_no_1);
+}
+
 extern "C" void re4_ashley_ladder_down(cSubChar* a)
 {
+    if (a && pG && ((cModel*) a)->id == 3 && pG->pl_type == 0 && !gWalk) {
+        sayState(a);
+    }
     if (!a || !pPL || !pG || ((cModel*) a)->id != 3 || pG->pl_type != 0 || a->r_no_0 != 0) {
         gWalk = 0;
         gStillFrames = 0;

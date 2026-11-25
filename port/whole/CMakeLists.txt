@@ -314,7 +314,7 @@ add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge
     runtime/gx_owner.cpp runtime/potato.cpp runtime/aim_options.cpp
     runtime/sound_volume.cpp runtime/minimap.cpp runtime/laser_colour.cpp runtime/benchmark.cpp
     runtime/glow_check.cpp runtime/view_distance.cpp runtime/cpu_skip.cpp runtime/free_move.cpp
-    runtime/quick_slots.cpp runtime/parry.cpp runtime/wardrobe.cpp runtime/melee.cpp runtime/finisher.cpp runtime/locomotion.cpp runtime/react.cpp runtime/ashley_gun.cpp runtime/ashley_ladder.cpp runtime/skin_hands.cpp runtime/quick_pickup.cpp runtime/codec_call.cpp runtime/music.cpp runtime/studio_game.cpp
+    runtime/quick_slots.cpp runtime/parry.cpp runtime/wardrobe.cpp runtime/melee.cpp runtime/finisher.cpp runtime/locomotion.cpp runtime/react.cpp runtime/ashley_gun.cpp runtime/ashley_ladder.cpp runtime/case_arrange.cpp runtime/skin_hands.cpp runtime/quick_pickup.cpp runtime/codec_call.cpp runtime/music.cpp runtime/studio_game.cpp
     runtime/lock_on.cpp runtime/blink.cpp runtime/wheel_zoom.cpp runtime/enemy_random.cpp runtime/rt_shadow.cpp
     runtime/ashley_catchup.cpp runtime/health_bars.cpp runtime/mouse_menu.cpp
     runtime/title_skip.cpp runtime/berserker.cpp

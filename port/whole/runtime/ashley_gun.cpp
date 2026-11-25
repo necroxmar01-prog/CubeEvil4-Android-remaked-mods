@@ -65,6 +65,7 @@
 #include "joy.h"
 #include "pl_sub.h"
 #include "id_sys.h"
+#include "texture.h"
 #include <dolphin/dvd.h>
 
 #include <atomic>
@@ -80,6 +81,12 @@ extern "C" int re4_dsp_caught(const short** pcm, int* serial);   // runtime/dsp.
 extern "C" void re4_mod_pcm_play(const short* pcm, unsigned frames, int gain);  // runtime/mod_sound.cpp
 extern "C" int re4_sound_volume(int music);                       // runtime/sound_volume.cpp
 extern "C" const char* re4_data_dir(void);                        // runtime/dvd.cpp
+extern "C" void* re4_gx_cached(unsigned int physical);            // runtime/gx_fifo.cpp
+extern cTexSys* g_pIdTexSys;                                       // src/game/id_tex.cpp
+extern "C" int GXGetTexObjFmt(const GXTexObj* to);                // src/lib/GXTexture.c
+extern "C" u16 GXGetTexObjWidth(const GXTexObj* to);
+extern "C" u16 GXGetTexObjHeight(const GXTexObj* to);
+extern "C" int GXGetTlutObjFmt(const GXTlutObj* tlut);
 extern "C" void re4_formats_part_loaded(const char* name, int nest, int index, const void* part, unsigned addr);
 
 namespace {
@@ -1228,6 +1235,27 @@ void re4_case_window_dump(ID_UNIT** u, int n, int cmd)
                 a->col0[2], a->col0[3], a->col1[0], a->col1[1], a->col1[2], a->col1[3], a->col[0], a->col[1],
                 a->col[2], a->col[3], a->blend_type, a->trans_type, a->pow, a->otType, a->otNo, a->rev_flag,
                 a->anima_state, a->vtxType, a->timer[0], a->timer[1], a->timer[2], a->timer[3]);
+        // its texture (25.11.2026: the names' units 5 and 7 are there, their textures 0x39 / 0x40 found, yet nothing
+        // shows): format, size, palette, and how much of the image is not zero
+        GXTexObj* tex = 0;
+        if (a->texId != 0xFF && g_pIdTexSys && g_pIdTexSys->GetTexObj(a->texId, a->texNo, &tex) && tex) {
+            const int fmt = GXGetTexObjFmt(tex);
+            const int w = GXGetTexObjWidth(tex), h = GXGetTexObjHeight(tex);
+            const int bits = fmt == 0 || fmt == 8 || fmt == 14 ? 4 : fmt == 1 || fmt == 2 || fmt == 9 ? 8 :
+                             fmt == 6 ? 32 : 16;
+            const unsigned phys = (unsigned) (uintptr_t) GXGetTexObjData(tex);
+            const unsigned char* px = (const unsigned char*) re4_gx_cached(phys);
+            const int bytes = w * h * bits / 8;
+            int nonzero = 0, ff = 0;
+            for (int k = 0; px && k < bytes && k < 65536; k++) {
+                nonzero += px[k] != 0;
+                ff += px[k] == 0xFF;
+            }
+            GXTlutObj* tl = 0;
+            const int tlut = g_pIdTexSys->GetTlutObj(a->texId, &tl) && tl ? GXGetTlutObjFmt(tl) : -1;
+            re4_log("case window: %2d texture %02x: format %d, %dx%d, palette format %d, at %08x, %d of %d bytes not "
+                    "zero, %d 0xff", i, a->texId, fmt, w, h, tlut, phys, nonzero, bytes, ff);
+        }
     }
 }
 

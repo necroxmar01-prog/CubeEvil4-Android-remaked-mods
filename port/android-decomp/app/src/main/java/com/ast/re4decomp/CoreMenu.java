@@ -2491,6 +2491,10 @@ final class CoreMenu extends Dialog {
         on -> { input.edit().putBoolean(CoreActivity.ASHLEY_GUN, on).apply();
                 CoreBridge.setBackPlacement(CoreActivity.backPlacement(input)); });
     help(R.string.ingame_ashley_gun_help);
+    // "Arrange the case" (patch 0953): the case's items put in order each time it opens
+    toggle(buttonsRow(body), R.string.ingame_case_arrange, input.getBoolean(CoreActivity.CASE_ARRANGE, false),
+        on -> { input.edit().putBoolean(CoreActivity.CASE_ARRANGE, on).apply(); CoreBridge.setCaseArrange(on); });
+    help(R.string.ingame_case_arrange_help);
     melee();
     wardrobe();
     // mods: files that replace the disc's (character skins; wish of the project owner, 08.11.2026)

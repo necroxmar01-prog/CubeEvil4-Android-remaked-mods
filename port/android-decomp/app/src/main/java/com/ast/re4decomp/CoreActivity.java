@@ -165,6 +165,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   // "Ashley's pistol" (wish of DevJunior, 11.11.2026; patch 0911, runtime/ashley_gun.cpp): she carries a pistol as the
   // partner and backs Leon up (bit 29 of the placement word, off by default)
   static final String ASHLEY_GUN = "ashleyGun";
+  // "Arrange the case" (wish of DevJunior, 25.11.2026; patch 0953, runtime/case_arrange.cpp): the case's items put in
+  // order each time it opens (INPUT_PREFS like the Mods page's other switches, off by default)
+  static final String CASE_ARRANGE = "caseArrange";
   /** The placement word for CoreBridge.setBackPlacement (the core's runtime/wardrobe.cpp adjustOf). */
   static int backPlacement(SharedPreferences p) {
     final int slant = Math.max(10, Math.min(80, p.getInt(BACK_SLANT, 45)));
@@ -677,6 +680,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       if (stack != 0) Log.i(TAG, "cheats: stack items up to " + stack);
       CoreBridge.setStackItems(stack);
     }
+    CoreBridge.setCaseArrange(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getBoolean(CASE_ARRANGE, false));
     setContentView(root);
     // Android Automotive: the bars the car keeps stay off the picture (CarDisplay; nothing elsewhere)
     CarDisplay.fit(this, getWindow());

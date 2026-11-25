@@ -1,0 +1,22 @@
+# Patch 0953 (wish of DevJunior, 25.11.2026: "an option to arrange the case automatically, so that the things fall
+# into place"). Not a bug of the prototype: a port feature of the mods with runtime/case_arrange.cpp.
+# Sscrn/ss_pzzl.cpp SsPzzlMain::init: before the case screen lays the items out (its pzlPlayer from the items'
+# places), re4_case_arrange may put the case in order (the app's "Arrange the case", off by default).
+--- a/src/Sscrn/ss_pzzl.cpp
++++ b/src/Sscrn/ss_pzzl.cpp
+@@ -1342,6 +1342,7 @@
+ // SsItemExamine, CaseChange; the id groups (case 0x10, command menus 0x1C/0x1D, name 0x1E, digits
+ // IdNum 0x40..), the pzlPlayer of board_size; on a pick-up open (get_item_id) the new item is
+ // appended as the extra piece and put in hand; the debug editor; caseMove = first frame.
++extern "C" void re4_case_arrange(int size); /* port (patch 0953): runtime/case_arrange.cpp */
+ void SsPzzlMain::init(SUB_SCREEN* wk)
+ {
+     ID_UNIT* tbl[16];
+@@ -1421,6 +1422,7 @@
+         wk->alpha_flag = 0;
+         wk->alpha_cnt = 10;
+     }
++    re4_case_arrange((s8) wk->board_size); /* port (patch 0953, mods): the case put in order first */
+     wk->puzzlePlayer = new pzlPlayer;
+     if (!wk->puzzlePlayer->init((s8) wk->board_size)) {
+         delete wk->puzzlePlayer;

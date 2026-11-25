@@ -229,6 +229,7 @@ extern "C" int re4_codec_walk_only(void);                  // runtime/codec_call
 extern "C" void re4_move_jog_press(void);                 // runtime/locomotion.cpp
 extern "C" void re4_back_adjust_set(int word);           // runtime/wardrobe.cpp
 extern "C" void re4_ashley_gun_set(int on);             // runtime/ashley_gun.cpp
+extern "C" void re4_case_arrange_set(int on);           // runtime/case_arrange.cpp
 // Patch 0905 (title.cpp titleWait): 1 = the title starts at its main menu (the app's "Skip intro logos"; on the PC
 // RE4_SKIP_INTRO=1).
 int re4_skip_intro(void)
@@ -264,6 +265,7 @@ void re4_aim_set(int bits)
         }
         re4_health_bars_set((bits >> 19) & 1);
         re4_stack_items_set((bits >> 20) & 3);
+        re4_case_arrange_set((bits >> 22) & 1);  // bit 22 "Arrange the case" (mods, patch 0953)
         int knife = bits & 0xFFF;
         knife = knife == 0 ? 0 : knife < 50 ? 50 : knife > 300 ? 300 : knife;
         if (gKnifeSpeed.exchange(knife) != knife) {
