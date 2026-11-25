@@ -12,9 +12,9 @@
 //    fires, kFireGap frames apart: the same shot, the same rounds that come back with time; none left, the case's
 //    "no" sound.
 //
-//  - Stage 2, patch 0912 (Sscrn/ss_pzzl.cpp): with the switch on and Ashley the partner, "Equip" on the handgun or
-//    magnum Leon already holds (the D-pad quick slots' up list) gives it to her (until 23.11.2026 the case's own
-//    "use on" window, an empty dark box on the debug disc). Ashley: she
+//  - Stage 2, patch 0912 (Sscrn/ss_pzzl.cpp): with the switch on and Ashley the partner, "Equip" on a handgun or a
+//    magnum (the D-pad quick slots' up list) opens the case's own "use on" choice, Leon or Ashley (23..25.11.2026
+//    "Equip" twice instead, while the window showed an empty dark box on the debug disc). Ashley: she
 //    takes that pistol out of the case (DevJunior, 11.11.2026: "that it takes no room while she has it"): the
 //    item's inventory type becomes kAway, a set no character's case shows (cItem::type, cItemMgr::m_char 0 Leon,
 //    1 Ashley's chapter), so it goes with the save, its tune levels and its place kept; one pistol at a time (a
@@ -64,6 +64,7 @@
 #include "item.h"
 #include "joy.h"
 #include "pl_sub.h"
+#include "id_sys.h"
 #include <dolphin/dvd.h>
 
 #include <atomic>
@@ -1198,8 +1199,40 @@ int re4_ashley_behind_mot(int no)
     return 0x12;
 }
 
-// Patch 0912: 1 = "Equip" on p may give it to Ashley (when Leon already holds p): the switch on, Leon's game,
-// Ashley the partner (id 3), p a handgun or a magnum.
+// Patch 0912 (DevJunior, 25.11.2026: the case's "use on Leon / Ashley" window is an empty dark box, "make it
+// work"): its 11 units to the log, the first frame of each opening and 20 frames later (when its fade has run), to
+// see why the two names do not show (no texture error in the reports).
+void re4_case_window_dump(ID_UNIT** u, int n, int cmd)
+{
+    static int last = -100, open = 0, dumps = 0;
+    const int now = pG ? (int) pG->Frame_cnt : 0;
+    if (now - last > 2) {
+        open = now;
+    }
+    last = now;
+    if ((now != open && now != open + 20) || dumps >= 8 || !u) {
+        return;
+    }
+    dumps++;
+    re4_log("case window: command %d, frame %d of it", cmd, now - open);
+    for (int i = 0; i < n; i++) {
+        const ID_UNIT* a = u[i];
+        if (!a) {
+            continue;
+        }
+        re4_log("case window: %2d be %02x unit %02x class %02x type %d parent %02x tex %02x/%d ptn %d mask %02x "
+                "texfl %02x pos %.0f,%.0f,%.0f size %.0fx%.0f col0 %02x%02x%02x%02x col1 %02x%02x%02x%02x "
+                "col %.2f,%.2f,%.2f,%.2f blend %d trans %d pow %d ot %d/%d rev %02x anima %02x vtx %02x t %d,%d,%d,%d",
+                i, a->be_flag, a->unitNo, a->classNo, a->type, a->parentNo, a->texId, a->texNo, a->tex_ptn_no,
+                a->maskId, a->tex_flag, a->pos.x, a->pos.y, a->pos.z, a->size_W, a->size_H, a->col0[0], a->col0[1],
+                a->col0[2], a->col0[3], a->col1[0], a->col1[1], a->col1[2], a->col1[3], a->col[0], a->col[1],
+                a->col[2], a->col[3], a->blend_type, a->trans_type, a->pow, a->otType, a->otNo, a->rev_flag,
+                a->anima_state, a->vtxType, a->timer[0], a->timer[1], a->timer[2], a->timer[3]);
+    }
+}
+
+// Patch 0912: 1 = "Equip" on p asks who takes it (Leon or Ashley): the switch on, Leon's game, Ashley the partner
+// (id 3, as the case's "use on" choice asks), p a handgun or a magnum.
 int re4_ashley_gun_menu(cItem* p)
 {
     return p && (p->flags & 1) && gOn.load(std::memory_order_relaxed) && pG && pG->pl_type == 0 && pSUB &&
