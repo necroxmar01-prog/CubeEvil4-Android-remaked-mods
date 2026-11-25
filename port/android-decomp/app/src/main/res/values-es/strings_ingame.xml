@@ -422,7 +422,7 @@
     <string name="ingame_cheat_costume_normal">Normal</string>
     <string name="ingame_cheat_costume_jacket">Chaqueta de Leon</string>
     <string name="ingame_cheat_costume_special">Especial</string>
-    <string name="ingame_cheat_character_help">El personaje ocupa al instante el lugar de Leon (la sala se vuelve a cargar donde estás). El maletín, la vida y el dinero de Leon se mantienen; las escenas y las llamadas de radio siguen mostrando a Leon, y la parte de Ashley sigue siendo de Ashley. Krauser trae su arco y Wesker su silenciador mientras estén elegidos. Tus partidas guardadas siempre conservan a Leon. Los personajes distintos de Leon no están pensados para el juego principal, así que antes aparece un aviso.</string>
+    <string name="ingame_cheat_character_help">El personaje ocupa al instante el lugar de Leon (la sala se vuelve a cargar donde estás). El maletín, la vida y el dinero de Leon se mantienen; las escenas y las llamadas de radio siguen mostrando a Leon, y la parte de Ashley sigue siendo de Ashley. Krauser trae su arco y Wesker su silenciador mientras estén elegidos. Tus partidas guardadas siempre conservan a Leon. Los personajes distintos de Leon no están pensados para el juego principal, así que antes aparece un aviso. Con Ashley, Krauser usa su brazo con apuntar + X; X solo da órdenes a Ashley.</string>
     <string name="ingame_cheat_character_warning">Atención: este personaje no está pensado para el juego principal. ¡Pueden aparecer y aparecerán errores, y son inevitables!</string>
     <string name="ingame_understood">Entendido</string>
     <string name="ingame_later">Más tarde</string>
@@ -497,7 +497,7 @@
     <string name="ingame_health_bars">Barras de vida de enemigos</string>
     <string name="ingame_health_bars_help">Barras de vida de enemigos: una pequeña barra sobre cada enemigo muestra su salud (verde, amarilla por debajo de un cuarto, roja por debajo de una décima parte); no en escenas ni menús.</string>
     <string name="ingame_more_enemies">Más enemigos</string>
-    <string name="ingame_more_enemies_help">Más enemigos: alrededor de un 40 por ciento más de los Ganados normales de una sala, en lugares aleatorios, en cualquier dificultad; desde la siguiente sala. Los jefes, los enemigos especiales y las oleadas no cambian; solo en la historia.</string>
+    <string name="ingame_more_enemies_help">Más enemigos: alrededor de un 40 por ciento más de los Ganados normales de una sala, en lugares aleatorios, en cualquier dificultad; desde la siguiente sala. Los jefes, los enemigos especiales y las oleadas no cambian; solo en la historia. La dificultad Berserker siempre los tiene.</string>
     <string name="ingame_dof_light">Suave</string>
     <string name="ingame_dof_strong">Fuerte</string>
     <string name="ingame_player_view">Vista del jugador</string>

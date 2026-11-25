@@ -417,7 +417,7 @@
     <string name="ingame_cheat_costume_normal">普通</string>
     <string name="ingame_cheat_costume_jacket">里昂的夹克</string>
     <string name="ingame_cheat_costume_special">特别</string>
-    <string name="ingame_cheat_character_help">该角色立即取代里昂（房间会在你所在的位置重新载入）。里昂的手提箱、生命值和金钱保持不变；过场动画和无线电通话仍显示里昂，阿什莉的部分仍由阿什莉进行。被选中期间，克劳萨带着他的弓，威斯克带着他的消音器。你的存档始终保存为里昂。里昂以外的角色并非为主线游戏设计，因此会先显示警告。</string>
+    <string name="ingame_cheat_character_help">该角色立即取代里昂（房间会在你所在的位置重新载入）。里昂的手提箱、生命值和金钱保持不变；过场动画和无线电通话仍显示里昂，阿什莉的部分仍由阿什莉进行。被选中期间，克劳萨带着他的弓，威斯克带着他的消音器。你的存档始终保存为里昂。里昂以外的角色并非为主线游戏设计，因此会先显示警告。有阿什莉同行时，克劳萨用瞄准 + X 使用手臂；单按 X 向阿什莉下令。</string>
     <string name="ingame_cheat_character_warning">注意：此角色并非为主线游戏设计，可能并且一定会出现错误，这些错误无法避免！</string>
     <string name="ingame_understood">我已了解</string>
     <string name="ingame_later">稍后</string>
@@ -492,7 +492,7 @@
     <string name="ingame_health_bars">敌人血条</string>
     <string name="ingame_health_bars_help">敌人血条：每个敌人头上的小条显示其生命值（绿色，低于四分之一为黄色，低于十分之一为红色）；过场动画和菜单中不显示。</string>
     <string name="ingame_more_enemies">更多敌人</string>
-    <string name="ingame_more_enemies_help">更多敌人：房间里的普通 Ganado 增加约四成，位置随机，任何难度均有效；从下一个房间开始。头目、特殊敌人和敌人波次保持不变；仅限主线剧情。</string>
+    <string name="ingame_more_enemies_help">更多敌人：房间里的普通 Ganado 增加约四成，位置随机，任何难度均有效；从下一个房间开始。头目、特殊敌人和敌人波次保持不变；仅限主线剧情。难度 Berserker 始终包含此效果。</string>
     <string name="ingame_dof_light">轻度</string>
     <string name="ingame_dof_strong">强烈</string>
     <string name="ingame_player_view">玩家视角</string>

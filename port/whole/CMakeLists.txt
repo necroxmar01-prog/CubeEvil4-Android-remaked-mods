@@ -317,7 +317,7 @@ add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge
     runtime/quick_slots.cpp runtime/parry.cpp runtime/wardrobe.cpp runtime/melee.cpp runtime/finisher.cpp runtime/locomotion.cpp runtime/react.cpp runtime/ashley_gun.cpp runtime/ashley_ladder.cpp runtime/skin_hands.cpp runtime/quick_pickup.cpp runtime/codec_call.cpp runtime/music.cpp runtime/studio_game.cpp
     runtime/lock_on.cpp runtime/blink.cpp runtime/wheel_zoom.cpp runtime/enemy_random.cpp runtime/rt_shadow.cpp
     runtime/ashley_catchup.cpp runtime/health_bars.cpp runtime/mouse_menu.cpp
-    runtime/title_skip.cpp
+    runtime/title_skip.cpp runtime/berserker.cpp
     runtime/photo_mode.cpp)
 target_link_libraries(re4_gamehooks_obj PRIVATE re4_game_flags)
 target_include_directories(re4_gamehooks_obj PRIVATE runtime)

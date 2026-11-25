@@ -8,7 +8,7 @@ zuerst und aktualisiert sie am Ende (siehe `CLAUDE.md`).
 Der Feature-Freeze ist mit 1.0.0 vorbei: neue Wünsche kommen in 1.1.0. Alles bis zum Release 1.1.0 geht in den
 GitHub-Branch `workthread` (Worktree `E:\Development\Android\RE4-workthread`, WSL-Baum `~/re4-wt` mit
 `wt-sync_wsl.sh` im Notizordner der Sitzungen). Releasetext `port/android-decomp/docs/releases/v1.1.0.md`.
-Nächste freie Patch-Nummer: 0255 (0254 Cheat „Gegenstände stapeln“, 0248 Meldungszahl nicht gesetzt, 0247 Kappen-Vitrine ohne Debug-Taste, 0246 Schießstand wie das fertige Spiel; 0249–0253 frei; 0245 größerer Raum-Heap, 0244 Mehr Gegner ohne Listeneintrag, 0243 Fotomodus, 0242 Intro überspringen, 0238 Lebensbalken, 0239 Maus in den Menüs, 0241 Nachladen ohne Zielen; 0240 sind die Schatten).
+Nächste freie Patch-Nummer: 0256 (0255 Schwierigkeit „Berserker“, 0254 Cheat „Gegenstände stapeln“, 0248 Meldungszahl nicht gesetzt, 0247 Kappen-Vitrine ohne Debug-Taste, 0246 Schießstand wie das fertige Spiel; 0249–0253 frei; 0245 größerer Raum-Heap, 0244 Mehr Gegner ohne Listeneintrag, 0243 Fotomodus, 0242 Intro überspringen, 0238 Lebensbalken, 0239 Maus in den Menüs, 0241 Nachladen ohne Zielen; 0240 sind die Schatten).
 
 ### 1. Vibration: DualSense und Handy vibrierten nicht (Nutzerbericht 19.11.2026, Samsung S25, Android 16)
 
@@ -898,6 +898,174 @@ Entwurf `builds/workthread-1.1.0/design/menu-arrows-sliders-mockup.png`.
   Laserstrahl. Test `TestWideLines`; Testschalter `RE4_GX_NO_WIDE_LINES=1` (wie ein Gerät ohne breite Linien, mit Kopien),
   `=2` (ohne Kopien, wie vorher). **4d45022d zurückgenommen** (Menüs ohne Anisotropie/erzeugte Mipmaps traf nicht die
   Ursache und bringt in den Menüs nichts); `RE4_GX_ANISO` im Nachzeichner bleibt. Packer unverändert, kein Neu-Packen nötig.
+
+## 1.1.2 (ab 23.11.2026, auf 1.1.1 = 4e13b97b; Punkt 39 = 24a32a8d)
+
+Version 1.1.2 (versionCode 126), Branch `workthread-112` (Worktree `RE4-wt112`), Releasetext
+`port/android-decomp/docs/releases/v1.1.2.md`. Release und Tag macht der Projektinhaber auf GitHub.
+
+### 45. Koffer: Gegenstand mit dem Finger ziehen (Projektinhaber, 24.11.2026)
+
+Lange auf einen Gegenstand im Koffer drücken nimmt ihn auf, er folgt dem Finger, Loslassen legt ihn ab; liegt dort schon
+etwas, tauscht er wie mit dem Controller. Nur Tasten des Spiels, keine eigene Kofferlogik:
+- `runtime/menu_touch.cpp re4_touch_case_drag` (aus `re4_touch_sscrn`, Patch 0106, jedes Bild des Untermenüs): ein
+  Finger 450 ms still auf einem Gegenstand (PieceSelect Zustand 0, nichts in der Hand) setzt den Cursor auf seine Zelle
+  und gibt X (das Aufnehmen des Spiels); danach je Bild ein Druck des Steuerkreuzes zur Zelle des Fingers (der Finger
+  behält die Zelle, an der er den Gegenstand hält; der ganze Gegenstand bleibt im Brett; ein Druck, der nichts bewegt,
+  wird nicht wiederholt; zum Ersatzbrett über die Seite, wie das Spiel es tut); beim Loslassen X (Ablegen, Kombinieren
+  oder Tauschen in `PzzlThinking::move`; ein Platz, den das Spiel ablehnt, lässt ihn in der Hand). Ein Gegenstand, der
+  schon in der Hand ist (auch im Ablageschirm beim Aufheben), folgt einem Finger sofort. Nie B oder Y; Drehen und
+  Spiegeln bleiben; Steuerkreuz, Stick und C-Stick des Spielers zählen während des Ziehens nicht. Tap und Wischen dieses
+  Fingers werden geschluckt (bis 700 ms nach dem Ende), ein kurzer Tap und Wischen ohne Ziehen wie bisher.
+- App: `CoreActivity.watchTap` meldet den Finger neben den Touch-Tasten (`CoreBridge.drag`: unten, bewegt, oben,
+  abgebrochen; derselbe Finger auch, wenn ein zweiter eine Taste drückt), `core_mode.cpp` gibt ihn als u + 4 + 2·Phase
+  (10 = abgebrochen) an `re4_core_touch`. RetroTouch unverändert.
+- Testschalter `RE4_TEST_CASE_TOUCH="d3,1@4 m8,4@30 u@44 t6,1@195"` (nur PC): Finger auf Kofferzellen, Bilder ab dem
+  ersten Bild mit Koffer-Cursor; die Uhr der Berührung läuft dann mit den Bildern (33 ms).
+- **Geprüft (WSL):** Laufzeittest `menutouch` (i686 und x86_64): langes Drücken → X und Cursor, Ziehen → Kreuz bis zur
+  Zelle, Loslassen auf frei → abgelegt, auf die Pistole → getauscht, Gegenstand in der Hand folgt sofort, Pistole über
+  Munition und Spray (vom Spiel abgelehnt) → bleibt in der Hand, Ablageschirm (`open_flag` PZZL) → abgelegt, nie B/Y,
+  kurzer Tap und Wischen danach wie bisher (der Test-Koffer hat dafür zusätzlich Munition 0x20). PC-Lauf mit Debug-Disc r100 (`112-drag.sh`): Spray aufgenommen, nach (8 4)
+  gezogen und abgelegt, Pistole aufs Spray → getauscht, Spray in der Hand weitergezogen und abgelegt, Tap danach setzt
+  den Cursor; Bilder `builds/workthread-1.1.2/drag-case-steps.jpg`. **Nicht geprüft:** auf einem Gerät (echter Finger,
+  Ablageschirm beim Aufheben mit Disc-Daten, Ersatzbrett, Drehen mit dem zweiten Finger).
+
+### 44. Berserker: größeres Blut bei Treffern (Projektinhaber, 24.11.2026, Patch 0256)
+
+„größere Blutfontäne und größere Blutlache bei Treffern, rund 1.5x“; Entscheidungen: keine zusätzlichen Spritzer, keine
+größeren oder längeren Lachen unter Toten, nur mit Berserker. Abgenommen am 24.11.2026 („Ja“, Bilder `blood-*`).
+- Patch 0256: `em_sub.cpp` (`EmDmBloodSet`, `EmDmBloodSet2`, `EmDmBloodSet3`) und `em10.cpp` (`em10BloodSet`,
+  `em1cBloodSet`) öffnen einen `Re4BloodScope` (ohne neue Zeilen vor den Stellen von `byte_views.json` und
+  `lp64_int_casts.json`: Deklaration an die Prototypzeile gehängt, Scope auf der Zeile der öffnenden Klammer);
+  `est.cpp` (`EstSet` mit 10 Argumenten: ohne eigenen Steuerblock der von `re4_berserker_blood_ctl`), `esp_sub.cpp`
+  (`EspEstSetSelect` gibt ihn als 9. Argument weiter; `EspSeqSet` wendet ihn nur an, wenn
+  `re4_berserker_blood_rec` ja sagt).
+- `runtime/berserker.cpp`: innerhalb eines Blut-Helfers für einen Gegner, dessen Schaden Berserker skaliert (Ids
+  0x10..0x3F ohne die Tiere 0x21, 0x23, 0x24, 0x26–0x29; nicht Ashley, Luis, Türen, Fässer …), bekommen die Effekte
+  den eigenen Steuerblock des Spiels (`ESPSEQ_CONTROL`, `Mul_flg` Bit 1 = Größe, 1,5; Markierung `pad` 0xB5), der in
+  die Sequenz kopiert und an ihre Untereffekte weitergegeben wird (so auch das Bodenblut der Tropfen). Angewandt nur
+  auf die Blut-Sprites (Ids 0x00, 0x01, 0x0B, 0x10), nicht auf Brechungs- oder Blitz-Einträge eines Treffers. Nichts
+  wird zusätzlich gezeichnet, keine Zufallszahl mehr gezogen.
+  Testschalter `RE4_TEST_BLOOD_OFF=1` (Berserker mit dem Blut des Spiels, zum Vergleich); `RE4_TEST_BERSERKER=1` nimmt
+  jetzt den festen Seed 0x4242 (gleiche Gegnerkopien in jedem Lauf).
+- **Geprüft (WSL, i686, Debug-Disc):** Läufe mit und ohne (`112-blood.sh`, Leon schießt mit Lock-on): gleiche Treffer
+  (Pistole 78, Schrotflinte 55), gleiche Zeichenaufrufe mit der Pistole, mit der Schrotflinte in einigen Bildern 1–3
+  mehr (größere Bodenflecken); dieselben 46 Shader-Schlüssel; GLES und Vulkan gezeichnet; Bilder
+  `builds/workthread-1.1.2/blood-*`. x86_64 und die Android-Kerne bauen. **Nicht geprüft:** auf einem Gerät; Gewehr (keine
+  Treffer im Lauf), Treppen.
+
+### 43. Shader-Vorbereitung: Leiste braun statt cyan (Projektinhaber, 24.11.2026)
+
+„nicht Cyan sondern auch in dem Braunton wie im Spiel die Touchbuttons“. `ShaderPrepScreen`: die Leiste (auch die noch
+unbestimmte und die Spur) im Braun des Rings der Touch-Buttons des RE-Skins (`TouchStyle.BORDER` 0xFFB58B55) statt der
+Akzentfarbe des Material-Themes; Texte unverändert. Gleicher Bildschirm für GLES und Vulkan. **Geprüft:**
+`ShaderPrepShotTest` (Robolectric, Farben; mit `RE4_PREP_SHOTS` Bilder vorher/nachher, 640×360 dp), Bilder
+`builds/workthread-1.1.2/shader-prep-*.png` vom Projektinhaber abgenommen. Kein Releasetext. **Nicht geprüft:** auf einem
+Gerät.
+
+### 42. Krauser als Stellvertreter: Zielen + X ist sein Arm (Nutzerwunsch, Projektinhaber 24.11.2026)
+
+Nutzerbericht: mit Ashley ging Krausers Arm nicht mehr, X gab ihr Befehle (Patch 0197: ein Stellvertreter befiehlt
+Ashley mit X, Krausers `checkXbutton` fragte das zuerst). Entscheidung des Projektinhabers: „Zielen + X“, keine eigene
+Taste. `runtime/cheats.cpp re4_story_char_xbutton`: Krauser mit gehaltener Zieltaste (`joyKamae`) behält X für seinen
+Arm, auch wenn Ashley folgt (Logzeile „Krauser aims: X is his arm“); X allein gibt Ashley weiter Befehle, ohne Ashley ist
+X allein wie bisher der Arm. Leon, Ada, HUNK, Wesker unverändert. Hilfe der Figurenwahl in 11 Sprachen um einen Satz
+ergänzt.
+- **Geprüft (WSL, i686, Debug-Start):** r203 mit Ashley: X, X → „wait“, „follow“; Zielen + X → Arm; A schlägt; X, X →
+  wieder „wait“, „follow“. r208 mit Ashley: Zielen + X → Arm (Bild: verwandelter Arm). Ada und Wesker in r203: alle X
+  (auch mit Zielen) geben Ashley Befehle wie bisher. **Nicht geprüft:** auf einem Gerät, Touch.
+
+### 41. Schwierigkeit „Berserker“ (Projektinhaber, 24.11.2026, Patch 0255)
+
+„sollte automatisch +40% mehr Gegner haben und sie sollen auch rund 25% schwerer zu töten sein“; Entscheidungen
+24.11.2026: eine 4. Zeile BERSERKER über Professional im eigenen Schwierigkeitsmenü des Spiels (frei mit Professional),
+Tiere nicht zäher, Wellen unverändert, mit den japanischen Discs nicht, kein App-Schalter.
+- Berserker ist Professional (`game_mode` 6 bleibt: alles, was Spiel und Port für Professional tun, Rang fest 10,
+  Bild in der Spielstandliste) plus Markierung im Spielstand: die drei Bytes nach `game_mode` (GLOBAL_WK 0x8355..0x8357,
+  Füllbytes vor `SaveKind`, im gespeicherten Block): 0xB5 und ein 16-bit-Seed. Kein Code des Debug-Builds und der
+  EU/US/JP-Veröffentlichungen liest oder schreibt sie (alle Lade-/Speicherbefehle auf diese Abstände in main.dol und
+  den RELs geprüft, Retail-Layout +0xC). Ältere Versionen, Dolphin und der GameCube laden so einen Spielstand als
+  Professional (geprüft: älterer Kern 504e728f lädt ihn, Rang 10).
+- `runtime/berserker.cpp`: „Mehr Gegner“ (`enemy_random.cpp moreNow`) immer an, Seed aus dem Spielstand (mit dem
+  App-Schalter zusammen bleibt es einmal +40 %); Gegner nehmen 0,8 des Schadens (`LifeDownSet2` nach dem Rangfaktor des
+  Spiels, Professional 0,85; aufgerundet, mindestens 1), nur die Ids, die das Spiel dort selbst skaliert (Ganados,
+  Bosse, Plaga-Hunde 0x22, Parasiten 0x25 …), ohne Tiere (0x21, 0x23, 0x24, 0x26, 0x28, 0x29). Leon, Ashley, Luis wie
+  Professional; One-Hit-Kill gewinnt weiter. Nicht in Adas Spiel und Mercenaries.
+- Patch 0255: `title.cpp` (Zeile BERSERKER: Kopie der zwei Professional-Einheiten eine Zeile höher, Textur aus
+  `runtime/berserker_word.inc`, eigene Textur-Id, die der Titel nicht benutzt; Cursor-Zeile 0 = Berserker, Start auf
+  Normal; Debug-/US-Menü und EU-Menü von Patch 0139), `game.cpp` (Markierung beim neuen Spiel setzen/löschen, ohne
+  neue Zeilen vor 1069 wegen `byte_views.json`; `clearGlobalSaveData` behält sie), `em_sub.cpp` (Schaden),
+  `id_tex.cpp`/`id_sys.cpp` (die Wort-Textur für `IdTexSet`, keine Texturanimation). Wortbild: DejaVu Serif Bold
+  (`port/tools/berserker_word.py`, IA8 120×14; nach den Gerätetests des Projektinhabers 24.11.2026 Texel für Texel an die
+  Wörter des Spiels angeglichen, gemessen an deren Texturen (nur am PC ausgelesen, nichts davon im Repository): 14
+  Texel hoch, helle Zeilen 3..10 mit halbhellen Serifenzeilen 2 und 11, Hauptstämme auf Texelkanten, Stämme etwa 2
+  Texel, Buchstaben 9–12 Texel breit und 3 Texel auseinander, schwarze deckende Fläche Zeilen 1..12 (wie das Spiel,
+  das die Wörter auf einer dunklen Fläche hat); im Maßstab des Professional-Worts gezeichnet; Bilder `font4-*.png`; nach
+  dem Gerätetest „links nicht bündig“: der erste Stamm des B auf Texelspalte 4 wie bei den Wörtern des Spiels, Serife 2,
+  hell ab 3, Bilder `font5-*`; nach dem Gerätetest „seitlich gestreckt“: Serifen und Ausläufer reichten je Buchstabe
+  etwa 1 Texel weiter als beim Spiel (mit halbhellem Rand E 11 statt 9–10, R 13 statt 10–11), jetzt 1,12 statt 1,22
+  verbreitert: E 9, R 11, S 9, B 10 (P 10), Lücken 2–3 Texel, 120×14; und die App schärfte mit „Sharper menu text“ (Standard an)
+  nur die Wörter des Spiels, die sie am Texel-Hash erkennt (`tex_pack_words.h`): BERSERKER und BSK stehen jetzt mit
+  in der Liste (`berserker_word.py` trägt ihre Hashes selbst ein), so werden sie genauso geschärft; Bilder `font6-*`), Platz in
+  MEM1 `RE4_MEM1_CHEAT_ADDR + 0x4F0000` (BSK + 0x4F8000).
+  Testschalter `RE4_TEST_BERSERKER=1` (neues Spiel ist Berserker), `RE4_BERSERKER_LOG=1` (eine Zeile je Treffer).
+- Spielstandliste (Wunsch des Projektinhabers 24.11.2026, „Eigenes Zeichen BZK“, nach dem Gerätetest „von BZK auf
+  BSK“): ein Berserker-Spielstand zeigt in der Spalte „Mode“ BSK statt PRO. Merker im Kopf des Spielstands: Byte 0x3F = GLOBAL_WK `pad_4F8B` (Füllbyte, von keinem
+  Code der vier Veröffentlichungen gelesen oder geschrieben), 0xB5, gesetzt beim Spielstart (`re4_berserker_game_init`).
+  `card.cpp dispSaveInfo` (Patch 0255) ruft `re4_berserker_list_mark`: Kopie der Einheit 0x18 (PRO, 38×21 Texel,
+  gezeichnet 38×23) mit eigenem Bild BSK (DejaVu Serif Bold, `berserker_word.inc` `kMark`, gleicher Maßstab; wie die PRO-Textur:
+  Großbuchstaben 11 Texel ab Zeile 1, Stämme 2 Texel, weicher Schatten rechts unten; nach dem Gerätetest „bei PRO ist
+  zwischen den Buchstaben mehr Platz“: B–S und S–K je 1 Texel weiter, an den Stämmen 2 Texel frei wie P–R, 44 Texel breit
+  mit dem ersten Stamm auf Spalte 4, so liegt die Mitte der Schrift auf dem Bildschirm genau dort, wo die von PRO liegt
+  (die Einheit ist mittig verankert; 1x x 610,5, 2,5x x 1528); Bilder `font5-save-list-*`).
+  Ältere Versionen zeigen PRO (geprüft mit Kern 504e728f: Bilder `berserker-save-list*.png`).
+- Hilfe unter „Mehr Gegner“ in 11 Sprachen um einen Satz ergänzt.
+- **Geprüft (WSL, i686):** Laufzeittest `berserker` (die echte `LifeDownSet2`): Treffer bis zum Tod Professional →
+  Berserker: Ganado 400/100 5 → 6, Plaga-Hund 600/100 8 → 9, Del Lago 30000/1000 36 → 45, Kuh 4 → 4, One-Hit-Kill 1.
+  Rundgang 126 Räume (`112-bztour.sh`, Professional / Berserker / Normal mit „Mehr Gegner“, Leon schießt mit
+  Lock-on): Berserker in allen 126 Läufen an; Kopien in denselben 26 Räumen mit denselben Zahlen wie der Schalter
+  (164 → 228 Ganados, +39 %); Schaden 0,80 statt 1,00, auch an Bossen (r21d, r228, r332). 14 Abstürze in Läufen ohne
+  Berserker (r208, r400–r409 mit Debug-Start und Dauerfeuer, `TaskExec_hook`): mit dem älteren Kern genauso,
+  Altbefund. Speichern/Laden: neues Berserker-Spiel auf Karte gespeichert, neu gestartet, geladen: gleicher Seed.
+  Menü-Bilder mit Debug-, US- und EU-Discs (`builds/workthread-1.1.2/berserker-*.png`). x86_64 (LP64) und die
+  Android-Kerne armeabi-v7a/arm64-v8a bauen; LP64-Laufzeittest `berserker` und Menü geprüft. **Nicht geprüft:** auf
+  einem Gerät.
+- **Offener Befund** (nicht verfolgt, Koordinator 24.11.2026): Absturz in `TaskExec_hook` (Adresse 0x34) in r208 und
+  r400–r409 beim Debug-Start mit Dauerfeuer (Zielen + A alle 15 Bilder, Lock-on), auch ohne Berserker und im Kern
+  504e728f.
+
+### 40. Shaderlisten aufgefrischt (GLES und Vulkan, Projektinhaber, 23.11.2026)
+
+- Neue Raum-Rundgänge am PC mit dem Stand von 1.1.2 (126 Räume je Rundgang, alle exit 0): Debug-Disc, EU-Disc mit
+  Cheats und Spezialkostüm, die vier anderen Spielfiguren (Ada, HUNK, Krauser, Wesker), mehr und zufällige Gegner mit
+  Leon-Jacke und Schattenmarken, Söldner-Modus (4 Räume × 5 Figuren); jeweils mit Lebensbalken. Skripte
+  `112-keytour.sh`/`112-alltours.sh` im Notizordner der Sitzungen. Je Raum: Kern-Dumps, dann `gx_chunk_render` mit
+  GLES und Vulkan (ohne und mit gebündelten Draws) in einen leeren Cache.
+- `gx-programs.keys` (GLES): 9 174 → 11 287 Schlüssel. Alle alten bleiben (das Schlüssel-Layout ist seit 15.10.2026
+  gleich, nichts ist unmöglich geworden); dazu 1 829 neue der Rundgänge und 284 Schlüssel aus Fehlerberichten, die auf
+  mindestens 6 verschiedenen Geräten vorkamen (alle Berichte zusammen wären 22 669, zu viel für die Grenze von etwa
+  11 000; Berichtschlüssel von weniger Geräten bleiben draußen).
+- `gx-vkpipes.keys` (Vulkan): 2 822 → 4 872 Pipelines (743 davon gebündelte Draws), 126 Räume; alle Berichte und
+  alle Rundgänge; größter Raum r203 mit 522 (Grenze 3 000).
+- Die 1.1-Nachbearbeitung (CRT, Bloom, FXAA, Schärfen, SGSR/FSR, TV-Filter, Tiefenschärfe, Lichtreflexe) und die
+  RT-Schatten sind feste Shader, nicht in den Listen; Alpha-to-Coverage ändert nur den Quelltext, nicht den Schlüssel.
+  Neu in den Listen sind vor allem Lebensbalken, Kostüme, Ersatzfiguren und zufällige Gegner.
+- `gx_chunk_render`: neue Umgebungsvariable `RE4_GX_WARM_LIST=<gx-programs.keys>` (mit `RE4_GX_PROGRAM_CACHE`) lässt
+  vorher `WarmProgramCache` über die ganze Liste laufen, wie die App beim Start (`RE4_GX_SAMPLES` > 1 für MSAA).
+- **Geprüft (WSL, Mesa/lavapipe):** GLES-Vorbereitung über die ganze neue Liste ohne und mit MSAA 4: 11 287
+  Schlüssel, 9 280 Programme gelinkt, 0 Fehler (107 s / 69 s); `vk_shader_check` über die neue GLES-Liste: 33 861
+  Shader, 0 Fehler; Vulkan-Vorbereitung (`RE4_GX_AHEAD_WAIT=1`, Validierung an) ohne Bündeln 4 129 von 4 872 (743
+  gebündelte ausgelassen), mit Bündeln 4 872 von 4 872, 0 Fehler, 0 Validierungsmeldungen, danach r100 gezeichnet.
+- Erwartete Dauer des ersten Vorbereitens: GLES etwa ein Viertel länger als mit der 1.1.1-Liste (auf dem langsamsten
+  gemessenen Handy grob 0,26 s je Programm); Vulkan etwa 1,5- bis 1,7-mal so lang (Retroid vorher 68 s, jetzt grob
+  1,5 bis 2 Minuten). Danach wie bisher nur Sekunden. Nicht auf einem Gerät geprüft.
+
+### 39. Technische Notiz: Google-Play-Signaturschlüssel (Projektinhaber, 23.11.2026)
+
+- Die Auto-App (AAOS, `com.ast.re4decomp`) aus Google Play zeigte die Warnung für inoffizielle Builds: Play signiert
+  sie mit seinem eigenen App-Signaturschlüssel. Der Schlüssel (SHA-256 `c453588f…e456ec74`, aus der Play Console des
+  Projektinhabers) steht jetzt als zweiter in `OfficialBuild.RELEASE_CERTS`; `OfficialBuildTest` prüft ihn.
+  Nicht im Releasetext, README oder Wiki erwähnen (Regel des Projektinhabers). Nicht auf dem Gerät geprüft.
 
 ## 1.1.1 (ab 22.11.2026, auf 1.1.0 = f0cd8d0e)
 

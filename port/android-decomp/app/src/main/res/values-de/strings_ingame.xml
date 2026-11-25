@@ -419,7 +419,7 @@
     <string name="ingame_cheat_costume_normal">Normal</string>
     <string name="ingame_cheat_costume_jacket">Leons Jacke</string>
     <string name="ingame_cheat_costume_special">Spezial</string>
-    <string name="ingame_cheat_character_help">Die Figur übernimmt sofort Leons Platz (der Raum lädt dort neu, wo du stehst). Leons Koffer, Leben und Geld bleiben; Zwischensequenzen und Funksprüche zeigen weiter Leon, und Ashleys Teil bleibt Ashleys. Krauser bringt seinen Bogen und Wesker seinen Schalldämpfer mit, solange sie gewählt sind. Deine Spielstände behalten immer Leon. Figuren außer Leon sind nicht für das Hauptspiel gedacht, deshalb kommt zuerst eine Warnung.</string>
+    <string name="ingame_cheat_character_help">Die Figur übernimmt sofort Leons Platz (der Raum lädt dort neu, wo du stehst). Leons Koffer, Leben und Geld bleiben; Zwischensequenzen und Funksprüche zeigen weiter Leon, und Ashleys Teil bleibt Ashleys. Krauser bringt seinen Bogen und Wesker seinen Schalldämpfer mit, solange sie gewählt sind. Deine Spielstände behalten immer Leon. Figuren außer Leon sind nicht für das Hauptspiel gedacht, deshalb kommt zuerst eine Warnung. Mit Ashley setzt Krauser seinen Arm mit Zielen + X ein; X allein gibt Ashley Befehle.</string>
     <string name="ingame_cheat_character_warning">Achtung: Diese Spielfigur ist nicht für das Hauptspiel gedacht, es können und werden Fehler auftreten, diese sind unumgänglich!</string>
     <string name="ingame_understood">Ich habe verstanden</string>
     <string name="ingame_later">Später</string>
@@ -494,7 +494,7 @@
     <string name="ingame_health_bars">Lebensbalken bei Gegnern</string>
     <string name="ingame_health_bars_help">Lebensbalken bei Gegnern: Ein kleiner Balken über jedem Gegner zeigt seine Gesundheit (grün, unter einem Viertel gelb, unter einem Zehntel rot); nicht in Zwischensequenzen und Menüs.</string>
     <string name="ingame_more_enemies">Mehr Gegner</string>
-    <string name="ingame_more_enemies_help">Mehr Gegner: Etwa 40 Prozent mehr der gewöhnlichen Ganados eines Raums, an zufälligen Stellen, auf jeder Schwierigkeitsstufe; ab dem nächsten Raum. Bosse, besondere Gegner und Wellen bleiben, wie sie sind; nur in der Geschichte.</string>
+    <string name="ingame_more_enemies_help">Mehr Gegner: Etwa 40 Prozent mehr der gewöhnlichen Ganados eines Raums, an zufälligen Stellen, auf jeder Schwierigkeitsstufe; ab dem nächsten Raum. Bosse, besondere Gegner und Wellen bleiben, wie sie sind; nur in der Geschichte. Die Schwierigkeitsstufe Berserker hat sie immer.</string>
     <string name="ingame_dof_light">Leicht</string>
     <string name="ingame_dof_strong">Stark</string>
     <string name="ingame_player_view">Spielersicht</string>
