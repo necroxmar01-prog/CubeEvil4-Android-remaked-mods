@@ -158,8 +158,8 @@ public final class CoreBridge {
   /** The cheat "Stack items" (1.1.0, Cheats & Mods): ammo, grenades and recovery items up to `max` a slot (0 Standard,
    *  250, 500, 999; patch 0254). */
   public static native void setStackItems(int max);
-  /** The Mods page's "Arrange the case" (patch 0953): the case's items put in order each time it opens. */
-  public static native void setCaseArrange(boolean on);
+  /** The Mods page's "Arrange the case" (patch 0953): the case's items put in order the next time it opens. */
+  public static native void arrangeCase();
   /** The mouse in the game's title and options menus (1.1.0): the app's own pointer (u, v 0..1 over the game's
    *  picture) at each move, `click` for a left click (runtime/mouse_menu.cpp). */
   public static native void mouseMenu(float u, float v, boolean click);

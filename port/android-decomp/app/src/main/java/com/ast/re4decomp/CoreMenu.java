@@ -2491,9 +2491,12 @@ final class CoreMenu extends Dialog {
         on -> { input.edit().putBoolean(CoreActivity.ASHLEY_GUN, on).apply();
                 CoreBridge.setBackPlacement(CoreActivity.backPlacement(input)); });
     help(R.string.ingame_ashley_gun_help);
-    // "Arrange the case" (patch 0953): the case's items put in order each time it opens
-    toggle(buttonsRow(body), R.string.ingame_case_arrange, input.getBoolean(CoreActivity.CASE_ARRANGE, false),
-        on -> { input.edit().putBoolean(CoreActivity.CASE_ARRANGE, on).apply(); CoreBridge.setCaseArrange(on); });
+    // "Arrange the case" (patch 0953; DevJunior, 25.11.2026: "when the user wants, with an option", not each time):
+    // one press puts the case's items in order the next time it opens
+    cellAction(buttonsRow(body), s(R.string.ingame_case_arrange), v -> {
+      CoreBridge.arrangeCase();
+      android.widget.Toast.makeText(getContext(), s(R.string.ingame_case_arrange_done), android.widget.Toast.LENGTH_SHORT).show();
+    });
     help(R.string.ingame_case_arrange_help);
     melee();
     wardrobe();

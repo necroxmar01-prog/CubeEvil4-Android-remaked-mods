@@ -34,6 +34,9 @@ const f32 kBelow = 1000.0f;        // Leon this far below her
 const f32 kLeonReach = 25000.0f;   // Leon this near the ladder (horizontal)
 const int kStill = 45;             // frames standing at the top before she goes on her own
 const int kGiveUp = 300;           // frames of walk to the ladder at most
+const f32 kNear = 400.0f;          // near enough to the ladder's place to climb from there (0.15 m before 25.11.2026)
+f32 gBest;                         // the walk's nearest so far (squared)
+int gStuck;                        // frames the walk came no nearer
 
 int gWalk;          // frames walking to the ladder (0 none)
 Vec gUse;           // where she takes it
@@ -189,8 +192,17 @@ extern "C" void re4_ashley_ladder_down(cSubChar* a)
             stop(a, gWalk > kGiveUp ? "too long" : "Leon came back up");
             return;
         }
-        Vec d = gUse;
-        const bool there = a->status.check(cSubChar::S_ARRIVED) || flat2(d, a->pos) < 150.0f * 150.0f;
+        // (25.11.2026, report 16:39: from 0.2 m away the walk never "arrived" in 10 s, the ledge's edge in the way)
+        // near enough, or no nearer for a second within 0.8 m: climb() puts her there
+        const f32 d2 = flat2(gUse, a->pos);
+        if (d2 < gBest - 30.0f * 30.0f) {
+            gBest = d2;
+            gStuck = 0;
+        } else {
+            gStuck++;
+        }
+        const bool there = a->status.check(cSubChar::S_ARRIVED) || d2 < kNear * kNear ||
+                           (gStuck >= 30 && d2 < 800.0f * 800.0f);
         if (there && !leonOnLadder) {
             gWalk = 0;
             climb(a);
@@ -223,10 +235,12 @@ extern "C" void re4_ashley_ladder_down(cSubChar* a)
         return;
     }
     gStillFrames = 0;
-    if (flat2(gUse, a->pos) < 150.0f * 150.0f) {
+    if (flat2(gUse, a->pos) < kNear * kNear) {
         climb(a);
         return;
     }
+    gBest = flat2(gUse, a->pos);
+    gStuck = 0;
     a->m_PlActTime = 0;  // not the ledge's way any more
     a->m_TargetPos = gUse;
     a->m_TargetDir = gAng;

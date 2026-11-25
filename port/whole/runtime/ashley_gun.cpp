@@ -1206,12 +1206,130 @@ int re4_ashley_behind_mot(int no)
     return 0x12;
 }
 
+// The names in the case's "use on Leon / Ashley" window (DevJunior, 25.11.2026, "the window still does not draw
+// right"): on the debug disc its two name textures (id 0x39 "Leon" 96x48, 0x40 "Ashley" 144x48, CMPR) hold no picture,
+// every block a transparent one (colours 0000 0000, all texels index 3; the report of 16:37). Such a texture gets the
+// name written into it: white letters (5x7 font, 4 texels a dot) with a black edge, the rest transparent.
+static const unsigned char kFont[][8] = {
+    // letter, then its 7 rows (5 bits each, the leftmost the highest)
+    {'L', 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F}, {'e', 0x00, 0x00, 0x0E, 0x11, 0x1F, 0x10, 0x0E},
+    {'o', 0x00, 0x00, 0x0E, 0x11, 0x11, 0x11, 0x0E}, {'n', 0x00, 0x00, 0x16, 0x19, 0x11, 0x11, 0x11},
+    {'A', 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}, {'s', 0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E},
+    {'h', 0x10, 0x10, 0x16, 0x19, 0x11, 0x11, 0x11}, {'l', 0x0C, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E},
+    {'y', 0x00, 0x00, 0x11, 0x11, 0x0F, 0x01, 0x0E},
+};
+
+static bool blankCmpr(const unsigned char* px, int bytes)
+{
+    for (int k = 0; k < bytes; k += 8) {
+        if (px[k] | px[k + 1] | px[k + 2] | px[k + 3] || (px[k + 4] & px[k + 5] & px[k + 6] & px[k + 7]) != 0xFF) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void writeName(unsigned char* px, int w, int h, const char* name)
+{
+    // the picture: 1 letter, 2 edge, 0 nothing
+    static unsigned char pic[48 * 160];
+    if (w > 160 || h > 48) {
+        return;
+    }
+    memset(pic, 0, sizeof pic);
+    const int dot = 4, n = (int) strlen(name), tw = n * 6 * dot - dot, th = 7 * dot;
+    const int x0 = (w - tw) / 2, y0 = (h - th) / 2;
+    for (int c = 0; c < n; c++) {
+        const unsigned char* g = 0;
+        for (const auto& f : kFont) {
+            if (f[0] == (unsigned char) name[c]) {
+                g = f + 1;
+            }
+        }
+        for (int r = 0; g && r < 7; r++) {
+            for (int b = 0; b < 5; b++) {
+                if (!(g[r] & (0x10 >> b))) {
+                    continue;
+                }
+                for (int yy = 0; yy < dot; yy++) {
+                    for (int xx = 0; xx < dot; xx++) {
+                        const int x = x0 + (c * 6 + b) * dot + xx, y = y0 + r * dot + yy;
+                        if (x >= 0 && x < w && y >= 0 && y < h) {
+                            pic[y * w + x] = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            if (pic[y * w + x] == 1) {
+                continue;
+            }
+            for (int dy = -2; dy <= 2 && pic[y * w + x] == 0; dy++) {
+                for (int dx = -2; dx <= 2; dx++) {
+                    const int xx = x + dx, yy = y + dy;
+                    if (xx >= 0 && xx < w && yy >= 0 && yy < h && pic[yy * w + xx] == 1) {
+                        pic[y * w + x] = 2;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    // CMPR: 8x8 tiles row by row, each four 4x4 blocks (top left, top right, bottom left, bottom right); a block: colour
+    // 0 = black 0x0000, colour 1 = white 0xFFFF (0 <= 1: three colours and transparent), 2 bits a texel, index 0 black,
+    // 1 white, 3 transparent
+    unsigned char* o = px;
+    for (int ty = 0; ty < h; ty += 8) {
+        for (int tx = 0; tx < w; tx += 8) {
+            for (int sb = 0; sb < 4; sb++) {
+                const int bx = tx + (sb & 1) * 4, by = ty + (sb >> 1) * 4;
+                o[0] = 0x00, o[1] = 0x00, o[2] = 0xFF, o[3] = 0xFF;
+                for (int r = 0; r < 4; r++) {
+                    unsigned char bits = 0;
+                    for (int c = 0; c < 4; c++) {
+                        const int v = pic[(by + r) * w + bx + c];
+                        bits = (unsigned char) (bits << 2 | (v == 1 ? 1 : v == 2 ? 0 : 3));
+                    }
+                    o[4 + r] = bits;
+                }
+                o += 8;
+            }
+        }
+    }
+}
+
+static void fillNames(ID_UNIT** u, int n)
+{
+    for (int i = 0; i < n; i++) {
+        const ID_UNIT* a = u[i];
+        GXTexObj* tex = 0;
+        if (!a || (a->texId != 0x39 && a->texId != 0x40) || !g_pIdTexSys ||
+            !g_pIdTexSys->GetTexObj(a->texId, a->texNo, &tex) || !tex || GXGetTexObjFmt(tex) != 14) {
+            continue;
+        }
+        const int w = GXGetTexObjWidth(tex), h = GXGetTexObjHeight(tex);
+        unsigned char* px = (unsigned char*) re4_gx_cached((unsigned) (uintptr_t) GXGetTexObjData(tex));
+        if (!px || w % 8 || h % 8 || !blankCmpr(px, w * h / 2)) {
+            continue;
+        }
+        writeName(px, w, h, a->texId == 0x39 ? "Leon" : "Ashley");
+        re4_log("case window: texture %02x (%dx%d) was empty: the name %s written into it", a->texId, w, h,
+                a->texId == 0x39 ? "Leon" : "Ashley");
+    }
+}
+
 // Patch 0912 (DevJunior, 25.11.2026: the case's "use on Leon / Ashley" window is an empty dark box, "make it
 // work"): its 11 units to the log, the first frame of each opening and 20 frames later (when its fade has run), to
 // see why the two names do not show (no texture error in the reports).
 void re4_case_window_dump(ID_UNIT** u, int n, int cmd)
 {
     static int last = -100, open = 0, dumps = 0;
+    if (u) {
+        fillNames(u, n);
+    }
     const int now = pG ? (int) pG->Frame_cnt : 0;
     if (now - last > 2) {
         open = now;

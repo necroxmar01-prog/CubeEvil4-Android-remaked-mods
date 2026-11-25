@@ -1,5 +1,6 @@
 // Mods: "Arrange the case" (wish of DevJunior, 25.11.2026: "an option to arrange the case automatically, so that the
-// things fall into place"; the app's Mods page, off by default, bit 22 of the third aim word, runtime/aim_options.cpp).
+// things fall into place"; 16:40: "when the user wants, with an option": a button on the app's Mods page, each press
+// toggles bit 22 of the third aim word, runtime/aim_options.cpp, and asks for one arrangement).
 //
 // Patch 0953 (Sscrn/ss_pzzl.cpp SsPzzlMain::init) calls re4_case_arrange each time the case screen opens, before it
 // lays the items out from their places: the case's items (those inside the case, not the ones on the side space) are
@@ -60,16 +61,16 @@ int putFirst(pzlBoard* b, pzlPiece* p)
 
 extern "C" {
 
+// asked for (the button): the next opening arranges the case, once
 void re4_case_arrange_set(int on)
 {
-    if (gOn.exchange(on != 0) != (on != 0)) {
-        re4_log("case: arranged on opening %s", on ? "on" : "off");
-    }
+    gOn.store(on != 0);
+    re4_log("case: %s", on ? "to be put in order when it opens next" : "no arrangement asked");
 }
 
 void re4_case_arrange(int size)
 {
-    if (!gOn.load()) {
+    if (!gOn.exchange(false)) {
         return;
     }
     pzlPlayer* pl = new pzlPlayer;

@@ -265,7 +265,13 @@ void re4_aim_set(int bits)
         }
         re4_health_bars_set((bits >> 19) & 1);
         re4_stack_items_set((bits >> 20) & 3);
-        re4_case_arrange_set((bits >> 22) & 1);  // bit 22 "Arrange the case" (mods, patch 0953)
+        // bit 22 toggled by each press of the app's "Arrange the case" (mods, patch 0953)
+        static std::atomic<int> caseBit(-1);
+        const int cb = (bits >> 22) & 1;
+        const int cbBefore = caseBit.exchange(cb);
+        if (cbBefore >= 0 && cbBefore != cb) {
+            re4_case_arrange_set(1);
+        }
         int knife = bits & 0xFFF;
         knife = knife == 0 ? 0 : knife < 50 ? 50 : knife > 300 ? 300 : knife;
         if (gKnifeSpeed.exchange(knife) != knife) {
