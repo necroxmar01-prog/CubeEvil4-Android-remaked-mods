@@ -1237,7 +1237,7 @@ public final class StudioActivity extends Activity {
     int pick = editWeaponPick;
     if (pick == 0) {
       int c = clipCode();
-      pick = (c >= 0xB4 && c <= 0xB6) || (c >= 0xC0 && c <= 0xC6) ? 3 : c >= 0xB0 && c <= 0xBE ? 2
+      pick = (c >= 0xB4 && c <= 0xB6) || (c >= 0xC0 && c <= 0xC6) ? 3 : (c >= 0xB0 && c <= 0xBE) || (c >= 0xC8 && c <= 0xCB) ? 2
           : c >= 0x90 && c <= 0x9B ? 4 : 1;
     }
     String rel = pick >= 2 ? discFile(EDIT_WEAPONS[pick][1]) : null;

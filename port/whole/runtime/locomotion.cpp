@@ -143,6 +143,11 @@ u16 gAimLast[3];
 // back step (move.dat 0x98 + k, k as gMove, the same frames as gMove[k]); heavyUpper plays them on the upper body in
 // place of the game's own while the shotgun is out
 Move gCarry[kMoves];
+// (Mods, 26.11.2026, DevJunior: "while the pistol is equipped, the classic stance with the remake's torso, hips and
+// legs") the handguns' high ready (the "Classic Stance" mod's pose: cha0_wp4000M arm_1 held at its frame 60, the gun
+// up before the chest) as an arm layer over the stand, walk, jog and back step (move.dat 0xC8 + k, the frames of
+// gMove[k]); heavyUpper plays it on the arms while a handgun is out and not aimed
+Move gPistolCarry[kMoves];
 // (Mods, 21.11.2026, DevJunior: "add the animation of taking objects") the remake's hand reaching for an item, on the
 // upper body (move.dat codes 0xA0 on the move, 0xA1 standing for a low item, 0xA2 at a table's height; re4_move_pickup)
 Move gPick[3];
@@ -335,6 +340,8 @@ void load()
     u8* aim[3] = {0, 0, 0};
     u8* carry[kMoves] = {};
     u16 carryLast[kMoves] = {};
+    u8* pcarry[kMoves] = {};
+    u16 pcarryLast[kMoves] = {};
     u16 aimLast[3] = {0, 0, 0};
     u16 reloadLast[3] = {0, 0, 0};
     u8* pick[3] = {0, 0, 0};
@@ -349,6 +356,10 @@ void load()
         if (r[0] >= 0xA0 && r[0] < 0xA3 && last <= kSeqMax) {
             pick[r[0] - 0xA0] = base + at[entry];
             pickLast[r[0] - 0xA0] = last;
+        }
+        if (r[0] >= 0xC8 && r[0] < 0xC8 + kMoves && last <= kSeqMax) {
+            pcarry[r[0] - 0xC8] = base + at[entry];
+            pcarryLast[r[0] - 0xC8] = last;
         }
         if (r[0] >= 0x98 && r[0] < 0x98 + kMoves && last <= kSeqMax) {
             carry[r[0] - 0x98] = base + at[entry];
@@ -497,6 +508,25 @@ void load()
     }
     if (nCarry) {
         re4_log("move: %s: the remake's shotgun carried on the move, %d movements", path, nCarry);
+    }
+    int nPistol = 0;
+    for (int i = 0; i < kMoves; i++) {
+        Move& m = gPistolCarry[i];
+        memset(&m, 0, sizeof(m));
+        m.mot = pcarry[i];
+        m.last = pcarryLast[i];
+        m.scale = m.time = 1.0f;
+        if (m.mot) {
+            nPistol++;
+            m.seq[0] = m.last;
+            SEQUENCE_DATA* key = (SEQUENCE_DATA*) (m.seq + 2);
+            for (int k = 0; k < m.last; k++) {
+                key[k].Frame = (u16) (k * 64);
+            }
+        }
+    }
+    if (nPistol) {
+        re4_log("move: %s: the handguns' classic stance, %d movements", path, nPistol);
     }
     int nPick = 0;
     for (int i = 0; i < 3; i++) {
@@ -1007,9 +1037,15 @@ f32 gameStrike(const void* seq)
 
 // The movement whose game motion holds the upper body now (0 stand, 1 walk, 2 run, 3 back step), -1 none: one of the
 // remake's motions or clips plays in the field's plain routines with a big weapon
+// a handgun out with the classic stance loaded (its arms as gPistolCarry)
+bool pistolStance()
+{
+    return pG && pG->pl_type == 0 && pG->weapon_no != 0 && HandgunCk(pG->weapon_no) && gPistolCarry[0].mot;
+}
+
 int heavy(cPlayer* pl)
 {
-    if (!pl || pl != pPL || !pG || gApplied != 1 || light() || !on() || !gCount || !pl->m_MotTbl ||
+    if (!pl || pl != pPL || !pG || gApplied != 1 || (light() && !pistolStance()) || !on() || !gCount || !pl->m_MotTbl ||
         pl->r_no_0 != 0 || pl->r_no_1 > 3) {
         return -1;
     }
@@ -1039,6 +1075,22 @@ int heavyUpper(cPlayer* pl)
     gHeavyW = k >= 0 ? (gHeavyW + kHeavyFade > 1.0f ? 1.0f : gHeavyW + kHeavyFade)
                      : (gHeavyW - kHeavyFade < 0.0f ? 0.0f : gHeavyW - kHeavyFade);
     const Move& mv = gMove[gHeavyK];
+    if (pistolStance() && gHeavyW > 0.0f && pl && pl->pList && pl->m_MotTbl) {
+        // the handgun's classic stance: its arm layer over the remake's movement (the torso, hips and legs the remake's)
+        const Move& pm = gPistolCarry[gHeavyK];
+        if (pm.mot && pm.last == mv.last) {
+            const f32 cat = (const void*) pl->Motion.pMot == (const void*) mv.mot ? (f32) pl->Motion.Seq.Frame / 64.0f
+                                                                                    : -1.0f;
+            static bool saidPistol;
+            if (!saidPistol) {
+                saidPistol = true;
+                re4_log("move: the handgun in the classic stance (weapon %d, its %s)", (int) pG->weapon_no,
+                        kNames[gHeavyK]);
+            }
+            return re4_legs_overlay(pl, pm.mot, (void*) pm.seq, 0, 1.0f, cat, gHeavyW, 0.0f, 0.0f, 2);
+        }
+        return 0;
+    }
     if (gHeavyW <= 0.0f || !pl || !pl->pList || !pl->m_MotTbl || !mv.orig || light()) {
         gHeavyW = 0.0f;
         return 0;

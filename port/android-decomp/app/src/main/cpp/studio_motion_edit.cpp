@@ -160,6 +160,7 @@ std::string clipName(int code) {
   if (code >= 0x90 && code <= 0x92) return std::string("Shotgun reload, level ") + levels[code - 0x90];
   if (code >= 0x94 && code <= 0x96) return "Shotgun aim " + std::to_string(code - 0x93);
   if (code >= 0x98 && code <= 0x9B) return std::string("Shotgun carry: ") + kMoves[code - 0x98];
+  if (code >= 0xC8 && code <= 0xCB) return std::string("Handgun classic stance: ") + kMoves[code - 0xC8];
   if (code == 0xA0) return "Pick up (on the move)";
   if (code == 0xA1) return "Pick up (low)";
   if (code == 0xA2) return "Pick up (table)";
@@ -497,7 +498,7 @@ std::vector<unsigned> Editor::withLayers(unsigned entry) const {
   for (int k = 0; k < 4; ++k)
     if (code == moves[k])
       for (const auto &c : clips())
-        if (c.code == 0x98 + k) which.push_back(c.entry);
+        if (c.code == 0x98 + k || c.code == 0xC8 + k) which.push_back(c.entry);
   return which;
 }
 
@@ -549,6 +550,10 @@ bool Editor::trim(unsigned entry, int f0, int f1, std::string *why) {
     if (why) *why = "the game matches the weapon animations by their length: cutting one would stop it playing";
     return false;
   }
+  if ((code >= 0x98 && code <= 0x9B) || (code >= 0xC8 && code <= 0xCB)) {
+    if (why) *why = "this arm layer has the frames of its movement: cut the movement (Stand, Walk ...) instead";
+    return false;
+  }
   const auto which = withLayers(entry);
   remember(which);
   for (unsigned e : which) trimOne(e, f0, f1);
@@ -569,13 +574,12 @@ bool Editor::retime(unsigned entry, float speed, std::string *why) {
     if (why) *why = "the game matches the weapon animations by their length: their speed cannot change here";
     return false;
   }
-  std::vector<unsigned> which{entry};
-  // the shotgun's carry layers have the frames of their move (locomotion.cpp gCarry): they change with it
-  const int moves[4] = {0x00, 0x02, 0x06, 0x08};
-  for (int k = 0; k < 4; ++k)
-    if (code == moves[k])
-      for (const auto &c : clips())
-        if (c.code == 0x98 + k) which.push_back(c.entry);
+  if ((code >= 0x98 && code <= 0x9B) || (code >= 0xC8 && code <= 0xCB)) {
+    if (why) *why = "this arm layer has the frames of its movement: change the movement's speed (Stand, Walk ...)";
+    return false;
+  }
+  // the arm layers (the shotgun's carry, the handguns' stance) have the frames of their move: they change with it
+  const auto which = withLayers(entry);
   remember(which);
   for (unsigned e : which) retimeOne(e, speed);
   edited_ = true;

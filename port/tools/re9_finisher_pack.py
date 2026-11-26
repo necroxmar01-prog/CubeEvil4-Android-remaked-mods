@@ -924,6 +924,35 @@ class _Shifted:
         return self.track.sample((frame - self.first) % self.length)
 
 
+class _Frozen:
+    """A track of the arm layer held at one frame (the "Classic Stance" mod's freeze)."""
+
+    def __init__(self, track, frame):
+        self.track, self.frame = track, frame
+
+    def sample(self, frame):
+        return self.track.sample(self.frame)
+
+
+# (Mods, 26.11.2026, DevJunior: "while the pistol is equipped, the classic stance with the remake's torso, hips and
+# legs"; the "Resident Evil 4 Remake Classic Stance" REFramework mod he sent plays the SG-09 R's arm layer motion 0 of
+# bank 1000 held at frame 60: the gun up before the chest as in the 2005 game) cha0_wp4000M "0000_arm_1" held at frame
+# 60 on the arm bones of each movement, the right hand turned to hold the gun as the game does; move.dat 0xC8 + the
+# index of MOVES (runtime/locomotion.cpp gPistolCarry, played on the arms while a handgun is out and not aimed)
+WEP_CARRY_PISTOL = "cha0_wp4000M.motlist.663"
+PISTOL_STANCE = ("0000_arm_1", 60.0)
+
+
+def frozen(base, arm, frame):
+    """`base` with the arm layer `arm` held at `frame` on its arm bones."""
+    out = copy.copy(base)
+    out.tracks = {k: v for k, v in base.tracks.items() if not any(k[1] == h for (_b, h) in arm.tracks)}
+    by_hash = {b.hash: i for i, b in enumerate(base.bones)}
+    for (bi, h), per in arm.tracks.items():
+        out.tracks[(by_hash.get(h, bi), h)] = {kind: _Frozen(t, frame) for kind, t in per.items()}
+    return out
+
+
 def carried(base, arm, first):
     """`base` (a movement of cha0_general) with the arm layer `arm` on its arm bones from `first` on."""
     out = copy.copy(base)
@@ -1253,6 +1282,17 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
                                                    grip_frame(model, g7, gf)), model, g16, 16), model)
             carry.append((0x98 + MOVES.index((slot, name, lengths, flags)), fcv.serialise(cf.motion(cf.scale)),
                           len(cf.frames) - 1))
+        if weapons and pistols and "wep01" in pistols:
+            _v, parms = R.read_motlist(motlist_in(weapons, WEP_CARRY_PISTOL))
+            arm = next(x for x in parms if x.name.endswith(PISTOL_STANCE[0]))
+            pf = Fit(frozen(m, arm, PISTOL_STANCE[1]), model, "leon", 2.0, tol, m.frames, True, frames=fit.frames,
+                     loop=True)
+            warc1 = U.Archive(Path(pistols["wep01"]).read_bytes(), ">")
+            g1 = warc1.entry(0x27 - 4)  # the level aim idle
+            gf1 = range(0, fcv.parse(g1).max_frame + 1, 4)
+            pf.rows = grip_fix(pf.rows, model, grip_frame(model, g1, gf1))
+            carry.append((0xC8 + MOVES.index((slot, name, lengths, flags)), fcv.serialise(pf.motion(pf.scale)),
+                          len(pf.frames) - 1))
         dist = np.linalg.norm(np.array(fit.root[-1][0]) - np.array(fit.root[0][0])) * fit.scale
         print("move %-22s slot 0x%x: source %d..%d, %d game frames, %d bytes, %.0f mm a cycle, feet %s, steps %s; "
               "check %.1f/%.1f deg" % (name, slot, first, first + length, len(fit.frames), len(data), dist, feet,
@@ -1321,7 +1361,8 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
         entries.append(data)
         table.append(struct.pack(">BBHHHHH", code, 0, len(entries) - 1, last, 0xFFFF, 0xFFFF, 0))
         steps.append([])
-        print("shotgun carry 0x%x: %d game frames, %d bytes" % (code, last + 1, len(data)))
+        print("%s carry 0x%x: %d game frames, %d bytes" % ("handgun" if code >= 0xC8 else "shotgun", code, last + 1,
+                                                        len(data)))
     if len(table) > 64:  # runtime/locomotion.cpp takes 64 rows at most (32 before 23.11.2026)
         raise SystemExit("move.dat: %d movements, the game takes 64" % len(table))
     stk = b"STK1"

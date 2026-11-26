@@ -20321,3 +20321,18 @@ des Spiels.
   wep07 Eintrag 1; `Viewer::attachWeapon`, nicht gehäutet), wählbar Auto/None/Handgun/Red9/Shotgun. Treffer-Radius
   64 px. Geprüft (Host): Bilder mit Waffe in der Hand und beiden Gizmos; Pose/IK-Prüfung weiter 0,000 mm. Nicht geprüft:
   Gerät.
+
+### Mods: klassische Pistolenhaltung (26.11.2026)
+
+Wunsch von DevJunior („siempre y cuando la pistola esté equipada, la estancia clásica con el movimiento de torso, cadera
+y piernas del Remake“; Vorlage: der REFramework-Mod „Resident Evil 4 Remake Classic Stance“, der die Armschicht
+Motion 0 von Bank 1000 des SG-09 R bei Bild 60 anhält). `re9_finisher_pack.py`: `cha0_wp4000M 0000_arm_1` bei Bild 60
+auf den Armknochen jeder Bewegung (Stehen, Gehen, Joggen, Rückwärtsschritt; `frozen`), die rechte Hand gedreht, damit
+sie die Waffe wie das Spiel hält (`grip_fix` mit der mittleren Zielpose von wep01); move.dat 0xC8+k, gleiche Bilder wie
+die Bewegung. `locomotion.cpp`: `gPistolCarry`, `pistolStance()` (Leon, Handfeuerwaffe nach `HandgunCk`, Schicht
+geladen); `heavy()` lässt Handfeuerwaffen dann zu, `heavyUpper` legt die Schicht nur auf die Arme (Modus 2) über die
+Bewegung des Remakes – Rumpf, Hüfte und Beine bleiben die des Remakes; beim Zielen blendet sie aus (`heavy` −1 ab
+r_no_1 > 3). Studio: Namen „Handgun classic stance: …“, Tempo/Schneiden der Armschichten nur über ihre Bewegung (beide
+Schichten gehen mit). Paket v34 (move.dat mit 52 Bewegungen). Geprüft: Host-Bilder Stehen/Gehen/Joggen mit Pistole in
+der Hand, Tempo-Prüfung (Gehen, Schrotflinten- und Pistolenschicht 26 Bilder), kompiliert (i686). Nicht geprüft: im
+Spiel.
