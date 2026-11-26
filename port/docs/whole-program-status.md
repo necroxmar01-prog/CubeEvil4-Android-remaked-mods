@@ -20400,3 +20400,7 @@ Spiel.
   Remake-Leon im schwarzen Hemd): v6 mit `skin_graft.py --physique athletic --inflate 0:26 --inflate 6:26`
   (`pl08` dazu `12:26`: Messer und Holsterteil an der Brust gehen mit), breite Schultern und Arme, Taille schmal.
   Am Host gerendert, auf dem Gerät nicht getestet.
+- **Leon Remasterizado (Remake) v1** (DevJunior, 26.11.2026: „esa versión con el suéter del remake también, quiero
+  tener ambos“): neben dem klassischen v7 die Remake-Kleidung von „Leon Remake Lite optimized“ (`pl00` Lederjacke,
+  `pl08` schwarzer Strickpullover mit kurzen Ärmeln, Gurt und Messer) mit Kopf, Gesicht und Haar von v4; `pl08` mit
+  `--physique athletic --inflate 0:-12` (zwischen Remake Lite und v7). Am Host gerendert, auf dem Gerät nicht getestet.
