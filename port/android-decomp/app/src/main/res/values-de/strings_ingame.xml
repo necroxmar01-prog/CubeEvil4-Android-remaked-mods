@@ -581,12 +581,11 @@
     <string name="ingame_mod_add_zip">Mods als .zip hinzufügen (einer oder mehrere)</string>
     <string name="ingame_mod_add_all">Alle Mods eines Ordners hinzufügen</string>
     <string name="ingame_mod_remove_one">%1$s entfernen</string>
-    <string name="ingame_mod_remove_one_text">„%1$s“ wird gelöscht. Die Änderung gilt nach einem Neustart: lösche ruhig erst weitere Mods und starte dann neu.</string>
+    <string name="ingame_mod_remove_one_text">„%1$s“ wird gelöscht. Die Änderung gilt nach einem Neustart.</string>
     <string name="ingame_mods_added_all">Hinzugefügt: %1$s</string>
     <string name="ingame_mods_failed_all">Nicht hinzugefügt: %1$s</string>
     <string name="ingame_mods_none_found">Der Ordner enthält keine Mods (Ordner wie auf der Disc oder .zip-Dateien).</string>
     <string name="ingame_mod_delete">Löschen</string>
-    <string name="ingame_mod_delete_restart">Löschen und neu starten</string>
     <string name="ingame_mods_remove">Alle Mods entfernen</string>
     <string name="ingame_mods_remove_text">Das Spiel startet neu und nutzt wieder die Dateien der Disc. Fortschritt seit dem letzten Speichern geht verloren.</string>
     <string name="ingame_mod_copying">Mod wird kopiert…</string>

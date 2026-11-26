@@ -576,12 +576,11 @@
     <string name="ingame_mod_add_zip">Tambah mod .zip (satu atau lebih)</string>
     <string name="ingame_mod_add_all">Tambah semua mod dalam folder</string>
     <string name="ingame_mod_remove_one">Hapus %1$s</string>
-    <string name="ingame_mod_remove_one_text">“%1$s” dihapus. Perubahan berlaku setelah dimulai ulang: hapus mod lain dulu jika mau, lalu mulai ulang.</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” dihapus. Perubahan berlaku setelah dimulai ulang.</string>
     <string name="ingame_mods_added_all">Ditambahkan: %1$s</string>
     <string name="ingame_mods_failed_all">Tidak ditambahkan: %1$s</string>
     <string name="ingame_mods_none_found">Folder ini tidak berisi mod (folder seperti di disk atau file .zip).</string>
     <string name="ingame_mod_delete">Hapus</string>
-    <string name="ingame_mod_delete_restart">Hapus dan mulai ulang</string>
     <string name="ingame_mods_remove">Hapus semua mod</string>
     <string name="ingame_mods_remove_text">Game dimulai ulang dan kembali memakai file disk. Progres sejak penyimpanan terakhir akan hilang.</string>
     <string name="ingame_mod_copying">Menyalin mod…</string>

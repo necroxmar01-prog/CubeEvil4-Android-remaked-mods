@@ -20477,3 +20477,6 @@ Spiel.
   einem Neustart löschen; Texte in 11 Sprachen. Nur CI-Build, auf dem Gerät nicht getestet.
 
 | 0957 `game/mes.cpp` | Titel vor dem ersten Spiel: Typ-3-Texte (Gegenstandsnamen) aus `etc/core.das`, wenn `gameInit` sie noch nicht gebunden hat (EU-Optionen, Steuercode 0x11) |
+- **Mod löschen: danach „Später / Neu starten“** (DevJunior, 26.11.2026: „un cuadro que dirá reiniciar o más tarde como
+  cuando los instalas“): die Rückfrage hat wieder „Abbrechen / Löschen“; nach dem Löschen fragt ein zweites Fenster wie
+  beim Hinzufügen „Später / Neu starten“ (`restartForMods`). Ersetzt die drei Knöpfe von 15bebf7. Nur CI-Build.

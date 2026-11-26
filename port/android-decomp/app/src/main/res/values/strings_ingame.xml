@@ -599,12 +599,11 @@
     <string name="ingame_mod_add_zip">Add mods .zip (one or more)</string>
     <string name="ingame_mod_add_all">Add all mods in a folder</string>
     <string name="ingame_mod_remove_one">Remove %1$s</string>
-    <string name="ingame_mod_remove_one_text">“%1$s” is deleted. The change counts after a restart: delete more mods first if you like, then restart.</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” is deleted. The change counts after a restart.</string>
     <string name="ingame_mods_added_all">Added: %1$s</string>
     <string name="ingame_mods_failed_all">Not added: %1$s</string>
     <string name="ingame_mods_none_found">The folder holds no mods (folders laid out like the disc, or .zip files).</string>
     <string name="ingame_mod_delete">Delete</string>
-    <string name="ingame_mod_delete_restart">Delete and restart</string>
     <string name="ingame_mods_remove">Remove all mods</string>
     <string name="ingame_mods_remove_text">The game restarts and uses the disc\'s own files again. Progress since your last save is lost.</string>
     <string name="ingame_mod_copying">Copying the mod…</string>

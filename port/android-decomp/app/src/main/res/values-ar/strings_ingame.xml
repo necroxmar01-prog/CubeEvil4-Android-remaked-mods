@@ -602,12 +602,11 @@
     <string name="ingame_mod_add_zip">إضافة تعديلات ‎.zip (واحد أو أكثر)</string>
     <string name="ingame_mod_add_all">إضافة كل التعديلات في مجلد</string>
     <string name="ingame_mod_remove_one">إزالة %1$s</string>
-    <string name="ingame_mod_remove_one_text">سيُحذف “%1$s”. يسري التغيير بعد إعادة التشغيل: احذف تعديلات أخرى أولًا إن شئت، ثم أعد التشغيل.</string>
+    <string name="ingame_mod_remove_one_text">سيُحذف “%1$s”. يسري التغيير بعد إعادة التشغيل.</string>
     <string name="ingame_mods_added_all">أُضيفت: %1$s</string>
     <string name="ingame_mods_failed_all">لم تُضف: %1$s</string>
     <string name="ingame_mods_none_found">لا يحتوي المجلد على تعديلات (مجلدات مثل القرص أو ملفات ‎.zip).</string>
     <string name="ingame_mod_delete">حذف</string>
-    <string name="ingame_mod_delete_restart">حذف وإعادة التشغيل</string>
     <string name="ingame_mods_remove">إزالة كل التعديلات</string>
     <string name="ingame_mods_remove_text">ستُعاد تشغيل اللعبة وتستخدم ملفات القرص من جديد. يضيع التقدم منذ آخر حفظ.</string>
     <string name="ingame_mod_copying">جارٍ نسخ التعديل…</string>

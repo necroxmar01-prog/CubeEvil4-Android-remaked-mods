@@ -589,12 +589,11 @@
     <string name="ingame_mod_add_zip">Добавить моды .zip (один или несколько)</string>
     <string name="ingame_mod_add_all">Добавить все моды из папки</string>
     <string name="ingame_mod_remove_one">Удалить %1$s</string>
-    <string name="ingame_mod_remove_one_text">«%1$s» будет удалён. Изменение вступит в силу после перезапуска: можно сначала удалить другие моды, а затем перезапустить.</string>
+    <string name="ingame_mod_remove_one_text">«%1$s» будет удалён. Изменение вступит в силу после перезапуска.</string>
     <string name="ingame_mods_added_all">Добавлены: %1$s</string>
     <string name="ingame_mods_failed_all">Не добавлены: %1$s</string>
     <string name="ingame_mods_none_found">В папке нет модов (папок как на диске или файлов .zip).</string>
     <string name="ingame_mod_delete">Удалить</string>
-    <string name="ingame_mod_delete_restart">Удалить и перезапустить</string>
     <string name="ingame_mods_remove">Удалить все моды</string>
     <string name="ingame_mods_remove_text">Игра перезапустится и снова будет использовать файлы диска. Прогресс после последнего сохранения будет потерян.</string>
     <string name="ingame_mod_copying">Копирование мода…</string>

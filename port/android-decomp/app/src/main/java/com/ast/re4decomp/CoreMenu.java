@@ -2892,8 +2892,17 @@ final class CoreMenu extends Dialog {
         .setNegativeButton(R.string.ingame_cancel, null)
         // (DevJunior, 26.11.2026: "deleting a mod and restarting every time is tedious, it should be possible to delete
         // several") delete now and restart later, after more, or delete and restart at once
-        .setNeutralButton(R.string.ingame_mod_delete, (d, w) -> { host.removeMod(name, false); refreshMods(); })
-        .setPositiveButton(R.string.ingame_mod_delete_restart, (d, w) -> { close(); host.removeMod(name, true); }).create();
+        // (DevJunior, 26.11.2026: "a box that says restart or later, as when installing them") delete, then ask
+        .setPositiveButton(R.string.ingame_mod_delete, (d, w) -> {
+          host.removeMod(name, false);
+          refreshMods();
+          AlertDialog after = new AlertDialog.Builder(getContext())
+              .setMessage(s(R.string.ingame_mods_changed))
+              .setNegativeButton(R.string.ingame_later, null)
+              .setPositiveButton(R.string.ingame_restart, (d2, w2) -> { close(); host.restartForMods(); }).create();
+          after.setOnShowListener(d2 -> after.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
+          after.show();
+        }).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
     dialog.show();
   }
