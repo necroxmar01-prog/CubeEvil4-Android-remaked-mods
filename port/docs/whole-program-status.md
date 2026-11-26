@@ -20380,3 +20380,9 @@ Spiel.
   Haare mit den Gewichten der Remake-Lite-Haare (`--weights-from`, Knochen 4 und die Schwungknochen 65–83 von
   `leonHair`, `--physics 0.8`). Am Host gerendert (Ruhepose; die Physik läuft nur im Spiel), auf dem Gerät nicht
   getestet.
+- **Leon Clásico Remasterizado v5: schlanker im klassischen Hemd** (DevJunior, 26.11.2026: „el traje clásico del og,
+  la camisa oscura con el strap … y no es tan corpulento“): pl08 von Remake Lite (dunkles Hemd mit Brustgurt und
+  Messer, derselbe Körper wie „Leon No Jacket Remake“) mit `skin_graft.py --inflate 0:-30 --physique athletic`
+  (Schultern, Arme, Brust schmaler; Hals, Hände, Gurt bleiben). Rqqps „Classic holster chest strap“ ist nur die
+  RE4R-Mesh ohne Texturen (die des Spiels), daher nicht verwendet. Wahlweise dasselbe Hemd auch als pl00. Am Host
+  gerendert, auf dem Gerät nicht getestet.
