@@ -20357,3 +20357,8 @@ Spiel.
   `--keep-mats 0,1 --tex 1024 --scalp-depth 0.6 --scalp-reach 6 --hairline 1790 --crown-under 3`, danach
   `skin_shapes.py` (Mund und Lidschlag in Filmen). Am Host gerendert (vorne, schräg, von oben; pl00 7,0 MB, pl08 6,8 MB,
   Platz 8 MB). Auf dem Gerät nicht getestet. Mod-Dateien nicht im Repository.
+- **Haarfarbe wie im Remake** (DevJunior, 26.11.2026, „no se parece mucho“ mit Bildern des Remake-Leon):
+  `skin_head_fbx.py --hair-tint` färbt die eigenen Haartexturen des Skins nach ihrer Helligkeit in die Farben von
+  `--hair-ramp` (Leon Clásico Remasterizado v2: `48,36,27:118,93,68:186,160,124`, dazu `--normal` aus
+  `cha000_10_face_nrmr`, `--relief 0.6`). Am Host gerendert, auf dem Gerät nicht getestet. Offen: die Frisur des
+  Remake (Rqqp, `cha000_20.mesh`) braucht `cha000_20_Hair_ALBD`/`_ATOC` aus dem Spiel.

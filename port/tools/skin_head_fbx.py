@@ -348,6 +348,8 @@ def main(argv=None):
     ap.add_argument("--hair-albedo", help="the RE Engine hair's ALBS: the hair's colour texture anew (with --hair-ramp)")
     ap.add_argument("--hair-alpha", help="the hair's ACOT (its red channel: the strands)")
     ap.add_argument("--hair-ramp", default="35,31,27:82,72,61:152,138,118", help="shadow:middle:highlight colours")
+    ap.add_argument("--hair-tint", action="store_true",
+                    help="the skin's own hair textures in --hair-ramp's colours (by their brightness)")
     ap.add_argument("--hair-streaks", type=float, default=0.35, help="lighter streaks along the strands (0..1)")
     ap.add_argument("--hair-image", type=int, default=0, help="the hair's colour image in palette 3")
     ap.add_argument("--eye-clear", type=float, default=0.2,
@@ -518,6 +520,26 @@ def main(argv=None):
         levels = hair_levels(a.hair_albedo, a.hair_alpha, (w, h), stops, a.hair_streaks)
         imgs[k] = H.encode_levels(levels, 0xE, imgs[k][0], H.enc_cmpr)
         print("hair: colour image %d anew, %dx%d, %d levels, ramp %s" % (k, w, h, len(levels), a.hair_ramp))
+    if a.hair_tint and entries[HAIR]:  # the skin's own hair in the ramp's colours (its strands' light kept)
+        stops = np.array([[float(c) for c in x.split(",")] for x in a.hair_ramp.split(":")])
+        done = set()
+        for p in G.parts(entries[HAIR]):
+            k = entries[HAIR][p + 0xC]
+            if k in done or k == 0xFF or struct.unpack_from(">I", imgs[k][0], 4)[0] != 0xE:
+                continue
+            done.add(k)
+            hdr_h = imgs[k][0]
+            img = np.asarray(U.decode_gx(*struct.unpack_from(">HHI", hdr_h), imgs[k][1]).convert("RGBA"),
+                             dtype=np.float64)
+            lum = img[..., :3] @ np.array([0.3, 0.59, 0.11])
+            seen = lum[img[..., 3] > 128] if (img[..., 3] > 128).any() else lum.ravel()
+            lo, hi = np.percentile(seen, 5), np.percentile(seen, 97)
+            t = np.clip((lum - lo) / max(hi - lo, 1.0), 0, 1) * (len(stops) - 1)
+            i = np.minimum(t.astype(int), len(stops) - 2)
+            f = (t - i)[..., None]
+            img[..., :3] = stops[i] * (1 - f) + stops[i + 1] * f
+            imgs[k] = G.encode_image(Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGBA"), hdr_h)
+            print("hair: texture %d in the ramp %s" % (k, a.hair_ramp))
     if a.face_mips:  # a mipmap chain: seen small, beard, brows and creases no longer shimmer into blotches
         hdr_f = imgs[skin_mat][0]
         base = U.decode_gx(*struct.unpack_from(">HHI", hdr_f), imgs[skin_mat][1]).convert("RGBA")
