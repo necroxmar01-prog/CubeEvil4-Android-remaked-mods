@@ -611,15 +611,22 @@ DffMesh readFbx(const Bytes &data, const std::map<std::string, Bytes> &files, st
     }
     // weights per control point, on the GTA bones
     std::vector<std::vector<std::pair<unsigned, double>>> wOf(ncp);
+    std::vector<double> clothOf(ncp, 0.0), allOf(ncp, 0.0);  // weight on skirt bones, all weight
     if (clustersOf.count(g))
       for (const auto &cl : clustersOf.at(g)) {
         const FbxNode *I = cl.node->first("Indexes"), *W = cl.node->first("Weights");
         if (!I || !W || I->props.empty() || W->props.empty()) continue;
         const unsigned to = mapped(cl.bone);
+        bool skirtBone = false;  // a skirt's or a dress's chain (DevJunior's Ashley: "pants 1 a".."pants 3 d")
+        for (const auto &t : nameWords(bones.at(cl.bone).name))
+          for (const char *x : {"skirt", "pants", "dress", "robe", "kilt", "cloth"})
+            if (t.rfind(x, 0) == 0) skirtBone = true;
         const auto &ii = I->props[0].ai;
         const auto &ww = W->props[0].ad;
         for (std::size_t k = 0; k < ii.size() && k < ww.size(); ++k) {
           if (ii[k] < 0 || std::size_t(ii[k]) >= ncp || ww[k] <= 0) continue;
+          allOf[std::size_t(ii[k])] += ww[k];
+          if (skirtBone) clothOf[std::size_t(ii[k])] += ww[k];
           auto &list = wOf[std::size_t(ii[k])];
           bool merged = false;
           for (auto &e : list)
@@ -772,6 +779,7 @@ DffMesh readFbx(const Bytes &data, const std::map<std::string, Bytes> &files, st
           if (sum <= 0) bi = {std::uint8_t(index.at(pick.at("pelvis").second)), 0, 0, 0}, bw = {1, 0, 0, 0}, sum = 1;
           for (auto &x : bw) x = float(x / sum);
           m.bone.push_back(bi), m.weight.push_back(bw);
+          m.cloth.push_back(allOf[cp] > 0 ? float(clothOf[cp] / allOf[cp]) : 0.0f);
         }
         ids.push_back(it->second);
       }

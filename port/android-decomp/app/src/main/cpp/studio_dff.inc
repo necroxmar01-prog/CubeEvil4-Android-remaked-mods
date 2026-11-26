@@ -108,6 +108,7 @@ struct DffMesh {
   std::vector<std::string> boneName;  // per skin bone
   std::vector<V3> boneAt;             // per skin bone: its joint in the bind pose
   std::vector<int> boneParent;        // per skin bone: its parent skin bone, -1 none
+  std::vector<float> cloth;           // per vertex: its share on a skirt's bones (.fbx; empty: none)
 };
 
 DffMesh readDff(const Bytes &b) {

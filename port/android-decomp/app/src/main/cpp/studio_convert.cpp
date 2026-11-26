@@ -1606,6 +1606,7 @@ void reduceSkin(DffMesh &m, std::size_t target, std::string &log) {
     if (v < m.uv.size()) m.uv.push_back(m.uv[v]);
     if (v < m.bone.size()) m.bone.push_back(m.bone[v]);
     if (v < m.weight.size()) m.weight.push_back(m.weight[v]);
+    if (v < m.cloth.size()) m.cloth.push_back(m.cloth[v]);
     return unsigned(m.pos.size() - 1);
   };
   std::vector<std::array<unsigned, 4>> tris;
@@ -1654,7 +1655,7 @@ void reduceSkin(DffMesh &m, std::size_t target, std::string &log) {
   // the vertices still used, renumbered
   std::vector<unsigned> remap(nv, ~0u);
   DffMesh r = m;
-  r.pos.clear(), r.nrm.clear(), r.uv.clear(), r.bone.clear(), r.weight.clear(), r.tris.clear();
+  r.pos.clear(), r.nrm.clear(), r.uv.clear(), r.bone.clear(), r.weight.clear(), r.cloth.clear(), r.tris.clear();
   for (std::size_t i = 0; i < n; i += 3) {
     std::array<unsigned, 4> t{out[i], out[i + 1], out[i + 2], vmat[out[i]]};
     for (int c = 0; c < 3; ++c) {
@@ -1664,6 +1665,7 @@ void reduceSkin(DffMesh &m, std::size_t target, std::string &log) {
         r.pos.push_back(m.pos[t[c]]), r.nrm.push_back(m.nrm[t[c]]), r.uv.push_back(m.uv[t[c]]);
         if (t[c] < m.bone.size()) r.bone.push_back(m.bone[t[c]]);
         if (t[c] < m.weight.size()) r.weight.push_back(m.weight[t[c]]);
+        if (t[c] < m.cloth.size()) r.cloth.push_back(m.cloth[t[c]]);
       }
       t[c] = w;
     }
@@ -2226,6 +2228,96 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
                  nv, src.size(), far);
     }
 
+    // A skirt on the character's own skirt bones (DevJunior, 25.11.2026: "it has a skirt, it should sway with the legs";
+    // the .fbx's skirt bones had gone onto the hips, the legs went through it): Ashley's skirt is cloth the game moves
+    // (pl_cloth.cpp girlSkirt, bones 93..140 in 16 strands of 3 around the hips, kept off the thighs). Each skirt vertex
+    // of the skin takes the weights of the 4 nearest vertices of her own skirt (on those bones), as much as it hung on
+    // skirt bones in the model.
+    if (!m.cloth.empty() && (stem == "pl01" || stem == "pl05" || stem == "pl11")) {
+      struct Cv {
+        V3 p;
+        std::vector<std::pair<int, double>> w;
+      };
+      std::vector<Cv> skirt;
+      for (std::size_t e = 0; e < gc.count(); ++e) {
+        if (gc.kind(e) != "BIN" || gc.entry(e).size() < 0x60) continue;
+        const Bytes &md = gc.entry(e);
+        const unsigned shift = md[0x28], nvv = be16(md, 0x38);
+        const std::uint32_t vtx = be32(md, 0x30), wgt = be32(md, 0x14);
+        const unsigned ext = be16(md, 0x2A), n = ext > 0xFF ? ext : md[0x18];
+        const bool big = ext > 0xFF;
+        std::vector<std::vector<std::pair<int, double>>> entries;
+        for (unsigned k = 0; k < n; ++k) {
+          const std::size_t q = wgt + std::size_t(k) * (big ? 12 : 8);
+          if (q + (big ? 12 : 8) > md.size()) break;
+          const unsigned cnt = std::min<unsigned>(big ? be16(md, q + 6) : md.at(q + 3), 3);
+          std::vector<std::pair<int, double>> list;
+          bool onSkirt = false;
+          for (unsigned j = 0; j < cnt; ++j) {
+            const int id = big ? int(be16(md, q + j * 2)) : int(md.at(q + j));
+            const double r = md.at(q + (big ? 8 : 4) + j);
+            if (r <= 0) continue;
+            list.push_back({id, r});
+            onSkirt |= id >= 93 && id <= 140;
+          }
+          entries.push_back(onSkirt ? list : std::vector<std::pair<int, double>>{});
+        }
+        const double sc = 1.0 / double(1 << shift);
+        for (unsigned i = 0; i < nvv; ++i) {
+          const std::size_t q = vtx + std::size_t(i) * 8;
+          if (q + 8 > md.size()) break;
+          const unsigned wi = be16(md, q + 6);
+          if (wi >= entries.size() || entries[wi].empty()) continue;
+          skirt.push_back({V3{double(std::int16_t(be16(md, q))) * sc, double(std::int16_t(be16(md, q + 2))) * sc,
+                              double(std::int16_t(be16(md, q + 4))) * sc},
+                           entries[wi]});
+        }
+      }
+      std::size_t moved = 0;
+      if (!skirt.empty())
+        for (std::size_t v = 0; v < nv && v < m.cloth.size(); ++v) {
+          const double share = m.cloth[v];
+          if (share < 0.05) continue;
+          std::array<std::pair<double, const Cv *>, 4> near;
+          near.fill({1e30, nullptr});
+          for (const auto &c : skirt) {
+            const V3 d = c.p - P[v];
+            const double dd = dot(d, d);
+            if (dd >= near.back().first) continue;
+            std::size_t k = near.size() - 1;
+            while (k > 0 && near[k - 1].first > dd) near[k] = near[k - 1], --k;
+            near[k] = {dd, &c};
+          }
+          if (!near[0].second || near[0].first > 200.0 * 200.0) continue;  // far below her hem: its own
+          std::map<int, double> mix;
+          double total = 0;
+          for (const auto &[dd, c] : near) {
+            if (!c) break;
+            const double w = 1.0 / (dd + 25.0);
+            double sum = 0;
+            for (const auto &[b, r] : c->w) sum += r;
+            for (const auto &[b, r] : c->w) mix[b] += w * r / sum;
+            total += w;
+          }
+          for (auto &[b, x] : mix) x = share * x / total;
+          for (const auto &[b, r] : W[v]) mix[b] += (1 - share) * r / 100.0;
+          std::vector<std::pair<int, double>> list(mix.begin(), mix.end());
+          std::stable_sort(list.begin(), list.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
+          if (list.size() > 3) list.resize(3);
+          double sum = 0;
+          for (const auto &x : list) sum += x.second;
+          Weight e;
+          int given = 0;
+          for (std::size_t k = 0; k < list.size(); ++k) {
+            const int r = k + 1 == list.size() ? 100 - given : int(std::lround(list[k].second * 100.0 / sum));
+            if (r <= 0) continue;
+            e.push_back({list[k].first, r});
+            given += r;
+          }
+          if (!e.empty()) W[v] = e, ++moved;
+        }
+      log += fmt("the skirt on the character's skirt bones (cloth): %zu vertices (%zu of hers)\n", moved, skirt.size());
+    }
     const std::vector<Weight> Wsoft = W;  // before the plates: the inner layer bends smoothly
     std::vector<char> plated(nv, 0);
     // The armour round the hips (DevJunior, 19.11.2026): a separate small piece of the mesh there (its triangles joined
