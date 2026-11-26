@@ -67,6 +67,12 @@ int main(int argc, char **argv) {
     ++bad;
   }
   writeAll(out + "/speed.dat", e.save());
+  e.undo();
+  if (!e.trim(walk, 4, 28, &why)) {
+    std::fprintf(stderr, "trim: %s\n", why.c_str());
+    ++bad;
+  }
+  writeAll(out + "/trim.dat", e.save());
   std::printf("edited entry %u; %s\n", walk, bad ? "FAILED" : "ok");
   return bad ? 1 : 0;
 }

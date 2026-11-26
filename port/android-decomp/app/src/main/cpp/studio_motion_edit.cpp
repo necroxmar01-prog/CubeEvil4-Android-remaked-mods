@@ -74,6 +74,51 @@ float hermite(float v0, float v1, float t0, float t1, float t) {
   return v0 * h00 + v1 * h01 + t0 * h10 + t1 * h11;
 }
 
+// d/dt of the Hermite piece
+float hermiteSlope(float v0, float v1, float t0, float t1, float t) {
+  const float t2 = t * t;
+  return v0 * (6 * t2 - 6 * t) + v1 * (-6 * t2 + 6 * t) + t0 * (3 * t2 - 4 * t + 1) + t1 * (3 * t2 - 2 * t);
+}
+
+// the axis between frames f0 and f1, f0 becoming 0: each piece of the curve inside kept exactly (a piece cut at
+// parameters a..b keeps its shape with its tangents times b - a: the game's tangents are per piece)
+Axis cutAxis(const Axis &a, int f0, int f1) {
+  Axis o;
+  const std::size_t n = a.keys.size();
+  if (!n) return o;
+  auto push = [&](int frame, float value, float in, float out) {
+    const auto f = std::uint16_t(frame - f0);
+    if (!o.frames.empty() && o.frames.back() == f) {
+      o.keys.back().out = out;  // the same frame: the next piece's tangent leaves it
+      return;
+    }
+    o.frames.push_back(f);
+    o.keys.push_back({value, in, out});
+  };
+  const float first = a.frames.front(), last = a.frames.back();
+  if (n == 1 || float(f1) <= first || float(f0) >= last) {  // flat there
+    const float v = float(f0) >= last ? a.keys.back().value : a.keys.front().value;
+    push(f0, v, 0, 0);
+    push(f1, v, 0, 0);
+    return o;
+  }
+  if (float(f0) < first) push(f0, a.keys.front().value, 0, 0), push(int(first), a.keys.front().value, 0, 0);
+  for (std::size_t i = 0; i + 1 < n; ++i) {
+    const float s0 = a.frames[i], s1 = a.frames[i + 1];
+    const float lo = std::max(s0, float(f0)), hi = std::min(s1, float(f1));
+    if (hi <= lo) continue;
+    const float ta = (lo - s0) / (s1 - s0), tb = (hi - s0) / (s1 - s0), span = tb - ta;
+    const Key &k0 = a.keys[i], &k1 = a.keys[i + 1];
+    const float va = hermite(k0.value, k1.value, k0.out, k1.in, ta), vb = hermite(k0.value, k1.value, k0.out, k1.in, tb);
+    const float da = hermiteSlope(k0.value, k1.value, k0.out, k1.in, ta) * span;
+    const float db = hermiteSlope(k0.value, k1.value, k0.out, k1.in, tb) * span;
+    push(int(std::lround(lo)), va, da, da);
+    push(int(std::lround(hi)), vb, db, db);
+  }
+  if (float(f1) > last) push(int(last), a.keys.back().value, 0, 0), push(f1, a.keys.back().value, 0, 0);
+  return o;
+}
+
 // how much of an edit applies at frame f: 1 from f0 to f1, easing to 0 over `fade` frames outside
 float weight(int f, int f0, int f1, int fade) {
   if (f >= f0 && f <= f1) return 1.0f;
@@ -430,6 +475,78 @@ bool Editor::retimeOne(unsigned entry, float speed) {
         if (f != 0xFFFF) set16(t, at, unsigned(std::lround(double(f) * now / last)));
       }
     }
+  return true;
+}
+
+int Editor::codeOf(unsigned entry) const {
+  for (const auto &c : clips())
+    if (c.entry == entry) return c.code;
+  return -1;
+}
+
+std::vector<unsigned> Editor::withLayers(unsigned entry) const {
+  std::vector<unsigned> which{entry};
+  const int code = codeOf(entry);
+  const int moves[4] = {0x00, 0x02, 0x06, 0x08};
+  for (int k = 0; k < 4; ++k)
+    if (code == moves[k])
+      for (const auto &c : clips())
+        if (c.code == 0x98 + k) which.push_back(c.entry);
+  return which;
+}
+
+bool Editor::trimOne(unsigned entry, int f0, int f1) {
+  Motion *m = motion(entry);
+  if (!m) return false;
+  const int last = m->maxFrame();
+  for (auto &j : m->joints) {
+    if (j.type() == 15) continue;
+    for (auto &a : j.axes) a = cutAxis(a, f0, f1);
+    j.edited = true;
+  }
+  const int now = f1 - f0;
+  m->rawMax = std::uint16_t((m->rawMax & 0xC000) | now);
+  changed_[entry] = true;
+  if (!entries_.empty())
+    for (auto r : movRows(entries_[0])) {
+      Bytes &t = entries_[0];
+      if (u16(t.data() + r + 2) != entry) continue;
+      set16(t, r + 4, unsigned(now));
+      for (std::size_t at : {r + 6, r + 8}) {
+        const unsigned f = u16(t.data() + at);
+        if (f != 0xFFFF) set16(t, at, unsigned(std::clamp(int(f) - f0, 0, now)));
+      }
+    }
+  (void) last;
+  return true;
+}
+
+bool Editor::trim(unsigned entry, int f0, int f1, std::string *why) {
+  const Motion *m = motion(entry);
+  if (!m) {
+    if (why) *why = "no such animation";
+    return false;
+  }
+  f0 = std::clamp(f0, 0, m->maxFrame());
+  f1 = std::clamp(f1, 0, m->maxFrame());
+  if (f1 < f0) std::swap(f0, f1);
+  if (f1 - f0 < 2) {
+    if (why) *why = "keep at least 2 frames";
+    return false;
+  }
+  if (f0 == 0 && f1 == m->maxFrame()) {
+    if (why) *why = "nothing to cut (the whole animation is marked)";
+    return false;
+  }
+  const int code = codeOf(entry);
+  if ((code >= 0x90 && code <= 0x92) || (code >= 0xB0 && code <= 0xB6)) {
+    if (why) *why = "the game matches the reloads by their length: cutting one would stop it playing";
+    return false;
+  }
+  const auto which = withLayers(entry);
+  remember(which);
+  for (unsigned e : which) trimOne(e, f0, f1);
+  edited_ = true;
   return true;
 }
 

@@ -43,6 +43,8 @@ final class StudioBridge {
   static native String editAdjust(int entry, int part, boolean pos, float x, float y, float z, int f0, int f1,
       int fade);
   static native String editSpeed(int entry, float speed);
+  // cut: keeps frames f0..f1 of the animation (f0 becomes frame 0)
+  static native String editTrim(int entry, int f0, int f1);
   // IK: end 0 right hand, 1 left hand, 2 right foot, 3 left foot moved by x, y, z mm; "" done, "!..." out of reach
   static native String editReach(int entry, int end, float x, float y, float z, int f0, int f1, int fade);
   static native int editUndo();

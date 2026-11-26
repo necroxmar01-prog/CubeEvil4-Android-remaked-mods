@@ -74,6 +74,9 @@ class Editor {
   bool adjust(unsigned entry, int part, bool pos, const float d[3], int f0, int f1, int fade, std::string *why);
   // plays the clip `speed` times as fast (its frames, its MOV1 rows' length and foot frames)
   bool retime(unsigned entry, float speed, std::string *why);
+  // keeps frames f0..f1 of the clip (frame f0 becomes 0): every curve cut exactly (the Hermite pieces split with their
+  // tangents scaled), its MOV1 rows' length and foot frames with it
+  bool trim(unsigned entry, int f0, int f1, std::string *why);
   // the model-space matrix of every part at `frame` (the game's cCoord: T(pos) R(z) R(y) R(x), the parent's times the
   // own; the root's own placement left out)
   bool pose(unsigned entry, float frame, const Skeleton &s, std::vector<Matrix> &out) const;
@@ -96,6 +99,10 @@ class Editor {
   const Motion *motion(unsigned entry) const;
   void remember(std::vector<unsigned> which);
   bool retimeOne(unsigned entry, float speed);
+  bool trimOne(unsigned entry, int f0, int f1);
+  // the clip's code and the shotgun carry layers that share its frames (gCarry: 0x98 + k for the moves)
+  int codeOf(unsigned entry) const;
+  std::vector<unsigned> withLayers(unsigned entry) const;
 
   Bytes head_;  // bytes 4..15 of the body (written back as they were)
   std::vector<Bytes> entries_;

@@ -20275,3 +20275,8 @@ Oberfläche auf dem Gerät, die bearbeitete Datei im Spiel. IK (Hand/Fuß-Ziele)
   (`common_p.fnt`: CI4-Blatt 1024×192, Zellen 32×32, Glyphe 39+k = 'A'+k, 65+k = 'a'+k, Breiten aus der Tabelle) statt
   der eigenen 5×7-Schrift (bleibt als Rückfall). Am Host mit den Schriftdateien von DevJunior nachgestellt; nicht auf
   dem Gerät geprüft. Keine Schriftdateien im Repository: der Kern liest die geladene Schrift aus dem Speicher.
+- **Schneiden** (DevJunior: „que podamos cortar animaciones“): „Cut: keep From–To“ behält die Bilder f0..f1 (f0 wird 0).
+  Jede Kurve wird exakt geteilt (ein Hermite-Stück zwischen den Parametern a..b behält seine Form, wenn seine Tangenten
+  mal b−a genommen werden; die Tangenten des Spiels gelten pro Stück); Länge und Fußbilder der MOV1-Zeilen und die
+  Tragen-Ebenen der Schrotflinte (0x98+k) gehen mit, Nachladen wird abgelehnt. Geprüft (Host): Gehen 4..28 → 24 Bilder,
+  alle Kurven gleich dem Original +4 (Abweichung 2,5e-5, auch zwischen den Bildern). Reiterknöpfe des Studios einzeilig.

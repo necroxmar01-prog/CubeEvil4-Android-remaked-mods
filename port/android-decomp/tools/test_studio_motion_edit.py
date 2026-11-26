@@ -44,3 +44,14 @@ for ja,jb in zip(ma.joints,mb.joints):
 print('max err',err,'bad',bad)
 s=body(sys.argv[3]); ms=fcv.parse(s[2]); 
 print('speed frames',ms.max_frame, 'carry',fcv.parse(s[34]).max_frame, struct.unpack_from('>BBHHHHH',s[0],8+12))
+
+if len(sys.argv) > 4:
+    t=body(sys.argv[4]); mt=fcv.parse(t[2]); err=0
+    for ja,jb in zip(ma.joints,mt.joints):
+        fa=fcv.FCC_FMT[ja.fcc_type]; fb=fcv.FCC_FMT[jb.fcc_type]
+        for ax in range(3):
+            for f10 in range(0,241):
+                f=f10/10
+                err=max(err,abs(val(ja.axes[ax],fa,f+4,ma.max_frame)-val(jb.axes[ax],fb,f,mt.max_frame)))
+    print('trim frames',mt.max_frame,'max err',err,'row',struct.unpack_from('>BBHHHHH',t[0],8+12),'carry',fcv.parse(t[34]).max_frame)
+    if err>1e-3: print('TRIM FAILED')

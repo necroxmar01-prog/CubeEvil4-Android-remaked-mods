@@ -413,6 +413,13 @@ JNIEXPORT jstring JNICALL STUDIO(editReach)(JNIEnv *env, jclass, jint entry, jin
   return env->NewStringUTF("");
 }
 
+// cut: keeps frames f0..f1 of the animation ("" or why not)
+JNIEXPORT jstring JNICALL STUDIO(editTrim)(JNIEnv *env, jclass, jint entry, jint f0, jint f1) {
+  std::lock_guard<std::mutex> lock(gLock);
+  std::string why;
+  return env->NewStringUTF(gEdit.trim(unsigned(entry), f0, f1, &why) ? "" : why.c_str());
+}
+
 JNIEXPORT jstring JNICALL STUDIO(editSpeed)(JNIEnv *env, jclass, jint entry, jfloat speed) {
   std::lock_guard<std::mutex> lock(gLock);
   std::string why;

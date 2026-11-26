@@ -92,6 +92,10 @@ public final class StudioActivity extends Activity {
     for (int i = 0; i < names.length; i++) {
       final int index = i;
       Button b = pill(names[i], false);
+      // one line each (DevJunior's screenshot 26.11.2026: "Model s", "Animat ions" broken in two)
+      b.setSingleLine(true);
+      b.setPadding(dp(4), 0, dp(4), 0);
+      b.setTextSize(12);
       b.setOnClickListener(v -> showTab(index));
       tabs.add(b);
       LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
@@ -1282,6 +1286,18 @@ public final class StudioActivity extends Activity {
     fr.addView(to, chip());
     fr.addView(all, chip());
     content.addView(fr);
+    Button cut = pill("Cut: keep " + editFrom + "–" + editTo, false);
+    cut.setOnClickListener(v -> {
+      String why = StudioBridge.editTrim(clipEntry(), editFrom, editTo);
+      if (!why.isEmpty()) { toast(why); return; }
+      editClips = StudioBridge.editClips();
+      editFrom = 0;
+      editTo = -1;
+      frame = 0;
+      preview();
+      showTab(3);
+    });
+    content.addView(cut, item());
     content.addView(slider("Soft edge", 0, 15, editFade, " frames", 3));
 
     LinearLayout act = row();
