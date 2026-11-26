@@ -20480,3 +20480,10 @@ Spiel.
 - **Mod löschen: danach „Später / Neu starten“** (DevJunior, 26.11.2026: „un cuadro que dirá reiniciar o más tarde como
   cuando los instalas“): die Rückfrage hat wieder „Abbrechen / Löschen“; nach dem Löschen fragt ein zweites Fenster wie
   beim Hinzufügen „Später / Neu starten“ (`restartForMods`). Ersetzt die drei Knöpfe von 15bebf7. Nur CI-Build.
+- **Pistole: Zielen und Schießen wieder die des Spiels; Ursache fehlender Gegenstandsnamen** (DevJunior, 26.11.2026,
+  Videos 118288/118299, Bilder des Händlers): `re9_finisher_pack.py` `PISTOL_POSES = False` (move.dat ohne
+  0xB8..0xC6; `re4_move_hg_pose` gibt dann die Bewegung des Spiels): beim Zielen lief der Körper aus dem Takt und am
+  Hals öffnete sich eine Lücke. RE9 Finishers v41 (move.dat 594 976 Bytes). Fehlende Namen beim Händler und im
+  Aufhebe-Hinweis („(10“): im Protokoll ersetzt der Mod „Remake HUD“ `etc/core.das` (3 118 368 Bytes) – ein Kern der
+  Debug-Disc – auf den EU-Discs; dessen Texttabellen haben für Spanisch nur Platzhalter, die Namen (Typ 3,
+  `CORE_MESSAGE_3`) kommen leer. Nicht im Spiel getestet.

@@ -1052,6 +1052,7 @@ PISTOL_CLASSIC = False
 # lo de tener la postura levantada, no queda bien") no arm layer for the handgun at all: move.dat without 0xC8..0xCB,
 # runtime/locomotion.cpp's pistolStance() off, the handgun carried as the game carries it, the legs the remake's
 PISTOL_CARRY = False
+PISTOL_POSES = False  # move.dat 0xB8..0xC6: the remake's handgun aim and fire (see moves())
 
 
 def frozen(base, arm, frame):
@@ -1466,8 +1467,10 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
                                      0))
             steps.append([])
     if weapons and pistols:
-        for code, data in pistol_reloads(weapons, mots[0], model, tol, pistols) + pistol_poses(weapons, mots[0], model,
-                                                                                                tol, pistols):
+        # (DevJunior, 26.11.2026, device video 118288: aiming and firing the handgun the body moved out of step and a
+        # gap opened at the neck, the head bent over the gun) the remake's aim and fire poses off: the game's own
+        poses = pistol_poses(weapons, mots[0], model, tol, pistols) if PISTOL_POSES else []
+        for code, data in pistol_reloads(weapons, mots[0], model, tol, pistols) + poses:
             entries.append(data)
             table.append(struct.pack(">BBHHHHH", code, 0, len(entries) - 1, fcv.parse(data).max_frame, 0xFFFF, 0xFFFF,
                                      0))
