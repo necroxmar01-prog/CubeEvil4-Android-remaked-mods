@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "puzzle.h"
+#include "item.h"
 #include "mes.h"
 #include "trans_ot.h"
 
@@ -65,12 +66,53 @@ int putFirst(pzlBoard* b, pzlPiece* p)
 
 }  // namespace
 
+extern "C" int re4_stack_items(void);  // runtime/cheats.cpp (patch 0254)
+
+// (DevJunior, 26.11.2026: "if the user has the stack option on, the stacks combine by themselves with that move") with
+// the cheat "Stack items" on, the ammo of one kind (item type 2, as the cheat stacks only ammo) is put together first,
+// in the case and on the side space: the game's own combine (cItemMgr::combine, as dropping one box on another does),
+// up to the slot's most (itemMaxNum: the cheat's value); emptied boxes leave the case (rehash). The item being picked up
+// (the extra piece) stays apart. Returns how many boxes were emptied.
+static int mergeAmmo(pzlPlayer* pl)
+{
+    if (re4_stack_items() <= 0) {
+        return 0;
+    }
+    int emptied = 0;
+    for (int i = 0; i < pl->pieceMax(); i++) {
+        pzlPiece* p = pl->pieceAt(i);
+        if (p->isEmpty() || !p->isAlive() || p == pl->pieceExtra() || !p->item || p->item->isEmpty() ||
+            itemType(p->item->id) != 2) {
+            continue;
+        }
+        for (int j = i + 1; j < pl->pieceMax(); j++) {
+            pzlPiece* q = pl->pieceAt(j);
+            if (q->isEmpty() || !q->isAlive() || q == pl->pieceExtra() || !q->item || q->item->isEmpty() ||
+                q->item->id != p->item->id) {
+                continue;
+            }
+            if (!ItemMgr.combine(p->item, q->item, 0)) {
+                break;  // p is full
+            }
+            if (q->item->isEmpty()) {
+                emptied++;
+            }
+        }
+    }
+    if (emptied) {
+        pl->rehash();
+        re4_log("case: stacks put together, %d boxes emptied", emptied);
+    }
+    return emptied;
+}
+
 // 1 = something moved
 int re4_case_arrange(pzlPlayer* pl)
 {
     if (pl == 0 || pl->pieceInHand()) {
         return 0;
     }
+    const int merged = mergeAmmo(pl);
     pzlBoard* b = pl->boardPtr();
     pzlBoard* space = pl->spacePtr();
     Was was[64];
@@ -124,7 +166,7 @@ int re4_case_arrange(pzlPlayer* pl)
             b->putPiece(was[i].p);
         }
         re4_log("case: %d items, %d did not fit back in order: left as they were", n, n - put);
-        return 0;
+        return merged ? 1 : 0;
     }
     // the side space's items into the free room, where they fit
     int in = 0;

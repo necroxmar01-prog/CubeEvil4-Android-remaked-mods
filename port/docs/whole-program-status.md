@@ -20280,3 +20280,7 @@ Oberfläche auf dem Gerät, die bearbeitete Datei im Spiel. IK (Hand/Fuß-Ziele)
   mal b−a genommen werden; die Tangenten des Spiels gelten pro Stück); Länge und Fußbilder der MOV1-Zeilen und die
   Tragen-Ebenen der Schrotflinte (0x98+k) gehen mit, Nachladen wird abgelehnt. Geprüft (Host): Gehen 4..28 → 24 Bilder,
   alle Kurven gleich dem Original +4 (Abweichung 2,5e-5, auch zwischen den Bildern). Reiterknöpfe des Studios einzeilig.
+- **Ordnen fasst Munition zusammen** (DevJunior: „si el usuario tiene la opción de combinar stack, que se combinen en
+  automático“): mit dem Cheat „Stack items“ legt `re4_case_arrange` vor dem Ordnen gleiche Munition (Typ 2) im Koffer
+  und auf der Ablage zusammen – mit dem Kombinieren des Spiels (`cItemMgr::combine`, bis `itemMaxNum`), leere Schachteln
+  verschwinden (`rehash`); das gerade aufgenommene Teil bleibt außen vor. Kompiliert (i686); nicht auf dem Gerät geprüft.
