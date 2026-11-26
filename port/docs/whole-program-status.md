@@ -20455,3 +20455,8 @@ Spiel.
     wird, wird zum direkten Nachladen (`PlReloadDirect` 1): Leon geht während des Rests (`reloadMove`), es endet
     `kQuickEnd` Bilder nach dem Füllen (Patches 0909/0933) wie ein Nachladen ohne Zielen. Nur CI-Build; Gerät nicht
     getestet.
+- **Ganado-Hände in Linie mit dem Unterarm** (DevJunior, 26.11.2026, nach v37: „aún veo manos dobladas“): die lokale
+  Handgelenk-Drehung des Stands (v37) ließ die Handflächen nach oben oder außen zeigen, wo der Unterarm des Remakes
+  anders gerollt ist. `Fit.natural_hands`: die Hand wie im Stand zur Brust (Teil 2) gehalten, dann um den kleinsten
+  Winkel in Linie mit dem Unterarm gedreht (kein Knick im Handgelenk); für Reaktionen und Finisher. RE9 Finishers
+  v38 (finish.dat 2 385 728, react.dat 489 440 Bytes). Am Host gerendert, im Spiel nicht getestet.

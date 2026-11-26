@@ -318,6 +318,32 @@ class Fit:
         self.rows = rows
         return moved
 
+    def natural_hands(self, stand):
+        """(Mods, 26.11.2026, DevJunior, after v37: "I still see hands bent in directions they should not") the hands
+        (10, 16) as in the game's stand (`stand`: {part: 3x3 local rotation}), held against the chest (part 2) as
+        there, then turned the least way that puts them in line with the forearm: no bend at the wrist and the palm as
+        the stand has it. Copying the stand's local wrist (v37) left the palms up or out wherever the remake's forearm
+        is rolled otherwise than the game's."""
+        par = [p.parent for p in self.model.parts]
+        srot, spos = fk(self.model, (stand, np.zeros(3)))
+        rows = []
+        for row in self.rows:
+            local = dict(row[0])
+            rot, pos = fk(self.model, (local,) + tuple(row[1:]))
+            for hand, fore in ((10, 8), (16, 14)):
+                if hand not in local and hand not in stand:
+                    continue
+                ds = spos[hand] - spos[fore]
+                ds /= np.linalg.norm(ds)
+                v = srot[hand].T @ ds  # the forearm's way in the hand's own frame
+                h0 = rot[2] @ srot[2].T @ srot[hand]
+                d = pos[hand] - pos[fore]
+                d /= np.linalg.norm(d)
+                h = rotation_between(h0 @ v, d) @ h0
+                local[hand] = rot[par[hand]].T @ h
+            rows.append((local,) + tuple(row[1:]))
+        self.rows = rows
+
     def motion(self, world_scale):
         fixed = None
         if self.game_like:
@@ -1484,17 +1510,24 @@ def game_wrists(model, data):
     return out
 
 
+def game_stand(model, data, frame=0):
+    """Every part's local rotation on `frame` of a motion of the game's own (Fit.natural_hands)."""
+    from tools.motion import evalhost
+    pose = evalhost.Player(model, fcv.parse(data), ik=False).frame(frame)
+    return {p: np.array(pose.l_mat[p], dtype=np.float64).reshape(3, 4)[:, :3] for p in range(model.n_parts)}
+
+
 def reacts(root, model, tol, out_path, ganado_arc=None):
     """The Ganados' hit reactions (see --react)."""
     _v, mots = R.read_motlist(root / DAMAGE)
-    wrists = game_wrists(model, ganado_arc.entry(REACT_WRISTS)) if ganado_arc is not None else None
+    wrists = game_stand(model, ganado_arc.entry(REACT_WRISTS)) if ganado_arc is not None else None
     entries, table = [b""], []
     for cls, names in REACTS:
         for name in names:
             m = next(x for x in mots if x.name.endswith(name))
             fit = Fit(m, model, "ganado", REACT_STEP, tol, m.frames, game_like=True)
             if wrists:
-                fit.game_wrists(wrists)
+                fit.natural_hands(wrists)
             far = max(math.hypot(t[0], t[2]) for t in fit.track(fit.scale))
             k = min(1.0, REACT_TRAVEL / far) if far > 1.0 else 1.0
             data = fcv.serialise(fit.motion(fit.scale * k))
@@ -1591,7 +1624,7 @@ def main(argv=None):
         pist = {Path(x).stem.lower(): x for x in a.pistols.split(",")} if a.pistols else None
         moves(root, leon_model, a.tolerance, a.move, a.weapons, a.wep07, a.general2, a.general, pist)
     want = set(a.only.split(",")) if a.only else None
-    ganado_wrists = game_wrists(ganado_model, U.Archive(Path(a.ganado.partition(":")[0]).read_bytes(), ">").entry(
+    ganado_wrists = game_stand(ganado_model, U.Archive(Path(a.ganado.partition(":")[0]).read_bytes(), ">").entry(
         REACT_WRISTS))
     entries = [("FIN", b"")]
     made = {}
@@ -1615,7 +1648,7 @@ def main(argv=None):
         lf = Fit(lm, leon_model, "leon", 2.0, a.tolerance, lm.frames, a.no_fingers)
         ef = Fit(em, ganado_model, "ganado", 2.0, a.tolerance, em.frames)
         if ganado_wrists:
-            ef.game_wrists(ganado_wrists)  # hands in line with the forearms (as the reactions'; DevJunior, 26.11.2026)
+            ef.natural_hands(ganado_wrists)  # hands in line with the forearms (as the reactions'; DevJunior, 26.11.2026)
         fr0 = f["frames"]
         if fr0.get("down"):
             ef.feet_down(min(int(round(fr0["down"] / 2.0)), len(ef.rows) - 1))
