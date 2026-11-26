@@ -118,7 +118,7 @@ if(ANDROID)
     # JNI_OnLoad would load the game core)
     add_library(re4studio SHARED studio_gl.cpp studio_jni.cpp studio_convert.cpp
         third_party/meshoptimizer/simplifier.cpp third_party/meshoptimizer/allocator.cpp)
-    target_link_libraries(re4studio PRIVATE re4_platform GLESv3 log)
+    target_link_libraries(re4studio PRIVATE re4_platform GLESv3 log z)  # z: the .fbx's packed arrays, .png
     target_link_options(re4studio PRIVATE "-Wl,-z,max-page-size=16384")
     if(RE4_CORE_MODE)
         # the core in a process of its own when MEM1 is taken here (port/docs/32bit-kernprozess.md)
@@ -336,7 +336,7 @@ else()
             add_library(re4studio_link_check SHARED studio_gl.cpp studio_jni.cpp studio_convert.cpp third_party/meshoptimizer/simplifier.cpp third_party/meshoptimizer/allocator.cpp ../../../../tools/host_android/android_log.c)
             target_include_directories(re4studio_link_check PRIVATE ${RE4_GLES_INCLUDE_DIR}
                 ../../../../tools/host_android ${JNI_INCLUDE_DIRS})
-            target_link_libraries(re4studio_link_check PRIVATE re4_platform ${RE4_GLES_LIBRARY})
+            target_link_libraries(re4studio_link_check PRIVATE re4_platform ${RE4_GLES_LIBRARY} z)
             target_compile_definitions(re4studio_link_check PRIVATE __ANDROID_API__=21)
             target_link_options(re4studio_link_check PRIVATE -Wl,--no-undefined)
         endif()

@@ -224,6 +224,38 @@ JNIEXPORT jstring JNICALL STUDIO(convertDff)(JNIEnv *env, jclass, jstring gc, js
   return env->NewStringUTF(("ok\n" + log).c_str());
 }
 
+// A rigged model (`fbx`, a binary .fbx; its pictures the .png / .tga files in its folder) on the character's archive of
+// the disc (`gc`, its name `gcName`) as a GTA skin, written to `out`: "ok\n" + the report, or "error\n" + why
+JNIEXPORT jstring JNICALL STUDIO(convertFbx)(JNIEnv *env, jclass, jstring gc, jstring gcName, jstring fbx, jint tex,
+                                            jboolean keepHead, jstring out) {
+  convert::Bytes g, f, result;
+  if (!readAll(text(env, gc), g)) return env->NewStringUTF("error\nthe disc's archive cannot be read");
+  const std::string path = text(env, fbx);
+  if (!readAll(path, f)) return env->NewStringUTF("error\nthe .fbx cannot be read");
+  std::map<std::string, convert::Bytes> files;
+  const std::string dir = path.substr(0, path.find_last_of('/'));
+  if (DIR *d = opendir(dir.c_str())) {
+    while (dirent *e = readdir(d)) {
+      std::string low = e->d_name;
+      for (auto &c : low) c = char(std::tolower(static_cast<unsigned char>(c)));
+      const auto dot = low.find_last_of('.');
+      const std::string ext = dot == std::string::npos ? "" : low.substr(dot);
+      if (ext != ".png" && ext != ".tga" && ext != ".jpg" && ext != ".jpeg") continue;
+      convert::Bytes b;
+      if (readAll(dir + "/" + e->d_name, b)) files[low] = std::move(b);
+    }
+    closedir(d);
+  }
+  convert::Options o;
+  if (tex >= 8) o.tex = tex;
+  o.keepHead = keepHead;
+  std::string log, why;
+  if (!convert::ConvertFbx(g, text(env, gcName), f, files, o, result, log, &why))
+    return env->NewStringUTF(("error\n" + why + "\n" + log).c_str());
+  if (!writeAll(text(env, out), result)) return env->NewStringUTF("error\nthe result cannot be written");
+  return env->NewStringUTF(("ok\n" + log).c_str());
+}
+
 // the RE4 Remake mod's files below `dir` (natives/STM/... inside): their path after "natives/stm/" in lower case;
 // only meshes, materials and textures
 static void readReFolder(const std::string &dir, const std::string &rel, std::map<std::string, convert::Bytes> &files) {

@@ -39,6 +39,11 @@ Both archives are written by uhd_skin_convert.py (or the disc's) for the same sk
 --back ENTRY:Z:Y     drops ENTRY's triangles wholly behind z Z and below y Y (a shirt's back under a closed coat).
 --compact ENTRY      drops what nothing in ENTRY draws any more (after skin_graft.py --drop).
 --prune TPL          keeps only the textures of palette TPL its models draw (after a graft or a hide).
+--reduce ENTRY:SHARE  lightens model ENTRY to about SHARE of its triangles (DevJunior, 25.11.2026: "optimise them for
+                     a Snapdragon 8 Gen 1 without losing much quality"): per part, edges collapsed onto existing corners
+                     (meshoptimizer, built from the app's copy into a temporary library), the texture seams, the part's
+                     border and each corner's normal, colour, texture coordinate and weights kept; no model with
+                     shapes: the positions they move stay (lids, lips) and the table is renumbered. --reduce-error: the largest change allowed, a share of the model's size (0.01).
 --carry ENTRY:LIST   moves the models LIST (straps, a harness) as the nearest positions of ENTRY moved in --fit.
 """
 import argparse
@@ -166,11 +171,29 @@ def rebuild(b, kept):
             o, n = sec[name]
             put(name, b[o:o + n], 4)
     if "shape" in sec:
-        raise ValueError("a model with shapes (the face) is not thinned out here")
+        # the shape table (game/shape.cpp; skin_shapes.shape_table) with its positions renumbered, the dropped ones out
+        o, _ = sec["shape"]
+        count = be32(b, o)
+        lists = []
+        for i in range(count):
+            off, n = struct.unpack_from(">Ii", b, o + 4 + 8 * i)
+            lst = []
+            for k in range(max(0, n)):
+                v, dx, dy, dz = struct.unpack_from(">Hhhh", b, o + 4 + off + 8 * k)
+                if v in remap[0]:
+                    lst.append((remap[0][v], dx, dy, dz))
+            lists.append(lst)
+        table = bytearray(struct.pack(">I", count))
+        data = bytearray()
+        for lst in lists:
+            table += struct.pack(">Ii", 8 * count + len(data), len(lst))
+            for e in lst:
+                data += struct.pack(">Hhhh", *e)
+        put("shape", bytes(table + data), 32)
     out.extend(bytes(U.align(len(out)) - len(out)))
     out[0:0x60] = b[0:0x60]
-    for name, off in (("head", 0), ("clr", 0xC), ("tex", 0x10), ("wgt", 0x14), ("parts", 0x1C), ("vtx", 0x30),
-                      ("nrm", 0x34)):
+    for name, off in (("head", 0), ("clr", 0xC), ("tex", 0x10), ("wgt", 0x14), ("parts", 0x1C), ("shape", 0x2C),
+                      ("vtx", 0x30), ("nrm", 0x34)):
         struct.pack_into(">I", out, off, where.get(name, 0))
     if "blend" in where:
         struct.pack_into(">II", out, 0x40, where["blend"], where["flip"])
@@ -230,6 +253,79 @@ def thin_cards(b, keep, centre=(0.0, 1720.0, 0.0)):
         else:
             kept.append([t for t in tris if root[t[0][0]] in kept_roots])
     return rebuild(b, kept), len(pieces), len(kept_roots)
+
+
+# ---- --reduce -------------------------------------------------------------------------------------------------------
+
+_MESHOPT = None
+
+
+def meshopt():
+    """meshoptimizer's simplifier as a ctypes library, built once from the app's copy (needs g++)."""
+    global _MESHOPT
+    if _MESHOPT is None:
+        import ctypes
+        import subprocess
+        import tempfile
+        src = Path(__file__).resolve().parents[1] / "android-decomp/app/src/main/cpp/third_party/meshoptimizer"
+        lib = Path(tempfile.gettempdir()) / "cubeevil4_meshopt.so"
+        if not lib.exists():
+            subprocess.run(["g++", "-O2", "-shared", "-fPIC", "-o", str(lib), str(src / "simplifier.cpp"),
+                            str(src / "allocator.cpp")], check=True)
+        _MESHOPT = ctypes.CDLL(str(lib))
+        f = _MESHOPT.meshopt_simplifyWithAttributes
+        f.restype = ctypes.c_size_t
+        f.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t,
+                      ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t,
+                      ctypes.c_void_p, ctypes.c_size_t, ctypes.c_float, ctypes.c_uint, ctypes.c_void_p]
+    return _MESHOPT
+
+
+def reduce_model(b, share, error=0.01):
+    """The model with about `share` of its triangles: each part simplified on its own (its corners: the index records,
+    so a corner with another normal or texture coordinate is another vertex and the seams stay)."""
+    import ctypes
+    lib = meshopt()
+    P = G.positions(b).astype(np.float32)
+    # the positions a face shape moves (blink, mouth) stay: their lids and lips keep their rows
+    moving = set()
+    sec = sections(b)
+    if "shape" in sec:
+        o, _ = sec["shape"]
+        for i in range(be32(b, o)):
+            off, n = struct.unpack_from(">Ii", b, o + 4 + 8 * i)
+            for k in range(max(0, n)):
+                moving.add(be16(b, o + 4 + off + 8 * k))
+    kept = []
+    before = after = 0
+    for _, tris in part_lists(b):
+        before += len(tris)
+        if len(tris) < 64:
+            kept.append(tris)
+            after += len(tris)
+            continue
+        corner = {}
+        verts = []
+        idx = []
+        for t in tris:
+            for r in t:
+                k = corner.get(r)
+                if k is None:
+                    k = corner[r] = len(verts)
+                    verts.append(r)
+                idx.append(k)
+        V = np.ascontiguousarray(P[[r[0] for r in verts]], dtype=np.float32)
+        I = np.ascontiguousarray(idx, dtype=np.uint32)
+        out = np.zeros_like(I)
+        target = max(3, int(len(I) * share) // 3 * 3)
+        L = np.ascontiguousarray([1 if r[0] in moving else 0 for r in verts], dtype=np.uint8)
+        n = lib.meshopt_simplifyWithAttributes(out.ctypes.data, I.ctypes.data, len(I), V.ctypes.data, len(V), 12,
+                                               None, 0, None, 0, L.ctypes.data, target, ctypes.c_float(error), 0,
+                                               None)
+        new = [(verts[out[k]], verts[out[k + 1]], verts[out[k + 2]]) for k in range(0, n, 3)]
+        kept.append(new)
+        after += len(new)
+    return rebuild(b, kept), before, after
 
 
 # ---- --fit ----------------------------------------------------------------------------------------------------------
@@ -734,6 +830,10 @@ def main(argv=None):
     ap.add_argument("--tuck", action="append", default=[], metavar="HEAD:BODY",
                     help="keep the base of head HEAD's neck under the collar of model BODY")
     ap.add_argument("--carry", action="append", default=[], metavar="ENTRY:LIST")
+    ap.add_argument("--reduce", action="append", default=[], metavar="ENTRY:SHARE",
+                    help="lighten model ENTRY to about SHARE of its triangles")
+    ap.add_argument("--reduce-error", type=float, default=0.01,
+                    help="--reduce's largest change, a share of the model's size (default 0.01)")
     ap.add_argument("--hide", action="append", default=[], metavar="ENTRY[@MATS]:COVER[:front=X,minx=X]",
                     help="drop ENTRY's triangles (with @MATS: of these parts) that model COVER hides")
     ap.add_argument("--inside", action="append", default=[], metavar="ENTRY:COVER",
@@ -781,6 +881,10 @@ def main(argv=None):
         entries[int(e)], pieces, kept = thin_cards(entries[int(e)], float(keep))
         print("entry %s: %d of %d pieces kept, %d -> %d positions, %d bytes" %
               (e, kept, pieces, before, len(G.positions(entries[int(e)])), len(entries[int(e)])))
+    for spec in a.reduce:
+        e, share = spec.split(":")
+        entries[int(e)], n0, n1 = reduce_model(entries[int(e)], float(share), a.reduce_error)
+        print("entry %s: %d -> %d triangles, %d bytes" % (e, n0, n1, len(entries[int(e)])))
     moved = {}
     for spec in a.fit:
         e, ref = spec.split("=")

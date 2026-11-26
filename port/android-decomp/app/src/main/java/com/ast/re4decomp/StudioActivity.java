@@ -527,7 +527,7 @@ public final class StudioActivity extends Activity {
       return;
     }
     content.addView(note("UHD skins of the PC release (Nexus mods: em/plXX.udas with BIO4/ImagePackHD/*.pack), GTA San "
-        + "Andreas ped skins (.dff with its .txd), outfits for Leon, Ashley or Ada and handguns of the RE4 Remake (natives/STM/..., "
+        + "Andreas ped skins (.dff with its .txd), rigged models (binary .fbx with their .png / .tga pictures), outfits for Leon, Ashley or Ada and handguns of the RE4 Remake (natives/STM/..., "
         + ".mesh with its .mdf2 and .tex) become a mod pack for CubeEvil4. Pick the mod's .zip (or its files)."));
     Button pick = card("Pick a mod (.zip)", modName.isEmpty() ? "" : "Now: " + modName);
     pick.setOnClickListener(v -> {
@@ -552,7 +552,7 @@ public final class StudioActivity extends Activity {
       }
       content.addView(sizes);
       boolean gta = false;
-      for (String[] k : skins) gta |= k[0].endsWith(".dff") || k[0].endsWith(REMAKE);
+      for (String[] k : skins) gta |= k[0].endsWith(".dff") || k[0].endsWith(".fbx") || k[0].endsWith(REMAKE);
       if (gta) {
         LinearLayout who = row();
         who.addView(text("For ", 12, DIM, false));
@@ -707,6 +707,7 @@ public final class StudioActivity extends Activity {
       deleteTree(convertDir);
       java.io.File udas = new java.io.File(convertDir, "udas"), packs = new java.io.File(convertDir, "packs");
       new java.io.File(convertDir, "gta").mkdirs();
+      new java.io.File(convertDir, "fbx").mkdirs();
       java.io.File remake = new java.io.File(convertDir, "remake");
       remake.mkdirs();
       udas.mkdirs();
@@ -788,6 +789,11 @@ public final class StudioActivity extends Activity {
         java.util.Arrays.sort(gta);
         for (java.io.File f : gta) if (f.getName().endsWith(".dff")) udasFiles.add(new String[] {f.getName(), f.getAbsolutePath()});
       }
+      java.io.File[] fbx = new java.io.File(convertDir, "fbx").listFiles();
+      if (fbx != null) {
+        java.util.Arrays.sort(fbx);
+        for (java.io.File f : fbx) if (f.getName().endsWith(".fbx")) udasFiles.add(new String[] {f.getName(), f.getAbsolutePath()});
+      }
       // RE4 Remake mods: the folder with the character meshes, and each colour variant laid over it; weapons (meshes
       // under Character/wp/wpNN/wpNNNN) each on its own, a folder with only textures of a weapon as its variant
       java.io.File[] tops = remake.listFiles();
@@ -833,8 +839,8 @@ public final class StudioActivity extends Activity {
       String[] packNames = packs.list();
       log(skins.size() + " skins, " + (packNames == null ? 0 : packNames.length) + " texture packs");
       if (skins.isEmpty()) {
-        log("No em/plXX.udas, .dff or RE4 Remake .mesh in what was picked: this converts UHD skins of the PC release, GTA "
-            + "San Andreas ped skins and outfits of the RE4 Remake.");
+        log("No em/plXX.udas, .dff, .fbx or RE4 Remake .mesh in what was picked: this converts UHD skins of the PC release, "
+            + "GTA San Andreas ped skins, rigged .fbx models and outfits of the RE4 Remake.");
       }
     });
   }
@@ -845,7 +851,7 @@ public final class StudioActivity extends Activity {
     List<String[]> out = new ArrayList<>();
     for (String[] u : udasFiles) {
       List<String> targets = new ArrayList<>();
-      if (u[0].endsWith(".dff") || u[0].endsWith(REMAKE)) {
+      if (u[0].endsWith(".dff") || u[0].endsWith(".fbx") || u[0].endsWith(REMAKE)) {
         String who = !skinFor.isEmpty() ? skinFor
             : u[0].endsWith(REMAKE) ? whoFor(u[1].split("\n")[0]) : whoByName(u[0] + " " + u[1]);
         targets.addAll(java.util.Arrays.asList(
@@ -918,6 +924,9 @@ public final class StudioActivity extends Activity {
     String low = name.toLowerCase(Locale.ROOT);
     if (low.matches("(pl|em)[0-9a-f]{2}\\.udas(\\.lfs)?")) return new java.io.File(udas, low);
     if (low.endsWith(".dff") || low.endsWith(".txd")) return new java.io.File(new java.io.File(udas.getParentFile(), "gta"), low);
+    // a rigged model as .fbx with its pictures beside it (DevJunior, 25.11.2026)
+    if (low.endsWith(".fbx") || low.endsWith(".png") || low.endsWith(".tga") || low.endsWith(".jpg") || low.endsWith(".jpeg"))
+      return new java.io.File(new java.io.File(udas.getParentFile(), "fbx"), low);
     if (low.endsWith(".pack") || low.endsWith(".pack.lfs")) return new java.io.File(packs, low);
     return null;
   }
@@ -1018,6 +1027,8 @@ public final class StudioActivity extends Activity {
         : k[0].endsWith(REMAKE)
         ? StudioBridge.convertReMod(disc.getAbsolutePath(), k[3], k[1].split("\n"), convertTex, keepHead, fitLeon,
             dest.getAbsolutePath())
+        : k[0].endsWith(".fbx")
+        ? StudioBridge.convertFbx(disc.getAbsolutePath(), k[3], k[1], convertTex, keepHead, dest.getAbsolutePath())
         : k[0].endsWith(".dff")
         ? StudioBridge.convertDff(disc.getAbsolutePath(), k[3], k[1], txdFor(k[1]), convertTex, keepHead, fitLeon,
             dest.getAbsolutePath())

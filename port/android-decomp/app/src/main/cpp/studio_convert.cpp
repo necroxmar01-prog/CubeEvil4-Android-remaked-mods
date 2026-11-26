@@ -1587,6 +1587,7 @@ Bytes readFile(const std::string &path, std::uint64_t at, std::uint64_t len) {
 
 #include "studio_dff.inc"
 #include "studio_remesh.inc"
+#include "studio_fbx.inc"
 
 // A model takes at most 65535 corners (the header's count is 16-bit): 21845 triangles. A skin with more (the RE4
 // Remake's Leons have 40 000 to 80 000; DevJunior, 20.11.2026: "the Remake's models do not always work") is reduced
@@ -2693,6 +2694,25 @@ bool ConvertDff(const Bytes &gcData, const std::string &gcName, const Bytes &dff
     std::map<std::string, Rgba> images;
     if (!txdData.empty()) images = readTxd(txdData, notes);
     skinOnLeon(gcData, gcName, std::move(m), images, std::move(notes), o, result, log, "GTA skin");
+    return true;
+  } catch (const std::exception &e) {
+    if (why) *why = e.what();
+    return false;
+  }
+}
+
+bool ConvertFbx(const Bytes &gcData, const std::string &gcName, const Bytes &fbx,
+                const std::map<std::string, Bytes> &files, const Options &o, Bytes &result, std::string &log,
+                std::string *why) {
+  try {
+    std::vector<std::string> notes;
+    std::map<std::string, Rgba> images;
+    DffMesh m = readFbx(fbx, files, images, notes, log);
+    // the model's own weights, not the character's: a rigged model brings good ones, and its arms were bound bent
+    // (DevJunior's Ashley: her upper arms took the trunk's weights from the character's skin and stayed at her sides)
+    Options own = o;
+    own.transfer = 0;
+    skinOnLeon(gcData, gcName, std::move(m), images, std::move(notes), own, result, log, "FBX model");
     return true;
   } catch (const std::exception &e) {
     if (why) *why = e.what();

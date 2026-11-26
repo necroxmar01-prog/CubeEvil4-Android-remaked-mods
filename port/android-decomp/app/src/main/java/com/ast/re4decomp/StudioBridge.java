@@ -48,6 +48,9 @@ final class StudioBridge {
   /** A GTA San Andreas ped skin (.dff, its .txd or "") on Leon's disc archive: "ok\n" + report or "error\n" + why. */
   static native String convertDff(String gc, String gcName, String dff, String txd, int tex, boolean keepHead,
       boolean fitLeon, String out);
+  /** A rigged model as a binary .fbx (its pictures, .png / .tga, in the same folder) on the character's disc archive as
+   *  a GTA skin: "ok\n" + report or "error\n" + why. */
+  static native String convertFbx(String gc, String gcName, String fbx, int tex, boolean keepHead, String out);
   /**
    * An RE4 Remake (PC) character mod on Leon's disc archive: `dirs` its folders (natives/STM/... inside; the base,
    * then a colour variant laid over it): "ok\n" + report or "error\n" + why.
