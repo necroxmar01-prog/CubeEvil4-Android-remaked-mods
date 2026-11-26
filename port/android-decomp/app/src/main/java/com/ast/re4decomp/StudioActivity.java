@@ -237,6 +237,7 @@ public final class StudioActivity extends Activity {
       }
     });
     view.setOnTouchListener((v, e) -> {
+      if (editTouch(e)) return true;
       scale.onTouchEvent(e);
       int n = e.getPointerCount();
       float x = 0, y = 0;
@@ -282,6 +283,7 @@ public final class StudioActivity extends Activity {
   // ---- the tabs
   private void showTab(int index) {
     tab = index;
+    updateOverlay();
     for (int i = 0; i < tabs.size(); i++) style(tabs.get(i), i == index);
     content.removeAllViews();
     if (files == null) {
@@ -1203,7 +1205,10 @@ public final class StudioActivity extends Activity {
   private int editPart = 3;           // the bone (part number); -1 the body's position (root, mm); -10 - k IK target k
   private static final String[] IK_ENDS = {"IK: right hand", "IK: left hand", "IK: right foot", "IK: left foot"};
   private final float[] editDelta = new float[3];  // degrees, or mm for the body
-  private int editFrom = 0, editTo = -1, editFade = 4, editSpeedPct = 100;
+  private int editFrom = 0, editTo = -1, editFade = 8, editSpeedPct = 100;
+  private int editGizmo = 2;          // the gizmo: 1 move (hands, feet, the root: IK), 2 turn
+  private int dragAxis = -1;          // the gizmo axis being dragged
+  private float dragX0, dragY0, dragAmount;
 
   private static String boneName(int part) {
     if (part <= -10) return IK_ENDS[-10 - part];
@@ -1217,6 +1222,82 @@ public final class StudioActivity extends Activity {
   private String clipLabel(int i) {
     String[] c = editClips[i].split("\\|", 3);
     return c[2] + " · " + c[1] + " frames";
+  }
+
+  // the part the view's handles mark: the bone, the IK target's hand or foot, the root for the body's position
+  private int overlayPart() {
+    if (editPart <= -10) return new int[] {10, 16, 20, 24}[-10 - editPart];
+    return editPart < 0 ? 0 : editPart;
+  }
+
+  private void updateOverlay() {
+    if (tab == 3 && editClip >= 0 && modelLoaded) StudioBridge.editOverlay(clipEntry(), overlayPart(), editGizmo);
+    else StudioBridge.editOverlay(-1, -1, 0);
+  }
+
+  // a touch in the view while editing: a circle chooses its bone, a gizmo axis dragged changes the pose at this frame
+  // (the frames around adapt over "Adapt"); anything else turns the camera as before
+  private boolean editTouch(MotionEvent e) {
+    if (tab != 3 || editClip < 0 || !modelLoaded) return false;
+    final float x = e.getX(), y = e.getY();
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        int hit = StudioBridge.editPick(x, y);
+        if (hit >= 100) {
+          dragAxis = hit - 100;
+          dragX0 = x;
+          dragY0 = y;
+          dragAmount = 0;
+          playing = false;
+          play.setText("Play");
+          return true;
+        }
+        if (hit >= 0) {
+          editPart = hit;
+          editDelta[0] = editDelta[1] = editDelta[2] = 0;
+          if (editGizmo == 1 && hit != 0 && hit != 10 && hit != 16 && hit != 20 && hit != 24) editGizmo = 2;
+          showTab(3);
+          toast(boneName(hit));
+          return true;
+        }
+        return false;
+      }
+      case MotionEvent.ACTION_MOVE:
+        if (dragAxis < 0) return false;
+        dragAmount = StudioBridge.editDrag(dragAxis, dragX0, dragY0, x, y);
+        frameLabel.setText(editGizmo == 1 ? String.format(Locale.ROOT, "%s %+.0f mm", "XYZ".charAt(dragAxis), dragAmount)
+            : String.format(Locale.ROOT, "%s %+.0f°", "XYZ".charAt(dragAxis), Math.toDegrees(dragAmount)));
+        return true;
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL:
+        if (dragAxis < 0) return false;
+        int axis = dragAxis;
+        dragAxis = -1;
+        if (e.getActionMasked() == MotionEvent.ACTION_UP && Math.abs(dragAmount) > 1e-3f) applyGizmo(axis, dragAmount);
+        return true;
+      default:
+        return dragAxis >= 0;
+    }
+  }
+
+  private void applyGizmo(int axis, float amount) {
+    int part = overlayPart(), f = Math.round(frame);
+    float[] d = new float[3];
+    d[axis] = amount;
+    String why;
+    if (editGizmo == 1) {
+      int end = part == 10 ? 0 : part == 16 ? 1 : part == 20 ? 2 : part == 24 ? 3 : -1;
+      if (part == 0) why = StudioBridge.editAdjust(clipEntry(), 0, true, d[0], d[1], d[2], f, f, editFade);
+      else if (end >= 0) why = StudioBridge.editReach(clipEntry(), end, d[0], d[1], d[2], f, f, editFade);
+      else why = "Move works on the hands, the feet and the root: use Turn";
+    } else {
+      why = StudioBridge.editAdjust(clipEntry(), part, false, d[0], d[1], d[2], f, f, editFade);
+    }
+    if (why.startsWith("!")) toast(why.substring(1));
+    else if (!why.isEmpty()) { toast(why); return; }
+    preview();
+    frame = f;
+    showTab(3);
   }
 
   private void showEdit() {
@@ -1262,6 +1343,15 @@ public final class StudioActivity extends Activity {
     Button bone = card("Bone", boneName(editPart));
     bone.setOnClickListener(v -> chooseBone());
     content.addView(bone, item());
+    content.addView(note("Or tap a circle on the model. Drag the gizmo's arrows (Move: hands, feet, root) or rings "
+        + "(Turn) at the paused frame; the frames around adapt over \"Adapt\"."));
+    LinearLayout giz = row();
+    Button move = pill("Move", editGizmo == 1), turn = pill("Turn", editGizmo == 2);
+    move.setOnClickListener(v -> { editGizmo = 1; showTab(3); });
+    turn.setOnClickListener(v -> { editGizmo = 2; showTab(3); });
+    giz.addView(move, chip());
+    giz.addView(turn, chip());
+    content.addView(giz);
 
     boolean body = editPart < 0, ik = editPart <= -10;
     if (ik) content.addView(note("Move the hand or foot; the arm or leg bends to reach it, the hand or foot keeps its "
@@ -1298,7 +1388,7 @@ public final class StudioActivity extends Activity {
       showTab(3);
     });
     content.addView(cut, item());
-    content.addView(slider("Soft edge", 0, 15, editFade, " frames", 3));
+    content.addView(slider("Adapt", 0, 30, editFade, " frames around", 3));
 
     LinearLayout act = row();
     Button apply = pill("Apply", true);

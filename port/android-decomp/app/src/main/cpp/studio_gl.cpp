@@ -150,6 +150,18 @@ void pushLine(std::vector<float> &out, const std::array<float, 3> &a, const std:
 
 }  // namespace
 
+float GizmoSize(float distance) { return std::max(60.f, distance * 0.07f); }
+
+bool ToScreen(const std::array<float, 16> &m, int width, int height, const std::array<float, 3> &p, float out[2]) {
+  const float x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12];
+  const float y = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13];
+  const float w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15];
+  if (w <= 1e-4f) return false;
+  out[0] = (x / w * 0.5f + 0.5f) * float(width);
+  out[1] = (0.5f - y / w * 0.5f) * float(height);
+  return true;
+}
+
 Camera FrameBounds(const std::array<float, 3> &minimum, const std::array<float, 3> &maximum) {
   Camera c;
   c.target = {(minimum[0] + maximum[0]) / 2, (minimum[1] + maximum[1]) / 2, (minimum[2] + maximum[2]) / 2};
@@ -294,6 +306,52 @@ void GlView::draw(const Viewer &viewer, int width, int height, const Camera &cam
     const auto &p = viewer.parents();
     for (std::size_t i = 0; i < j.size() && i < p.size(); ++i)
       if (p[i] != 255 && p[i] < j.size()) pushLine(lines, j[p[i]], j[i], {1.f, 0.78f, 0.25f, 1});
+  }
+  // the editor's handles and gizmo (over the model as the bones)
+  if (!options.handles.empty()) {
+    std::array<float, 3> f{camera.target[0] - eye[0], camera.target[1] - eye[1], camera.target[2] - eye[2]};
+    const float fl = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+    for (auto &v : f) v /= fl;
+    std::array<float, 3> r{-f[2], 0, f[0]};
+    const float rl = std::max(1e-6f, std::sqrt(r[0] * r[0] + r[2] * r[2]));
+    r = {r[0] / rl, 0, r[2] / rl};
+    const std::array<float, 3> u{r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]};
+    auto ring = [&](const std::array<float, 3> &c, const std::array<float, 3> &a, const std::array<float, 3> &b,
+                    float radius, const std::array<float, 4> &col) {
+      const int n = 24;
+      for (int k = 0; k < n; ++k) {
+        const float t0 = 6.2831853f * float(k) / n, t1 = 6.2831853f * float(k + 1) / n;
+        std::array<float, 3> p0, p1;
+        for (int i = 0; i < 3; ++i) {
+          p0[i] = c[i] + radius * (std::cos(t0) * a[i] + std::sin(t0) * b[i]);
+          p1[i] = c[i] + radius * (std::cos(t1) * a[i] + std::sin(t1) * b[i]);
+        }
+        pushLine(lines, p0, p1, col);
+      }
+    };
+    const float small = camera.distance * 0.009f;
+    for (std::size_t i = 0; i < options.handles.size(); ++i) {
+      const bool on = i < options.handleParts.size() && options.handleParts[i] == options.selected;
+      ring(options.handles[i], r, u, on ? small * 1.8f : small,
+           on ? std::array<float, 4>{1, 1, 1, 1} : std::array<float, 4>{0.35f, 0.85f, 1.f, 1});
+      if (on && options.gizmo) {
+        const auto &c = options.handles[i];
+        const float g = GizmoSize(camera.distance);
+        const std::array<float, 4> colours[3] = {{0.95f, 0.3f, 0.3f, 1}, {0.4f, 0.9f, 0.4f, 1}, {0.35f, 0.55f, 1.f, 1}};
+        for (int a = 0; a < 3; ++a) {
+          const auto &ax = options.gizmoAxes[std::size_t(a)];
+          if (options.gizmo == 1) {
+            const std::array<float, 3> tip{c[0] + ax[0] * g, c[1] + ax[1] * g, c[2] + ax[2] * g};
+            pushLine(lines, c, tip, colours[a]);
+            ring(tip, r, u, small * 0.9f, colours[a]);
+          } else {
+            // the ring around axis a: two directions across it
+            const auto &b0 = options.gizmoAxes[std::size_t((a + 1) % 3)], &b1 = options.gizmoAxes[std::size_t((a + 2) % 3)];
+            ring(c, b0, b1, g, colours[a]);
+          }
+        }
+      }
+    }
   }
   if (!lines.empty()) {
     glUseProgram(lineProgram_);

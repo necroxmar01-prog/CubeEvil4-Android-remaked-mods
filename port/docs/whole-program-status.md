@@ -20284,3 +20284,13 @@ Oberfläche auf dem Gerät, die bearbeitete Datei im Spiel. IK (Hand/Fuß-Ziele)
   automático“): mit dem Cheat „Stack items“ legt `re4_case_arrange` vor dem Ordnen gleiche Munition (Typ 2) im Koffer
   und auf der Ablage zusammen – mit dem Kombinieren des Spiels (`cItemMgr::combine`, bis `itemMaxNum`), leere Schachteln
   verschwinden (`rehash`); das gerade aufgenommene Teil bleibt außen vor. Kompiliert (i686); nicht auf dem Gerät geprüft.
+- **Esqueleto mit Kreisen und Gizmo** (DevJunior: „un esqueleto con circulitos y una cruceta para controlar su posición
+  nueva y rotación“; „que las animaciones cuando se editen se adapten“): im Reiter „Edit“ zeigt die Ansicht einen Kreis
+  auf jedem Gelenk, das die Animation dreht (Twist-Gelenke über ihrem Elternteil weggelassen), der gewählte groß mit
+  Gizmo: „Move“ drei Pfeile (Modell-X/Y/Z; Hände/Füße per IK, die Wurzel als Körperposition), „Turn“ drei Ringe um die
+  Achsen, um die ein X-, Y-, Z-Winkel das Gelenk dreht (`Editor::turnAxes`: X die eigene, Y nach Eltern·Z, Z die des
+  Elternteils). Antippen eines Kreises wählt den Knochen, Ziehen eines Pfeils/Rings ändert die Pose am angehaltenen Bild,
+  die Bilder ringsum passen sich weich an („Adapt“, 0–30 Bilder, vorher „Soft edge“). Gezeichnet in `studio_gl.cpp`,
+  Treffer und Ziehweg in `studio_jni.cpp` (`editPick`, `editDrag`: mm entlang des Pfeils auf dem Bildschirm, Winkel um
+  das Gelenk). Geprüft: Host-Bild (`studio_gl_check` mit `STUDIO_GIZMO`) zeigt Kreise, Pfeile und Ringe; die
+  Bedienung per Finger nicht geprüft (Gerät).

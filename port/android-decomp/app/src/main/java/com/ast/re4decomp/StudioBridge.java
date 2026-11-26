@@ -49,6 +49,12 @@ final class StudioBridge {
   static native String editReach(int entry, int end, float x, float y, float z, int f0, int f1, int fade);
   static native int editUndo();
   static native String editSave(String path);
+  // the handles in the view (DevJunior, 26.11.2026: circles on the skeleton and a gizmo): the clip (-1 off), the chosen
+  // part (-1 none), the gizmo (1 move, 2 turn); a touch: 100 + axis on the gizmo, a handle's part, -1 nothing; a drag
+  // on an axis: mm (move) or radians (turn)
+  static native void editOverlay(int entry, int part, int mode);
+  static native int editPick(float x, float y);
+  static native float editDrag(int axis, float x0, float y0, float x1, float y1);
   static native String editPreview(String path, int entry);
   static native String setMotion(int clip);
   static native float motionLength();

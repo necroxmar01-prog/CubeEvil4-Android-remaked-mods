@@ -81,6 +81,15 @@ int main(int argc, char **argv) {
     Camera cam = FrameBounds(v.restMinimum(), v.restMaximum());
     if (const char *c = std::getenv("STUDIO_CAM"))
       std::sscanf(c, "%f,%f,%f,%f", &cam.yaw, &cam.pitch, &cam.distance, &cam.target[1]);
+    // STUDIO_GIZMO=part,mode: the animation editor's circles on the main joints and the gizmo (1 move, 2 turn)
+    if (const char *g = std::getenv("STUDIO_GIZMO")) {
+      int part = -1, mode = 0;
+      std::sscanf(g, "%d,%d", &part, &mode);
+      for (int p : {0, 1, 2, 3, 4, 7, 8, 10, 13, 14, 16, 17, 18, 19, 20, 22, 23, 24})
+        if (std::size_t(p) < v.joints().size()) options.handles.push_back(v.joints()[std::size_t(p)]), options.handleParts.push_back(p);
+      options.selected = part;
+      options.gizmo = mode;
+    }
     view.draw(v, W, H, cam, options);
     std::vector<unsigned char> px(W * H * 4);
     glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, px.data());

@@ -12,7 +12,22 @@ struct Camera {
 
 struct ViewOptions {
   bool grid = true, axes = true, skeleton = false, textured = true;
+  // the animation editor's handles (DevJunior, 26.11.2026: "a skeleton with little circles and a cross to control its
+  // new position and rotation"): a circle on each joint that can be edited, the chosen one bigger with the gizmo
+  // (gizmo 1 move: three arrows; 2 turn: three rings) along `gizmoAxes` (unit vectors, model space)
+  std::vector<std::array<float, 3>> handles;
+  std::vector<int> handleParts;
+  int selected = -1;  // a part number of handleParts
+  int gizmo = 0;
+  std::array<std::array<float, 3>, 3> gizmoAxes{{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
 };
+
+// The editor's gizmo on the screen: a touch (pixels, y down) against the last draw. GizmoSize: its arrows' length and
+// rings' radius (mm) for a camera distance
+float GizmoSize(float distance);
+// the screen point (pixels) of a model-space point; false behind the camera
+bool ToScreen(const std::array<float, 16> &viewProjection, int width, int height, const std::array<float, 3> &p,
+              float out[2]);
 
 class GlView {
 public:

@@ -3,6 +3,7 @@
 #include "studio_convert.h"
 #include "studio_gl.h"
 #include "studio_motion_edit.h"
+#include <cmath>
 #include <dirent.h>
 #include <fstream>
 #include <sys/stat.h>
@@ -22,6 +23,56 @@ bool gViewReady = false;
 bool gUpload = false;  // a new model: its textures and uvs to the GPU
 std::string gError;
 motionedit::Editor gEdit;  // the Edit tab's animations (studio_motion_edit.cpp)
+// the editor's handles in the view: the clip (-1 none), the chosen part, the gizmo (0 none, 1 move, 2 turn); the last
+// draw's camera and size (the touches are measured against it)
+int gOverlayEntry = -1, gOverlayPart = -1, gOverlayMode = 0;
+float gOverlayFrame = 0;
+Camera gLastCamera;
+int gLastWidth = 1, gLastHeight = 1;
+ViewOptions gLastOptions;
+
+motionedit::Skeleton skeletonOf(const Viewer &v) {
+  motionedit::Skeleton s;
+  if (const auto *joints = v.bindJoints())
+    for (const auto &j : *joints) {
+      s.parent.push_back(j.parent == 255 ? -1 : int(j.parent));
+      s.bind.push_back(j.center);
+    }
+  return s;
+}
+
+// the handles: the parts the clip turns (and the root when it moves), not those on top of their parent (twists)
+void overlayOf(ViewOptions &o) {
+  if (gOverlayEntry < 0 || !gViewer.hasModel()) return;
+  const auto &j = gViewer.joints();
+  const auto &par = gViewer.parents();
+  auto parts = gEdit.parts(unsigned(gOverlayEntry), false);
+  for (int p : gEdit.parts(unsigned(gOverlayEntry), true))
+    if (p == 0) parts.insert(parts.begin(), 0);
+  for (int p : parts) {
+    if (std::size_t(p) >= j.size()) continue;
+    if (p && par[std::size_t(p)] < j.size()) {
+      const auto &a = j[std::size_t(p)], &b = j[par[std::size_t(p)]];
+      const float d = std::sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]));
+      if (d < 15.f) continue;
+    }
+    if (!o.handleParts.empty() && o.handleParts.back() == p) continue;
+    o.handles.push_back(j[std::size_t(p)]);
+    o.handleParts.push_back(p);
+  }
+  o.selected = gOverlayPart;
+  o.gizmo = gOverlayPart >= 0 ? gOverlayMode : 0;
+  if (o.gizmo == 2) {
+    std::array<std::array<float, 3>, 3> axes;
+    if (gEdit.turnAxes(unsigned(gOverlayEntry), gOverlayFrame, skeletonOf(gViewer), gOverlayPart, axes)) {
+      for (auto &a : axes) {
+        const float l = std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+        if (l > 1e-6f) for (auto &v : a) v /= l;
+      }
+      o.gizmoAxes = axes;
+    }
+  }
+}
 
 std::string text(JNIEnv *env, jstring s) {
   if (!s) return {};
@@ -395,13 +446,8 @@ JNIEXPORT jstring JNICALL STUDIO(editAdjust)(JNIEnv *env, jclass, jint entry, ji
 JNIEXPORT jstring JNICALL STUDIO(editReach)(JNIEnv *env, jclass, jint entry, jint end, jfloat x, jfloat y, jfloat z,
                                             jint f0, jint f1, jint fade) {
   std::lock_guard<std::mutex> lock(gLock);
-  const auto *joints = gViewer.bindJoints();
-  if (!joints) return env->NewStringUTF("load a model first (Models tab)");
-  motionedit::Skeleton s;
-  for (const auto &j : *joints) {
-    s.parent.push_back(j.parent == 255 ? -1 : int(j.parent));
-    s.bind.push_back(j.center);
-  }
+  if (!gViewer.bindJoints()) return env->NewStringUTF("load a model first (Models tab)");
+  const motionedit::Skeleton s = skeletonOf(gViewer);
   const float d[3] = {x, y, z};
   std::string why;
   if (!gEdit.reach(unsigned(entry), s, end, d, f0, f1, fade, &why)) return env->NewStringUTF(why.c_str());
@@ -467,6 +513,90 @@ JNIEXPORT jstring JNICALL STUDIO(editPreview)(JNIEnv *env, jclass, jstring path,
     }
   }
   return env->NewStringUTF("the animation is not in the written file");
+}
+
+// the editor's handles in the view: the clip (-1 off), the chosen part (-1 none), the gizmo (1 move, 2 turn)
+JNIEXPORT void JNICALL STUDIO(editOverlay)(JNIEnv *, jclass, jint entry, jint part, jint mode) {
+  std::lock_guard<std::mutex> lock(gLock);
+  gOverlayEntry = entry;
+  gOverlayPart = part;
+  gOverlayMode = mode;
+}
+
+// a touch (pixels in the view) against the last draw: 100 + axis on the gizmo, a handle's part, -1 nothing
+JNIEXPORT jint JNICALL STUDIO(editPick)(JNIEnv *, jclass, jfloat x, jfloat y) {
+  std::lock_guard<std::mutex> lock(gLock);
+  const auto &o = gLastOptions;
+  const auto &vp = gView.viewProjection();
+  const float reach2 = 40.f * 40.f;
+  if (o.gizmo && o.selected >= 0) {
+    for (std::size_t i = 0; i < o.handleParts.size(); ++i) {
+      if (o.handleParts[i] != o.selected) continue;
+      const auto &c = o.handles[i];
+      const float g = GizmoSize(gLastCamera.distance);
+      int best = -1;
+      float bestD = reach2;
+      for (int a = 0; a < 3; ++a) {
+        const auto &ax = o.gizmoAxes[std::size_t(a)];
+        // points along the arrow (move) or around the ring (turn)
+        for (int k = 0; k <= 24; ++k) {
+          std::array<float, 3> p;
+          if (o.gizmo == 1) {
+            const float t = float(k) / 24.f;
+            for (int q = 0; q < 3; ++q) p[std::size_t(q)] = c[std::size_t(q)] + ax[std::size_t(q)] * g * t;
+            if (k < 6) continue;  // not at the joint itself (that picks the joint)
+          } else {
+            const auto &b0 = o.gizmoAxes[std::size_t((a + 1) % 3)], &b1 = o.gizmoAxes[std::size_t((a + 2) % 3)];
+            const float t = 6.2831853f * float(k) / 24.f;
+            for (int q = 0; q < 3; ++q)
+              p[std::size_t(q)] = c[std::size_t(q)] + g * (std::cos(t) * b0[std::size_t(q)] + std::sin(t) * b1[std::size_t(q)]);
+          }
+          float sp[2];
+          if (!ToScreen(vp, gLastWidth, gLastHeight, p, sp)) continue;
+          const float d = (sp[0] - x) * (sp[0] - x) + (sp[1] - y) * (sp[1] - y);
+          if (d < bestD) bestD = d, best = a;
+        }
+      }
+      if (best >= 0) return 100 + best;
+    }
+  }
+  int best = -1;
+  float bestD = reach2;
+  for (std::size_t i = 0; i < o.handles.size(); ++i) {
+    float sp[2];
+    if (!ToScreen(vp, gLastWidth, gLastHeight, o.handles[i], sp)) continue;
+    const float d = (sp[0] - x) * (sp[0] - x) + (sp[1] - y) * (sp[1] - y);
+    if (d < bestD) bestD = d, best = o.handleParts[i];
+  }
+  return best;
+}
+
+// how far a drag on gizmo axis `axis` from (x0, y0) to (x1, y1) moves (mm, move) or turns (radians, turn)
+JNIEXPORT jfloat JNICALL STUDIO(editDrag)(JNIEnv *, jclass, jint axis, jfloat x0, jfloat y0, jfloat x1, jfloat y1) {
+  std::lock_guard<std::mutex> lock(gLock);
+  const auto &o = gLastOptions;
+  if (axis < 0 || axis > 2 || !o.gizmo) return 0;
+  const auto &vp = gView.viewProjection();
+  std::array<float, 3> c{};
+  for (std::size_t i = 0; i < o.handleParts.size(); ++i)
+    if (o.handleParts[i] == o.selected) c = o.handles[i];
+  const auto &ax = o.gizmoAxes[std::size_t(axis)];
+  const float g = GizmoSize(gLastCamera.distance);
+  float sc[2], st[2];
+  const std::array<float, 3> tip{c[0] + ax[0] * g, c[1] + ax[1] * g, c[2] + ax[2] * g};
+  if (!ToScreen(vp, gLastWidth, gLastHeight, c, sc) || !ToScreen(vp, gLastWidth, gLastHeight, tip, st)) return 0;
+  if (o.gizmo == 1) {
+    const float sx = st[0] - sc[0], sy = st[1] - sc[1], l2 = sx * sx + sy * sy;
+    if (l2 < 4.f) return 0;  // the arrow points at the camera
+    return ((x1 - x0) * sx + (y1 - y0) * sy) / l2 * g;
+  }
+  // turn: the angle swept around the joint on the screen, its sense by whether the axis points at the camera
+  const float ax0 = x0 - sc[0], ay0 = y0 - sc[1], ax1 = x1 - sc[0], ay1 = y1 - sc[1];
+  const float swept = std::atan2(ax0 * ay1 - ay0 * ax1, ax0 * ax1 + ay0 * ay1);
+  const float cp = std::cos(gLastCamera.pitch);
+  const std::array<float, 3> toEye{cp * std::sin(gLastCamera.yaw), std::sin(gLastCamera.pitch), cp * std::cos(gLastCamera.yaw)};
+  const float facing = ax[0] * toEye[0] + ax[1] * toEye[1] + ax[2] * toEye[2];
+  return facing >= 0 ? swept : -swept;
 }
 
 JNIEXPORT jstring JNICALL STUDIO(lastError)(JNIEnv *env, jclass) {
@@ -548,7 +678,13 @@ JNIEXPORT void JNICALL STUDIO(draw)(JNIEnv *, jclass, jint width, jint height, j
   o.axes = flags & 2;
   o.skeleton = flags & 4;
   o.textured = flags & 8;
+  gOverlayFrame = frame;
+  overlayOf(o);
   gView.draw(gViewer, width, height, c, o);
+  gLastCamera = c;
+  gLastWidth = std::max(1, int(width));
+  gLastHeight = std::max(1, int(height));
+  gLastOptions = o;
 }
 
 }  // extern "C"

@@ -80,6 +80,9 @@ class Editor {
   // the model-space matrix of every part at `frame` (the game's cCoord: T(pos) R(z) R(y) R(x), the parent's times the
   // own; the root's own placement left out)
   bool pose(unsigned entry, float frame, const Skeleton &s, std::vector<Matrix> &out) const;
+  // the three model-space directions that a change of the part's X, Y, Z angle turns it about at `frame` (the game's
+  // R(z) R(y) R(x): X its own axis, Y the axis after Z, Z its parent's)
+  bool turnAxes(unsigned entry, float frame, const Skeleton &s, int part, std::array<std::array<float, 3>, 3> &out) const;
   // IK (DevJunior, 25.11.2026: "IK bones to edit the animations"): the hand or foot (end) moved by d (mm, model
   // space: X side, Y up, Z forward) from frame f0 to f1, easing over `fade` frames; its two bones above (upper arm and
   // forearm, thigh and calf) turn to reach it, the end keeps its turn in the world

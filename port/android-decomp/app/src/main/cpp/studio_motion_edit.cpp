@@ -675,6 +675,25 @@ bool Editor::pose(unsigned entry, float frame, const Skeleton &s, std::vector<Ma
   return true;
 }
 
+bool Editor::turnAxes(unsigned entry, float frame, const Skeleton &s, int part,
+                      std::array<std::array<float, 3>, 3> &out) const {
+  const Motion *m = motion(entry);
+  if (!m || part < 0 || std::size_t(part) >= s.parent.size()) return false;
+  const Frame f = frameOf(*m, s, frame);
+  std::vector<Matrix> world;
+  worldOf(f, s, world);
+  const int up = s.parent[std::size_t(part)];
+  Matrix parent = rotation(0, 0, 0);
+  if (up >= 0 && std::size_t(up) < world.size()) parent = world[std::size_t(up)];
+  const auto &a = f.angle[std::size_t(part)];
+  const Matrix pz = multiply(parent, rotation(0, 0, a[2]));
+  const Matrix own = world[std::size_t(part)];
+  out[0] = {own[0], own[4], own[8]};   // X: the part's own x
+  out[1] = {pz[1], pz[5], pz[9]};      // Y: y after the parent and Z
+  out[2] = {parent[2], parent[6], parent[10]};  // Z: the parent's z
+  return true;
+}
+
 bool Editor::reach(unsigned entry, const Skeleton &s, int end, const float d[3], int f0, int f1, int fade,
                    std::string *why) {
   auto fail = [&](const std::string &w) {
