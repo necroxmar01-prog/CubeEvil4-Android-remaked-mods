@@ -2712,7 +2712,7 @@ bool ConvertFbx(const Bytes &gcData, const std::string &gcName, const Bytes &fbx
     // (DevJunior's Ashley: her upper arms took the trunk's weights from the character's skin and stayed at her sides)
     Options own = o;
     own.transfer = 0;
-    skinOnLeon(gcData, gcName, std::move(m), images, std::move(notes), own, result, log, "FBX model");
+    skinOnLeon(gcData, gcName, std::move(m), images, std::move(notes), own, result, log, "FBX model", true);
     return true;
   } catch (const std::exception &e) {
     if (why) *why = e.what();

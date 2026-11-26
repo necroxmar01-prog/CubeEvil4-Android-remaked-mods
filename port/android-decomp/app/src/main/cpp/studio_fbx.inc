@@ -299,44 +299,49 @@ std::vector<std::string> nameWords(const std::string &raw) {
   return w;
 }
 
-// the GTA key of a bone ("l upperarm"; "spine" for any spine bone, sorted out later), "" a helper or none
+// the GTA key of a bone ("l upperarm"; "spine" for any spine bone, sorted out later), "" a helper or none. Whole words
+// for the short ones (DevJunior's Ashley: "ear" in "forearm" made her forearms helpers, the arms stayed bent),
+// compound names ("ForeArm", "UpLeg") on the words run together.
 // `loose`: a helper's part too ("arm left upperarm twist 1" -> l upperarm: its twist and shape bones are often the
 // clavicle's children, the upper arm's skin stayed at the side then)
 std::string fbxBoneKind(const std::string &raw, char &side, bool loose = false) {
   const auto w = nameWords(raw);
+  std::string joined;
+  for (const auto &t : w) joined += t;
   auto has = [&](const char *x) { return std::find(w.begin(), w.end(), x) != w.end(); };
-  auto part = [&](const char *x) {
+  auto starts = [&](const char *x) {  // a word beginning so ("eyelid", "eyebrow")
     for (const auto &t : w)
-      if (t.find(x) != std::string::npos) return true;
+      if (t.rfind(x, 0) == 0) return true;
     return false;
   };
+  auto in = [&](const char *x) { return joined.find(x) != std::string::npos; };
   side = 0;
   if (has("left") || has("l") || has("lft")) side = 'l';
   else if (has("right") || has("r") || has("rgt")) side = 'r';
-  // bip01 l ... / prefixes like "l_hand" end up as the word "l"
   if (!loose)
     for (const char *helper : {"twist", "adj", "end", "roll", "helper", "ik", "pole", "nub", "target", "ctrl", "corrective",
-                             "sleeve", "bend", "share", "trapezius", "unused", "grp", "group", "dummy", "jiggle", "breast", "pendant", "cloth", "hair",
-                             "eye", "jaw", "brow", "lip", "cheek", "ear", "tongue", "teeth", "boots", "pants", "skirt"})
-      if (part(helper)) return "";
-  if (loose)
-    for (const char *other : {"hair", "eye", "jaw", "brow", "lip", "cheek", "ear", "tongue", "teeth", "breast", "cloth",
-                              "pendant", "boots", "pants", "skirt", "unused", "grp", "trapezius", "knit"})
-      if (part(other)) return "";
-  if (part("finger") || part("thumb") || part("index") || part("middle") || part("ring") || part("pinky")) return "";
-  if (part("toe") || has("ball")) return side ? "toe0" : "";
-  if (part("foot") || part("ankle")) return side ? "foot" : "";
-  if (part("thigh") || part("upleg") || part("upperleg")) return side ? "thigh" : "";
-  if (part("calf") || part("knee") || part("shin") || part("lowerleg") || has("leg")) return side ? "calf" : "";
-  if (part("forearm") || part("lowerarm") || part("elbow")) return side ? "forearm" : "";
-  if (part("upperarm") || part("uparm")) return side ? "upperarm" : "";
-  if (part("hand") || part("wrist") || part("palm")) return side ? "hand" : "";
-  if (part("clavicle") || part("shoulder") || part("collar")) return side ? "clavicle" : "";
+                               "sleeve", "bend", "share", "trapezius", "unused", "grp", "group", "dummy", "jiggle"})
+      if (starts(helper)) return "";
+  for (const char *other : {"hair", "eye", "jaw", "brow", "lip", "cheek", "ear", "tongue", "teeth", "breast", "cloth",
+                            "pendant", "boots", "pants", "skirt", "knit", "chin", "nose", "mouth", "forehead", "glabella",
+                            "unused", "grp", "trapezius"})
+    if (starts(other)) return "";
+  if (starts("finger") || starts("thumb") || starts("index") || starts("pinky") ||
+      (side && (starts("middle") || starts("ring"))))
+    return "";
+  if (in("toe") || has("ball")) return side ? "toe0" : "";
+  if (in("foot") || in("ankle")) return side ? "foot" : "";
+  if (in("thigh") || in("upleg") || in("upperleg")) return side ? "thigh" : "";
+  if (in("calf") || in("knee") || in("shin") || in("lowerleg") || has("leg")) return side ? "calf" : "";
+  if (in("forearm") || in("lowerarm") || in("elbow")) return side ? "forearm" : "";
+  if (in("upperarm") || in("uparm")) return side ? "upperarm" : "";
+  if (in("hand") || in("wrist") || in("palm")) return side ? "hand" : "";
+  if (in("clavicle") || in("shoulder") || in("collar")) return side ? "clavicle" : "";
   if (has("arm")) return side ? "upperarm" : "";
   if (side) return "";
-  if (part("pelvis") || part("hip")) return "pelvis";
-  if (part("spine") || part("chest") || part("torso") || part("back")) return "spine";
-  if (part("neck")) return "neck";
+  if (in("pelvis") || has("hips") || has("hip")) return "pelvis";
+  if (in("spine") || in("chest") || in("torso") || has("back")) return "spine";
+  if (in("neck")) return "neck";
   if (has("head")) return "head";
   return "";
 }
@@ -775,7 +780,46 @@ DffMesh readFbx(const Bytes &data, const std::map<std::string, Bytes> &files, st
     }
     polys += poly;
   }
+  auto place0 = [](const V3 &p) { return p; };  // m.pos and m.boneAt share the bind pose's space
   if (m.tris.empty()) fail("the FBX's meshes have no faces");
+  // the skin beyond the shoulder joint on the upper arm, not the clavicle (DevJunior's Ashley: the deltoid was the
+  // "shoulder" bone's, the clavicle's here; turned down onto the character's arm, the upper arm tore from it): a vertex's
+  // clavicle weight goes over to the upper arm the further it lies out along the upper arm (all of it a quarter of the
+  // way to the elbow)
+  for (const char *sd : {"l ", "r "}) {
+    const std::string c = std::string(sd) + "clavicle", u = std::string(sd) + "upperarm", f = std::string(sd) + "forearm";
+    if (!pick.count(c) || !pick.count(u) || !pick.count(f)) continue;
+    const unsigned C = index.at(pick.at(c).second), U = index.at(pick.at(u).second), F = index.at(pick.at(f).second);
+    const V3 a0 = m.boneAt[U], ax = m.boneAt[F] - m.boneAt[U];
+    const double L = len(ax);
+    if (L <= 1e-9) continue;
+    std::size_t moved = 0;
+    for (std::size_t v = 0; v < m.pos.size(); ++v) {
+      const double t = dot(place0(m.pos[v]) - a0, ax * (1.0 / L)) / (0.25 * L);
+      if (t <= 0) continue;
+      const double share = std::min(1.0, t);
+      int cj = -1, uj = -1;
+      for (int j = 0; j < 4; ++j) {
+        if (m.bone[v][std::size_t(j)] == C && m.weight[v][std::size_t(j)] > 0) cj = j;
+        if (m.bone[v][std::size_t(j)] == U && m.weight[v][std::size_t(j)] > 0) uj = j;
+      }
+      if (cj < 0) continue;
+      const float give = float(m.weight[v][std::size_t(cj)] * share);
+      if (uj < 0) {  // the upper arm into the clavicle's slot when it all goes, else into an empty one
+        for (int j = 0; j < 4 && uj < 0; ++j)
+          if (m.weight[v][std::size_t(j)] <= 0) uj = j, m.bone[v][std::size_t(j)] = std::uint8_t(U), m.weight[v][std::size_t(j)] = 0;
+        if (uj < 0) {
+          if (share < 1) continue;
+          m.bone[v][std::size_t(cj)] = std::uint8_t(U);
+          ++moved;
+          continue;
+        }
+      }
+      m.weight[v][std::size_t(cj)] -= give, m.weight[v][std::size_t(uj)] += give;
+      ++moved;
+    }
+    if (moved) log += fmt("  %zu vertices of the %supper arm taken from its clavicle\n", moved, sd);
+  }
   log += fmt("the FBX: %zu meshes, %zu faces, %zu materials, %zu pictures\n", geoms.size(), polys, m.matTex.size(), images.size());
   if (m.boneName.size() > 255) fail("more than 255 bones");
   return m;
