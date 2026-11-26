@@ -1048,6 +1048,10 @@ PISTOL_STANCE = ("0000_arm_1", 60.0)
 # the pistol and for running": hunched while running with the gun held up before the chest) the classic stance off:
 # the remake's carry instead (cha0_wp4000M arm_1 / arm_3 / arm_5 of the stand, walk and jog, as CARRY_ARMS)
 PISTOL_CLASSIC = False
+# (Mods, 26.11.2026, DevJunior, device picture of v36: the remake's carry holds the pistol raised before the face: "quita
+# lo de tener la postura levantada, no queda bien") no arm layer for the handgun at all: move.dat without 0xC8..0xCB,
+# runtime/locomotion.cpp's pistolStance() off, the handgun carried as the game carries it, the legs the remake's
+PISTOL_CARRY = False
 
 
 def frozen(base, arm, frame):
@@ -1389,7 +1393,7 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
                                                    grip_frame(model, g7, gf)), model, g16, 16), model)
             carry.append((0x98 + MOVES.index((slot, name, lengths, flags)), fcv.serialise(cf.motion(cf.scale)),
                           len(cf.frames) - 1))
-        if weapons and pistols and "wep01" in pistols and slot in CARRY_ARMS:
+        if PISTOL_CARRY and weapons and pistols and "wep01" in pistols and slot in CARRY_ARMS:
             _v, parms = R.read_motlist(motlist_in(weapons, WEP_CARRY_PISTOL))
             if PISTOL_CLASSIC:
                 arm = next(x for x in parms if x.name.endswith(PISTOL_STANCE[0]))

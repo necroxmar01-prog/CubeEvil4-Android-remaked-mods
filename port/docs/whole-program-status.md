@@ -20464,3 +20464,7 @@ Spiel.
   oben, gekrümmte Hände wie Krallen): `Fit.natural_hands` dreht die Hand nach dem Ausrichten auch um den Unterarm, so
   dass die Handfläche wie im Stand zur Mitte der Brust zeigt (im Stand zum Oberschenkel). RE9 Finishers v39
   (finish.dat 2 333 472, react.dat 468 544 Bytes). Am Host gerendert, im Spiel nicht getestet.
+- **Pistole ohne Armschicht** (DevJunior, 26.11.2026, Bild vom Gerät mit v36: die Pistole vor dem Gesicht erhoben, „quita
+  lo de tener la postura levantada, no queda bien“): `re9_finisher_pack.py` `PISTOL_CARRY = False`, move.dat ohne
+  0xC8..0xCB; `locomotion.cpp` `pistolStance()` bleibt damit aus, die Pistole trägt Leon wie das Spiel, die Beine die
+  des Remakes. RE9 Finishers v40 (move.dat 648 032 Bytes, sonst v39). Nicht im Spiel getestet.
