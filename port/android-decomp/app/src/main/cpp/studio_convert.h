@@ -87,6 +87,11 @@ bool ConvertSkin(const Bytes &gc, const std::string &gcName, const Bytes &pc, co
 bool ConvertDff(const Bytes &gc, const std::string &gcName, const Bytes &dff, const Bytes &txd, const Options &o,
                 Bytes &out, std::string &log, std::string *why);
 
+// An XNALara model (the classic binary generic_item.mesh; studio_fbx.inc) put on the character's archive the same way,
+// `files` its pictures by their lower-case file name.
+bool ConvertXps(const Bytes &gc, const std::string &gcName, const Bytes &mesh, const std::map<std::string, Bytes> &files,
+                const Options &o, Bytes &out, std::string &log, std::string *why);
+
 // A rigged model as a binary .fbx (7.x; studio_fbx.inc) put on the character's archive as a GTA skin: its bones by
 // their names (Blender, Mixamo, Biped, Unreal), `files` its pictures (.png, .tga) by their lower-case file name.
 bool ConvertFbx(const Bytes &gc, const std::string &gcName, const Bytes &fbx, const std::map<std::string, Bytes> &files,

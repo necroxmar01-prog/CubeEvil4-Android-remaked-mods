@@ -51,6 +51,8 @@ final class StudioBridge {
   /** A rigged model as a binary .fbx (its pictures, .png / .tga, in the same folder) on the character's disc archive as
    *  a GTA skin: "ok\n" + report or "error\n" + why. */
   static native String convertFbx(String gc, String gcName, String fbx, int tex, boolean keepHead, String out);
+  /** An XNALara model (the classic binary generic_item.mesh, its pictures in the same folder), as convertFbx. */
+  static native String convertXps(String gc, String gcName, String mesh, int tex, boolean keepHead, String out);
   /**
    * An RE4 Remake (PC) character mod on Leon's disc archive: `dirs` its folders (natives/STM/... inside; the base,
    * then a colour variant laid over it): "ok\n" + report or "error\n" + why.

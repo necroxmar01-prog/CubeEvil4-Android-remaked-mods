@@ -2793,6 +2793,23 @@ bool ConvertDff(const Bytes &gcData, const std::string &gcName, const Bytes &dff
   }
 }
 
+bool ConvertXps(const Bytes &gcData, const std::string &gcName, const Bytes &mesh,
+                const std::map<std::string, Bytes> &files, const Options &o, Bytes &result, std::string &log,
+                std::string *why) {
+  try {
+    std::vector<std::string> notes;
+    std::map<std::string, Rgba> images;
+    DffMesh m = readXps(mesh, files, images, notes, log);
+    Options own = o;  // its own weights, as an .fbx
+    own.transfer = 0;
+    skinOnLeon(gcData, gcName, std::move(m), images, std::move(notes), own, result, log, "XNALara model", true);
+    return true;
+  } catch (const std::exception &e) {
+    if (why) *why = e.what();
+    return false;
+  }
+}
+
 bool ConvertFbx(const Bytes &gcData, const std::string &gcName, const Bytes &fbx,
                 const std::map<std::string, Bytes> &files, const Options &o, Bytes &result, std::string &log,
                 std::string *why) {

@@ -320,7 +320,8 @@ std::string fbxBoneKind(const std::string &raw, char &side, bool loose = false) 
   else if (has("right") || has("r") || has("rgt")) side = 'r';
   if (!loose)
     for (const char *helper : {"twist", "adj", "end", "roll", "helper", "ik", "pole", "nub", "target", "ctrl", "corrective",
-                               "sleeve", "bend", "share", "trapezius", "unused", "grp", "group", "dummy", "jiggle"})
+                               "sleeve", "bend", "share", "trapezius", "unused", "grp", "group", "dummy", "jiggle",
+                               "fix"})
       if (starts(helper)) return "";
   for (const char *other : {"hair", "eye", "jaw", "brow", "lip", "cheek", "ear", "tongue", "teeth", "breast", "cloth",
                             "pendant", "boots", "pants", "skirt", "knit", "chin", "nose", "mouth", "forehead", "glabella",
@@ -336,6 +337,8 @@ std::string fbxBoneKind(const std::string &raw, char &side, bool loose = false) 
   if (in("forearm") || in("lowerarm") || in("elbow")) return side ? "forearm" : "";
   if (in("upperarm") || in("uparm")) return side ? "upperarm" : "";
   if (in("hand") || in("wrist") || in("palm")) return side ? "hand" : "";
+  // XNALara's rigs: "arm left shoulder 1" the clavicle, "arm left shoulder 2" the upper arm
+  if (in("shoulder") && has("2")) return side ? "upperarm" : "";
   if (in("clavicle") || in("shoulder") || in("collar")) return side ? "clavicle" : "";
   if (has("arm")) return side ? "upperarm" : "";
   if (side) return "";
@@ -845,4 +848,271 @@ DffMesh readFbx(const Bytes &data, const std::map<std::string, Bytes> &files, st
   log += fmt("the FBX: %zu meshes, %zu faces, %zu materials, %zu pictures\n", geoms.size(), polys, m.matTex.size(), images.size());
   if (m.boneName.size() > 255) fail("more than 255 bones");
   return m;
+}
+
+// ---- XNALara / XPS models (DevJunior, 26.11.2026: Leon Asia and Leon USA by xxmauroxx, RE6 ports as XNALara's
+// generic_item.mesh with their pictures) ------------------------------------------------------------------------------
+// The binary generic_item.mesh: bones (name, parent, the joint in the bind pose), then the meshes (name
+// "group_name_params", the textures with the colour map first, vertices with position, normal, colour, texture
+// coordinates and tangents per layer, 4 bones and 4 weights, triangles). Read into the GTA skins' terms by their bone
+// names as the .fbx (the same names as the remake's Ashley: "arm left forearm", "leg right knee", "spine upper").
+
+struct RigBone {
+  std::string name;
+  int parent = -1;
+  V3 at{};
+};
+struct RigPart {
+  std::string name, tex;
+  std::vector<V3> pos, nrm;
+  std::vector<std::array<double, 2>> uv;
+  std::vector<std::array<int, 4>> bi;
+  std::vector<std::array<float, 4>> bw;
+  std::vector<std::array<unsigned, 3>> tris;
+};
+
+// a rig of named bones and skinned parts as a DffMesh (the bones as for the .fbx: fbxBoneKind)
+DffMesh rigToDff(const std::vector<RigBone> &bones, const std::vector<RigPart> &parts,
+                 const std::map<std::string, Bytes> &files, std::map<std::string, Rgba> &images,
+                 std::vector<std::string> &notes, std::string &log, const char *what) {
+  const std::size_t nb = bones.size();
+  std::vector<int> depth(nb, 0);
+  for (std::size_t i = 0; i < nb; ++i)
+    for (int q = bones[i].parent, hops = 0; q >= 0 && std::size_t(q) < nb && hops < 512; q = bones[std::size_t(q)].parent, ++hops)
+      ++depth[i];
+  std::map<std::string, std::pair<int, int>> pick;  // key -> (depth, bone)
+  std::vector<std::pair<int, int>> spines, necks;
+  for (std::size_t i = 0; i < nb; ++i) {
+    char side = 0;
+    const std::string kind = fbxBoneKind(bones[i].name, side);
+    if (kind.empty()) continue;
+    if (kind == "spine") {
+      spines.push_back({depth[i], int(i)});
+      continue;
+    }
+    if (kind == "neck") necks.push_back({depth[i], int(i)});
+    const std::string key = side ? std::string(1, side) + " " + kind : kind;
+    auto it = pick.find(key);
+    if (it == pick.end() || depth[i] < it->second.first) pick[key] = {depth[i], int(i)};
+  }
+  std::sort(spines.begin(), spines.end());
+  if (!spines.empty()) pick["spine"] = spines.front();
+  if (spines.size() > 1) pick["spine1"] = spines.back();
+  if (!pick.count("pelvis") && pick.count("spine")) {
+    pick["pelvis"] = pick["spine"];
+    if (spines.size() > 2) pick["spine"] = spines[1];
+    else pick.erase("spine");
+  }
+  // XNALara's rigs have no "head": "head neck lower" the neck, "head neck upper" the head
+  std::sort(necks.begin(), necks.end());
+  if (!pick.count("head") && necks.size() >= 2) pick["head"] = necks.back(), pick["neck"] = necks.front();
+  std::string missing;
+  for (const char *need : {"pelvis", "head", "l foot", "r foot", "l upperarm", "r upperarm"})
+    if (!pick.count(need)) missing += std::string(missing.empty() ? "" : ", ") + need;
+  if (!missing.empty()) fail(std::string("the ") + what + "'s skeleton has no bone for: " + missing + " (by their names)");
+  DffMesh m;
+  std::map<int, unsigned> index;
+  for (const auto &[key, v] : pick)
+    if (!index.count(v.second)) index[v.second] = unsigned(m.boneName.size()), m.boneName.push_back(key), m.boneAt.push_back(bones[std::size_t(v.second)].at);
+  m.boneParent.assign(m.boneName.size(), -1);
+  auto mapped = [&](int id) -> unsigned {
+    if (id >= 0 && std::size_t(id) < nb && !index.count(id)) {
+      char side = 0;
+      const std::string kind = fbxBoneKind(bones[std::size_t(id)].name, side, true);
+      if (!kind.empty() && kind != "spine") {
+        const std::string key = side ? std::string(1, side) + " " + kind : kind;
+        if (pick.count(key)) return index.at(pick.at(key).second);
+      }
+    }
+    for (int hops = 0; id >= 0 && std::size_t(id) < nb && hops < 512; ++hops) {
+      if (auto it = index.find(id); it != index.end()) return it->second;
+      id = bones[std::size_t(id)].parent;
+    }
+    return index.at(pick.at("pelvis").second);
+  };
+  for (const auto &[id, k] : index)
+    if (bones[std::size_t(id)].parent >= 0) {
+      const unsigned p = mapped(bones[std::size_t(id)].parent);
+      if (p != k) m.boneParent[k] = int(p);
+    }
+  std::vector<char> skirtBone(nb, 0);
+  for (std::size_t i = 0; i < nb; ++i)
+    for (const auto &t : nameWords(bones[i].name))
+      for (const char *x : {"skirt", "pants", "dress", "robe", "kilt", "cloth"})
+        if (t.rfind(x, 0) == 0) skirtBone[i] = 1;
+  log += fmt("the %s's skeleton: %zu bones, as a GTA ped's:", what, nb);
+  for (const auto &[key, v] : pick) log += " " + key + "=" + bones[std::size_t(v.second)].name + ";";
+  log += "\n";
+  // the parts
+  std::map<std::string, unsigned> matOf;
+  std::size_t faces = 0;
+  for (const auto &pt : parts) {
+    // the cards round the eyes and see-through layers, as for the .fbx
+    const std::string pn = lower(pt.name);
+    bool card = false;
+    for (const char *x : {"lash", "brow", "shadow", "shaodw", "tear", "wet"})
+      if (pn.find(x) != std::string::npos) card = true;
+    if (card) {
+      notes.push_back("  " + pt.name + ": a card round the eyes, left out");
+      continue;
+    }
+    std::string tex = lower(pt.tex);
+    if (auto sl = tex.find_last_of("/\\"); sl != std::string::npos) tex = tex.substr(sl + 1);
+    if (!tex.empty() && !images.count(tex)) {
+      const Bytes *pic = files.count(tex) ? &files.at(tex) : nullptr;
+      const auto dot = tex.find_last_of('.');
+      for (const char *ext : {".png", ".tga"})  // the same picture saved otherwise beside it
+        if (!pic && dot != std::string::npos && files.count(tex.substr(0, dot) + ext)) pic = &files.at(tex.substr(0, dot) + ext);
+      if (!pic) {
+        notes.push_back("  " + tex + ": not beside the model (grey)");
+      } else {
+        try {
+          images[tex] = readPicture(*pic);
+        } catch (const std::exception &e) {
+          notes.push_back("  " + tex + ": " + e.what() + " (grey)");
+        }
+      }
+    }
+    if (!images.count(tex)) tex.clear();
+    if (!tex.empty()) {
+      const Rgba &img = images.at(tex);
+      std::size_t clear = 0, n = img.px.size() / 4;
+      double sum = 0, sq = 0;
+      for (std::size_t q = 0; q < n; ++q) {
+        const double a = img.px[q * 4 + 3];
+        clear += a < 16, sum += a, sq += a * a;
+      }
+      const double mean = n ? sum / double(n) : 255, sd = n ? std::sqrt(std::max(0.0, sq / double(n) - mean * mean)) : 0;
+      if (n && (clear >= n * 98 / 100 || (mean < 192 && sd < 8))) {
+        notes.push_back("  " + pt.name + ": " + tex + " is see-through (a layer over another): left out");
+        continue;
+      }
+    }
+    const std::string key = tex.empty() ? "material " + pt.name : tex;
+    auto it = matOf.find(key);
+    if (it == matOf.end()) {
+      it = matOf.emplace(key, unsigned(m.matTex.size())).first;
+      m.matTex.push_back(tex);
+      m.matColour.push_back({180, 180, 180, 255});
+      m.matName.push_back(pt.name);
+    }
+    const unsigned first = unsigned(m.pos.size());
+    for (std::size_t v = 0; v < pt.pos.size(); ++v) {
+      m.pos.push_back(pt.pos[v]);
+      m.nrm.push_back(v < pt.nrm.size() ? pt.nrm[v] : V3{0, 1, 0});
+      m.uv.push_back(v < pt.uv.size() ? pt.uv[v] : std::array<double, 2>{0, 0});
+      std::map<unsigned, double> w;
+      double cloth = 0, all = 0;
+      for (int j = 0; j < 4; ++j) {
+        const int b = v < pt.bi.size() ? pt.bi[v][std::size_t(j)] : -1;
+        const double x = v < pt.bw.size() ? pt.bw[v][std::size_t(j)] : 0;
+        if (x <= 0 || b < 0 || std::size_t(b) >= nb) continue;
+        w[mapped(b)] += x, all += x;
+        if (skirtBone[std::size_t(b)]) cloth += x;
+      }
+      std::vector<std::pair<unsigned, double>> list(w.begin(), w.end());
+      std::sort(list.begin(), list.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
+      std::array<std::uint8_t, 4> bi{};
+      std::array<float, 4> bw{};
+      double sum = 0;
+      for (std::size_t j = 0; j < 4 && j < list.size(); ++j) bi[j] = std::uint8_t(list[j].first), bw[j] = float(list[j].second), sum += list[j].second;
+      if (sum <= 0) bi = {std::uint8_t(index.at(pick.at("pelvis").second)), 0, 0, 0}, bw = {1, 0, 0, 0}, sum = 1;
+      for (auto &x : bw) x = float(x / sum);
+      m.bone.push_back(bi), m.weight.push_back(bw);
+      m.cloth.push_back(all > 0 ? float(cloth / all) : 0.0f);
+    }
+    for (const auto &t : pt.tris)
+      if (t[0] < pt.pos.size() && t[1] < pt.pos.size() && t[2] < pt.pos.size())
+        m.tris.push_back({t[0] + first, t[1] + first, t[2] + first, it->second}), ++faces;
+  }
+  if (m.tris.empty()) fail(std::string("the ") + what + " has no faces");
+  log += fmt("the %s: %zu parts, %zu faces, %zu materials, %zu pictures\n", what, parts.size(), faces, m.matTex.size(),
+             images.size());
+  return m;
+}
+
+DffMesh readXps(const Bytes &b, const std::map<std::string, Bytes> &files, std::map<std::string, Rgba> &images,
+                std::vector<std::string> &notes, std::string &log) {
+  std::size_t o = 0;
+  auto need = [&](std::size_t n) {
+    if (o + n > b.size()) fail("the XNALara model is cut short");
+  };
+  auto u32 = [&]() {
+    need(4);
+    const std::uint32_t v = le32(b, o);
+    o += 4;
+    return v;
+  };
+  auto f32 = [&]() {
+    need(4);
+    const std::uint32_t v = le32(b, o);
+    o += 4;
+    float f;
+    std::memcpy(&f, &v, 4);
+    return double(f);
+  };
+  auto str = [&]() {
+    std::size_t n = 0;
+    for (int sh = 0;; sh += 7) {
+      need(1);
+      const std::uint8_t c = b[o++];
+      n |= std::size_t(c & 0x7F) << sh;
+      if (!(c & 0x80) || sh > 28) break;
+    }
+    need(n);
+    std::string s(reinterpret_cast<const char *>(b.data() + o), n);
+    o += n;
+    return s;
+  };
+  if (b.size() >= 4 && le32(b, 0) == 323232) fail("an XPS model of the newer format (save it in XNALara's classic .mesh)");
+  const std::uint32_t nb = u32();
+  if (nb > 4096) fail("not an XNALara .mesh");
+  std::vector<RigBone> bones(nb);
+  for (auto &bn : bones) {
+    bn.name = str();
+    need(2);
+    bn.parent = std::int16_t(b[o] | (b[o + 1] << 8));
+    o += 2;
+    bn.at.x = f32(), bn.at.y = f32(), bn.at.z = f32();
+  }
+  const std::uint32_t nm = u32();
+  if (nm > 4096) fail("not an XNALara .mesh");
+  std::vector<RigPart> parts(nm);
+  for (auto &pt : parts) {
+    pt.name = str();
+    const std::uint32_t layers = u32(), nt = u32();
+    if (layers == 0 || layers > 8 || nt > 64) fail("not an XNALara .mesh");
+    for (std::uint32_t t = 0; t < nt; ++t) {
+      std::string tn = str();
+      u32();
+      if (t == 0) pt.tex = tn;  // the colour map first
+    }
+    const std::uint32_t nv = u32();
+    if (nv > 1000000) fail("not an XNALara .mesh");
+    for (std::uint32_t v = 0; v < nv; ++v) {
+      V3 p{f32(), f32(), f32()}, n{f32(), f32(), f32()};
+      need(4);
+      o += 4;  // colour
+      std::array<double, 2> uv{f32(), f32()};
+      for (std::uint32_t l = 1; l < layers; ++l) f32(), f32();
+      need(16 * layers);
+      o += 16 * layers;  // tangents
+      std::array<int, 4> bi{-1, -1, -1, -1};
+      std::array<float, 4> bw{};
+      if (nb) {
+        need(8);
+        for (int j = 0; j < 4; ++j) bi[std::size_t(j)] = std::int16_t(b[o + std::size_t(j) * 2] | (b[o + std::size_t(j) * 2 + 1] << 8));
+        o += 8;
+        for (int j = 0; j < 4; ++j) bw[std::size_t(j)] = float(f32());
+      }
+      pt.pos.push_back(p), pt.nrm.push_back(n), pt.uv.push_back(uv), pt.bi.push_back(bi), pt.bw.push_back(bw);
+    }
+    const std::uint32_t nf = u32();
+    if (nf > 2000000) fail("not an XNALara .mesh");
+    for (std::uint32_t f = 0; f < nf; ++f) {
+      const unsigned a = u32(), c = u32(), d = u32();
+      pt.tris.push_back({a, c, d});
+    }
+  }
+  return rigToDff(bones, parts, files, images, notes, log, "XNALara model");
 }

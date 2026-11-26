@@ -224,14 +224,8 @@ JNIEXPORT jstring JNICALL STUDIO(convertDff)(JNIEnv *env, jclass, jstring gc, js
   return env->NewStringUTF(("ok\n" + log).c_str());
 }
 
-// A rigged model (`fbx`, a binary .fbx; its pictures the .png / .tga files in its folder) on the character's archive of
-// the disc (`gc`, its name `gcName`) as a GTA skin, written to `out`: "ok\n" + the report, or "error\n" + why
-JNIEXPORT jstring JNICALL STUDIO(convertFbx)(JNIEnv *env, jclass, jstring gc, jstring gcName, jstring fbx, jint tex,
-                                            jboolean keepHead, jstring out) {
-  convert::Bytes g, f, result;
-  if (!readAll(text(env, gc), g)) return env->NewStringUTF("error\nthe disc's archive cannot be read");
-  const std::string path = text(env, fbx);
-  if (!readAll(path, f)) return env->NewStringUTF("error\nthe .fbx cannot be read");
+// the pictures (.png, .tga, .jpg) in the folder of `path`, by their lower-case names
+static std::map<std::string, convert::Bytes> picturesBeside(const std::string &path) {
   std::map<std::string, convert::Bytes> files;
   const std::string dir = path.substr(0, path.find_last_of('/'));
   if (DIR *d = opendir(dir.c_str())) {
@@ -246,14 +240,38 @@ JNIEXPORT jstring JNICALL STUDIO(convertFbx)(JNIEnv *env, jclass, jstring gc, js
     }
     closedir(d);
   }
+  return files;
+}
+
+// A rigged model (`model`: a binary .fbx, or XNALara's generic_item.mesh when `xps`; its pictures in its folder) on the
+// character's archive of the disc (`gc`, its name `gcName`) as a GTA skin, written to `out`: "ok\n" + the report, or
+// "error\n" + why
+static jstring convertRig(JNIEnv *env, jstring gc, jstring gcName, jstring model, jint tex, jboolean keepHead, jstring out,
+                          bool xps) {
+  convert::Bytes g, f, result;
+  if (!readAll(text(env, gc), g)) return env->NewStringUTF("error\nthe disc's archive cannot be read");
+  const std::string path = text(env, model);
+  if (!readAll(path, f)) return env->NewStringUTF("error\nthe model cannot be read");
+  const auto files = picturesBeside(path);
   convert::Options o;
   if (tex >= 8) o.tex = tex;
   o.keepHead = keepHead;
   std::string log, why;
-  if (!convert::ConvertFbx(g, text(env, gcName), f, files, o, result, log, &why))
-    return env->NewStringUTF(("error\n" + why + "\n" + log).c_str());
+  const bool ok = xps ? convert::ConvertXps(g, text(env, gcName), f, files, o, result, log, &why)
+                      : convert::ConvertFbx(g, text(env, gcName), f, files, o, result, log, &why);
+  if (!ok) return env->NewStringUTF(("error\n" + why + "\n" + log).c_str());
   if (!writeAll(text(env, out), result)) return env->NewStringUTF("error\nthe result cannot be written");
   return env->NewStringUTF(("ok\n" + log).c_str());
+}
+
+JNIEXPORT jstring JNICALL STUDIO(convertFbx)(JNIEnv *env, jclass, jstring gc, jstring gcName, jstring fbx, jint tex,
+                                            jboolean keepHead, jstring out) {
+  return convertRig(env, gc, gcName, fbx, tex, keepHead, out, false);
+}
+
+JNIEXPORT jstring JNICALL STUDIO(convertXps)(JNIEnv *env, jclass, jstring gc, jstring gcName, jstring mesh, jint tex,
+                                            jboolean keepHead, jstring out) {
+  return convertRig(env, gc, gcName, mesh, tex, keepHead, out, true);
 }
 
 // the RE4 Remake mod's files below `dir` (natives/STM/... inside): their path after "natives/stm/" in lower case;
