@@ -2833,7 +2833,30 @@ final class CoreMenu extends Dialog {
       int files = p.length > 1 ? Integer.parseInt(p[1]) : 0;
       boolean on = p.length < 3 || !"0".equals(p[2]);
       String label = getContext().getResources().getQuantityString(R.plurals.ingame_mod_line, files, name, files);
-      Button b = cellAction(modsBox, "", v -> switchMod(name, !v.isSelected()));
+      // (Mods by DevParalax, 26.11.2026, DevJunior: "un icono de eliminación … como de basura color rojo") one row per
+      // pack: its switch, and beside it a square button with a red waste bin that removes it (askRemoveMod)
+      LinearLayout line = new LinearLayout(getContext());
+      line.setOrientation(LinearLayout.HORIZONTAL);
+      Button b = button("", v -> switchMod(name, !v.isSelected()));
+      b.setMinHeight(dp(64)); b.setMinimumHeight(dp(64));
+      line.addView(b, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+      android.widget.ImageButton bin = new android.widget.ImageButton(getContext());
+      StateListDrawable binLook = new StateListDrawable();
+      binLook.addState(new int[] {android.R.attr.state_focused}, focused());
+      binLook.addState(new int[] {android.R.attr.state_pressed}, shape(ACTIVE, 0xffe5484d, 6));
+      binLook.addState(new int[0], shape(SURFACE, BORDER, 6));
+      bin.setBackground(binLook);
+      bin.setImageResource(R.drawable.ic_trash);
+      bin.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+      bin.setContentDescription(getContext().getString(R.string.ingame_mod_remove_one, name));
+      bin.setFocusable(true);
+      bin.setId(View.generateViewId());
+      bin.setOnClickListener(v -> askRemoveMod(name));
+      LinearLayout.LayoutParams binLp = new LinearLayout.LayoutParams(dp(64), dp(64));
+      binLp.setMarginStart(dp(8));
+      binLp.gravity = Gravity.CENTER_VERTICAL;
+      line.addView(bin, binLp);
+      modsBox.addButton(line);
       b.setSelected(on);
       b.setText(getContext().getString(R.string.ingame_toggle_value, label, s(on ? R.string.ingame_on : R.string.ingame_off)));
       b.setAccessibilityDelegate(new View.AccessibilityDelegate() {
@@ -2841,8 +2864,6 @@ final class CoreMenu extends Dialog {
           super.onInitializeAccessibilityNodeInfo(view, info); info.setCheckable(true); info.setChecked(view.isSelected());
         }
       });
-      // (Mods by DevParalax, 26.11.2026: "delete mods one by one") each pack's own remove button beside it
-      cellAction(modsBox, getContext().getString(R.string.ingame_mod_remove_one, name), v -> askRemoveMod(name));
     }
     modsLine.setText(s(R.string.ingame_mods_none));
     modsLine.setVisibility(packs.length == 0 ? View.VISIBLE : View.GONE);

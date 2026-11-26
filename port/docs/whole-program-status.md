@@ -20430,3 +20430,8 @@ Spiel.
   `--cover -1` (das Haar sitzt, wie es gebaut ist), ohne `--crown-under` (das zog den Scheitel unter das Haar von
   Remake Lite, nicht unter dieses), Haarphysik 0,6 statt 0,8. Am Host gerendert (vorn, Seite, oben: anliegend, kein
   Schädel sichtbar), auf dem Gerät nicht getestet.
+- **Mods by DevParalax: Papierkorb statt Zeile** (DevJunior, 26.11.2026, Bild des Menüs: der „Quitar …“-Knopf stand
+  als eigene breite Zeile unter jedem Paket; „un icono de eliminación … como de basura color rojo“): je Paket eine Zeile
+  aus dem Schalter und rechts daneben einem quadratischen Knopf (64 dp) mit rotem Papierkorb (`res/drawable/ic_trash.xml`,
+  eigene Zeichnung), Beschreibung für Bedienungshilfen „Remove NAME“, gleiche Rückfrage wie bisher. Gebaut nur in der
+  CI, auf dem Gerät nicht getestet.
