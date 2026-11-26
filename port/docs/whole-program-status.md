@@ -20386,3 +20386,13 @@ Spiel.
   (Schultern, Arme, Brust schmaler; Hals, Hände, Gurt bleiben). Rqqps „Classic holster chest strap“ ist nur die
   RE4R-Mesh ohne Texturen (die des Spiels), daher nicht verwendet. Wahlweise dasselbe Hemd auch als pl00. Am Host
   gerendert, auf dem Gerät nicht getestet.
+- **Leon Clásico Remasterizado v6: die Kostüme der Disc in HD** (DevJunior, 26.11.2026: „el strap clásico“, v5 „parece
+  anoréxico“, „la camisa no es la negra clásica“): Körper jetzt die der Disc (`pl00` Jacke, `pl08` schwarzes Hemd mit
+  dem braunen Schulterholster), Kopf, Gesicht und Haar aus v4. Neues Werkzeug `port/tools/skin_hd_textures.py`: die
+  Farbtexturen der Disc-Paletten aus dem HD-Paket der PC-Version (`imagePackHD/0100000X.pack`, Bilder in der Reihenfolge
+  der Paletten des Disc-Archivs), bis zum Vierfachen (höchstens 1024), mit Mipmaps; ein Bild wird nur genommen, wenn
+  es auf 32 × 32 um höchstens `--max-diff` (15) vom Disc-Bild abweicht (im hochgeladenen `pl00`-Paket ist Bild 5 ein
+  Auge statt des Jackenrückens, im `pl08`-Paket das Hemd marineblau umgemalt: beide bleiben die der Disc). Kopf in
+  `pl00` mit `skin_graft.py --entry 2/4/5 --tpl 3` (Texturen an Palette 3 angehängt; `skin_slim --take` ersetzte die
+  Palette, die die Disc-Jacke mitbenutzt), in `pl08` mit `skin_slim --take 2,3,4,5`. Daten `pl00` 4,7 MB, `pl08`
+  5,2 MB. Am Host gerendert (vorn, hinten), auf dem Gerät nicht getestet. Disc-Dateien und Pakete nicht im Repository.
