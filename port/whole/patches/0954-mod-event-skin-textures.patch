@@ -1,0 +1,35 @@
+# Patch 0954 (Mods, 25.11.2026, DevJunior: Leon Remake Lite in the cutscenes "when he is infected and faints", "when he
+# wants to take the rope off the fish": white forearms, a black face with only the eyes). Not a bug of the prototype: a
+# port feature of the mods.
+# game/event.cpp ExePacket_SetOm and ExePacket_SetPartsSub: a model of a skin (the cutscene's copy of a skinned
+# archive's part, patch 0915, or the player's loaded archive) drawn with a texture set that is not the skin's (the
+# event's own copy of the disc's set, laid out for the disc's model) is given the set the game draws it with in the
+# field (runtime/dvd.cpp re4_mod_event_tpl; logged). Patch 0901's swap for pl000a.bin is one case of it.
+--- a/src/game/event.cpp
++++ b/src/game/event.cpp
+@@ -837,6 +837,7 @@
+ // "pl0000" becomes the event player body (PPl). Registered as model type 2.
+ extern "C" int re4_player_modded(void); /* port: runtime/dvd.cpp */
+ extern "C" int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume);
++extern "C" void* re4_mod_event_tpl(const void* bin, void* tpl, const void* plArc); /* port (patch 0954): runtime/dvd.cpp */
+ int Event::ExePacket_SetOm(Event* pEvt)
+ {
+     EvtPacket* pac = pEvt->pPacket;
+@@ -862,6 +863,8 @@
+     if (re4_player_modded() && pG->pPlayer != 0 && bin == PL_ARC_PTR(pG->pPlayer, 4)) {
+         tpl = PL_ARC_PTR(pG->pPlayer, 5);
+     }
++    /* port (patch 0954, mods): any model of a skin keeps the skin's textures (Leon Remake Lite: white forearms) */
++    tpl = re4_mod_event_tpl(bin, tpl, pG->pPlayer);
+     {
+         OmTbl tbl[] = {
+             {"pl00", 4, OBJ18_TYPE_LEON}, {"pl01", 4, OBJ18_TYPE_ASHLEY}, {"evm90", 5, OBJ18_TYPE_ASHLEY},
+@@ -998,6 +1001,8 @@
+         pLog->err(0, 0, "Event::ExePacket_SetParts : dat failed");
+         return 1;
+     }
++    /* port (patch 0954, mods): a part that is a skin's model keeps the skin's textures */
++    t = re4_mod_event_tpl(b, t, pG->pPlayer);
+     if (GetMod((void**) &m, oya, 0, 0) == 0) {
+         pLog->err(0, 0, "Event::ExePacket_SetParts : oya non");
+         return 1;

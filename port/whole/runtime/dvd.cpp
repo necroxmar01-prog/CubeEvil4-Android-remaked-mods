@@ -943,6 +943,7 @@ void* re4_core_data_place(const char* name, unsigned fixedMax)
 // The player's file came from a mod (re4_player_data_place, before each read of it): patch 0901 lets
 // cutscenes draw Leon's body with his archive's textures then.
 static int gPlayerModded;
+static char gPlayerStem[8];  // "pl00" (re4_mod_event_tpl)
 
 // The active mods' melee archive (see gMeleePath), "" without one.
 const char* re4_mod_melee_path(void)
@@ -1127,6 +1128,11 @@ void* re4_player_data_place(const char* name, unsigned fixedMax)
             re4_log("DVD: %s: the player's file is %s", name, modded ? "a mod's" : "the disc's");
         }
         gPlayerModded = modded;
+        // the player file's character ("em/pl00.drs" -> pl00) for re4_mod_event_tpl
+        {
+            const char* slash = strrchr(name, '/');
+            snprintf(gPlayerStem, sizeof(gPlayerStem), "%.4s", slash ? slash + 1 : name);
+        }
     }
     u32 size = bodySize(name);
     if (size <= fixedMax) {
@@ -1695,6 +1701,99 @@ void* re4_mod_event_bin(const void* header, int index, const char* name, void* d
                 (unsigned) room);
     }
     return data;
+}
+
+// Patch 0954 (event.cpp ExePacket_SetOm and ExePacket_SetPartsSub; Mods, 25.11.2026, DevJunior: Leon Remake Lite
+// in the cutscenes "cuando está infectado y se desmaya", "cuando se quiere quitar la soga del pez": white forearms, a
+// black face with only the eyes). A model of a skin (the cutscene's copy of it, patch 0915, or the player's loaded
+// archive) drawn with a texture set that is not the skin's: the event's copy of the disc's set, laid out for the
+// disc's model. The set the game draws that model with in the field (studio_model.cpp Characters: the archive part
+// and its TPL) is returned instead; anything else keeps `tpl`. `plArc` is pG->pPlayer.
+namespace {
+struct TplPair {
+    unsigned char bin, tpl;  // archive parts (entry + 4)
+};
+const TplPair* tplPairs(const char* stem, int* n)
+{
+    static const TplPair leon[] = {{4, 5}, {0xA, 5}, {0x10, 5}, {8, 7}, {6, 7}, {9, 7}, {0x12, 0x11}, {0x15, 0x11}};
+    static const TplPair ashley[] = {{4, 5}, {7, 9}, {6, 0xB}, {8, 5}, {0xA, 5}, {0x11, 5}, {0x14, 5}};
+    static const TplPair partner[] = {{4, 5}, {7, 0xB}, {6, 8}, {9, 5}, {0xA, 5}, {0xC, 5}, {0xF, 5}};
+    static const TplPair ada[] = {{4, 5}, {6, 7}, {8, 7}, {9, 0xA}, {0x11, 5}, {0x12, 5}};
+    *n = 0;
+    if (!stem) {
+        return 0;
+    }
+    if (!strncmp(stem, "pl00", 4) || !strncmp(stem, "pl08", 4) || !strncmp(stem, "pl09", 4) || !strncmp(stem, "pl10", 4)) {
+        *n = (int) (sizeof(leon) / sizeof(leon[0]));
+        return leon;
+    }
+    if (!strncmp(stem, "pl01", 4) || !strncmp(stem, "pl05", 4)) {
+        *n = (int) (sizeof(ashley) / sizeof(ashley[0]));
+        return ashley;
+    }
+    if (!strncmp(stem, "pl11", 4)) {
+        *n = (int) (sizeof(partner) / sizeof(partner[0]));
+        return partner;
+    }
+    if (!strncmp(stem, "pl0b", 4) || !strncmp(stem, "pl0c", 4)) {
+        *n = (int) (sizeof(ada) / sizeof(ada[0]));
+        return ada;
+    }
+    return 0;
+}
+}  // namespace
+
+void* re4_mod_event_tpl(const void* bin, void* tpl, const void* plArc)
+{
+    if (!bin || !tpl) {
+        return tpl;
+    }
+    static int told;
+    int n = 0;
+    // a cutscene's copy of a skinned archive's part: the skin's copy (re4_mod_event_bin)
+    for (SkinFile& f : gSkins) {
+        if (!f.skin || (const unsigned char*) bin < f.skin || (const unsigned char*) bin >= f.skin + f.skinSize) {
+            continue;
+        }
+        if ((const unsigned char*) tpl >= f.skin && (const unsigned char*) tpl < f.skin + f.skinSize) {
+            return tpl;  // the skin's own set already
+        }
+        const char* slash = strrchr(f.name, '/');
+        const TplPair* pairs = tplPairs(slash ? slash + 1 : f.name, &n);
+        for (int k = 0; k < n; k++) {
+            const u32 b = pairs[k].bin - 4u, t = pairs[k].tpl - 4u;
+            if (b < f.skinStart.size() && f.skinStart[b] && f.skin + f.skinStart[b] == bin && t < f.skinStart.size() &&
+                f.skinStart[t]) {
+                if (told++ < 64) {
+                    re4_log("mods: event model %s part %u drawn with the skin's textures (part %u), not the event's",
+                            f.name, (unsigned) pairs[k].bin, (unsigned) pairs[k].tpl);
+                }
+                return f.skin + f.skinStart[t];
+            }
+        }
+        return tpl;
+    }
+    // the player's loaded archive (a mod's file)
+    if (!gPlayerModded || !plArc) {
+        return tpl;
+    }
+    const u32* ofs = (const u32*) plArc;
+    const uintptr_t base = (uintptr_t) plArc;
+    const TplPair* pairs = tplPairs(gPlayerStem, &n);
+    for (int k = 0; k < n; k++) {
+        if (ofs[pairs[k].bin] && (const void*) (base + ofs[pairs[k].bin]) == bin) {
+            void* own = (void*) (base + ofs[pairs[k].tpl]);
+            if (ofs[pairs[k].tpl] && own != tpl) {
+                if (told++ < 64) {
+                    re4_log("mods: event model, the player's part %u drawn with his archive's textures (part %u), not "
+                            "the event's", (unsigned) pairs[k].bin, (unsigned) pairs[k].tpl);
+                }
+                return own;
+            }
+            return tpl;
+        }
+    }
+    return tpl;
 }
 
 // Patch 0946 (event.cpp ExePacket_SetPartsSub, after 0906): Ashley (pl0100) and Ada (pl0200) in a cutscene with a skin
