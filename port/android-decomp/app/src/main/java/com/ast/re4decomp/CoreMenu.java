@@ -179,6 +179,10 @@ final class CoreMenu extends Dialog {
     void restartForMods();
     /** Every mod pack goes (the menu asked first); the game restarts so the disc's files count again. */
     void removeMods();
+    /** Every mod in a folder the player picks (ModStore.copyAll; Mods by DevParalax, 26.11.2026). */
+    void addAllMods();
+    /** One pack goes (the menu asked first); the game restarts so it no longer counts. */
+    void removeMod(String name);
     /** The renderer (port/docs/vulkan-bauplan.md): Vulkan can run here (Android 10, Vulkan 1.1). */
     boolean vulkanSupported();
     /** Vulkan is the menu's choice (it may not run: not supported, or it fell back to OpenGL ES). */
@@ -2500,6 +2504,7 @@ final class CoreMenu extends Dialog {
     MenuLayout.Buttons modButtons = buttonsRow(body);
     cellAction(modButtons, s(R.string.ingame_mod_add), v -> host.addMod());
     cellAction(modButtons, s(R.string.ingame_mod_add_zip), v -> host.addModZip());
+    cellAction(modButtons, s(R.string.ingame_mod_add_all), v -> host.addAllMods());
     modsRemove = cellAction(modButtons, s(R.string.ingame_mods_remove), v -> askRemoveMods()); refreshMods();
   }
   /** "Leon's outfit" and "Weapon on the back" (wishes of DevJunior, 09.11.2026; runtime/wardrobe.cpp): the outfit
@@ -2836,6 +2841,8 @@ final class CoreMenu extends Dialog {
           super.onInitializeAccessibilityNodeInfo(view, info); info.setCheckable(true); info.setChecked(view.isSelected());
         }
       });
+      // (Mods by DevParalax, 26.11.2026: "delete mods one by one") each pack's own remove button beside it
+      cellAction(modsBox, getContext().getString(R.string.ingame_mod_remove_one, name), v -> askRemoveMod(name));
     }
     modsLine.setText(s(R.string.ingame_mods_none));
     modsLine.setVisibility(packs.length == 0 ? View.VISIBLE : View.GONE);
@@ -2853,6 +2860,16 @@ final class CoreMenu extends Dialog {
         .setMessage(text)
         .setNegativeButton(R.string.ingame_later, null)
         .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.restartForMods(); }).create();
+    dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
+    dialog.show();
+  }
+  /** One pack removed: the game restarts for it, so the menu asks first. */
+  private void askRemoveMod(String name) {
+    AlertDialog dialog = new AlertDialog.Builder(getContext())
+        .setTitle(getContext().getString(R.string.ingame_mod_remove_one, name))
+        .setMessage(getContext().getString(R.string.ingame_mod_remove_one_text, name))
+        .setNegativeButton(R.string.ingame_cancel, null)
+        .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.removeMod(name); }).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
     dialog.show();
   }

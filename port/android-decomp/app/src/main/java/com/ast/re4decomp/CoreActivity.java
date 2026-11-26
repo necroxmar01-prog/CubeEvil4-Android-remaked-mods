@@ -252,7 +252,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   /** "More enemies" (1.1.0, GAME_PREFS; CoreBridge.setMoreEnemies): its seed, 0 off. */
   static final String MORE_ENEMIES = "moreEnemiesSeed";
   private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_MOD = 5, REQUEST_TEXTURES = 6,
-      REQUEST_EXPORT_ZIP = 7, REQUEST_MOD_ZIP = 8;
+      REQUEST_EXPORT_ZIP = 7, REQUEST_MOD_ZIP = 8, REQUEST_MOD_ALL = 9;
   // "Import texture pack" (Cheats & Mods, TexturePacks): who hears the import, its cancel switch
   private TexturePacks.Listener textureListener;
   private final java.util.concurrent.atomic.AtomicBoolean textureCancel = new java.util.concurrent.atomic.AtomicBoolean();
@@ -1513,6 +1513,16 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       startForResult(pick, REQUEST_MOD_ZIP);
     }
 
+    @Override public void addAllMods() {
+      startForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_MOD_ALL);
+    }
+
+    @Override public void removeMod(String name) {
+      boolean gone = ModStore.remove(gameRoot(), name);
+      Log.i(TAG, "menu: mod " + name + " removed" + (gone ? "" : " (not all)"));
+      restartIntoGame("menu: mod removed");
+    }
+
     @Override public String[] modPacks() {
       File root = gameRoot();
       String[] packs = ModStore.packs(root);
@@ -1807,6 +1817,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         copyMod(data.getData(), false);
       } else if (request == REQUEST_MOD_ZIP && data.getData() != null) {
         copyMod(data.getData(), true);
+      } else if (request == REQUEST_MOD_ALL && data.getData() != null) {
+        copyAllMods(data.getData());
       } else if (request == REQUEST_REPORT && data.getData() != null) {
         final Uri target = data.getData();
         makeReport("saved", () -> {
@@ -1862,6 +1874,40 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
             .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mod added")).show();
       });
     }, "mod-copy").start();
+  }
+
+  /** Every mod of the picked folder into game/mods (ModStore.copyAll), off the main thread; then a restart. */
+  private void copyAllMods(Uri tree) {
+    Toast.makeText(this, R.string.ingame_mod_copying, Toast.LENGTH_SHORT).show();
+    final File root = gameRoot();
+    new Thread(() -> {
+      final ModStore.AllResult result = ModStore.copyAll(getContentResolver(), tree, root);
+      List<String> names = new java.util.ArrayList<>();
+      for (ModStore.Result r : result.added) names.add(r.name);
+      Log.i(TAG, "mods from a folder: added " + names + (result.failed.isEmpty() ? "" : ", failed " + result.failed));
+      main.post(() -> {
+        if (isFinishing()) return;
+        if (menu != null) menu.refreshMods();
+        if (names.isEmpty() && result.failed.isEmpty()) {
+          message(getString(R.string.ingame_mods_none_found));
+          return;
+        }
+        String text = names.isEmpty() ? "" : getString(R.string.ingame_mods_added_all, TextUtils.join(", ", names));
+        if (!result.failed.isEmpty()) {
+          text += (text.isEmpty() ? "" : "\n\n") + getString(R.string.ingame_mods_failed_all,
+              TextUtils.join("; ", result.failed));
+        }
+        if (names.isEmpty()) {
+          message(text);
+          return;
+        }
+        text += "\n\n" + getString(R.string.ingame_mods_changed);
+        new AlertDialog.Builder(this)
+            .setMessage(text)
+            .setNegativeButton(R.string.ingame_later, null)
+            .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mods added")).show();
+      });
+    }, "mod-copy-all").start();
   }
 
   /** The chosen texture pack into the textures folder (TexturePacks.importFrom) on a thread of its own; the menu hears

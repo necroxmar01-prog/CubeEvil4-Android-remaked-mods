@@ -583,6 +583,12 @@
     </plurals>
     <string name="ingame_mod_add">Aggiungi cartella mod</string>
     <string name="ingame_mod_add_zip">Aggiungi mod .zip</string>
+    <string name="ingame_mod_add_all">Aggiungi tutte le mod di una cartella</string>
+    <string name="ingame_mod_remove_one">Rimuovi %1$s</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” viene eliminata. Il gioco si riavvia e usa le altre mod o i file del disco. I progressi dall\'ultimo salvataggio vanno persi.</string>
+    <string name="ingame_mods_added_all">Aggiunte: %1$s</string>
+    <string name="ingame_mods_failed_all">Non aggiunte: %1$s</string>
+    <string name="ingame_mods_none_found">La cartella non contiene mod (cartelle come quelle del disco o file .zip).</string>
     <string name="ingame_mods_remove">Rimuovi tutte le mod</string>
     <string name="ingame_mods_remove_text">Il gioco si riavvia e usa di nuovo i file del disco. I progressi dall\'ultimo salvataggio vanno persi.</string>
     <string name="ingame_mod_copying">Copia della mod…</string>
@@ -655,7 +661,7 @@
     <string name="ingame_upscaler_fsr">FSR (forte)</string>
     <string name="ingame_upscaler_help">Upscaler: come viene ingrandita l\'immagine del gioco quando è più piccola del suo posto sullo schermo (una risoluzione sopra inferiore a quella dello schermo). No: il semplice allungamento morbido. SGSR (Qualcomm Snapdragon Game Super Resolution): bordi più nitidi, poco lavoro per il telefono; consigliato. FSR (AMD FidelityFX Super Resolution 1): il più nitido, circa il doppio del lavoro di SGSR. Non cambia nulla quando l\'immagine è grande quanto il suo posto, né con il filtro CRT.</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">Mod</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">Texture HD</string>
     <string name="ingame_hd_import">Importa pacchetto texture</string>
     <string name="ingame_hd_cancel">Annulla importazione</string>

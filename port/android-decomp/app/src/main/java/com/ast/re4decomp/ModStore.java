@@ -63,6 +63,64 @@ final class ModStore {
 
   static boolean removeAll(File gameRoot) { return delete(dir(gameRoot)); }
 
+  /** One pack goes (Mods by DevParalax, 26.11.2026: "delete mods one by one"); false when it is not there. */
+  static boolean remove(File gameRoot, String name) {
+    File pack = new File(dir(gameRoot), safeName(name));
+    if (!pack.isDirectory() || !pack.getName().equals(name)) return false;
+    return delete(pack);
+  }
+
+  /** What copyAll brought: the packs added (in order) and "name: why" of the ones that failed. */
+  static final class AllResult {
+    final List<Result> added = new ArrayList<>();
+    final List<String> failed = new ArrayList<>();
+  }
+
+  /**
+   * Every mod in the picked folder (Mods by DevParalax, 26.11.2026: "install all the mods it finds in a folder"):
+   * each subfolder a pack (copied as copyTree copies a picked folder), each .zip one (copyZip); a picked folder that
+   * is itself laid out like the disc (em/, files/ ... at its top) is one pack. In name order, each switched on, so
+   * of two that replace the same file the later one stays on.
+   */
+  static AllResult copyAll(ContentResolver resolver, Uri tree, File gameRoot) {
+    AllResult out = new AllResult();
+    String rootId = DocumentsContract.getTreeDocumentId(tree);
+    List<String[]> kids = new ArrayList<>();  // id, name, mime
+    try (Cursor c = resolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(tree, rootId),
+        new String[] {DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE}, null, null, null)) {
+      if (c == null) { out.failed.add("?: the folder cannot be read"); return out; }
+      while (c.moveToNext()) {
+        String name = c.getString(1);
+        if (name == null || name.startsWith(".")) continue;
+        kids.add(new String[] {c.getString(0), name, c.getString(2)});
+      }
+    }
+    for (String[] k : kids) {
+      if (DocumentsContract.Document.MIME_TYPE_DIR.equals(k[2]) && looksLikeDiscFolder(k[1])) {
+        try {
+          out.added.add(copyTree(resolver, tree, gameRoot));
+        } catch (IOException | RuntimeException e) {
+          out.failed.add(k[1] + ": " + e.getMessage());
+        }
+        return out;
+      }
+    }
+    kids.sort((a, b) -> a[1].compareToIgnoreCase(b[1]));
+    for (String[] k : kids) {
+      try {
+        if (DocumentsContract.Document.MIME_TYPE_DIR.equals(k[2])) {
+          out.added.add(copyDir(resolver, tree, k[0], safeName(k[1]), gameRoot));
+        } else if (k[1].toLowerCase(java.util.Locale.ROOT).endsWith(".zip")) {
+          out.added.add(copyZip(resolver, DocumentsContract.buildDocumentUriUsingTree(tree, k[0]), gameRoot));
+        }
+      } catch (IOException | RuntimeException e) {
+        out.failed.add(k[1] + ": " + e.getMessage());
+      }
+    }
+    return out;
+  }
+
   static boolean delete(File f) {
     File[] all = f.listFiles();
     if (all != null) for (File c : all) delete(c);
@@ -86,6 +144,12 @@ final class ModStore {
   static Result copyTree(ContentResolver resolver, Uri tree, File gameRoot) throws IOException {
     String rootId = DocumentsContract.getTreeDocumentId(tree);
     String name = safeName(displayName(resolver, DocumentsContract.buildDocumentUriUsingTree(tree, rootId)));
+    return copyDir(resolver, tree, rootId, name, gameRoot);
+  }
+
+  /** The folder `docId` of the picked tree as the pack `name` (copyTree, copyAll). */
+  private static Result copyDir(ContentResolver resolver, Uri tree, String rootId, String name, File gameRoot)
+      throws IOException {
     File mods = dir(gameRoot), staging = new File(mods, ".incoming"), target = new File(mods, name);
     delete(staging);
     if (!staging.mkdirs()) throw new IOException("cannot create " + staging);

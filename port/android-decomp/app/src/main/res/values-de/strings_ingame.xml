@@ -579,6 +579,12 @@
     </plurals>
     <string name="ingame_mod_add">Mod-Ordner hinzufügen</string>
     <string name="ingame_mod_add_zip">Mod-.zip hinzufügen</string>
+    <string name="ingame_mod_add_all">Alle Mods eines Ordners hinzufügen</string>
+    <string name="ingame_mod_remove_one">%1$s entfernen</string>
+    <string name="ingame_mod_remove_one_text">„%1$s“ wird gelöscht. Das Spiel startet neu und nutzt die anderen Mods oder die Dateien der Disc. Fortschritt seit dem letzten Speichern geht verloren.</string>
+    <string name="ingame_mods_added_all">Hinzugefügt: %1$s</string>
+    <string name="ingame_mods_failed_all">Nicht hinzugefügt: %1$s</string>
+    <string name="ingame_mods_none_found">Der Ordner enthält keine Mods (Ordner wie auf der Disc oder .zip-Dateien).</string>
     <string name="ingame_mods_remove">Alle Mods entfernen</string>
     <string name="ingame_mods_remove_text">Das Spiel startet neu und nutzt wieder die Dateien der Disc. Fortschritt seit dem letzten Speichern geht verloren.</string>
     <string name="ingame_mod_copying">Mod wird kopiert…</string>
@@ -650,7 +656,7 @@
     <string name="ingame_upscaler_fsr">FSR (stark)</string>
     <string name="ingame_upscaler_help">Hochskalierer: wie das Bild des Spiels vergrößert wird, wenn es kleiner ist als sein Platz auf dem Bildschirm (eine Auflösung oben unter der des Bildschirms). Aus: das einfache, weiche Strecken. SGSR (Qualcomm Snapdragon Game Super Resolution): schärfere Kanten, wenig Arbeit für das Handy; empfohlen. FSR (AMD FidelityFX Super Resolution 1): am schärfsten, etwa doppelt so viel Arbeit wie SGSR. Nichts ändert sich, wenn das Bild so groß ist wie sein Platz, und mit dem CRT-Filter.</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">HD-Texturen</string>
     <string name="ingame_hd_import">Texturpaket importieren</string>
     <string name="ingame_hd_cancel">Import abbrechen</string>

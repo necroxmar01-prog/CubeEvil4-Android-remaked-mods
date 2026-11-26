@@ -587,6 +587,12 @@
     </plurals>
     <string name="ingame_mod_add">Добавить папку мода</string>
     <string name="ingame_mod_add_zip">Добавить мод .zip</string>
+    <string name="ingame_mod_add_all">Добавить все моды из папки</string>
+    <string name="ingame_mod_remove_one">Удалить %1$s</string>
+    <string name="ingame_mod_remove_one_text">«%1$s» будет удалён. Игра перезапустится и будет использовать другие моды или файлы диска. Прогресс с последнего сохранения будет потерян.</string>
+    <string name="ingame_mods_added_all">Добавлены: %1$s</string>
+    <string name="ingame_mods_failed_all">Не добавлены: %1$s</string>
+    <string name="ingame_mods_none_found">В папке нет модов (папок как на диске или файлов .zip).</string>
     <string name="ingame_mods_remove">Удалить все моды</string>
     <string name="ingame_mods_remove_text">Игра перезапустится и снова будет использовать файлы диска. Прогресс после последнего сохранения будет потерян.</string>
     <string name="ingame_mod_copying">Копирование мода…</string>
@@ -660,7 +666,7 @@
     <string name="ingame_upscaler_fsr">FSR (сильный)</string>
     <string name="ingame_upscaler_help">Апскейлер: как увеличивается картинка игры, когда она меньше своего места на экране (разрешение выше ниже, чем у экрана). Выкл.: простое мягкое растяжение. SGSR (Qualcomm Snapdragon Game Super Resolution): более чёткие края, мало работы для телефона; рекомендуется. FSR (AMD FidelityFX Super Resolution 1): самый чёткий, примерно вдвое больше работы, чем SGSR. Ничего не меняется, если картинка такого же размера, как её место, и с фильтром CRT.</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">Моды</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">HD-текстуры</string>
     <string name="ingame_hd_import">Импорт пакета текстур</string>
     <string name="ingame_hd_cancel">Отменить импорт</string>

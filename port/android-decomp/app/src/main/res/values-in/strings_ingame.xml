@@ -574,6 +574,12 @@
     </plurals>
     <string name="ingame_mod_add">Tambah folder mod</string>
     <string name="ingame_mod_add_zip">Tambah mod .zip</string>
+    <string name="ingame_mod_add_all">Tambah semua mod dalam folder</string>
+    <string name="ingame_mod_remove_one">Hapus %1$s</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” dihapus. Game dimulai ulang dan memakai mod lain atau file disk sendiri. Progres sejak simpanan terakhir hilang.</string>
+    <string name="ingame_mods_added_all">Ditambahkan: %1$s</string>
+    <string name="ingame_mods_failed_all">Tidak ditambahkan: %1$s</string>
+    <string name="ingame_mods_none_found">Folder ini tidak berisi mod (folder seperti di disk atau file .zip).</string>
     <string name="ingame_mods_remove">Hapus semua mod</string>
     <string name="ingame_mods_remove_text">Game dimulai ulang dan kembali memakai file disk. Progres sejak penyimpanan terakhir akan hilang.</string>
     <string name="ingame_mod_copying">Menyalin mod…</string>
@@ -644,7 +650,7 @@
     <string name="ingame_upscaler_fsr">FSR (kuat)</string>
     <string name="ingame_upscaler_help">Upscaler: cara gambar game diperbesar saat lebih kecil dari tempatnya di layar (resolusi di atas lebih rendah dari resolusi layar). Mati: peregangan biasa yang lembut. SGSR (Qualcomm Snapdragon Game Super Resolution): tepi lebih tajam, kerja ringan bagi ponsel; disarankan. FSR (AMD FidelityFX Super Resolution 1): paling tajam, sekitar dua kali kerja SGSR. Tidak ada yang berubah saat gambar sebesar tempatnya, juga dengan filter CRT.</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">Mod</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">Tekstur HD</string>
     <string name="ingame_hd_import">Impor paket tekstur</string>
     <string name="ingame_hd_cancel">Batalkan impor</string>

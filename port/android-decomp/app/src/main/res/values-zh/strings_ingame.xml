@@ -576,6 +576,12 @@
     </plurals>
     <string name="ingame_mod_add">添加模组文件夹</string>
     <string name="ingame_mod_add_zip">添加模组 .zip</string>
+    <string name="ingame_mod_add_all">添加文件夹中的所有模组</string>
+    <string name="ingame_mod_remove_one">移除 %1$s</string>
+    <string name="ingame_mod_remove_one_text">将删除“%1$s”。游戏会重启并使用其他模组或光盘自身的文件。上次存档后的进度将丢失。</string>
+    <string name="ingame_mods_added_all">已添加：%1$s</string>
+    <string name="ingame_mods_failed_all">未添加：%1$s</string>
+    <string name="ingame_mods_none_found">该文件夹中没有模组（与光盘结构相同的文件夹或 .zip 文件）。</string>
     <string name="ingame_mods_remove">移除所有模组</string>
     <string name="ingame_mods_remove_text">游戏将重启并重新使用光盘上的文件。上次存档之后的进度会丢失。</string>
     <string name="ingame_mod_copying">正在复制模组…</string>
@@ -646,7 +652,7 @@
     <string name="ingame_upscaler_fsr">FSR（强）</string>
     <string name="ingame_upscaler_help">放大算法：当游戏画面小于它在屏幕上的位置时（上面的分辨率低于屏幕的分辨率），画面如何放大。关：普通的柔和拉伸。SGSR（Qualcomm Snapdragon Game Super Resolution）：边缘更清晰，手机负担小；推荐。FSR（AMD FidelityFX Super Resolution 1）：最清晰，工作量约为 SGSR 的两倍。画面与其位置一样大时，或开启 CRT 滤镜时，没有变化。</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">模组</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">高清纹理</string>
     <string name="ingame_hd_import">导入纹理包</string>
     <string name="ingame_hd_cancel">取消导入</string>

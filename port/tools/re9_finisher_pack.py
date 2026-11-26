@@ -958,6 +958,10 @@ class _Frozen:
 # index of MOVES (runtime/locomotion.cpp gPistolCarry, played on the arms while a handgun is out and not aimed)
 WEP_CARRY_PISTOL = "cha0_wp4000M.motlist.663"
 PISTOL_STANCE = ("0000_arm_1", 60.0)
+# (Mods, 26.11.2026, DevJunior, device test of the classic stance: "better go back to the remake's normal animation for
+# the pistol and for running": hunched while running with the gun held up before the chest) the classic stance off:
+# the remake's carry instead (cha0_wp4000M arm_1 / arm_3 / arm_5 of the stand, walk and jog, as CARRY_ARMS)
+PISTOL_CLASSIC = False
 
 
 def frozen(base, arm, frame):
@@ -1299,11 +1303,15 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
                                                    grip_frame(model, g7, gf)), model, g16, 16), model)
             carry.append((0x98 + MOVES.index((slot, name, lengths, flags)), fcv.serialise(cf.motion(cf.scale)),
                           len(cf.frames) - 1))
-        if weapons and pistols and "wep01" in pistols:
+        if weapons and pistols and "wep01" in pistols and slot in CARRY_ARMS:
             _v, parms = R.read_motlist(motlist_in(weapons, WEP_CARRY_PISTOL))
-            arm = next(x for x in parms if x.name.endswith(PISTOL_STANCE[0]))
-            pf = Fit(frozen(m, arm, PISTOL_STANCE[1]), model, "leon", 2.0, tol, m.frames, True, frames=fit.frames,
-                     loop=True)
+            if PISTOL_CLASSIC:
+                arm = next(x for x in parms if x.name.endswith(PISTOL_STANCE[0]))
+                pistol_base = frozen(m, arm, PISTOL_STANCE[1])
+            else:  # the remake's own carry: its arm layer of this movement, played in step with it
+                arm = next(x for x in parms if x.name.endswith(CARRY_ARMS[slot]))
+                pistol_base = carried(m, arm, first)
+            pf = Fit(pistol_base, model, "leon", 2.0, tol, m.frames, True, frames=fit.frames, loop=True)
             warc1 = U.Archive(Path(pistols["wep01"]).read_bytes(), ">")
             g1 = warc1.entry(0x27 - 4)  # the level aim idle
             gf1 = range(0, fcv.parse(g1).max_frame + 1, 4)

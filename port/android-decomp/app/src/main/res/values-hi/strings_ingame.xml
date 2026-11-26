@@ -579,6 +579,12 @@
     </plurals>
     <string name="ingame_mod_add">मॉड फ़ोल्डर जोड़ें</string>
     <string name="ingame_mod_add_zip">मॉड .zip जोड़ें</string>
+    <string name="ingame_mod_add_all">एक फ़ोल्डर के सभी मॉड जोड़ें</string>
+    <string name="ingame_mod_remove_one">%1$s हटाएँ</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” हटाया जाएगा। गेम फिर से शुरू होगा और दूसरे मॉड या डिस्क की अपनी फ़ाइलें इस्तेमाल करेगा। पिछली सेव के बाद की प्रगति खो जाएगी।</string>
+    <string name="ingame_mods_added_all">जोड़े गए: %1$s</string>
+    <string name="ingame_mods_failed_all">नहीं जोड़े गए: %1$s</string>
+    <string name="ingame_mods_none_found">इस फ़ोल्डर में कोई मॉड नहीं है (डिस्क जैसे फ़ोल्डर या .zip फ़ाइलें)।</string>
     <string name="ingame_mods_remove">सभी मॉड हटाएँ</string>
     <string name="ingame_mods_remove_text">गेम रीस्टार्ट होगा और फिर से डिस्क की फ़ाइलें इस्तेमाल करेगा। पिछली सेव के बाद की प्रगति खो जाएगी।</string>
     <string name="ingame_mod_copying">मॉड कॉपी हो रहा है…</string>
@@ -650,7 +656,7 @@
     <string name="ingame_upscaler_fsr">FSR (तेज़)</string>
     <string name="ingame_upscaler_help">अपस्केलर: जब गेम की तस्वीर स्क्रीन पर अपनी जगह से छोटी हो (ऊपर का रेज़ोल्यूशन स्क्रीन से कम), तो उसे कैसे बड़ा किया जाए। बंद: सादा, नरम खिंचाव। SGSR (Qualcomm Snapdragon Game Super Resolution): ज़्यादा साफ़ किनारे, फ़ोन पर कम काम; अनुशंसित। FSR (AMD FidelityFX Super Resolution 1): सबसे साफ़, SGSR से लगभग दोगुना काम। जब तस्वीर अपनी जगह जितनी बड़ी हो, या CRT फ़िल्टर के साथ, कुछ नहीं बदलता।</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">मॉड्स</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">HD टेक्सचर</string>
     <string name="ingame_hd_import">टेक्सचर पैक इम्पोर्ट करें</string>
     <string name="ingame_hd_cancel">इम्पोर्ट रद्द करें</string>

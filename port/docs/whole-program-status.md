@@ -20412,3 +20412,15 @@ Spiel.
   Haaransatz; hier 1745, 220 Texel); Körper `--inflate 23` statt 26 (Remake-Pullover −15 statt −12). Daten 5–6,6 MB.
   Am Host gerendert, auf dem Gerät nicht getestet. Offen aus demselben Test: Lauf- und Gehanimation „nicht schön“,
   das Nachladen dreht und bewegt Leon (Nachladen ohne Zielen mit „Move while aiming“, free_move.cpp) – Rückfrage.
+- **Pistole und Laufen wieder wie im Remake** (DevJunior, 26.11.2026, nach dem Gerätetest der klassischen Haltung:
+  „regresa a la animación del remake normal para pistola y para correr“; im Video lief Leon gebückt, die Waffe vor der
+  Brust): `re9_finisher_pack.py` `PISTOL_CLASSIC = False`: move.dat 0xC8..0xCB jetzt die Armschicht des Remakes
+  (`cha0_wp4000M` arm_1 / arm_3 / arm_5 zu Stand, Gehen, Joggen, wie bei der Schrotflinte im Takt der Bewegung) statt
+  „arm_1“ bei Bild 60 eingefroren; `locomotion.cpp` spielt sie unverändert. RE9 Finishers v36 (move.dat 762 496
+  Bytes, sonst wie v35). Am Host gerendert (Stand, Joggen), im Spiel nicht getestet.
+- **Mods by DevParalax** (DevJunior, 26.11.2026: Menüpunkt umbenannt, Mods einzeln löschen, alle Mods eines Ordners
+  installieren): `ingame_mods` heißt in allen Sprachen „Mods by DevParalax“; unter „Mod packs“ je Paket ein Knopf
+  „Remove NAME“ (Rückfrage, dann Neustart; `ModStore.remove`) und „Add all mods in a folder“ (`ModStore.copyAll`:
+  jeder Unterordner und jede .zip ein Paket in Namensreihenfolge, ein Ordner mit em/ … oben ist selbst ein Paket;
+  danach eine Meldung mit den hinzugefügten und den gescheiterten und Neustart). Texte in 11 Sprachen,
+  `check_translations.py` ohne Fehler. Gebaut nur in der CI; auf dem Gerät nicht getestet.

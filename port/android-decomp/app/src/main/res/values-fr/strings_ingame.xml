@@ -585,6 +585,12 @@
     </plurals>
     <string name="ingame_mod_add">Ajouter un dossier de mod</string>
     <string name="ingame_mod_add_zip">Ajouter un mod .zip</string>
+    <string name="ingame_mod_add_all">Ajouter tous les mods d\'un dossier</string>
+    <string name="ingame_mod_remove_one">Retirer %1$s</string>
+    <string name="ingame_mod_remove_one_text">« %1$s » est supprimé. Le jeu redémarre et utilise les autres mods ou les fichiers du disque. La progression depuis la dernière sauvegarde est perdue.</string>
+    <string name="ingame_mods_added_all">Ajoutés : %1$s</string>
+    <string name="ingame_mods_failed_all">Non ajoutés : %1$s</string>
+    <string name="ingame_mods_none_found">Le dossier ne contient aucun mod (dossiers comme ceux du disque ou fichiers .zip).</string>
     <string name="ingame_mods_remove">Retirer tous les mods</string>
     <string name="ingame_mods_remove_text">Le jeu redémarre et utilise de nouveau les fichiers du disque. La progression depuis votre dernière sauvegarde est perdue.</string>
     <string name="ingame_mod_copying">Copie du mod…</string>
@@ -657,7 +663,7 @@
     <string name="ingame_upscaler_fsr">FSR (fort)</string>
     <string name="ingame_upscaler_help">Mise à l\'échelle : comment l\'image du jeu est agrandie quand elle est plus petite que sa place à l\'écran (une résolution ci-dessus inférieure à celle de l\'écran). Non : l\'étirement simple et doux. SGSR (Qualcomm Snapdragon Game Super Resolution) : bords plus nets, peu de travail pour le téléphone ; recommandé. FSR (AMD FidelityFX Super Resolution 1) : le plus net, environ deux fois le travail de SGSR. Rien ne change quand l\'image est aussi grande que sa place, ni avec le filtre CRT.</string>
     <!-- textures: Cheats &amp; Mods, HD textures (port/docs/textur-lader-plan.md) -->
-    <string name="ingame_mods">Mods</string>
+    <string name="ingame_mods">Mods by DevParalax</string>
     <string name="ingame_hd_textures">Textures HD</string>
     <string name="ingame_hd_import">Importer un pack de textures</string>
     <string name="ingame_hd_cancel">Annuler l’import</string>
