@@ -162,6 +162,26 @@ def re_mesh(folder, face_tris):
     return out
 
 
+def despeckle(img, texel_pos, above, darker=14.0, radius=6.0):
+    """Dark spots on the face texture above height `above` on the model (DevJunior, 26.11.2026, device test of Leon
+    Clásico Remasterizado v4: moles and marks of the Hybrid face's albedo at the hairline showed as dark blots on the
+    forehead under the new fringe): a texel darker than its surroundings (Gaussian, `radius`) by more than `darker`
+    takes their colour, faded in over 8 levels. Returns (image, texels changed)."""
+    from scipy.ndimage import gaussian_filter
+    a = np.asarray(img.convert("RGBA"), dtype=np.float64).copy()
+    lum = a[..., :3] @ np.array([0.3, 0.59, 0.11])
+    with np.errstate(invalid="ignore"):
+        on = np.where(np.isfinite(texel_pos[..., 1]), texel_pos[..., 1] > above, False)
+    w = on.astype(np.float64)
+    mean = np.dstack([gaussian_filter(a[..., c] * w, radius) for c in range(3)]) / \
+        np.maximum(gaussian_filter(w, radius), 1e-6)[..., None]
+    mlum = mean @ np.array([0.3, 0.59, 0.11])
+    k = np.clip((mlum - lum - darker) / 8.0, 0, 1) * on
+    k = np.clip(gaussian_filter(k, 1.0) * 1.5, 0, 1)
+    a[..., :3] = a[..., :3] * (1 - k[..., None]) + mean * k[..., None]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), int((k > 0.5).sum())
+
+
 def corner_mesh(Pc, Nc, Tc):
     """Per-corner arrays (n x 3 x k) as (positions, triangles of (p, n, t) indices, normals, uvs)."""
     n = len(Pc)
@@ -377,6 +397,8 @@ def main(argv=None):
     ap.add_argument("--hair-colour", default="44,35,25", help="the scalp under the hair (skin_hair_fbx.scalp)")
     ap.add_argument("--scalp-rules", action="store_true",
                     help="also skin_hair_fbx.scalp's fixed regions (made for the disc's head; the FBX face has a hairline)")
+    ap.add_argument("--despeckle", type=float, metavar="Y", help="dark spots on the face texture above this height "
+                    "evened out (despeckle)")
     ap.add_argument("--crown-under", type=float, help="the crown kept this far under the hair's inside (under_hair)")
     ap.add_argument("--scalp-depth", type=float, default=0.8)
     ap.add_argument("--scalp-reach", type=float, default=0.0)
@@ -499,6 +521,9 @@ def main(argv=None):
         tone = np.array([float(x) for x in a.tone.split(",")])
     brow_colour = tuple(int(x) for x in a.brow_colour.split(","))
     face = face_texture(a, a.tex, texel_pos, cards, brow_colour, beard_colour, tone)
+    if a.despeckle is not None:
+        face, n = despeckle(face, texel_pos, a.despeckle)
+        print("face: %d texels of dark spots above y %.0f evened out" % (n, a.despeckle))
     imgs[skin_mat] = G.encode_image(face, bytes(hdr))
     hair = G.positions(entries[HAIR]) if entries[HAIR] else None
     colour = tuple(int(x) for x in a.hair_colour.split(","))

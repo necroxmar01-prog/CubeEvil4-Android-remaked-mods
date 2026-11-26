@@ -20404,3 +20404,11 @@ Spiel.
   tener ambos“): neben dem klassischen v7 die Remake-Kleidung von „Leon Remake Lite optimized“ (`pl00` Lederjacke,
   `pl08` schwarzer Strickpullover mit kurzen Ärmeln, Gurt und Messer) mit Kopf, Gesicht und Haar von v4; `pl08` mit
   `--physique athletic --inflate 0:-12` (zwischen Remake Lite und v7). Am Host gerendert, auf dem Gerät nicht getestet.
+- **Leon Clásico Remasterizado v8 / Remake v3** (DevJunior, 26.11.2026, Gerätetest mit Video 118137 und Bildern:
+  Haar mit Lücken, dunkle Flecken an Stirn und Haaransatz, „el bíceps solo redúcelo un 3 %“): Haar mit allen Karten von
+  `Hair00` und 60 % von `Hair01` (26 702 Dreiecke) und deckender gemacht wie Black Coat v30 (`--thicken 0.8 --fill 0.8
+  --alpha-ref 40 --solid 0.8 --harden 4`), `--albedo-contrast 3 --streaks 0.3`; `skin_head_fbx.py --despeckle Y`
+  gleicht dunkle Flecken der Gesichtstextur über y Y an ihre Umgebung an (Muttermale der Hybrid-Albedo am
+  Haaransatz; hier 1745, 220 Texel); Körper `--inflate 23` statt 26 (Remake-Pullover −15 statt −12). Daten 5–6,6 MB.
+  Am Host gerendert, auf dem Gerät nicht getestet. Offen aus demselben Test: Lauf- und Gehanimation „nicht schön“,
+  das Nachladen dreht und bewegt Leon (Nachladen ohne Zielen mit „Move while aiming“, free_move.cpp) – Rückfrage.
