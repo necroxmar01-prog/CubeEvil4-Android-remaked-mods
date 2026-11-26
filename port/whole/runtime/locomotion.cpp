@@ -123,6 +123,11 @@ Move gClip[kClips];
 // level; re4_move_reload, patch 0944)
 u8* gReload[3];
 u16 gReloadLast[3];
+// (Mods, 25.11.2026, DevJunior: "the other weapons' animations", handguns first) the handguns' reload per level in two
+// sets of lengths (move.dat 0xB0 + level: 52/45/28 frames, wep01/02/04; 0xB4 + level: 56/47/29, wep06), taken by the
+// game motion's own length (pl_handgun.cpp wep02_r2_reload, patch 0955)
+u8* gHgReload[2][3];
+u16 gHgReloadLast[2][3];
 // (Mods, 23.11.2026) the shotgun's three aim poses (move.dat codes 0x94..0x96 for the game's WEP entries 0x16, 0x1C,
 // 0x1E: PL_ARC 0x1A, 0x20, 0x22 of wep07_r3_set00 / fire00), the remake's hold loop with the gun on the game's line;
 // re4_move_aim, patch 0950
@@ -317,6 +322,8 @@ void load()
     static Move clips[kClips];
     memset(clips, 0, sizeof(clips));
     u8* reload[3] = {0, 0, 0};
+    u8* hg[2][3] = {};
+    u16 hgLast[2][3] = {};
     u8* aim[3] = {0, 0, 0};
     u8* carry[kMoves] = {};
     u16 carryLast[kMoves] = {};
@@ -346,6 +353,11 @@ void load()
         if (r[0] >= 0x90 && r[0] < 0x93) {
             reload[r[0] - 0x90] = base + at[entry];
             reloadLast[r[0] - 0x90] = last;
+        }
+        if ((r[0] >= 0xB0 && r[0] < 0xB3) || (r[0] >= 0xB4 && r[0] < 0xB7)) {
+            const int set = r[0] >= 0xB4 ? 1 : 0, lv = r[0] - (set ? 0xB4 : 0xB0);
+            hg[set][lv] = base + at[entry];
+            hgLast[set][lv] = last;
         }
         if (r[0] >= 0x80 && r[0] < 0x80 + kClips && last <= kSeqMax) {
             Move& c = clips[r[0] - 0x80];
@@ -431,6 +443,17 @@ void load()
     }
     if (nReload) {
         re4_log("move: %s: the remake's shotgun reload, %d levels", path, nReload);
+    }
+    int nHg = 0;
+    for (int k = 0; k < 2; k++) {
+        for (int i = 0; i < 3; i++) {
+            gHgReload[k][i] = hg[k][i];
+            gHgReloadLast[k][i] = hgLast[k][i];
+            nHg += hg[k][i] ? 1 : 0;
+        }
+    }
+    if (nHg) {
+        re4_log("move: %s: the remake's handgun reloads, %d motions", path, nHg);
     }
     int nAim = 0;
     for (int i = 0; i < 3; i++) {
@@ -1221,6 +1244,26 @@ int re4_move_strafe(void* p, float sx, float sy, float want, const void* cur, fl
 // another pack: the game's).
 void* re4_move_reload(int weapon, int level, void* mot)
 {
+    if (weapon != 7 && level >= 0 && level <= 2 && on() && mot) {
+        // a handgun (patch 0955): the set made for a reload as long as the game's
+        const unsigned own = get16((const u8*) mot) & 0x3FFF;
+        static int told;
+        for (int k = 0; k < 2; k++) {
+            if (gHgReload[k][level] && gHgReloadLast[k][level] == own) {
+                if (!(told & (1 << (k * 3 + level)))) {
+                    told |= 1 << (k * 3 + level);
+                    re4_log("move: the remake's handgun reload (weapon %d, level %d, %u frames)", weapon, level, own);
+                }
+                return gHgReload[k][level];
+            }
+        }
+        if (!(told & (0x100 << level))) {
+            told |= 0x100 << level;
+            re4_log("move: the handgun reload (weapon %d, level %d) is %u frames: no remake's reload that long, the "
+                    "game's", weapon, level, own);
+        }
+        return mot;
+    }
     if (weapon != 7 || level < 0 || level > 2 || !gReload[level] || !on() || !mot) {
         return mot;
     }

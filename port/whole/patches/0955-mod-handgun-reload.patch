@@ -1,0 +1,26 @@
+# Patch 0955 (wish of DevJunior, 25.11.2026: "now Leon's other animations, the other weapons", handguns first). Not a
+# bug of the prototype: a port feature of the mods.
+# wep/pl_handgun.cpp wep02_r2_reload (the handgun modules wep01/02/04/05/06/15/38/43/44): Leon's reload (pl_type 0)
+# asks runtime/locomotion.cpp re4_move_reload for the remake's (move.dat 0xB0.. / 0xB4.., the set as long as the
+# game's motion) in place of the game's; any other length, character or the movements off: the game's.
+--- a/src/wep/pl_handgun.cpp
++++ b/src/wep/pl_handgun.cpp
+@@ -458,6 +458,7 @@
+ // frame and return to set step 0. Steps 2/3 blend the aim idle back in over 8 frames (m_Work0
+ // counts) and return to set step 0.
+ extern "C" int re4_reload_quick_end(void); /* port (patch 0933): runtime/free_move.cpp */
++extern "C" void* re4_move_reload(int weapon, int level, void* mot); /* port (patch 0955): runtime/locomotion.cpp */
+ static void wep02_r2_reload(cPlayer* pl)
+ {
+     u8 step = pl->r_no_3;
+@@ -478,6 +479,10 @@
+             mot = WEP_ARC_PTR(0x2F);
+             break;
+         }
++        /* port (patch 0955, mods): Leon's handgun reload of the remake when move.dat has one as long as this */
++        if (pG->pl_type == 0) {
++            mot = re4_move_reload(pG->weapon_no, re4_story_char_reload_level(pG->weapon_lv_reload), mot);
++        }
+         MotionSetCore(pl, &pl->Motion, mot, 0, 3, 1, 0);
+         pl->motionMove();
+         pl->r_no_3 = 1;

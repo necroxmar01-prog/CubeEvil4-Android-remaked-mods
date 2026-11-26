@@ -672,6 +672,70 @@ def shotgun_reloads(motdir, ref, model, tol, wep, hand_off=None):
     return out
 
 
+# The handguns' reload of the 2023 game (wish of DevJunior, 25.11.2026: "now Leon's other animations, the other
+# weapons", handguns first): cha0_wp4000H 0810_reload (the SG-09 R's, 195 frames at 60 a second) played over the game's
+# own reload at each level (weapon_lv_reload 0..2; the game's handgun archives' PL_ARC 0x2D..0x2F = entries 0x29..0x2B),
+# stretched to its length so that the gun's own motion (the magazine) and the game's frames for the rounds stay as they
+# are. Two sets of lengths among the disc's handguns: 52/45/28 frames (wep01, wep02, wep04) as move.dat codes 0xB0 +
+# level, 56/47/29 (wep06) as 0xB4 + level (runtime/locomotion.cpp re4_move_reload takes the set as long as the game's).
+WEP_PISTOL = "cha0_wp4000H.motlist.663"
+PISTOL_SETS = [(0xB0, "wep01"), (0xB4, "wep06")]
+
+
+def game_yaw(model, data, part, frame=0):
+    """The game motion's facing (degrees from ahead, + to the left) of `part` at `frame`."""
+    from tools.motion import evalhost
+    p = evalhost.Player(model, fcv.parse(data), ik=False).frame(frame)
+    h = np.array(p.mat[part]).reshape(3, 4)[:, :3]
+    v = h @ np.array([0.0, 0.0, 1.0])
+    return math.degrees(math.atan2(v[0], v[2]))
+
+
+def pistol_reloads(motdir, ref, model, tol, archives):
+    """The rows (code, entry data) of the handguns' reloads for move.dat. `archives`: name -> the disc's handgun
+    archive (em/wepNN.drs) of PISTOL_SETS."""
+    _v, mots = R.read_motlist(motlist_in(motdir, WEP_PISTOL))
+    clip = next(x for x in mots if x.name.endswith("0810_reload"))
+    rest_from(clip, ref)
+    hold = next(x for x in mots if x.name.endswith("0160_hold_loop"))
+    rest_from(hold, ref)
+    out = []
+    for base, name in PISTOL_SETS:
+        if name not in archives:
+            continue
+        warc = U.Archive(Path(archives[name]).read_bytes(), ">")
+        aim = warc.entry(0x27 - 4)  # the level aim idle (PL_ARC 0x27)
+        grip = grip_frame(model, aim, range(0, fcv.parse(aim).max_frame + 1, 4))
+        # how the game's gun lies in the remake's right hand: from the remake's hold loop (both hands on it)
+        hf = Fit(hold, model, "leon", 2.0, tol, hold.frames, True, frames=list(np.arange(0, min(hold.frames, 120.0), 4.0)))
+        fixed_rows = grip_fix(hf.rows, model, grip)
+        acc = np.zeros((3, 3))
+        for r0, r1 in zip(hf.rows, fixed_rows):
+            acc += fk(model, r0)[0][10].T @ fk(model, r1)[0][10]
+        u_, _s, vt = np.linalg.svd(acc)
+        off = u_ @ vt
+        print("%s grip: the game's gun in the remake's hand turned %.0f deg" % (name, math.degrees(axis_angle(off)[1])))
+        for lv in range(3):
+            game = fcv.parse(warc.entry(0x29 + lv))
+            n = game.max_frame
+            frames = [min(clip.frames - 1.0, g * (clip.frames - 1.0) / n) for g in range(n + 1)]
+            fit = Fit(clip, model, "leon", 2.0, tol, clip.frames, True, frames=frames)
+            rows = [({**r[0], 10: r[0].get(10, np.eye(3)) @ off},) + tuple(r[1:]) for r in fit.rows]
+            # the legs and hips held as at the first frame, the whole body facing as the game's reload stands
+            rows = [({**r[0], **{q: rows[0][0][q] for q in RELOAD_STILL if q in rows[0][0]}}, rows[0][1]) + tuple(r[2:])
+                    for r in rows]
+            rows = face_ahead(rows, model, 18, game_yaw(model, warc.entry(0x29 + lv), 18))
+            fixed = {q: model.parts[q].pos for q in (10, 16, 20, 24) if q in fit.order}
+            mot = RT.build_motion(rows, fit.order, tol, root=None, fixed_pos=fixed)
+            # the game's own hand-held part (32: the gun's place) at the game's times
+            mot.joints = [j for j in mot.joints if j.parts_no != 32] + [j for j in game.joints if j.parts_no == 32]
+            mot.layout = list(range(len(mot.joints)))
+            data = fcv.serialise(mot)
+            print("handgun reload (%s) level %d: %d game frames, %d bytes" % (name, lv, n, len(data)))
+            out.append((base + lv, data))
+    return out
+
+
 # The shotgun's aim (wish of DevJunior, 21.11.2026: "the idle positions of the weapons", "do it"): the remake's hold
 # loop (cha0_wp4100H 0160) in place of the game's three-way aim idle (mot3: level, up, down = wep07 0x16, 0x1C, 0x1E,
 # PL_ARC 0x1A / 0x20 / 0x22), one cycle as long as the game's (60 frames). The remake has one aim pose (its aiming
@@ -1061,7 +1125,7 @@ def hand_offset(motdir, ref, model, tol, grip):
     return off
 
 
-def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, general=None):
+def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, general=None, pistols=None):
     """Leon's movements (see --move)."""
     _v, mots = R.read_motlist(Path(general) if general else root / CHA0)
     entries, table, steps = [b""], [], []
@@ -1144,6 +1208,12 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
         g7 = warc.entry(SHOTGUN_AIMS[0][1])
         off = hand_offset(weapons, mots[0], model, tol, grip_frame(model, g7, range(0, fcv.parse(g7).max_frame + 1, 6)))
         for code, data in shotgun_reloads(weapons, mots[0], model, tol, warc, off):
+            entries.append(data)
+            table.append(struct.pack(">BBHHHHH", code, 0, len(entries) - 1, fcv.parse(data).max_frame, 0xFFFF, 0xFFFF,
+                                     0))
+            steps.append([])
+    if weapons and pistols:
+        for code, data in pistol_reloads(weapons, mots[0], model, tol, pistols):
             entries.append(data)
             table.append(struct.pack(">BBHHHHH", code, 0, len(entries) - 1, fcv.parse(data).max_frame, 0xFFFF, 0xFFFF,
                                      0))
@@ -1273,6 +1343,8 @@ def main(argv=None):
     ap.add_argument("--weapons", help="with --move: the folder of Leon's weapon motlists (cha0_wp4100H …, the "
                     "'Tactical First-Person Mode' mod's _Chainsaw/Animation/ch/cha0/motlist)")
     ap.add_argument("--wep07", help="with --weapons: the disc's shotgun archive (em/wep07.drs)")
+    ap.add_argument("--pistols", help="with --weapons: the disc's handgun archives wep01.drs and wep06.drs, comma "
+                    "separated (their reloads, move.dat 0xB0.. / 0xB4..)")
     ap.add_argument("--general2", help="with --move: the remake's cha0_general2.motlist.663 (taking items; before 23.11.2026 "
                     "Ada's cha8_general2 of the 'General Animations Corrector' mod)")
     ap.add_argument("--general", help="with --move: the remake's own cha0_general.motlist.663 (else the one under ROOT)")
@@ -1301,7 +1373,8 @@ def main(argv=None):
     if a.react:
         reacts(root, ganado_model, a.tolerance, a.react, U.Archive(Path(a.ganado.partition(":")[0]).read_bytes(), ">"))
     if a.move:
-        moves(root, leon_model, a.tolerance, a.move, a.weapons, a.wep07, a.general2, a.general)
+        pist = {Path(x).stem.lower(): x for x in a.pistols.split(",")} if a.pistols else None
+        moves(root, leon_model, a.tolerance, a.move, a.weapons, a.wep07, a.general2, a.general, pist)
     want = set(a.only.split(",")) if a.only else None
     entries = [("FIN", b"")]
     made = {}
