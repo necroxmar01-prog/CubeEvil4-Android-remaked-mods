@@ -509,7 +509,9 @@ public final class StudioActivity extends Activity {
   private final java.util.Map<String, String> results = new java.util.HashMap<>();  // stem -> converted file
   private final List<String[]> udasFiles = new ArrayList<>();  // the mod's skins: PC stem, unpacked .udas
   private final StringBuilder convertLog = new StringBuilder();
-  private int convertTex = 128;
+  // the largest texture side; 0 = Best: 512, else 256, else 128, the largest whose archive fits the mods' place
+  // (DevJunior, 25.11.2026: "we use high-quality GTA skins and I want them to work optimally")
+  private int convertTex = 0;
   private boolean keepHead;  // GTA skins: Leon's own head, face and hair stay (a skin without a head)
   // RE4 Remake outfits: "Slim", sized as the GTA skins come out (trunk to the head joint, a little slimmer); on at
   // first (DevJunior, 20.11.2026, the Master Chief so: "this one came out perfect, it would be a good measure")
@@ -543,8 +545,8 @@ public final class StudioActivity extends Activity {
     if (!skins.isEmpty()) {
       LinearLayout sizes = row();
       sizes.addView(text("Textures ", 12, DIM, false));
-      for (int t : new int[] {128, 256, 512}) {
-        Button b = pill(String.valueOf(t), t == convertTex);
+      for (int t : new int[] {0, 128, 256, 512}) {
+        Button b = pill(t == 0 ? "Best" : String.valueOf(t), t == convertTex);
         b.setOnClickListener(v -> { convertTex = t; results.clear(); showTab(2); });
         sizes.addView(b, chip());
       }
@@ -586,9 +588,9 @@ public final class StudioActivity extends Activity {
         content.addView(note("RE4 Remake outfits. Slim: sized as the GTA skins come out (smaller trunk and head, a "
             + "little slimmer). Its own: the outfit's own build."));
       }
-      if (convertTex > 128) {
-        content.addView(note("Larger textures look sharper but need more of the game's memory: try 128 first."));
-      }
+      content.addView(note(convertTex == 0
+          ? "Best: the sharpest textures (512) that fit the game's place for the character, else 256, else 128."
+          : "Larger textures look sharper but need more of the game's memory."));
       for (String[] k : skins) {
         String done = results.get(k[4]);
         String detail = k[2].isEmpty()
@@ -985,17 +987,14 @@ public final class StudioActivity extends Activity {
           continue;
         }
         java.io.File dest = new java.io.File(out, k[3]);
-        String r = k[0].endsWith(REMAKE_WEAPON)
-            ? StudioBridge.convertReWeapon(disc.getAbsolutePath(), k[3], k[1].split("\n"), k[5], convertTex,
-                dest.getAbsolutePath())
-            : k[0].endsWith(REMAKE)
-            ? StudioBridge.convertReMod(disc.getAbsolutePath(), k[3], k[1].split("\n"), convertTex, keepHead, fitLeon,
-                dest.getAbsolutePath())
-            : k[0].endsWith(".dff")
-            ? StudioBridge.convertDff(disc.getAbsolutePath(), k[3], k[1], txdFor(k[1]), convertTex, keepHead, fitLeon,
-                dest.getAbsolutePath())
-            : StudioBridge.convertSkin(disc.getAbsolutePath(), k[3], k[1], packs.toArray(new String[0]), convertTex,
-                dest.getAbsolutePath());
+        String r = "";
+        for (int tex : convertTex == 0 ? new int[] {512, 256, 128} : new int[] {convertTex}) {
+          r = convertOne(k, disc, dest, packs, tex);
+          if (r.startsWith("ok\n") || !r.contains("too large")) {
+            if (convertTex == 0) r = r.replaceFirst("\n", "\ntextures up to " + tex + " (Best)\n");
+            break;
+          }
+        }
         disc.delete();
         boolean ok = r.startsWith("ok\n");
         log("── " + k[0] + " → " + k[3] + " · " + character(k[4]) + (ok ? ": converted" : ": failed"));
@@ -1009,6 +1008,21 @@ public final class StudioActivity extends Activity {
         main.post(() -> preview(preview, f));
       }
     });
+  }
+
+  // one conversion with textures up to `convertTex` (a side)
+  private String convertOne(String[] k, java.io.File disc, java.io.File dest, List<String> packs, int convertTex) {
+    return k[0].endsWith(REMAKE_WEAPON)
+        ? StudioBridge.convertReWeapon(disc.getAbsolutePath(), k[3], k[1].split("\n"), k[5], convertTex,
+            dest.getAbsolutePath())
+        : k[0].endsWith(REMAKE)
+        ? StudioBridge.convertReMod(disc.getAbsolutePath(), k[3], k[1].split("\n"), convertTex, keepHead, fitLeon,
+            dest.getAbsolutePath())
+        : k[0].endsWith(".dff")
+        ? StudioBridge.convertDff(disc.getAbsolutePath(), k[3], k[1], txdFor(k[1]), convertTex, keepHead, fitLeon,
+            dest.getAbsolutePath())
+        : StudioBridge.convertSkin(disc.getAbsolutePath(), k[3], k[1], packs.toArray(new String[0]), convertTex,
+            dest.getAbsolutePath());
   }
 
   // the converted archive on the view, as the game will put it together
