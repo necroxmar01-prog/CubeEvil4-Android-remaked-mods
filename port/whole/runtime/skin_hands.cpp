@@ -12,6 +12,7 @@
 #include "global.h"
 
 extern "C" int re4_player_modded(void);                        // runtime/dvd.cpp
+extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_set_whole_body_check(int (*check)(void));  // runtime/dvd.cpp
 
 // 1 while the player's file is such a whole-body skin (Leon the player, his own right hand folded and marked)
@@ -24,9 +25,25 @@ extern "C" int re4_skin_whole_body(void)
     return own && own[0x29] == 0xF0;
 }
 
+// (Mods, 25.11.2026, DevJunior: "Leon still has his hand bugged", Leon Remake Lite holding the handgun: a pale band at
+// the right wrist) the weapon's grip hand is the disc's hand from the weapon's own file, drawn with the player's hand
+// palette (pl_leon.cpp setRightHand: PL_ARC 0x11): with a skin's palette its texture coordinates hit the skin's glove
+// and arm pictures wrongly. With the player's file a mod's, the skin's own closed right hand (archive 0x13, the grip of
+// the disc's Leon as well) holds the weapon instead.
 extern "C" void* re4_skin_hand(void* wep)
 {
-    return re4_skin_whole_body() ? PL_ARC_PTR(pG->pPlayer, 0x12) : wep;
+    if (re4_skin_whole_body()) {
+        return PL_ARC_PTR(pG->pPlayer, 0x12);
+    }
+    if (wep && pG && pG->pl_type == 0 && re4_player_modded() && pG->pPlayer && pG->pPlayer->ofs[0x13]) {
+        static bool said;
+        if (!said) {
+            said = true;
+            re4_log("skin: the weapon's grip hand is the skin's own closed right hand (archive 0x13)");
+        }
+        return PL_ARC_PTR(pG->pPlayer, 0x13);
+    }
+    return wep;
 }
 
 namespace {

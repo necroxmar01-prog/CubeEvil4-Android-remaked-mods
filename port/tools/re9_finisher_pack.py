@@ -691,6 +691,21 @@ def game_yaw(model, data, part, frame=0):
     return math.degrees(math.atan2(v[0], v[2]))
 
 
+def hold_part_yaw(rows, model, part, yaws):
+    """`rows` with `part` turned about the upright each frame so that it faces yaws[frame] (degrees, as game_yaw)."""
+    z = np.array([0.0, 0.0, 1.0])
+    out = []
+    for i, r in enumerate(rows):
+        world = fk(model, r)[0]
+        v = world[part] @ z
+        d = math.radians(yaws[min(i, len(yaws) - 1)]) - math.atan2(v[0], v[2])
+        par = model.parts[part].parent
+        rp = world[par] if par is not None and par >= 0 else np.eye(3)
+        q = rp.T @ rot_axis(np.array([0.0, 1.0, 0.0]), d) @ rp
+        out.append(({**r[0], part: q @ r[0].get(part, np.eye(3))},) + tuple(r[1:]))
+    return out
+
+
 def pistol_reloads(motdir, ref, model, tol, archives):
     """The rows (code, entry data) of the handguns' reloads for move.dat. `archives`: name -> the disc's handgun
     archive (em/wepNN.drs) of PISTOL_SETS."""
@@ -725,6 +740,11 @@ def pistol_reloads(motdir, ref, model, tol, archives):
             rows = [({**r[0], **{q: rows[0][0][q] for q in RELOAD_STILL if q in rows[0][0]}}, rows[0][1]) + tuple(r[2:])
                     for r in rows]
             rows = face_ahead(rows, model, 18, game_yaw(model, warc.entry(0x29 + lv), 18))
+            # (device report 25.11.2026, video 117886: "the reload makes him turn") the remake's reload twists the
+            # trunk some 30..40 deg further round than the game's: the waist (part 1) turned back each frame to face
+            # as the game's own reload faces at that frame
+            gy = [game_yaw(model, warc.entry(0x29 + lv), 1, g) for g in range(n + 1)]
+            rows = hold_part_yaw(rows, model, 1, gy)
             fixed = {q: model.parts[q].pos for q in (10, 16, 20, 24) if q in fit.order}
             mot = RT.build_motion(rows, fit.order, tol, root=None, fixed_pos=fixed)
             # the game's own hand-held part (32: the gun's place) at the game's times

@@ -603,7 +603,19 @@ public final class StudioActivity extends Activity {
         b.setOnClickListener(v -> {
           if (results.containsKey(k[4]) && k[0].endsWith(REMAKE_WEAPON)) toast(k[3] + " is converted; the view shows characters only");
           else if (results.containsKey(k[4])) preview(k[4], k[3]);
-          else convert(java.util.Collections.singletonList(k), k[4]);
+          else {
+            // Ashley (DevJunior, 25.11.2026: "Ashley stops using the skin in the campaign"): the player's Ashley (pl01,
+            // pl05) and the partner at Leon's side in the story (pl11) are three archives; one tap converts the model
+            // into each of them that is listed
+            List<String[]> rows = new ArrayList<>();
+            boolean ashley = k[4].equals("pl01") || k[4].equals("pl05") || k[4].equals("pl11");
+            for (String[] o : skins)
+              if (o == k || (ashley && o[0].equals(k[0]) && o[1].equals(k[1]) && !o[2].isEmpty()
+                  && (o[4].equals("pl01") || o[4].equals("pl05") || o[4].equals("pl11")) && !results.containsKey(o[4])))
+                if (!rows.contains(o)) rows.add(o);
+            if (!rows.contains(k)) rows.add(0, k);
+            convert(rows, k[4]);
+          }
         });
         content.addView(b, item());
       }

@@ -701,6 +701,20 @@ DffMesh readFbx(const Bytes &data, const std::map<std::string, Bytes> &files, st
       // a layer drawn see-through over another (the knit's fur shells and the eyes' wet film: a clear picture, or one
       // even, half clear colour): the game draws a material solid or cut out, so it is left out (DevJunior's Ashley:
       // a white sweater)
+      // the cards round the eyes (lashes, brows, the eye shadow, the wet film): the remake's engine draws them faded by
+      // maps of their own; drawn solid here they were dark blocks over the eyes (DevJunior, 25.11.2026: "the texture
+      // of her eyes does not stay"). The face's picture has the brows painted in.
+      {
+        const std::string mn = lower(obj.at(mid).name);
+        bool card = false;
+        for (const char *x : {"lash", "brow", "shadow", "shaodw", "tear", "wet"})
+          if (mn.find(x) != std::string::npos) card = true;
+        if (card) {
+          notes.push_back("  " + obj.at(mid).name + ": a card round the eyes, left out");
+          matMap.push_back(~0u);
+          continue;
+        }
+      }
       if (!tex.empty()) {
         const Rgba &img = images.at(tex);
         std::size_t clear = 0, n = img.px.size() / 4;
