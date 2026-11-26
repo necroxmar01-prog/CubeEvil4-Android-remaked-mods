@@ -20,6 +20,7 @@ struct ViewOptions {
   int selected = -1;  // a part number of handleParts
   int gizmo = 0;
   std::array<std::array<float, 3>, 3> gizmoAxes{{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
+  int activeAxis = -1;  // the axis being dragged (drawn yellow, as Unity does)
 };
 
 // The editor's gizmo on the screen: a touch (pixels, y down) against the last draw. GizmoSize: its arrows' length and

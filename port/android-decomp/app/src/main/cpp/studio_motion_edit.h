@@ -80,6 +80,12 @@ class Editor {
   // the model-space matrix of every part at `frame` (the game's cCoord: T(pos) R(z) R(y) R(x), the parent's times the
   // own; the root's own placement left out)
   bool pose(unsigned entry, float frame, const Skeleton &s, std::vector<Matrix> &out) const;
+  // the pose at `frame` before and after a change that is being dragged (mode 2: the part's X, Y, Z angles + d
+  // radians; 1: the root's place + d mm, or a hand or foot moved by d mm through IK); nothing is kept
+  bool posePreview(unsigned entry, float frame, const Skeleton &s, int mode, int part, const float d[3],
+                   std::vector<Matrix> &before, std::vector<Matrix> &after) const;
+  // the clip's bytes as they are now (edited or as read)
+  Bytes clipBytes(unsigned entry) const;
   // the three model-space directions that a change of the part's X, Y, Z angle turns it about at `frame` (the game's
   // R(z) R(y) R(x): X its own axis, Y the axis after Z, Z its parent's)
   bool turnAxes(unsigned entry, float frame, const Skeleton &s, int part, std::array<std::array<float, 3>, 3> &out) const;

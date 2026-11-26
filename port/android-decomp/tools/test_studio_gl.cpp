@@ -72,6 +72,14 @@ int main(int argc, char **argv) {
       check(v.setMotion(clip, &why), ("motion: " + why).c_str());
       std::printf("motion %s: %.0f frames\n", v.motionName(clip).c_str(), v.motionLength());
     }
+    // STUDIO_WEAPON=archive:bin: a weapon in the hand (part 32), as the Studio's editor shows the weapon animations
+    if (const char *w = std::getenv("STUDIO_WEAPON")) {
+      std::string spec = w;
+      const auto colon = spec.rfind(':');
+      Archive wa;
+      check(wa.open(spec.substr(0, colon), &why), ("weapon: " + why).c_str());
+      check(v.attachWeapon(wa, unsigned(std::atoi(spec.c_str() + colon + 1)), -1, std::getenv("STUDIO_PART") ? std::atoi(std::getenv("STUDIO_PART")) : 10, &why), ("weapon: " + why).c_str());
+    }
     v.pose(float(std::atof(argv[5])));
     GlView view;
     check(view.create(&why), ("GL: " + why).c_str());
@@ -89,6 +97,7 @@ int main(int argc, char **argv) {
         if (std::size_t(p) < v.joints().size()) options.handles.push_back(v.joints()[std::size_t(p)]), options.handleParts.push_back(p);
       options.selected = part;
       options.gizmo = mode;
+      options.activeAxis = 1;
     }
     view.draw(v, W, H, cam, options);
     std::vector<unsigned char> px(W * H * 4);

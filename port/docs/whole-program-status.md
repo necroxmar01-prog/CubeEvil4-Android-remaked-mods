@@ -20309,3 +20309,15 @@ fragt `re4_move_hg_pose` (nur Leon, nur gleiche Länge). Paket v33 (move.dat 646
 nennt die neuen Clips und lehnt Tempo/Schneiden für sie ab. Geprüft: Host-Bilder (Studio-Betrachter) Zielen und Schuss
 neben denen des Spiels, kompiliert (i686). Nicht geprüft: im Spiel. Ziehen/Wegstecken (14/15 Bilder) bleiben vorerst die
 des Spiels.
+- **Gizmo wie in Unity, flüssiges Ziehen, Waffe in der Hand** (DevJunior: „como los controles de Unity“, „que el
+  movimiento sea fluido al editar“, „se traba mucho“, „no aparecen las animaciones con armas“): Pfeile mit Kegelspitze
+  („Move“), beim Drehen eine Kugel mit weißem Umriss, äußerem Kreis und den drei Ringen nur auf der zugewandten Hälfte;
+  die gezogene Achse gelb. Während des Ziehens zeigt die Ansicht die Pose sofort (`Editor::posePreview`: die Pose dieses
+  Bildes vor/nach der Änderung, IK für Hände/Füße mit demselben Löser wie `reach`; der Betrachter nimmt
+  `G·nachher` mit G = Betrachter[0]·Editor[0]⁻¹, `Viewer::poseEdited`), erst beim Loslassen wird die Animation
+  geschrieben. Die Vorschau danach ersetzt nur den einen Clip (`Viewer::replaceMotion`, `Editor::clipBytes`) statt das
+  ganze Archiv neu zu lesen; das Feld wird dabei nicht neu aufgebaut. Waffen: die Waffe des Clips in der rechten Hand
+  (Teil 10; das Modell ist in ihrem Raum gebaut: Handgun wep01 Eintrag 2, Red9-Satz wep06 Eintrag 2, Schrotflinte
+  wep07 Eintrag 1; `Viewer::attachWeapon`, nicht gehäutet), wählbar Auto/None/Handgun/Red9/Shotgun. Treffer-Radius
+  64 px. Geprüft (Host): Bilder mit Waffe in der Hand und beiden Gizmos; Pose/IK-Prüfung weiter 0,000 mm. Nicht geprüft:
+  Gerät.

@@ -428,6 +428,59 @@ std::vector<unsigned> Viewer::pieceEntries() const {
   return out;
 }
 
+void Viewer::replaceMotion(int clip, const std::vector<std::uint8_t> &motion) {
+  if (clip < 0 || clip >= int(clips_.size())) return;
+  clips_[std::size_t(clip)].motion = motion;
+  if (clip == clip_) setMotion(clip, nullptr);
+}
+
+void Viewer::poseEdited(float frame, const std::function<void(std::vector<Matrix34> &)> &edit) {
+  if (!rig_) return;
+  if (clip_ >= 0) {
+    frame = std::isfinite(frame) ? std::clamp(frame, 0.f, motionLength()) : 0.f;
+    try {
+      rig_->sample(0, frame);
+    } catch (const std::exception &) {
+      return;
+    }
+  }
+  std::vector<Matrix34> bones = rig_->bones();
+  edit(bones);
+  skin(bones);
+}
+
+bool Viewer::attachWeapon(const Archive &archive, unsigned bin, int tpl, int part, std::string *why) {
+  if (!model_) {
+    if (why) *why = "no model";
+    return false;
+  }
+  detachWeapon();
+  Piece piece;
+  piece.textureBase = textures_.size();
+  if (!buildPiece(archive, bin, tpl, piece, why)) {
+    textures_.resize(piece.textureBase);
+    return false;
+  }
+  piece.attach = part;
+  pieces_.push_back(std::move(piece));
+  pieceKeys_.push_back({archive.path(), bin});
+  pieceNames_.push_back("weapon");
+  rebuild();
+  if (rig_) skin(rig_->bones());
+  return true;
+}
+
+void Viewer::detachWeapon() {
+  while (!pieces_.empty() && pieces_.back().attach >= 0) {
+    textures_.resize(pieces_.back().textureBase);
+    pieces_.pop_back();
+    pieceKeys_.pop_back();
+    pieceNames_.pop_back();
+  }
+  rebuild();
+  if (rig_) skin(rig_->bones());
+}
+
 void Viewer::pose(float frame) {
   if (!rig_) return;
   if (clip_ >= 0) {
@@ -461,7 +514,15 @@ void Viewer::skin(const std::vector<Matrix34> &input) {
     const auto &m = model.mesh;
     std::vector<Matrix34> palette;
     try {
-      palette = model.palette(bones, rig_->bindCenters());
+      if (piece.attach >= 0) {
+        // a weapon in the hand: every joint of its own on the hand's part (its vertices in its own space)
+        if (std::size_t(piece.attach) >= bones.size()) throw std::runtime_error("no such part");
+        const std::size_t n = m.joints.size();
+        palette = model.palette(std::vector<Matrix34>(n, bones[std::size_t(piece.attach)]),
+                                std::vector<std::array<float, 3>>(n, std::array<float, 3>{0, 0, 0}));
+      } else {
+        palette = model.palette(bones, rig_->bindCenters());
+      }
     } catch (const std::exception &) {
       c += piece.cornerPosition.size();
       continue;

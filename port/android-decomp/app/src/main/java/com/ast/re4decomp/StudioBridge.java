@@ -55,6 +55,9 @@ final class StudioBridge {
   static native void editOverlay(int entry, int part, int mode);
   static native int editPick(float x, float y);
   static native float editDrag(int axis, float x0, float y0, float x1, float y1);
+  // the drag shown live while the finger moves (axis -1: over), a weapon model in the hand (path "" none)
+  static native void editDragLive(int axis, float amount);
+  static native String editWeapon(String path, String name, int bin, int tpl);
   static native String editPreview(String path, int entry);
   static native String setMotion(int clip);
   static native float motionLength();

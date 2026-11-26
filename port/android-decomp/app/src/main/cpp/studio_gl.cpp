@@ -143,6 +143,12 @@ Mat4 lookAt(const std::array<float, 3> &eye, const std::array<float, 3> &at) {
   return m;
 }
 
+void pushTriangle(std::vector<float> &out, const std::array<float, 3> &a, const std::array<float, 3> &b,
+                  const std::array<float, 3> &c, const std::array<float, 4> &col) {
+  for (const auto *p : {&a, &b, &c})
+    out.insert(out.end(), {(*p)[0], (*p)[1], (*p)[2], col[0], col[1], col[2], col[3]});
+}
+
 void pushLine(std::vector<float> &out, const std::array<float, 3> &a, const std::array<float, 3> &b,
               const std::array<float, 4> &c) {
   out.insert(out.end(), {a[0], a[1], a[2], c[0], c[1], c[2], c[3], b[0], b[1], b[2], c[0], c[1], c[2], c[3]});
@@ -283,7 +289,7 @@ void GlView::draw(const Viewer &viewer, int width, int height, const Camera &cam
     }
   }
   // the grid, the axes, the skeleton
-  std::vector<float> lines;
+  std::vector<float> lines, tris;
   const float floorY = viewer.hasModel() ? viewer.restMinimum()[1] : 0.f;
   if (options.grid) {
     const float step = 250.f, half = 3000.f;
@@ -337,18 +343,60 @@ void GlView::draw(const Viewer &viewer, int width, int height, const Camera &cam
       if (on && options.gizmo) {
         const auto &c = options.handles[i];
         const float g = GizmoSize(camera.distance);
-        const std::array<float, 4> colours[3] = {{0.95f, 0.3f, 0.3f, 1}, {0.4f, 0.9f, 0.4f, 1}, {0.35f, 0.55f, 1.f, 1}};
+        const std::array<float, 4> yellow{1.f, 0.85f, 0.1f, 1};
+        const std::array<float, 4> base[3] = {{0.95f, 0.25f, 0.25f, 1}, {0.45f, 0.9f, 0.3f, 1}, {0.3f, 0.5f, 1.f, 1}};
+        // toward the viewer from the joint
+        std::array<float, 3> toEye{eye[0] - c[0], eye[1] - c[1], eye[2] - c[2]};
+        const float te = std::sqrt(toEye[0] * toEye[0] + toEye[1] * toEye[1] + toEye[2] * toEye[2]);
+        for (auto &v : toEye) v /= te;
         for (int a = 0; a < 3; ++a) {
           const auto &ax = options.gizmoAxes[std::size_t(a)];
+          const auto col = a == options.activeAxis ? yellow : base[a];
           if (options.gizmo == 1) {
+            // Unity's move tool: a shaft and a cone at its tip
+            const std::array<float, 3> neck{c[0] + ax[0] * g * 0.78f, c[1] + ax[1] * g * 0.78f, c[2] + ax[2] * g * 0.78f};
             const std::array<float, 3> tip{c[0] + ax[0] * g, c[1] + ax[1] * g, c[2] + ax[2] * g};
-            pushLine(lines, c, tip, colours[a]);
-            ring(tip, r, u, small * 0.9f, colours[a]);
+            pushLine(lines, c, neck, col);
+            // two directions across the axis
+            std::array<float, 3> s1{ax[1] * toEye[2] - ax[2] * toEye[1], ax[2] * toEye[0] - ax[0] * toEye[2],
+                                    ax[0] * toEye[1] - ax[1] * toEye[0]};
+            float l1 = std::sqrt(s1[0] * s1[0] + s1[1] * s1[1] + s1[2] * s1[2]);
+            if (l1 < 1e-4f) s1 = {1, 0, 0}, l1 = 1;
+            for (auto &v : s1) v /= l1;
+            const std::array<float, 3> s2{ax[1] * s1[2] - ax[2] * s1[1], ax[2] * s1[0] - ax[0] * s1[2],
+                                          ax[0] * s1[1] - ax[1] * s1[0]};
+            const float rc = g * 0.08f;
+            const int n = 12;
+            for (int k = 0; k < n; ++k) {
+              const float t0 = 6.2831853f * float(k) / n, t1 = 6.2831853f * float(k + 1) / n;
+              std::array<float, 3> p0, p1;
+              for (int q = 0; q < 3; ++q) {
+                p0[q] = neck[q] + rc * (std::cos(t0) * s1[q] + std::sin(t0) * s2[q]);
+                p1[q] = neck[q] + rc * (std::cos(t1) * s1[q] + std::sin(t1) * s2[q]);
+              }
+              pushTriangle(tris, tip, p0, p1, col);
+              pushTriangle(tris, neck, p1, p0, {col[0] * 0.6f, col[1] * 0.6f, col[2] * 0.6f, 1});
+            }
           } else {
-            // the ring around axis a: two directions across it
+            // Unity's rotate tool: the ring around axis a on a sphere, its half toward the viewer
             const auto &b0 = options.gizmoAxes[std::size_t((a + 1) % 3)], &b1 = options.gizmoAxes[std::size_t((a + 2) % 3)];
-            ring(c, b0, b1, g, colours[a]);
+            const int n = 48;
+            for (int k = 0; k < n; ++k) {
+              const float t0 = 6.2831853f * float(k) / n, t1 = 6.2831853f * float(k + 1) / n;
+              std::array<float, 3> p0, p1, dm;
+              for (int q = 0; q < 3; ++q) {
+                p0[q] = c[q] + g * (std::cos(t0) * b0[q] + std::sin(t0) * b1[q]);
+                p1[q] = c[q] + g * (std::cos(t1) * b0[q] + std::sin(t1) * b1[q]);
+                dm[q] = (p0[q] + p1[q]) * 0.5f - c[q];
+              }
+              const bool front = dm[0] * toEye[0] + dm[1] * toEye[1] + dm[2] * toEye[2] >= -g * 0.02f;
+              if (front) pushLine(lines, p0, p1, col);
+            }
           }
+        }
+        if (options.gizmo == 2) {
+          ring(c, r, u, g, {0.85f, 0.85f, 0.85f, 1});           // the sphere's outline
+          ring(c, r, u, g * 1.15f, {0.55f, 0.55f, 0.55f, 1});  // the outer circle
         }
       }
     }
@@ -366,6 +414,16 @@ void GlView::draw(const Viewer &viewer, int width, int height, const Camera &cam
       glDrawArrays(GL_LINES, GLsizei(worldLines / 7), GLsizei((lines.size() - worldLines) / 7));
       glEnable(GL_DEPTH_TEST);
     }
+  }
+  if (!tris.empty()) {  // the gizmo's cones, over the model too
+    glUseProgram(lineProgram_);
+    glUniformMatrix4fv(glGetUniformLocation(lineProgram_, "viewProjection"), 1, GL_FALSE, viewProjection_.data());
+    glBindVertexArray(lineVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
+    glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(tris.size() * sizeof(float)), tris.data(), GL_STREAM_DRAW);
+    glDisable(GL_DEPTH_TEST);
+    glDrawArrays(GL_TRIANGLES, 0, GLsizei(tris.size() / 7));
+    glEnable(GL_DEPTH_TEST);
   }
   glBindVertexArray(0);
 }

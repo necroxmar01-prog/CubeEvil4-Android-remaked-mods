@@ -6,6 +6,7 @@
 #include "animation.h"
 #include "model_skin.h"
 #include "texture.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -88,6 +89,16 @@ public:
   // the animations: FCV entries of an archive (the model's own or a pack's); returns how many were added
   int addMotions(const Archive &archive, std::string *why);
   void clearMotions();
+  // the animation editor (Mods, 26.11.2026): a clip's bytes replaced (an edit: the rig made again only for it, not
+  // the whole archive read again)
+  void replaceMotion(int clip, const std::vector<std::uint8_t> &motion);
+  // the pose at `frame` with `edit` applied to its bone matrices (the editor's drag, shown live)
+  void poseEdited(float frame, const std::function<void(std::vector<Matrix34> &)> &edit);
+  // a weapon in the hand (DevJunior, 26.11.2026: "use the weapon models we have as examples"): a model of a weapon
+  // archive drawn on part `part` (the right hand, 10: the weapon model is made in its space) as it is, not skinned
+  bool attachWeapon(const Archive &archive, unsigned bin, int tpl, int part, std::string *why);
+  void detachWeapon();
+  bool hasWeapon() const { return !pieces_.empty() && pieces_.back().attach >= 0; }
   int motionCount() const { return int(clips_.size()); }
   const std::string &motionName(int i) const { return names_.at(std::size_t(i)); }
   // -1: the rest pose; false when the animation does not fit this model's skeleton
@@ -123,6 +134,8 @@ private:
     std::vector<std::uint16_t> cornerPosition, cornerNormal;
     std::vector<float> uvs;
     std::vector<Draw> draws;  // `first` within the piece, `texture` within textures_
+    int attach = -1;               // a weapon: the part it is drawn on (not skinned)
+    std::size_t textureBase = 0;   // its first image in textures_
   };
   bool buildPiece(const Archive &archive, unsigned bin, int tpl, Piece &piece, std::string *why);
   void rebuild();

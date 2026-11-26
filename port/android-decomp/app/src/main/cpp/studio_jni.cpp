@@ -30,6 +30,11 @@ float gOverlayFrame = 0;
 Camera gLastCamera;
 int gLastWidth = 1, gLastHeight = 1;
 ViewOptions gLastOptions;
+// a drag on the gizmo shown live (editDragLive): its axis and amount (mm or radians)
+bool gDragOn = false;
+int gDragAxis = 0;
+float gDragAmount = 0;
+bool gPreviewReady = false;  // the viewer's clips are the edited archive's (editPreview's fast way)
 
 motionedit::Skeleton skeletonOf(const Viewer &v) {
   motionedit::Skeleton s;
@@ -206,6 +211,7 @@ JNIEXPORT jint JNICALL STUDIO(useMotions)(JNIEnv *env, jclass, jstring path, jst
     return -1;
   }
   gViewer.clearMotions();
+  gPreviewReady = false;
   const int n = gViewer.addMotions(a, &why);
   if (!n) gError = why;
   return n ? n : -1;
@@ -412,14 +418,16 @@ JNIEXPORT jstring JNICALL STUDIO(editOpen)(JNIEnv *env, jclass, jstring path) {
   convert::Bytes data;
   std::string why;
   if (!ReadWhole(text(env, path), data, 16u * 1024 * 1024)) return env->NewStringUTF("cannot be read");
+  gPreviewReady = false;
   return env->NewStringUTF(gEdit.open(data, &why) ? "" : why.c_str());
 }
 
-// its animations: "entry|last frame|name"
+// its animations: "entry|last frame|move.dat code (-1 none)|name"
 JNIEXPORT jobjectArray JNICALL STUDIO(editClips)(JNIEnv *env, jclass) {
   std::lock_guard<std::mutex> lock(gLock);
   std::vector<std::string> out;
-  for (const auto &c : gEdit.clips()) out.push_back(std::to_string(c.entry) + "|" + std::to_string(c.frames) + "|" + c.name);
+  for (const auto &c : gEdit.clips())
+    out.push_back(std::to_string(c.entry) + "|" + std::to_string(c.frames) + "|" + std::to_string(c.code) + "|" + c.name);
   return strings(env, out);
 }
 
@@ -492,6 +500,20 @@ JNIEXPORT jstring JNICALL STUDIO(editSave)(JNIEnv *env, jclass, jstring path) {
 JNIEXPORT jstring JNICALL STUDIO(editPreview)(JNIEnv *env, jclass, jstring path, jint entry) {
   std::lock_guard<std::mutex> lock(gLock);
   if (!gEdit.isOpen()) return env->NewStringUTF("nothing open");
+  const std::string tail0 = " #" + std::to_string(entry);
+  if (gPreviewReady) {
+    // the viewer holds this archive's clips: only the edited one again (no file, no whole archive)
+    for (int i = 0; i < gViewer.motionCount(); ++i) {
+      const std::string n = gViewer.motionName(i);
+      if (n.compare(0, 8, "edit.dat") != 0 || n.size() < tail0.size() ||
+          n.compare(n.size() - tail0.size(), tail0.size(), tail0) != 0)
+        continue;
+      gViewer.replaceMotion(i, gEdit.clipBytes(unsigned(entry)));
+      std::string why;
+      if (gViewer.motion() != i && !gViewer.setMotion(i, &why)) return env->NewStringUTF(why.empty() ? "it does not fit" : why.c_str());
+      return env->NewStringUTF("");
+    }
+  }
   const std::string file = text(env, path);
   {
     std::ofstream o(file, std::ios::binary | std::ios::trunc);
@@ -504,6 +526,7 @@ JNIEXPORT jstring JNICALL STUDIO(editPreview)(JNIEnv *env, jclass, jstring path,
   if (!a.open(file, &why, "edit.dat")) return env->NewStringUTF(why.c_str());
   gViewer.clearMotions();
   gViewer.addMotions(a, &why);
+  gPreviewReady = true;
   const std::string tail = " #" + std::to_string(entry);
   for (int i = 0; i < gViewer.motionCount(); ++i) {
     const std::string n = gViewer.motionName(i);
@@ -528,7 +551,7 @@ JNIEXPORT jint JNICALL STUDIO(editPick)(JNIEnv *, jclass, jfloat x, jfloat y) {
   std::lock_guard<std::mutex> lock(gLock);
   const auto &o = gLastOptions;
   const auto &vp = gView.viewProjection();
-  const float reach2 = 40.f * 40.f;
+  const float reach2 = 64.f * 64.f;  // a finger's width on a phone
   if (o.gizmo && o.selected >= 0) {
     for (std::size_t i = 0; i < o.handleParts.size(); ++i) {
       if (o.handleParts[i] != o.selected) continue;
@@ -550,6 +573,15 @@ JNIEXPORT jint JNICALL STUDIO(editPick)(JNIEnv *, jclass, jfloat x, jfloat y) {
             const float t = 6.2831853f * float(k) / 24.f;
             for (int q = 0; q < 3; ++q)
               p[std::size_t(q)] = c[std::size_t(q)] + g * (std::cos(t) * b0[std::size_t(q)] + std::sin(t) * b1[std::size_t(q)]);
+            // only the ring's half toward the viewer is drawn (and taken)
+            const float cp = std::cos(gLastCamera.pitch);
+            const std::array<float, 3> eye{gLastCamera.target[0] + gLastCamera.distance * cp * std::sin(gLastCamera.yaw),
+                                           gLastCamera.target[1] + gLastCamera.distance * std::sin(gLastCamera.pitch),
+                                           gLastCamera.target[2] + gLastCamera.distance * cp * std::cos(gLastCamera.yaw)};
+            float facing = 0;
+            for (int q = 0; q < 3; ++q)
+              facing += (p[std::size_t(q)] - c[std::size_t(q)]) * (eye[std::size_t(q)] - c[std::size_t(q)]);
+            if (facing < 0) continue;
           }
           float sp[2];
           if (!ToScreen(vp, gLastWidth, gLastHeight, p, sp)) continue;
@@ -597,6 +629,34 @@ JNIEXPORT jfloat JNICALL STUDIO(editDrag)(JNIEnv *, jclass, jint axis, jfloat x0
   const std::array<float, 3> toEye{cp * std::sin(gLastCamera.yaw), std::sin(gLastCamera.pitch), cp * std::cos(gLastCamera.yaw)};
   const float facing = ax[0] * toEye[0] + ax[1] * toEye[1] + ax[2] * toEye[2];
   return facing >= 0 ? swept : -swept;
+}
+
+// a drag on the gizmo shown live (axis, mm or radians) and its end
+JNIEXPORT void JNICALL STUDIO(editDragLive)(JNIEnv *, jclass, jint axis, jfloat amount) {
+  std::lock_guard<std::mutex> lock(gLock);
+  gDragOn = axis >= 0 && axis <= 2;
+  gDragAxis = gDragOn ? axis : 0;
+  gDragAmount = amount;
+}
+
+// a weapon in the hand for the weapon animations: the model `bin` (palette `tpl`, -1 its own) of a weapon archive on
+// the right hand (part 10: the weapon model is made in its space); an empty path takes it away. "" or why not
+JNIEXPORT jstring JNICALL STUDIO(editWeapon)(JNIEnv *env, jclass, jstring path, jstring name, jint bin, jint tpl) {
+  std::lock_guard<std::mutex> lock(gLock);
+  const std::string p = text(env, path);
+  if (p.empty()) {
+    if (gViewer.hasWeapon()) {
+      gViewer.detachWeapon();
+      gUpload = true;
+    }
+    return env->NewStringUTF("");
+  }
+  Archive a;
+  std::string why;
+  if (!a.open(p, &why, text(env, name))) return env->NewStringUTF(why.c_str());
+  if (!gViewer.attachWeapon(a, unsigned(bin), tpl, 10, &why)) return env->NewStringUTF(why.c_str());
+  gUpload = true;
+  return env->NewStringUTF("");
 }
 
 JNIEXPORT jstring JNICALL STUDIO(lastError)(JNIEnv *env, jclass) {
@@ -667,7 +727,41 @@ JNIEXPORT void JNICALL STUDIO(draw)(JNIEnv *, jclass, jint width, jint height, j
     gView.upload(gViewer);
     gUpload = false;
   }
-  gViewer.pose(frame);
+  if (gDragOn && gOverlayEntry >= 0 && gOverlayPart >= 0 && gViewer.bindJoints()) {
+    // the drag shown live: the editor's pose before and after the change at this frame, the viewer's bones moved by it
+    // (the viewer's pose is the editor's placed by the root: G = viewer[0] · editor[0]^-1)
+    const auto skel = skeletonOf(gViewer);
+    float d[3] = {0, 0, 0};
+    d[gDragAxis] = gDragAmount;
+    std::vector<motionedit::Matrix> before, after;
+    if (gEdit.posePreview(unsigned(gOverlayEntry), frame, skel, gOverlayMode, gOverlayPart, d, before, after)) {
+      gViewer.poseEdited(frame, [&](std::vector<re4::Matrix34> &bones) {
+        if (bones.empty() || before.empty()) return;
+        const auto &v = bones[0];
+        const auto &e = before[0];
+        // e^-1 (rotation and place)
+        const motionedit::Matrix ei{e[0], e[4], e[8], -(e[0] * e[3] + e[4] * e[7] + e[8] * e[11]),
+                                    e[1], e[5], e[9], -(e[1] * e[3] + e[5] * e[7] + e[9] * e[11]),
+                                    e[2], e[6], e[10], -(e[2] * e[3] + e[6] * e[7] + e[10] * e[11])};
+        auto mul = [](const std::array<float, 12> &a, const std::array<float, 12> &b) {
+          std::array<float, 12> o{};
+          for (int r = 0; r < 3; ++r)
+            for (int c2 = 0; c2 < 4; ++c2) {
+              float x = c2 == 3 ? a[std::size_t(r * 4 + 3)] : 0.f;
+              for (int k = 0; k < 3; ++k) x += a[std::size_t(r * 4 + k)] * b[std::size_t(k * 4 + c2)];
+              o[std::size_t(r * 4 + c2)] = x;
+            }
+          return o;
+        };
+        const auto G = mul(v, ei);
+        for (std::size_t p = 0; p < bones.size() && p < after.size(); ++p) bones[p] = mul(G, after[p]);
+      });
+    } else {
+      gViewer.pose(frame);
+    }
+  } else {
+    gViewer.pose(frame);
+  }
   Camera c;
   c.yaw = yaw;
   c.pitch = pitch;
@@ -680,6 +774,7 @@ JNIEXPORT void JNICALL STUDIO(draw)(JNIEnv *, jclass, jint width, jint height, j
   o.textured = flags & 8;
   gOverlayFrame = frame;
   overlayOf(o);
+  o.activeAxis = gDragOn ? gDragAxis : -1;
   gView.draw(gViewer, width, height, c, o);
   gLastCamera = c;
   gLastWidth = std::max(1, int(width));

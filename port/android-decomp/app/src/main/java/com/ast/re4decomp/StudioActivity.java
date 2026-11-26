@@ -1217,11 +1217,39 @@ public final class StudioActivity extends Activity {
     return n.isEmpty() ? "Bone " + part : n + " (" + part + ")";
   }
 
-  private int clipEntry() { return editClip < 0 ? -1 : Integer.parseInt(editClips[editClip].split("\\|", 3)[0]); }
-  private int clipLast() { return editClip < 0 ? 0 : Integer.parseInt(editClips[editClip].split("\\|", 3)[1]); }
+  private int clipEntry() { return editClip < 0 ? -1 : Integer.parseInt(editClips[editClip].split("\\|", 4)[0]); }
+  private int clipLast() { return editClip < 0 ? 0 : Integer.parseInt(editClips[editClip].split("\\|", 4)[1]); }
+  private int clipCode() { return editClip < 0 ? -1 : Integer.parseInt(editClips[editClip].split("\\|", 4)[2]); }
   private String clipLabel(int i) {
-    String[] c = editClips[i].split("\\|", 3);
-    return c[2] + " · " + c[1] + " frames";
+    String[] c = editClips[i].split("\\|", 4);
+    return c[3] + " · " + c[1] + " frames";
+  }
+
+  // the weapon in the hand for a weapon's animation (DevJunior, 26.11.2026: "the animations with weapons do not show:
+  // use the weapon models we have"): the handguns' codes the Handgun (wep01) or the Red9 set's (wep06), the shotgun's
+  // the shotgun (wep07); 0 auto, 1 none, 2 handgun, 3 Red9 set, 4 shotgun
+  private int editWeaponPick = 0;
+  private static final String[][] EDIT_WEAPONS = {
+      {"Auto", ""}, {"None", ""}, {"Handgun", "em/wep01.drs"}, {"Red9 set", "em/wep06.drs"}, {"Shotgun", "em/wep07.drs"}};
+  private String shownWeapon = "";
+
+  private void updateWeapon() {
+    int pick = editWeaponPick;
+    if (pick == 0) {
+      int c = clipCode();
+      pick = (c >= 0xB4 && c <= 0xB6) || (c >= 0xC0 && c <= 0xC6) ? 3 : c >= 0xB0 && c <= 0xBE ? 2
+          : c >= 0x90 && c <= 0x9B ? 4 : 1;
+    }
+    String rel = pick >= 2 ? discFile(EDIT_WEAPONS[pick][1]) : null;
+    String want = rel == null ? "" : rel;
+    if (want.equals(shownWeapon)) return;
+    String path = rel == null ? "" : files.path(rel);
+    if (path == null) path = "";
+    // the gun model: entry 2 of the handguns' archives, entry 1 of the shotgun's
+    int bin = pick == 4 ? 1 : 2;
+    String why = StudioBridge.editWeapon(path, path.isEmpty() ? "" : rel.substring(rel.lastIndexOf('/') + 1), bin, -1);
+    if (!why.isEmpty()) toast("Weapon: " + why);
+    shownWeapon = path.isEmpty() ? "" : want;
   }
 
   // the part the view's handles mark: the bone, the IK target's hand or foot, the root for the body's position
@@ -1265,6 +1293,7 @@ public final class StudioActivity extends Activity {
       case MotionEvent.ACTION_MOVE:
         if (dragAxis < 0) return false;
         dragAmount = StudioBridge.editDrag(dragAxis, dragX0, dragY0, x, y);
+        StudioBridge.editDragLive(dragAxis, dragAmount);
         frameLabel.setText(editGizmo == 1 ? String.format(Locale.ROOT, "%s %+.0f mm", "XYZ".charAt(dragAxis), dragAmount)
             : String.format(Locale.ROOT, "%s %+.0f°", "XYZ".charAt(dragAxis), Math.toDegrees(dragAmount)));
         return true;
@@ -1273,6 +1302,7 @@ public final class StudioActivity extends Activity {
         if (dragAxis < 0) return false;
         int axis = dragAxis;
         dragAxis = -1;
+        StudioBridge.editDragLive(-1, 0);
         if (e.getActionMasked() == MotionEvent.ACTION_UP && Math.abs(dragAmount) > 1e-3f) applyGizmo(axis, dragAmount);
         return true;
       default:
@@ -1297,7 +1327,6 @@ public final class StudioActivity extends Activity {
     else if (!why.isEmpty()) { toast(why); return; }
     preview();
     frame = f;
-    showTab(3);
   }
 
   private void showEdit() {
@@ -1352,6 +1381,17 @@ public final class StudioActivity extends Activity {
     giz.addView(move, chip());
     giz.addView(turn, chip());
     content.addView(giz);
+    LinearLayout weps = row();
+    for (int k = 0; k < EDIT_WEAPONS.length; k++) {
+      final int pick = k;
+      Button b = pill(EDIT_WEAPONS[k][0], editWeaponPick == k);
+      b.setOnClickListener(v -> { editWeaponPick = pick; updateWeapon(); showTab(3); });
+      weps.addView(b, chip());
+    }
+    HorizontalScrollView wscroll = new HorizontalScrollView(this);
+    wscroll.addView(weps);
+    content.addView(note("Weapon in the hand:"));
+    content.addView(wscroll);
 
     boolean body = editPart < 0, ik = editPart <= -10;
     if (ik) content.addView(note("Move the hand or foot; the arm or leg bends to reach it, the hand or foot keeps its "
@@ -1521,6 +1561,7 @@ public final class StudioActivity extends Activity {
     if (!why.isEmpty()) { toast(why); return; }
     length = StudioBridge.motionLength();
     if (frame > length) frame = 0;
+    updateWeapon();
     info.setText(StudioBridge.info() + " · " + clipLabel(editClip));
   }
 
@@ -1541,6 +1582,7 @@ public final class StudioActivity extends Activity {
 
   private void loadComplete() {
     String why = StudioBridge.loadComplete();
+    shownWeapon = "";
     highlighted = -1;
     if (!why.isEmpty()) {
       toast(archiveName + ": " + why);
@@ -1559,6 +1601,7 @@ public final class StudioActivity extends Activity {
 
   private void loadModel(int index, String label) {
     String why = StudioBridge.loadModel(index, -1);
+    shownWeapon = "";
     highlighted = -1;
     if (!why.isEmpty()) {
       toast(label + ": " + why);

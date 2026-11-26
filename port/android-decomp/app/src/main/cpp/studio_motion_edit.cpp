@@ -672,6 +672,91 @@ void worldOf(const Frame &f, const Skeleton &s, std::vector<Matrix> &out) {
   }
 }
 
+// the chain c (upper, lower, end) turned so that the end reaches `target` (model space), the end keeping its turn in
+// the world; returns how far it stays from it (mm)
+float solveChain(Frame &fr, const Skeleton &s, const int *c, const float target[3]) {
+  std::vector<Matrix> world;
+  worldOf(fr, s, world);
+  const Matrix endWorld = world[std::size_t(c[2])];
+  float theta[6], theta0[6];
+  for (int k = 0; k < 2; ++k)
+    for (int a = 0; a < 3; ++a) theta[k * 3 + a] = theta0[k * 3 + a] = fr.angle[std::size_t(c[k])][std::size_t(a)];
+  auto endAt = [&](const float *t, float out[3]) {
+    Frame g = fr;
+    for (int k = 0; k < 2; ++k)
+      for (int a = 0; a < 3; ++a) g.angle[std::size_t(c[k])][std::size_t(a)] = t[k * 3 + a];
+    std::vector<Matrix> wd;
+    worldOf(g, s, wd);
+    const Matrix &e = wd[std::size_t(c[2])];
+    out[0] = e[3], out[1] = e[7], out[2] = e[11];
+  };
+  // damped least squares: the end on the target, the bones as little away from the animation as it takes
+  const float keep = 40.0f;  // mm^2 a radian^2 away from the animation's angles
+  for (int it = 0; it < 40; ++it) {
+    float p[3];
+    endAt(theta, p);
+    const float e[3] = {target[0] - p[0], target[1] - p[1], target[2] - p[2]};
+    float J[3][6];
+    for (int k = 0; k < 6; ++k) {
+      float t2[6];
+      std::copy(theta, theta + 6, t2);
+      t2[k] += 1e-3f;
+      float q[3];
+      endAt(t2, q);
+      for (int r = 0; r < 3; ++r) J[r][k] = (q[r] - p[r]) / 1e-3f;
+    }
+    double A[6][7] = {};
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 6; ++j) {
+        double v = 0;
+        for (int r = 0; r < 3; ++r) v += double(J[r][i]) * J[r][j];
+        A[i][j] = v + (i == j ? keep + 10.0 : 0.0);
+      }
+      double bb = -keep * double(theta[i] - theta0[i]);
+      for (int r = 0; r < 3; ++r) bb += double(J[r][i]) * e[r];
+      A[i][6] = bb;
+    }
+    for (int i = 0; i < 6; ++i) {  // Gauss-Jordan (A is positive definite)
+      const double piv = A[i][i];
+      for (int j = i; j < 7; ++j) A[i][j] /= piv;
+      for (int r = 0; r < 6; ++r) {
+        if (r == i) continue;
+        const double f2 = A[r][i];
+        for (int j = i; j < 7; ++j) A[r][j] -= f2 * A[i][j];
+      }
+    }
+    float step = 0;
+    for (int i = 0; i < 6; ++i) {
+      const float dx = std::clamp(float(A[i][6]), -0.3f, 0.3f);
+      theta[i] += dx;
+      step = std::max(step, std::fabs(dx));
+    }
+    if (step < 1e-5f) break;
+  }
+  float p[3];
+  endAt(theta, p);
+  const float miss = std::sqrt((p[0] - target[0]) * (p[0] - target[0]) + (p[1] - target[1]) * (p[1] - target[1]) +
+                               (p[2] - target[2]) * (p[2] - target[2]));
+  Frame g = fr;
+  for (int k = 0; k < 2; ++k)
+    for (int a = 0; a < 3; ++a) g.angle[std::size_t(c[k])][std::size_t(a)] = theta[k * 3 + a];
+  std::vector<Matrix> wd;
+  worldOf(g, s, wd);
+  const int up = s.parent[std::size_t(c[2])];
+  const Matrix local = multiply(inverseRotation(wd[std::size_t(up)]), endWorld);
+  const auto ang = anglesOf(local);
+  for (int a = 0; a < 3; ++a) {
+    g.angle[std::size_t(c[2])][std::size_t(a)] = unwrap(ang[std::size_t(a)], fr.angle[std::size_t(c[2])][std::size_t(a)]);
+    for (int k = 0; k < 2; ++k)
+      g.angle[std::size_t(c[k])][std::size_t(a)] = unwrap(g.angle[std::size_t(c[k])][std::size_t(a)],
+                                                           fr.angle[std::size_t(c[k])][std::size_t(a)]);
+  }
+  fr = g;
+  return miss;
+}
+
+const int kChains[4][3] = {{7, 8, 10}, {13, 14, 16}, {18, 19, 20}, {22, 23, 24}};  // upper, lower, end
+
 }  // namespace
 
 bool Editor::pose(unsigned entry, float frame, const Skeleton &s, std::vector<Matrix> &out) const {
@@ -679,6 +764,34 @@ bool Editor::pose(unsigned entry, float frame, const Skeleton &s, std::vector<Ma
   if (!m || s.parent.empty()) return false;
   worldOf(frameOf(*m, s, frame), s, out);
   return true;
+}
+
+bool Editor::posePreview(unsigned entry, float frame, const Skeleton &s, int mode, int part, const float d[3],
+                         std::vector<Matrix> &before, std::vector<Matrix> &after) const {
+  const Motion *m = motion(entry);
+  if (!m || s.parent.empty() || part < 0 || std::size_t(part) >= s.parent.size()) return false;
+  Frame fr = frameOf(*m, s, frame);
+  worldOf(fr, s, before);
+  if (mode == 2) {  // turn: the part's X, Y, Z angles
+    for (int a = 0; a < 3; ++a) fr.angle[std::size_t(part)][std::size_t(a)] += d[a];
+  } else if (part == 0) {  // move the root: the body's place
+    for (int a = 0; a < 3; ++a) fr.pos[0][std::size_t(a)] += d[a];
+  } else {
+    int end = -1;
+    for (int k = 0; k < 4; ++k)
+      if (kChains[k][2] == part) end = k;
+    if (end < 0) return false;
+    const Matrix &e = before[std::size_t(part)];
+    const float target[3] = {e[3] + d[0], e[7] + d[1], e[11] + d[2]};
+    solveChain(fr, s, kChains[end], target);
+  }
+  worldOf(fr, s, after);
+  return true;
+}
+
+Bytes Editor::clipBytes(unsigned entry) const {
+  if (entry >= entries_.size()) return {};
+  return changed_[entry] && isMotion_[entry] ? WriteMotion(motions_[entry]) : entries_[entry];
 }
 
 bool Editor::turnAxes(unsigned entry, float frame, const Skeleton &s, int part,
@@ -706,7 +819,6 @@ bool Editor::reach(unsigned entry, const Skeleton &s, int end, const float d[3],
     if (why) *why = w;
     return false;
   };
-  static const int kChains[4][3] = {{7, 8, 10}, {13, 14, 16}, {18, 19, 20}, {22, 23, 24}};  // upper, lower, end
   Motion *m = motion(entry);
   if (!m) return fail("no such animation");
   if (end < 0 || end > 3) return fail("no such hand or foot");
@@ -737,84 +849,9 @@ bool Editor::reach(unsigned entry, const Skeleton &s, int end, const float d[3],
     if (w > 0) {
       std::vector<Matrix> world;
       worldOf(fr, s, world);
-      const Matrix endWorld = world[std::size_t(c[2])];
+      const Matrix &endWorld = world[std::size_t(c[2])];
       const float target[3] = {endWorld[3] + d[0] * w, endWorld[7] + d[1] * w, endWorld[11] + d[2] * w};
-      float theta[6], theta0[6];
-      for (int k = 0; k < 2; ++k)
-        for (int a = 0; a < 3; ++a) theta[k * 3 + a] = theta0[k * 3 + a] = fr.angle[std::size_t(c[k])][std::size_t(a)];
-      auto endAt = [&](const float *t, float out[3]) {
-        Frame g = fr;
-        for (int k = 0; k < 2; ++k)
-          for (int a = 0; a < 3; ++a) g.angle[std::size_t(c[k])][std::size_t(a)] = t[k * 3 + a];
-        std::vector<Matrix> wd;
-        worldOf(g, s, wd);
-        const Matrix &e = wd[std::size_t(c[2])];
-        out[0] = e[3], out[1] = e[7], out[2] = e[11];
-      };
-      // damped least squares: the end on the target, the bones as little away from the animation as it takes
-      const float keep = 40.0f;  // mm^2 a radian^2 away from the animation's angles
-      for (int it = 0; it < 40; ++it) {
-        float p[3];
-        endAt(theta, p);
-        const float e[3] = {target[0] - p[0], target[1] - p[1], target[2] - p[2]};
-        float J[3][6];
-        for (int k = 0; k < 6; ++k) {
-          float t2[6];
-          std::copy(theta, theta + 6, t2);
-          t2[k] += 1e-3f;
-          float q[3];
-          endAt(t2, q);
-          for (int r = 0; r < 3; ++r) J[r][k] = (q[r] - p[r]) / 1e-3f;
-        }
-        // (J^T J + (keep + mu) I) dx = J^T e - keep (theta - theta0)
-        double A[6][7] = {};
-        for (int i = 0; i < 6; ++i) {
-          for (int j = 0; j < 6; ++j) {
-            double v = 0;
-            for (int r = 0; r < 3; ++r) v += double(J[r][i]) * J[r][j];
-            A[i][j] = v + (i == j ? keep + 10.0 : 0.0);
-          }
-          double b = -keep * double(theta[i] - theta0[i]);
-          for (int r = 0; r < 3; ++r) b += double(J[r][i]) * e[r];
-          A[i][6] = b;
-        }
-        for (int i = 0; i < 6; ++i) {  // Gauss-Jordan (A is positive definite)
-          const double piv = A[i][i];
-          for (int j = i; j < 7; ++j) A[i][j] /= piv;
-          for (int r = 0; r < 6; ++r) {
-            if (r == i) continue;
-            const double f2 = A[r][i];
-            for (int j = i; j < 7; ++j) A[r][j] -= f2 * A[i][j];
-          }
-        }
-        float step = 0;
-        for (int i = 0; i < 6; ++i) {
-          const float dx = std::clamp(float(A[i][6]), -0.3f, 0.3f);
-          theta[i] += dx;
-          step = std::max(step, std::fabs(dx));
-        }
-        if (step < 1e-5f) break;
-      }
-      float p[3];
-      endAt(theta, p);
-      worst = std::max(worst, std::sqrt((p[0] - target[0]) * (p[0] - target[0]) + (p[1] - target[1]) * (p[1] - target[1]) +
-                                        (p[2] - target[2]) * (p[2] - target[2])));
-      // the end keeps its turn in the world: its own angles against the new parent
-      Frame g = fr;
-      for (int k = 0; k < 2; ++k)
-        for (int a = 0; a < 3; ++a) g.angle[std::size_t(c[k])][std::size_t(a)] = theta[k * 3 + a];
-      std::vector<Matrix> wd;
-      worldOf(g, s, wd);
-      const int up = s.parent[std::size_t(c[2])];
-      const Matrix local = multiply(inverseRotation(wd[std::size_t(up)]), endWorld);
-      const auto ang = anglesOf(local);
-      for (int a = 0; a < 3; ++a) {
-        g.angle[std::size_t(c[2])][std::size_t(a)] = unwrap(ang[std::size_t(a)], fr.angle[std::size_t(c[2])][std::size_t(a)]);
-        for (int k = 0; k < 2; ++k)
-          g.angle[std::size_t(c[k])][std::size_t(a)] = unwrap(g.angle[std::size_t(c[k])][std::size_t(a)],
-                                                               fr.angle[std::size_t(c[k])][std::size_t(a)]);
-      }
-      fr = g;
+      worst = std::max(worst, solveChain(fr, s, c, target));
     }
     for (int k = 0; k < 3; ++k)
       for (int a = 0; a < 3; ++a) values[std::size_t(k)][std::size_t(a)].push_back(fr.angle[std::size_t(c[k])][std::size_t(a)]);
