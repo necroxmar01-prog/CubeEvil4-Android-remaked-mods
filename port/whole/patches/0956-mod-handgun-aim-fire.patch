@@ -1,0 +1,46 @@
+# Patch 0956 (wish of DevJunior, 26.11.2026: "the Remake's weapon animations", the handguns after their reload). Not a
+# bug of the prototype: a port feature of the mods.
+# wep/pl_handgun.cpp wep02_r3_set00, wep02_r3_fire00 and the return from the reload: Leon's (pl_type 0) aim idle
+# (PL_ARC 0x26..0x28) and fire (0x29..0x2B) through runtime/locomotion.cpp re4_move_hg_pose: the remake's (move.dat
+# 0xB8.. / 0xC0..: its legs and torso with the game's arms, aim and fire alike so that the body does not jump between
+# them) when the game's motion is as long as the one made for its weapon; any other length, character, weapon or the
+# movements off: the game's.
+--- a/src/wep/pl_handgun.cpp
++++ b/src/wep/pl_handgun.cpp
+@@ -28,6 +28,9 @@
+ #include "math_sub.h"
+ /* PORT (patch 0230): the reload motion's level (runtime/cheats.cpp) */
+ extern "C" int re4_story_char_reload_level(int lv);
++extern "C" void* re4_move_hg_pose(int weapon, int index, void* mot); /* port (patch 0956): runtime/locomotion.cpp */
++/* port (patch 0956, mods): Leon's aim idle and fire of the remake (DevJunior, 26.11.2026), the game's otherwise */
++#define HG_POSE(arc, i) (pG->pl_type == 0 ? re4_move_hg_pose(pG->weapon_no, (i), PL_ARC_PTR(arc, i)) : PL_ARC_PTR(arc, i))
+ 
+ static void wep02_r2_ready(cPlayer* pl);
+ static void wep02_r3_ready00(cPlayer* pl);
+@@ -311,7 +314,7 @@
+ {
+     PlArc* arc = pG->pWep;
+ 
+-    mot3.set(pl, PL_ARC_PTR(arc, 0x26), PL_ARC_PTR(arc, 0x27), PL_ARC_PTR(arc, 0x28), 0, 3, 0, 4, 0);
++    mot3.set(pl, HG_POSE(arc, 0x26), HG_POSE(arc, 0x27), HG_POSE(arc, 0x28), 0, 3, 0, 4, 0);
+     mot3.move(m3r);
+     pl->motionMove();
+     pl->r_no_3 = 1;
+@@ -362,7 +365,7 @@
+ 
+     WEP_OBJ(pl)->trigger();
+     arc = pG->pWep;
+-    mot3.set(pl, PL_ARC_PTR(arc, 0x29), PL_ARC_PTR(arc, 0x2A), PL_ARC_PTR(arc, 0x2B), 0, 0, 0, 4, 0);
++    mot3.set(pl, HG_POSE(arc, 0x29), HG_POSE(arc, 0x2A), HG_POSE(arc, 0x2B), 0, 0, 0, 4, 0);
+     mot3.move(m3r);
+     MotionMove(pl, 0);
+     m3r.move();
+@@ -549,7 +552,7 @@
+     case 2: {
+         PlArc* arc = pG->pWep;
+ 
+-        mot3.set(pl, PL_ARC_PTR(arc, 0x26), PL_ARC_PTR(arc, 0x27), PL_ARC_PTR(arc, 0x28), 0, 9, 0, 4, 0);
++        mot3.set(pl, HG_POSE(arc, 0x26), HG_POSE(arc, 0x27), HG_POSE(arc, 0x28), 0, 9, 0, 4, 0);
+         pl->m_Work0 = 0;
+         pl->r_no_3 = 3;
+     }

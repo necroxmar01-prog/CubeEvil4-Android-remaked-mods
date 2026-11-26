@@ -756,6 +756,84 @@ def pistol_reloads(motdir, ref, model, tol, archives):
     return out
 
 
+# (Mods, 26.11.2026, DevJunior: "the Remake's weapon animations", pistols first) the handguns' aim idle and fire from the
+# remake (cha0_wp4000H 0160_hold_loop, 0500_shoot) in place of the game's three-way poses (mot3: down, level, up =
+# PL_ARC 0x26..0x28 aim, 0x29..0x2B fire): the remake's legs and torso, the game's arms (the hands on the gun as the game
+# holds it, the laser from its muzzle), the torso turned until the right hand (the gun) lies as the game's; aim and fire
+# both from the remake so that the body does not jump between them (the shotgun's try of 23.11.2026: the remake's aim
+# with the game's fire turned the head away on firing). Stretched to the game's lengths (aim 40, fire 21 or 23):
+# move.dat 0xB8 + k aim, 0xBC + k fire for the 21-frame fire (wep01, 02, 03, 04, 38), 0xC0 + k / 0xC4 + k for the
+# 23-frame one (wep05, wep06); k 0 down, 1 level, 2 up (runtime/locomotion.cpp re4_move_hg_pose, patch 0956).
+PISTOL_POSE_SETS = [(0xB8, 0xBC, "wep01"), (0xC0, 0xC4, "wep06")]
+
+
+def hand_turn(model, data, frames, part=10):
+    """The mean model-space turn of `part` over `frames` of the motion `data`."""
+    from tools.motion import evalhost
+    pl = evalhost.Player(model, fcv.parse(data), ik=False)
+    acc = np.zeros((3, 3))
+    for f in frames:
+        h = np.array(pl.frame(f).mat[part]).reshape(3, 4)[:, :3]
+        acc += h / np.linalg.norm(h, axis=0)
+    u_, _s, vt = np.linalg.svd(acc)
+    return u_ @ vt
+
+
+def turn_torso_to(rows, model, order, tol, fixed, game, want_rot, frames, steps=4):
+    """`rows` with the waist and chest turned (half each) until the game's arms on them hold the right hand as
+    `want_rot` (model space)."""
+    for _i in range(steps):
+        have = hand_turn(model, with_game_arms(rows, order, tol, fixed, game), frames)
+        axis, ang = axis_angle(want_rot @ have.T)
+        half = rot_axis(axis, ang * 0.5)
+        rows = [({**row[0], 1: half @ row[0][1],
+                  2: (half @ row[0][1]).T @ half @ (half @ row[0][1]) @ row[0][2]},) + tuple(row[1:])
+                for row in rows]
+    return rows
+
+
+def pistol_poses(motdir, ref, model, tol, archives):
+    """The rows (code, entry data) of the handguns' aim idles and fire motions for move.dat (PISTOL_POSE_SETS)."""
+    _v, mots = R.read_motlist(motlist_in(motdir, WEP_PISTOL))
+    hold = next(x for x in mots if x.name.endswith("0160_hold_loop"))
+    shoot = next(x for x in mots if x.name.endswith("0500_shoot"))
+    rest_from(hold, ref)
+    rest_from(shoot, ref)
+    out = []
+    for aim_base, fire_base, name in PISTOL_POSE_SETS:
+        if name not in archives:
+            continue
+        warc = U.Archive(Path(archives[name]).read_bytes(), ">")
+        for k in range(3):
+            for kind, base, pl, src in (("aim", aim_base, 0x26, hold), ("fire", fire_base, 0x29, shoot)):
+                gdata = warc.entry(pl + k - 4)
+                game = fcv.parse(gdata)
+                n = game.max_frame
+                if kind == "aim":
+                    first, length = find_loop(src, (2 * n, 2 * n))
+                    frames = list(np.arange(first, first + length + 1e-6, 2.0))
+                    fit = Fit(src, model, "leon", 2.0, tol, src.frames, True, frames=frames, loop=True)
+                    stance = fit.rows[0]
+                    rows = fit.rows
+                else:
+                    frames = [min(src.frames - 1.0, g * (src.frames - 1.0) / n) for g in range(n + 1)]
+                    fit = Fit(src, model, "leon", 2.0, tol, src.frames, True, frames=frames)
+                    # the shot is the remake's upper body: its hips' place is not kept (0), the legs and the hips
+                    # stand as in the aim (its first frame)
+                    rows = [({**r[0], **{q: stance[0][q] for q in RELOAD_STILL if q in stance[0]}}, stance[1])
+                            + tuple(r[2:]) for r in fit.rows]
+                fixed = {q: model.parts[q].pos for q in (10, 16, 20, 24) if q in fit.order}
+                gf = list(range(0, n + 1, 4))
+                rows = turn_torso_to(rows, model, fit.order, tol, fixed, game, hand_turn(model, gdata, gf), gf)
+                data = with_game_arms(rows, fit.order, tol, fixed, game)
+                got = hand_turn(model, data, gf)
+                off = math.degrees(axis_angle(got @ hand_turn(model, gdata, gf).T)[1])
+                print("handgun %s %d (%s, PL_ARC 0x%x): %d game frames, %d bytes, the gun %.1f deg off the game's" % (
+                    kind, k, name, pl + k, n, len(data), off))
+                out.append((base + k, data))
+    return out
+
+
 # The shotgun's aim (wish of DevJunior, 21.11.2026: "the idle positions of the weapons", "do it"): the remake's hold
 # loop (cha0_wp4100H 0160) in place of the game's three-way aim idle (mot3: level, up, down = wep07 0x16, 0x1C, 0x1E,
 # PL_ARC 0x1A / 0x20 / 0x22), one cycle as long as the game's (60 frames). The remake has one aim pose (its aiming
@@ -1233,7 +1311,8 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
                                      0))
             steps.append([])
     if weapons and pistols:
-        for code, data in pistol_reloads(weapons, mots[0], model, tol, pistols):
+        for code, data in pistol_reloads(weapons, mots[0], model, tol, pistols) + pistol_poses(weapons, mots[0], model,
+                                                                                                tol, pistols):
             entries.append(data)
             table.append(struct.pack(">BBHHHHH", code, 0, len(entries) - 1, fcv.parse(data).max_frame, 0xFFFF, 0xFFFF,
                                      0))

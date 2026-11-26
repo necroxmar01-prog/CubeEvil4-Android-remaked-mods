@@ -165,6 +165,12 @@ std::string clipName(int code) {
   if (code == 0xA2) return "Pick up (table)";
   if (code >= 0xB0 && code <= 0xB2) return std::string("Handgun reload, level ") + levels[code - 0xB0];
   if (code >= 0xB4 && code <= 0xB6) return std::string("Handgun reload (Red9 set), level ") + levels[code - 0xB4];
+  if (code >= 0xB8 && code <= 0xC6 && (code & 3) != 3) {
+    static const char *const kPitch[3] = {"down", "level", "up"};
+    const int c = code - 0xB8;
+    return std::string((c / 4) & 1 ? "Handgun fire" : "Handgun aim") + ((c / 8) ? " (Red9 set), " : ", ") +
+           kPitch[c & 3];
+  }
   char hex[16];
   std::snprintf(hex, sizeof(hex), "Code 0x%02X", code);
   return hex;
@@ -539,8 +545,8 @@ bool Editor::trim(unsigned entry, int f0, int f1, std::string *why) {
     return false;
   }
   const int code = codeOf(entry);
-  if ((code >= 0x90 && code <= 0x92) || (code >= 0xB0 && code <= 0xB6)) {
-    if (why) *why = "the game matches the reloads by their length: cutting one would stop it playing";
+  if ((code >= 0x90 && code <= 0x92) || (code >= 0xB0 && code <= 0xC6)) {
+    if (why) *why = "the game matches the weapon animations by their length: cutting one would stop it playing";
     return false;
   }
   const auto which = withLayers(entry);
@@ -559,8 +565,8 @@ bool Editor::retime(unsigned entry, float speed, std::string *why) {
   for (const auto &c : clips())
     if (c.entry == entry) code = c.code;
   // the game picks these by their length (re4_move_reload): another length would not play
-  if ((code >= 0x90 && code <= 0x92) || (code >= 0xB0 && code <= 0xB6)) {
-    if (why) *why = "the game matches the reloads by their length: change their speed in the game (later)";
+  if ((code >= 0x90 && code <= 0x92) || (code >= 0xB0 && code <= 0xC6)) {
+    if (why) *why = "the game matches the weapon animations by their length: their speed cannot change here";
     return false;
   }
   std::vector<unsigned> which{entry};

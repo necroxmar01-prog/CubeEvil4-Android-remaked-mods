@@ -128,6 +128,12 @@ u16 gReloadLast[3];
 // game motion's own length (pl_handgun.cpp wep02_r2_reload, patch 0955)
 u8* gHgReload[2][3];
 u16 gHgReloadLast[2][3];
+// (Mods, 26.11.2026, DevJunior: "the Remake's weapon animations") the handguns' aim idle and fire, down / level / up
+// (pl_handgun.cpp mot3: PL_ARC 0x26..0x28, 0x29..0x2B), the remake's body with the game's arms: set 0 (move.dat 0xB8 +
+// k aim, 0xBC + k fire; wep01..04, 38: fire 21 frames), set 1 (0xC0 + k, 0xC4 + k; wep05, 06: fire 23); re4_move_hg_pose,
+// patch 0956
+u8* gHgPose[2][2][3];      // set, 0 aim / 1 fire, k
+u16 gHgPoseLast[2][2][3];
 // (Mods, 23.11.2026) the shotgun's three aim poses (move.dat codes 0x94..0x96 for the game's WEP entries 0x16, 0x1C,
 // 0x1E: PL_ARC 0x1A, 0x20, 0x22 of wep07_r3_set00 / fire00), the remake's hold loop with the gun on the game's line;
 // re4_move_aim, patch 0950
@@ -324,6 +330,8 @@ void load()
     u8* reload[3] = {0, 0, 0};
     u8* hg[2][3] = {};
     u16 hgLast[2][3] = {};
+    u8* hgPose[2][2][3] = {};
+    u16 hgPoseLast[2][2][3] = {};
     u8* aim[3] = {0, 0, 0};
     u8* carry[kMoves] = {};
     u16 carryLast[kMoves] = {};
@@ -353,6 +361,11 @@ void load()
         if (r[0] >= 0x90 && r[0] < 0x93) {
             reload[r[0] - 0x90] = base + at[entry];
             reloadLast[r[0] - 0x90] = last;
+        }
+        if (r[0] >= 0xB8 && r[0] < 0xC7 && (r[0] & 3) != 3) {
+            const int c = r[0] - 0xB8, set = c / 8, fire = (c / 4) & 1, k = c & 3;
+            hgPose[set][fire][k] = base + at[entry];
+            hgPoseLast[set][fire][k] = last;
         }
         if ((r[0] >= 0xB0 && r[0] < 0xB3) || (r[0] >= 0xB4 && r[0] < 0xB7)) {
             const int set = r[0] >= 0xB4 ? 1 : 0, lv = r[0] - (set ? 0xB4 : 0xB0);
@@ -455,6 +468,8 @@ void load()
     if (nHg) {
         re4_log("move: %s: the remake's handgun reloads, %d motions", path, nHg);
     }
+    memcpy(gHgPose, hgPose, sizeof gHgPose);
+    memcpy(gHgPoseLast, hgPoseLast, sizeof gHgPoseLast);
     int nAim = 0;
     for (int i = 0; i < 3; i++) {
         gAim[i] = aim[i];
@@ -1242,6 +1257,34 @@ int re4_move_strafe(void* p, float sx, float sy, float want, const void* cur, fl
 // remake's (Leon's own, the game's length) for the shotgun (weapon_no 7) when move.dat has it and the remake's movements
 // are on, else the game's `mot`. Only when the game's motion is as long as the one it was made for (another disc or
 // another pack: the game's).
+// Patch 0956 (pl_handgun.cpp wep02_r3_set00, the return from the reload, wep02_r3_fire00): the handgun's aim idle
+// (PL_ARC 0x26..0x28) and fire (0x29..0x2B) of the remake for Leon, the set of the weapon (wep05/06 set 1, wep01..04
+// and 38 set 0), when the game's motion is as long as the one made for it; else the game's
+void* re4_move_hg_pose(int weapon, int index, void* mot)
+{
+    const int fire = index >= 0x29 ? 1 : 0, k = index - (fire ? 0x29 : 0x26);
+    const int set = weapon == 5 || weapon == 6 ? 1 : (weapon >= 1 && weapon <= 4) || weapon == 0x38 ? 0 : -1;
+    if (set < 0 || k < 0 || k > 2 || !mot || !on() || !gHgPose[set][fire][k]) {
+        return mot;
+    }
+    const unsigned own = get16((const u8*) mot) & 0x3FFF;
+    static int told;
+    const int bit = 1 << (set * 6 + fire * 3 + k);
+    if (own != gHgPoseLast[set][fire][k]) {
+        if (!(told & (bit << 12))) {
+            told |= bit << 12;
+            re4_log("move: the handgun's %s 0x%x (weapon %d) is %u frames, the remake's %u: the game's",
+                    fire ? "fire" : "aim", index, weapon, own, (unsigned) gHgPoseLast[set][fire][k]);
+        }
+        return mot;
+    }
+    if (!(told & bit)) {
+        told |= bit;
+        re4_log("move: the remake's handgun %s 0x%x (weapon %d, %u frames)", fire ? "fire" : "aim", index, weapon, own);
+    }
+    return gHgPose[set][fire][k];
+}
+
 void* re4_move_reload(int weapon, int level, void* mot)
 {
     if (weapon != 7 && level >= 0 && level <= 2 && on() && mot) {

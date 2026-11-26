@@ -20294,3 +20294,18 @@ Oberfläche auf dem Gerät, die bearbeitete Datei im Spiel. IK (Hand/Fuß-Ziele)
   Treffer und Ziehweg in `studio_jni.cpp` (`editPick`, `editDrag`: mm entlang des Pfeils auf dem Bildschirm, Winkel um
   das Gelenk). Geprüft: Host-Bild (`studio_gl_check` mit `STUDIO_GIZMO`) zeigt Kreise, Pfeile und Ringe; die
   Bedienung per Finger nicht geprüft (Gerät).
+
+### Mods: Pistole zielen und schießen aus dem Remake (Patch 0956, 26.11.2026)
+
+Wunsch von DevJunior („traer las del Remake“, Pistolen zuerst). `re9_finisher_pack.py pistol_poses`: `cha0_wp4000H
+0160_hold_loop` (Zielen, Schleife auf 40 Bilder) und `0500_shoot` (Schuss, auf 21 bzw. 23 Bilder gestreckt) mit den
+Beinen und dem Oberkörper des Remakes und den Armen des Spiels (die Hände an der Waffe wie im Spiel, der Laser aus ihrer
+Mündung); Hüfte und Oberkörper halb/halb gedreht, bis die rechte Hand (die Waffe) wie im Spiel liegt (Abweichung 0,0°).
+Zielen und Schießen beide aus dem Remake, damit der Körper nicht zwischen ihnen springt (Lehre aus der Schrotflinte,
+23.11.2026). Der Schuss ist im Remake nur Oberkörper (Hüfthöhe 0): Beine und Hüfte stehen wie im ersten Bild des
+Zielens. move.dat 0xB8+k Zielen / 0xBC+k Schuss (wep01..04, 38; Schuss 21 Bilder), 0xC0+k / 0xC4+k (wep05, 06; 23),
+k 0 unten, 1 Mitte, 2 oben. Patch 0956 (`pl_handgun.cpp` wep02_r3_set00, wep02_r3_fire00, Rückkehr aus dem Nachladen)
+fragt `re4_move_hg_pose` (nur Leon, nur gleiche Länge). Paket v33 (move.dat 646 752 Bytes, 48 Bewegungen). Das Studio
+nennt die neuen Clips und lehnt Tempo/Schneiden für sie ab. Geprüft: Host-Bilder (Studio-Betrachter) Zielen und Schuss
+neben denen des Spiels, kompiliert (i686). Nicht geprüft: im Spiel. Ziehen/Wegstecken (14/15 Bilder) bleiben vorerst die
+des Spiels.
