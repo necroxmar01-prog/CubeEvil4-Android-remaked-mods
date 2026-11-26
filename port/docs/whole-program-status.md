@@ -20347,3 +20347,13 @@ Spiel.
   Schichten weg (das Gesichtsbild hat die Brauen gemalt). Am Host gelesen (30 615 Ecken, 7 Materialien). Offen: ein
   Kopf allein (ohne Remake-Körper) passt noch nicht in den Umbau („kein Knochen pelvis“) – dafür kommt ein Weg „nur den
   Kopf auf den Leon der Disc“.
+- **Kopf „Hybrid face“ auf Leon Remake Lite optimized** (DevJunior, 26.11.2026, „clásico remasterizado“: die Ressourcen
+  von „Leon_Remake_Lite_optimized“, Kopf aus `cha000_10.mesh`): neues Werkzeug `port/android-decomp/tools/re_mesh_dump.cpp`
+  (schreibt je Material einer RE-Engine-Mesh Positionen, Normalen, UVs und Dreiecke als Rohdateien);
+  `skin_head_fbx.py --re-mesh DIR` nimmt diesen Auszug statt einer FBX (Gesicht auf `--face-tris` Dreiecke reduziert,
+  Augäpfel je Seite), `--crown-under MM` hält den Scheitel unter der Innenseite der Haare (der RE-Kopf ist höher als
+  der alte, die Kopfhaut kam am Scheitel durch). `skin_hair_fbx.scalp` malt auch die Texel außerhalb aller Dreiecke
+  neben gemalten (UV-Nähte: Hautflecken zwischen den Haarkarten). Aufruf für pl00 und pl08:
+  `--keep-mats 0,1 --tex 1024 --scalp-depth 0.6 --scalp-reach 6 --hairline 1790 --crown-under 3`, danach
+  `skin_shapes.py` (Mund und Lidschlag in Filmen). Am Host gerendert (vorne, schräg, von oben; pl00 7,0 MB, pl08 6,8 MB,
+  Platz 8 MB). Auf dem Gerät nicht getestet. Mod-Dateien nicht im Repository.

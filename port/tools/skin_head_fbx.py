@@ -124,6 +124,44 @@ def build_model(template, P, N, T, groups):
     return out
 
 
+def re_mesh(folder, face_tris):
+    """(Mods, 26.11.2026, DevJunior's "Hybrid face" head, an RE Engine .mesh without an FBX) the meshes of a dump of
+    the RE Engine head (port/android-decomp/tools/re_mesh_dump.cpp: per material NAME.P / .N / .T / .tri, metres,
+    y up, +z ahead, v down) as H.meshes gives an FBX's: "Face_Mat" the face (reduced to face_tris triangles,
+    skin_body_fbx.reduce), "Eyeball_L" / "Eyeball_R" the eyes' insides split at x = 0; the mouth's inside, the brows'
+    and lashes' cards and the eyes' wet and shade layers left out."""
+    import skin_body_fbx as B
+    folder = Path(folder)
+    out = {}
+    for line in (folder / "index.txt").read_text().splitlines():
+        name = line.split()[0]
+        P = np.fromfile(folder / (name + ".P"), np.float32).reshape(-1, 3).astype(np.float64) * 1000.0
+        N = np.fromfile(folder / (name + ".N"), np.float32).reshape(-1, 3).astype(np.float64)
+        T = np.fromfile(folder / (name + ".T"), np.float32).reshape(-1, 2).astype(np.float64)
+        T[:, 1] = 1.0 - T[:, 1]  # v up, as the FBX's
+        tri = np.fromfile(folder / (name + ".tri"), np.int32).reshape(-1, 3).astype(np.int64)
+        corners = np.stack([tri, tri, tri], 2)
+        low = name.lower()
+        if low.startswith("face"):
+            if face_tris and len(tri) > face_tris:
+                V, Vn, W, F, _p, _u = B.reduce(P, corners, T, face_tris)
+                n = len(F)
+                T2 = W.reshape(-1, 2)
+                corners = np.stack([F, F, np.arange(3 * n).reshape(n, 3)], 2).astype(np.int64)
+                P, N, T = V.astype(np.float64), Vn.astype(np.float64), T2
+                print("face: %d triangles reduced to %d" % (len(tri), n))
+            out["Face_Mat"] = (P, corners, N, T)
+        elif low.startswith("eye_inside"):
+            for side, key in ((1, "Eyeball_L"), (-1, "Eyeball_R")):
+                m = P[tri].mean(1)[:, 0] * side > 0
+                used = np.unique(tri[m])
+                remap = np.full(len(P), -1)
+                remap[used] = np.arange(len(used))
+                t2 = remap[tri[m]]
+                out[key] = (P[used], np.stack([t2, t2, t2], 2), N[used], T[used])
+    return out
+
+
 def corner_mesh(Pc, Nc, Tc):
     """Per-corner arrays (n x 3 x k) as (positions, triangles of (p, n, t) indices, normals, uvs)."""
     n = len(Pc)
@@ -263,11 +301,39 @@ def face_texture(a, size, texel_pos, cards, brow_colour, beard_colour, tone=None
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGBA")
 
 
+def under_hair(P, hair, start=1760.0, inset=3.0, cone=10.0):
+    """Keeps the crown under the hair: a position above y `start` that lies further from the skull's middle than
+    the hair's innermost positions in its direction (within `cone` degrees) goes `inset` inside them. The RE Engine
+    head is a little taller than the disc's (DevJunior, 26.11.2026: the scalp showed through the hybrid head's
+    parting). Returns how many moved (P is changed in place)."""
+    H_ = hair[hair[:, 1] > start - 60.0]
+    c = np.array([0.0, start - 40.0, float(np.median(H_[:, 2]))])
+    hd = H_ - c
+    hr = np.linalg.norm(hd, axis=1)
+    hu = hd / hr[:, None]
+    cos = np.cos(np.radians(cone))
+    n = 0
+    for i in np.nonzero(P[:, 1] > start)[0]:
+        d = P[i] - c
+        r = np.linalg.norm(d)
+        u = d / r
+        near = hu @ u > cos
+        if not near.any():
+            continue
+        lim = hr[near].min() - inset
+        if r > lim:
+            P[i] = c + u * lim
+            n += 1
+    return n
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("skin")
     ap.add_argument("out")
-    ap.add_argument("--fbx", required=True)
+    ap.add_argument("--fbx", help="the head as an FBX (RE-Mesh-Editor)")
+    ap.add_argument("--re-mesh", help="the head as a dump of an RE Engine .mesh (tools/re_mesh_dump.cpp) instead")
+    ap.add_argument("--face-tris", type=int, default=7000, help="with --re-mesh: the face reduced to this many")
     ap.add_argument("--albedo", required=True, help="the face's albedo (..._Face_..._ALBD.tga)")
     ap.add_argument("--scot", help="the face's SCOT texture: red the eyebrows' mask, blue the cavity")
     ap.add_argument("--normal", help="the face's normal map (..._NRMR.tga: red and green)")
@@ -309,6 +375,7 @@ def main(argv=None):
     ap.add_argument("--hair-colour", default="44,35,25", help="the scalp under the hair (skin_hair_fbx.scalp)")
     ap.add_argument("--scalp-rules", action="store_true",
                     help="also skin_hair_fbx.scalp's fixed regions (made for the disc's head; the FBX face has a hairline)")
+    ap.add_argument("--crown-under", type=float, help="the crown kept this far under the hair's inside (under_hair)")
     ap.add_argument("--scalp-depth", type=float, default=0.8)
     ap.add_argument("--scalp-reach", type=float, default=0.0)
     a = ap.parse_args(argv)
@@ -316,7 +383,7 @@ def main(argv=None):
     arc = U.Archive(open(a.skin, "rb").read(), ">")
     entries = [arc.entry(i) for i in range(len(arc.offsets))]
     head = entries[HEAD]
-    fbx = H.meshes(H.load_fbx(a.fbx))
+    fbx = re_mesh(a.re_mesh, a.face_tris) if a.re_mesh else H.meshes(H.load_fbx(a.fbx))
     s, t = H.place(fbx, head)
     print("FBX head on the skin's: scale %.3f, shift (%.1f, %.1f, %.1f)" % (s, *t))
     keep = [int(x) for x in a.keep_mats.split(",") if x]
@@ -394,6 +461,9 @@ def main(argv=None):
         print("eyes: %d face triangles inside the eyeballs left out" % int(drop.sum()))
     groups.insert(0, (skin_part, trisf))
     P, N, T = np.concatenate(Ps), np.concatenate(Ns), np.concatenate(Ts)
+    if a.crown_under is not None and entries[HAIR]:
+        n = under_hair(P, G.positions(entries[HAIR]), inset=a.crown_under)
+        print("crown: %d positions kept under the hair" % n)
     model = build_model(head, P, N, T, groups)
     if a.neck_fit:
         model, n = S.tuck(bytes(model), head, top=a.neck_fit, inset=0.0)

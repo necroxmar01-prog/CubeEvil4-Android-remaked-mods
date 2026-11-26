@@ -684,6 +684,10 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
             wgt = np.maximum(wgt, top)
         if (wgt > 0.5).sum() < 50:
             continue
+        # the texels outside every triangle next to painted ones too: filtering and the mipmaps blend them in at
+        # the UV seams (DevJunior, 26.11.2026: skin specks between the cards on the hybrid head's crown)
+        from scipy.ndimage import maximum_filter
+        wgt = np.where(np.isfinite(y), wgt, maximum_filter(wgt, 7))
         rng = np.random.default_rng(5)
         streak = 0.85 + 0.3 * np.repeat(rng.random((1, w)), h, 0)  # a faint vertical grain
         tgt = np.array(colour, dtype=np.float64)[None, None, :] * depth * streak[..., None]
