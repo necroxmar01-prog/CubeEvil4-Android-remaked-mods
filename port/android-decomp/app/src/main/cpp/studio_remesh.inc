@@ -343,9 +343,34 @@ DffMesh readReMod(const std::map<std::string, Bytes> &files, std::map<std::strin
       if (fp.compare(0, stem.size() + 6, stem + ".mdf2.") == 0) colourOf = readMdf2(fd), hasMdf2 = true;
     // a mesh the mod ships without its materials draws with the game's own textures (the Claire outfit's head is
     // Ashley's): left out, the character's own part stays
+    // (Mods, 26.11.2026, DevJunior's "Hybrid face" head: cha000_10.mesh with its face pictures, no .mdf2) a head
+    // mesh without materials but with its face picture beside it (<stem>_face_albd): the face and the mouth on it,
+    // the eyes dark (their pictures are the game's), the brows' and lashes' cards and the eyes' wet and shade layers
+    // left out (the face picture has the brows painted)
+    std::set<std::string> dropMat;
+    std::map<std::string, std::array<std::uint8_t, 4>> flatMat;
     if (!hasMdf2) {
-      log += "  " + path.substr(path.find_last_of('/') + 1) + ": no materials in the mod (the game's own), left out\n";
-      continue;
+      std::string face;
+      for (const auto &[fp, fd] : files)
+        if (fp.compare(0, stem.size() + 15, stem + "_face_albd.tex.") == 0) face = stem + "_face_albd";
+      if (face.empty()) {
+        log += "  " + path.substr(path.find_last_of('/') + 1) + ": no materials in the mod (the game's own), left out\n";
+        continue;
+      }
+      for (const auto &name : p.mats) {
+        std::string n = name;
+        for (auto &ch : n) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+        if (n.find("face") != std::string::npos || n.find("mouth") != std::string::npos ||
+            n.find("skin") != std::string::npos || n.find("head") != std::string::npos)
+          colourOf[name] = face;
+        else if (n.find("eye_inside") != std::string::npos || n.find("eyeball") != std::string::npos ||
+                 n.find("iris") != std::string::npos)
+          flatMat[name] = {58, 52, 48, 255};
+        else
+          dropMat.insert(name);
+      }
+      log += "  " + path.substr(path.find_last_of('/') + 1) + ": no materials in the mod: the face picture " + face +
+             " on the face and the mouth, the eyes dark, the other layers left out\n";
     }
     std::vector<unsigned> matMap;
     for (const auto &name : p.mats) {
@@ -355,7 +380,7 @@ DffMesh readReMod(const std::map<std::string, Bytes> &files, std::map<std::strin
       if (it == matOf.end()) {
         it = matOf.emplace(key, unsigned(m.matTex.size())).first;
         m.matTex.push_back(key);
-        m.matColour.push_back({160, 160, 160, 255});
+        m.matColour.push_back(flatMat.count(name) ? flatMat.at(name) : std::array<std::uint8_t, 4>{160, 160, 160, 255});
         m.matName.push_back(name);
         if (!tex.empty() && !images.count(key)) {
           bool found = false;
@@ -462,7 +487,9 @@ DffMesh readReMod(const std::map<std::string, Bytes> &files, std::map<std::strin
       for (auto &x : bw) x /= sum;
       m.bone.push_back(bi), m.weight.push_back(bw);
     }
-    for (const auto &t : p.tris) m.tris.push_back({t[0] + first, t[1] + first, t[2] + first, matMap.at(t[3])});
+    for (const auto &t : p.tris)
+      if (t[3] >= p.mats.size() || !dropMat.count(p.mats[t[3]]))
+        m.tris.push_back({t[0] + first, t[1] + first, t[2] + first, matMap.at(t[3])});
     used.push_back(fmt("%s (%zu vertices, %zu triangles)", path.substr(path.find_last_of('/') + 1).c_str(), p.pos.size(),
                        p.tris.size()));
   }

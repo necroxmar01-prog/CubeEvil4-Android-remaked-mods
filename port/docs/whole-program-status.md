@@ -20341,3 +20341,9 @@ Spiel.
   Bild so, wie ihn die Bewegung des Spiels hält (der Kopf des Remakes auf dem zum Spiel gedrehten Oberkörper sah zur
   Seite); Paket v35. Studio: ein Gizmo-Zug ändert jetzt standardmäßig die ganze Animation („Whole animation“), wahlweise
   From–To oder nur das Bild („This frame“, mit „Adapt“). Geprüft: Host-Bilder Kopf wie im Spiel. Nicht geprüft: Gerät.
+- **Remake-Kopf ohne Materialdatei** (DevJunior, „clásico remasterizado“, der Kopf „Hybrid face“: `cha000_10.mesh` mit
+  den Gesichtsbildern, ohne `.mdf2`): `studio_remesh.inc` nimmt bei einer Kopf-Mesh ohne Materialien das Gesichtsbild
+  daneben (`<stem>_face_albd`) für Gesicht und Mund, die Augen dunkel, Brauen-/Wimpernkarten und Augen-Nass-/Schatten-
+  Schichten weg (das Gesichtsbild hat die Brauen gemalt). Am Host gelesen (30 615 Ecken, 7 Materialien). Offen: ein
+  Kopf allein (ohne Remake-Körper) passt noch nicht in den Umbau („kein Knochen pelvis“) – dafür kommt ein Weg „nur den
+  Kopf auf den Leon der Disc“.
