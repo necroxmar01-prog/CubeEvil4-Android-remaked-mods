@@ -20435,3 +20435,9 @@ Spiel.
   aus dem Schalter und rechts daneben einem quadratischen Knopf (64 dp) mit rotem Papierkorb (`res/drawable/ic_trash.xml`,
   eigene Zeichnung), Beschreibung für Bedienungshilfen „Remove NAME“, gleiche Rückfrage wie bisher. Gebaut nur in der
   CI, auf dem Gerät nicht getestet.
+- **Mehrere .zip-Mods auf einmal; Haar gleichmäßig** (DevJunior, 26.11.2026, Bilder vom Gerät: helle Flecken im Haar,
+  „falta poder instalar varios mods así“ mit dem Dateiauswahl-Bildschirm): „Add mods .zip (one or more)“ öffnet die
+  Auswahl mit `EXTRA_ALLOW_MULTIPLE`; mehrere Dateien gehen nacheinander durch `ModStore.copyZip` (`copyZips`, Meldung
+  wie beim Ordner, `showAddedMods`), eine Datei wie bisher. Texte in 11 Sprachen, `check_translations.py` ohne Fehler.
+  Leon Clásico Remasterizado v10 / Remake v5: Haar mit `--albedo-contrast 1.3 --streaks 0`, Farbverlauf
+  `26,21,17:78,63,50:118,98,80` (Lichter näher am Mittelton). Am Host gerendert; Gerät nicht getestet.

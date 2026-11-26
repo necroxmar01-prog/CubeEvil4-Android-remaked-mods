@@ -1509,7 +1509,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     @Override public void addModZip() {
       Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
           .putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"application/zip", "application/x-zip-compressed",
-              "application/octet-stream"});
+              "application/octet-stream"})
+          // (Mods by DevParalax, 26.11.2026, DevJunior: "falta poder instalar varios mods así") several .zip at once
+          .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
       startForResult(pick, REQUEST_MOD_ZIP);
     }
 
@@ -1815,8 +1817,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         importNext(new StringBuilder());
       } else if (request == REQUEST_MOD && data.getData() != null) {
         copyMod(data.getData(), false);
-      } else if (request == REQUEST_MOD_ZIP && data.getData() != null) {
-        copyMod(data.getData(), true);
+      } else if (request == REQUEST_MOD_ZIP && data.getClipData() != null && data.getClipData().getItemCount() > 1) {
+        List<Uri> zips = new java.util.ArrayList<>();
+        for (int i = 0; i < data.getClipData().getItemCount(); i++) zips.add(data.getClipData().getItemAt(i).getUri());
+        copyZips(zips);
+      } else if (request == REQUEST_MOD_ZIP && (data.getData() != null || data.getClipData() != null)) {
+        copyMod(data.getData() != null ? data.getData() : data.getClipData().getItemAt(0).getUri(), true);
       } else if (request == REQUEST_MOD_ALL && data.getData() != null) {
         copyAllMods(data.getData());
       } else if (request == REQUEST_REPORT && data.getData() != null) {
@@ -1874,6 +1880,48 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
             .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mod added")).show();
       });
     }, "mod-copy").start();
+  }
+
+  /** Several picked .zip mods (ModStore.copyZip each, in the order picked), off the main thread; then a restart. */
+  private void copyZips(List<Uri> zips) {
+    Toast.makeText(this, R.string.ingame_mod_copying, Toast.LENGTH_SHORT).show();
+    final File root = gameRoot();
+    new Thread(() -> {
+      final List<String> names = new java.util.ArrayList<>();
+      final List<String> failed = new java.util.ArrayList<>();
+      for (Uri zip : zips) {
+        try {
+          names.add(ModStore.copyZip(getContentResolver(), zip, root).name);
+        } catch (IOException | RuntimeException e) {
+          failed.add(zip.getLastPathSegment() + ": " + e.getMessage());
+        }
+      }
+      Log.i(TAG, "mods from " + zips.size() + " zips: added " + names + (failed.isEmpty() ? "" : ", failed " + failed));
+      main.post(() -> showAddedMods(names, failed));
+    }, "mod-copy-zips").start();
+  }
+
+  /** What copyZips / copyAllMods brought: the added and failed ones, and the restart when any came. */
+  private void showAddedMods(List<String> names, List<String> failed) {
+    if (isFinishing()) return;
+    if (menu != null) menu.refreshMods();
+    if (names.isEmpty() && failed.isEmpty()) {
+      message(getString(R.string.ingame_mods_none_found));
+      return;
+    }
+    String text = names.isEmpty() ? "" : getString(R.string.ingame_mods_added_all, TextUtils.join(", ", names));
+    if (!failed.isEmpty()) {
+      text += (text.isEmpty() ? "" : "\n\n") + getString(R.string.ingame_mods_failed_all, TextUtils.join("; ", failed));
+    }
+    if (names.isEmpty()) {
+      message(text);
+      return;
+    }
+    text += "\n\n" + getString(R.string.ingame_mods_changed);
+    new AlertDialog.Builder(this)
+        .setMessage(text)
+        .setNegativeButton(R.string.ingame_later, null)
+        .setPositiveButton(R.string.ingame_restart, (d, w) -> restartIntoGame("menu: mods added")).show();
   }
 
   /** Every mod of the picked folder into game/mods (ModStore.copyAll), off the main thread; then a restart. */

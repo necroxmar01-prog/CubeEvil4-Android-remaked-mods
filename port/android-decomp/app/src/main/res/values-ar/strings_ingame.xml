@@ -599,7 +599,7 @@
         <item quantity="other">&#x200F;%1$s: عدد الملفات %2$d</item>
     </plurals>
     <string name="ingame_mod_add">إضافة مجلد تعديل</string>
-    <string name="ingame_mod_add_zip">إضافة تعديل ‎.zip</string>
+    <string name="ingame_mod_add_zip">إضافة تعديلات ‎.zip (واحد أو أكثر)</string>
     <string name="ingame_mod_add_all">إضافة كل التعديلات في مجلد</string>
     <string name="ingame_mod_remove_one">إزالة %1$s</string>
     <string name="ingame_mod_remove_one_text">سيُحذف “%1$s”. تُعاد تشغيل اللعبة وتستخدم التعديلات الأخرى أو ملفات القرص نفسها. يضيع التقدم منذ آخر حفظ.</string>
