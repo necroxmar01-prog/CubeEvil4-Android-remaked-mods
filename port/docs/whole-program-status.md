@@ -20362,3 +20362,13 @@ Spiel.
   `--hair-ramp` (Leon Clásico Remasterizado v2: `48,36,27:118,93,68:186,160,124`, dazu `--normal` aus
   `cha000_10_face_nrmr`, `--relief 0.6`). Am Host gerendert, auf dem Gerät nicht getestet. Offen: die Frisur des
   Remake (Rqqp, `cha000_20.mesh`) braucht `cha000_20_Hair_ALBD`/`_ATOC` aus dem Spiel.
+- **Frisur des Remake auf dem Skin** (DevJunior, 26.11.2026: RaspTea „Classic Style Leon Hair (OG Face Fix)“,
+  `cha000_20.mesh` mit nur der ALBD, und Pakjuaans Kopf `cha000_10.mesh` „Head for Classic Outfit“):
+  `skin_hair_fbx.py` nimmt mit `--re-mesh DIR --re-head DIR` einen Auszug von `re_mesh_dump` statt einer FBX
+  (`re_dump`), `--alpha auto` macht die Strähnenmaske aus der ALBD (wo sie vom flachen Grau abweicht; die ATOC ist
+  die des Spiels und fehlt), `--albedo-contrast K` spreizt die Helligkeit der ALBD, `--place-on` setzt die Haare nach
+  dem Kopf des Ausgangs-Skins (wie `skin_head_fbx.py`), `--template` baut sie auf dem Haarmodell eines anderen Skins
+  (s8-Normalen), mit den eigenen Haartexturen. Leon Clásico Remasterizado v3: Kopf Pakjuaan mit dem Hybrid-Gesichtsbild,
+  Haare RaspTea (Hair00 60 %, Hair01 40 %, 17 172 Dreiecke), Farbe `26,21,17:78,63,50:142,124,104` (aschbraun, nach
+  DevJuniors Bild), Kopfhaut in der Haarfarbe (keine schwarze Linie am Haaransatz), `skin_shapes.py --no-mouth-inside`
+  (sonst helle Lippen beim Pakjuaan-Kopf). pl00 7,3 MB, pl08 7,0 MB. Am Host gerendert, auf dem Gerät nicht getestet.

@@ -173,6 +173,39 @@ def meshes(root):
     return out
 
 
+def re_dump(folder):
+    """(Mods, 26.11.2026, RaspTea's "Classic Style Leon Hair" for the RE4 Remake, a .mesh without an FBX) every
+    material of a dump of an RE Engine .mesh (port/android-decomp/tools/re_mesh_dump.cpp: NAME.P / .N / .T / .tri,
+    metres, y up, +z ahead: the game's axes; v down) as meshes() gives an FBX's: name -> (positions in millimetres,
+    triangles of (position, normal, uv) per corner, normals, uvs with v up)."""
+    folder = Path(folder)
+    out = {}
+    for line in (folder / "index.txt").read_text().splitlines():
+        name = line.split()[0]
+        P = np.fromfile(folder / (name + ".P"), np.float32).reshape(-1, 3).astype(np.float64) * 1000.0
+        N = np.fromfile(folder / (name + ".N"), np.float32).reshape(-1, 3).astype(np.float64)
+        T = np.fromfile(folder / (name + ".T"), np.float32).reshape(-1, 2).astype(np.float64)
+        T[:, 1] = 1.0 - T[:, 1]
+        tri = np.fromfile(folder / (name + ".tri"), np.int32).reshape(-1, 3).astype(np.int64)
+        key = name[:-4] + "_Mat" if name.lower().endswith("_mat") else name
+        out[key] = (P, np.stack([tri, tri, tri], 2), N, T)
+    return out
+
+
+def alpha_from_albedo(albedo, out):
+    """A strand mask for a hair whose ATOC is not at hand (RaspTea's hair ships only its ALBD, the ATOC is the
+    game's): the RE Engine fills an ALBD's empty texels with one flat grey, so a texel is strand where the albedo
+    varies around it (its 5 x 5 spread) or differs from that grey. Writes the mask (grey) to `out`."""
+    from scipy.ndimage import uniform_filter
+    a = np.asarray(Image.open(albedo).convert("L"), dtype=np.float64)
+    bg = float(np.median(a))
+    m = uniform_filter(a, 5)
+    sd = np.sqrt(np.maximum(uniform_filter(a * a, 5) - m * m, 0))
+    al = np.maximum(np.clip((sd - 1.0) / 3.0, 0, 1), np.clip((np.abs(a - bg) - 3.0) / 6.0, 0, 1))
+    Image.fromarray((al * 255).astype(np.uint8)).save(out)
+    return out
+
+
 # ---- placing it on the skin's head -----------------------------------------------------------------------------------
 
 
@@ -704,8 +737,18 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("skin")
     ap.add_argument("out")
-    ap.add_argument("--fbx", required=True)
-    ap.add_argument("--alpha", required=True, help="the hair's strand mask texture (e.g. ..._Hair_ACOT.tga)")
+    ap.add_argument("--fbx", help="the hair as an FBX (with the head's Face_Mat and Eyeball_L/R for placing it)")
+    ap.add_argument("--re-mesh", metavar="DIR", help="instead of --fbx: the hair as a dump of an RE Engine .mesh "
+                    "(port/android-decomp/tools/re_mesh_dump.cpp), placed by --re-head")
+    ap.add_argument("--place-on", metavar="SKIN.drs", help="place the hair by this skin's head (the one the new head "
+                    "was placed on: skin_head_fbx.py's input), not the skin's own (its crown is pulled under the hair)")
+    ap.add_argument("--template", metavar="SKIN.drs", help="build the hair on this skin's hair model (s8 normals: "
+                    "at most 255 weights), with the skin's own hair textures")
+    ap.add_argument("--re-head", metavar="DIR", help="with --re-mesh: the dump of the head the hair was made for")
+    ap.add_argument("--alpha", required=True, help="(\"auto\": made from --albedo, alpha_from_albedo) ""the hair's strand mask texture (e.g. ..._Hair_ACOT.tga)")
+    ap.add_argument("--albedo-contrast", type=float, default=1.0, metavar="K",
+                    help="the albedo's brightness spread K times about its middle grey first (an ALBD meant for the "
+                    "RE Engine's tinting has its strands within a few levels of the grey)")
     ap.add_argument("--alpha-channel", default="R", choices=list("RGBA"))
     ap.add_argument("--albedo", help="the hair's albedo (its brightness shades the colour)")
     ap.add_argument("--layers", default="Hair00:0.35,Hair01:0.2,Hair02:1",
@@ -754,12 +797,38 @@ def main(argv=None):
                          "a hair with the game's swinging hair bones (65..85) brings their physics back")
     ap.add_argument("--no-scalp", action="store_true", help="keep the head's scalp as it is (see scalp())")
     a = ap.parse_args(argv)
+    if a.albedo and a.albedo_contrast != 1.0:
+        import tempfile
+        im = np.asarray(Image.open(a.albedo).convert("RGB"), dtype=np.float64)
+        mid = float(np.median(im))
+        im = np.clip(mid + (im - mid) * a.albedo_contrast, 0, 255).astype(np.uint8)
+        if a.alpha == "auto":  # the mask from the albedo as it came
+            a.alpha = alpha_from_albedo(a.albedo, str(Path(tempfile.mkdtemp()) / "alpha.png"))
+            print("alpha: made from the albedo")
+        a.albedo = str(Path(tempfile.mkdtemp()) / "albedo.png")
+        Image.fromarray(im).save(a.albedo)
+        print("albedo: brightness spread %.1f times about %.0f" % (a.albedo_contrast, mid))
+    if a.alpha == "auto":
+        import tempfile
+        a.alpha = alpha_from_albedo(a.albedo, str(Path(tempfile.mkdtemp()) / "alpha.png"))
+        print("alpha: made from the albedo")
 
     arc = U.Archive(open(a.skin, "rb").read(), ">")
     entries = [arc.entry(i) for i in range(len(arc.offsets))]
     template, head = entries[HAIR], entries[HEAD]
-    fbx = meshes(load_fbx(a.fbx))
-    s, t = place(fbx, head)
+    if a.re_mesh:
+        import skin_head_fbx as HF  # here: it imports this module
+        fbx = dict(re_dump(a.re_mesh))
+        if a.re_head:
+            fbx.update(HF.re_mesh(a.re_head, 7000))  # as skin_head_fbx.py reduces it: the same placing
+    elif a.fbx:
+        fbx = meshes(load_fbx(a.fbx))
+    else:
+        raise SystemExit("give --fbx or --re-mesh")
+    s, t = place(fbx, U.Archive(open(a.place_on, "rb").read(), ">").entry(HEAD) if a.place_on else head)
+    own = entries[HAIR]
+    if a.template:
+        template = U.Archive(open(a.template, "rb").read(), ">").entry(HAIR)
     print("FBX head on the skin's: scale %.3f, shift (%.1f, %.1f, %.1f)" % (s, *t))
     allP, allN, allT, allTris = [], [], [], []
     po = no = to = 0
@@ -792,6 +861,11 @@ def main(argv=None):
         print("hair: %d positions lifted over the skull, at most %.0f" % (n, most))
     # the part's textures anew
     p0 = list(G.parts(hair))[0]
+    if a.template:  # the skin's own hair textures (the template's indexes are another TPL's)
+        q0 = list(G.parts(own))[0]
+        hair = bytearray(hair)
+        hair[p0 + 0xC], hair[p0 + 0xE] = own[q0 + 0xC], own[q0 + 0xE]
+        hair = bytes(hair)
     mc, ma = hair[p0 + 0xC], hair[p0 + 0xE]
     imgs = G.tpl_images(entries[HEAD_TPL])
     colour = tuple(int(x) for x in a.colour.split(",")) if a.colour else hair_colour(imgs, mc, ma)
