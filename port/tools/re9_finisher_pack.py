@@ -271,6 +271,53 @@ class Fit:
             rows.append((local,) + tuple(row[1:]))
         self.rows = rows
 
+    def feet_down(self, start, ramp=8, lift=15.0):
+        """(Mods, 26.11.2026, DevJunior: Ganados left "with the legs up" after a finisher) from game frame `start` (the
+        body down) on, each foot no higher than the ankle stands at rest plus `lift`: thigh and shin turned (two-bone,
+        the knee kept on its side) so that the ankle comes down onto the floor; faded in over `ramp` frames. The PC
+        bodies end on their backs with the knees drawn up (ankles 230-290 mm above the floor against 180-220 for the
+        hips); the game then holds that last pose while the body lies there."""
+        par = [p.parent for p in self.model.parts]
+        rest = {}
+        for q in range(self.model.n_parts):
+            rest[q] = (rest[par[q]] if par[q] >= 0 else np.zeros(3)) + np.array(self.model.parts[q].pos, dtype=float)
+        rows, moved = [], 0
+        for i, row in enumerate(self.rows):
+            t = min(max((i - start) / float(max(1, ramp)), 0.0), 1.0)
+            if t <= 0.0:
+                rows.append(row)
+                continue
+            local = dict(row[0])
+            for th, sh, ft in ((18, 19, 20), (22, 23, 24)):
+                if th not in local or sh not in local:
+                    continue
+                rot, pos = fk(self.model, (local,) + tuple(row[1:]))
+                floor = rest[ft][1] + lift
+                if pos[ft][1] <= floor:
+                    continue
+                want = pos[ft].copy()
+                want[1] = pos[ft][1] + (floor - pos[ft][1]) * t
+                s0, k0, f0 = pos[th], pos[sh], pos[ft]
+                a, b = np.linalg.norm(k0 - s0), np.linalg.norm(f0 - k0)
+                v = want - s0
+                d = min(np.linalg.norm(v), a + b - 1.0)
+                v /= np.linalg.norm(v)
+                pole = (k0 - s0) - np.dot(k0 - s0, v) * v
+                if np.linalg.norm(pole) < 1e-6:
+                    continue
+                pole /= np.linalg.norm(pole)
+                ca = max(-1.0, min(1.0, (a * a + d * d - b * b) / (2.0 * a * d)))
+                knee = s0 + v * a * ca + pole * a * math.sqrt(1.0 - ca * ca)
+                w = rot[par[th]]
+                local[th] = w.T @ rotation_between(k0 - s0, knee - s0) @ w @ local[th]
+                rot, pos = fk(self.model, (local,) + tuple(row[1:]))
+                w = rot[par[sh]]
+                local[sh] = w.T @ rotation_between(pos[ft] - pos[sh], want - pos[sh]) @ w @ local[sh]
+                moved += 1
+            rows.append((local,) + tuple(row[1:]))
+        self.rows = rows
+        return moved
+
     def motion(self, world_scale):
         fixed = None
         if self.game_like:
@@ -1420,7 +1467,10 @@ REACT_STEP = 3.0
 REACT_TRAVEL = 1600.0  # mm a reaction carries the Ganado at most (the game's own: up to 1.5 m; the remake's: 3 m)
 
 
-REACT_WRISTS = 0x37  # em10.drs: the game's own flinch (body, from the front) whose hands the reactions keep
+# em10.drs: the game's own motion whose hands the reactions keep. (Mods, 26.11.2026, DevJunior: "los ganados aparecen
+# con las manos de puerco", hands bent back at the wrist like hooves) 0x37 was a fall, its hands flung back over the
+# wrist; now the stand (entry 1): hands in line with the forearm, as the Ganados hold them
+REACT_WRISTS = 0x01
 
 
 def game_wrists(model, data):
@@ -1541,6 +1591,8 @@ def main(argv=None):
         pist = {Path(x).stem.lower(): x for x in a.pistols.split(",")} if a.pistols else None
         moves(root, leon_model, a.tolerance, a.move, a.weapons, a.wep07, a.general2, a.general, pist)
     want = set(a.only.split(",")) if a.only else None
+    ganado_wrists = game_wrists(ganado_model, U.Archive(Path(a.ganado.partition(":")[0]).read_bytes(), ">").entry(
+        REACT_WRISTS))
     entries = [("FIN", b"")]
     made = {}
     table = []
@@ -1562,6 +1614,11 @@ def main(argv=None):
         em = find_motion(epath, f.get("enemy_motion"))
         lf = Fit(lm, leon_model, "leon", 2.0, a.tolerance, lm.frames, a.no_fingers)
         ef = Fit(em, ganado_model, "ganado", 2.0, a.tolerance, em.frames)
+        if ganado_wrists:
+            ef.game_wrists(ganado_wrists)  # hands in line with the forearms (as the reactions'; DevJunior, 26.11.2026)
+        fr0 = f["frames"]
+        if fr0.get("down"):
+            ef.feet_down(min(int(round(fr0["down"] / 2.0)), len(ef.rows) - 1))
         world = (lf.scale + ef.scale) / 2.0  # the floor between them: neither body's alone
         ldata = fcv.serialise(lf.motion(world))
         edata = fcv.serialise(ef.motion(world))

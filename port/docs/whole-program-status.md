@@ -20441,3 +20441,17 @@ Spiel.
   wie beim Ordner, `showAddedMods`), eine Datei wie bisher. Texte in 11 Sprachen, `check_translations.py` ohne Fehler.
   Leon Clásico Remasterizado v10 / Remake v5: Haar mit `--albedo-contrast 1.3 --streaks 0`, Farbverlauf
   `26,21,17:78,63,50:118,98,80` (Lichter näher am Mittelton). Am Host gerendert; Gerät nicht getestet.
+- **Ganados: Hände und Beine in Reaktionen und Finishern; Nachladen aus dem Zielen** (DevJunior, 26.11.2026: „manos
+  de puerco y las piernas levantadas … en los remates“; „cuando recargas mientras sigues apuntando y sueltas el gatillo
+  de apuntar antes de que termine la recarga no me puedo mover“, jede Waffe):
+  - `re9_finisher_pack.py`: `REACT_WRISTS` 0x37 → 0x01. 0x37 ist ein Sturz, seine Hände über das Handgelenk nach hinten
+    geknickt (die „Hufe“); jetzt die Hände aus dem Stand des Spiels, in Linie mit dem Unterarm. Die Finisher bekommen
+    dieselben Handgelenke (`game_wrists`), dazu `Fit.feet_down`: ab dem Bild „down“ jeder Knöchel höchstens 15 mm über
+    seiner Ruhehöhe (Zwei-Knochen-IK von Oberschenkel und Schienbein, Knie auf seiner Seite, über 8 Bilder
+    eingeblendet); die PC-Körper enden auf dem Rücken mit angezogenen Knien (Knöchel 230–290 mm über dem Boden), die
+    das Spiel dann liegen lässt. RE9 Finishers v37 (finish.dat 2 364 864, react.dat 491 712 Bytes, sonst v36).
+    Am Host gerendert (Reaktionen, Endbilder der Finisher), im Spiel nicht getestet.
+  - `free_move.cpp` `re4_player_input`: ein Nachladen aus dem Zielen (`PlReloadDirect` 0), dessen Zieltaste losgelassen
+    wird, wird zum direkten Nachladen (`PlReloadDirect` 1): Leon geht während des Rests (`reloadMove`), es endet
+    `kQuickEnd` Bilder nach dem Füllen (Patches 0909/0933) wie ein Nachladen ohne Zielen. Nur CI-Build; Gerät nicht
+    getestet.

@@ -899,6 +899,20 @@ void re4_player_input(cPlayer* pl)
     // Ashley's own chapter: her pistol aimed (her keys out of the game's first)
     const int ashleyAims = re4_ashley_gun_input(pl, re4_free_move_on() && gCamValid && pl == gLastPl);
     reloadCancel(pl);           // before the quick slots take the D-pad's bits
+    // (Mods, 26.11.2026, DevJunior: "when I reload while still aiming and let go of the aim key before the reload ends,
+    // I cannot move", any weapon) a reload started from the aim (PlReloadDirect 0) whose aim key is let go becomes the
+    // direct reload: he walks during the rest of it (reloadMove), it ends kQuickEnd frames after the weapon is full
+    // and he goes on in the walk routines (patches 0909 / 0933), as a reload started without aiming
+    if (pl->r_no_0 == 0 && pl->r_no_1 == 6 && pl->r_no_2 == 4 && PlReloadDirect == 0 && pl->Wep && pl->Wep->m_pWep &&
+        !joyKamae()) {
+        PlReloadDirect = 1;
+        static int said;
+        if (said < 4) {
+            said++;
+            re4_log("reload: the aim key let go during a reload from the aim: the direct reload (weapon %d, frame %.0f)",
+                    (int) pG->weapon_no, (double) pl->Motion.Seq_frame);
+        }
+    }
     re4_quick_slots_input(pl);  // first: the D-pad's bits out of the keys when it equips weapons
     re4_parry_input(pl);
     reloadInput(pl);  // before the camera: a reload started now keeps the free camera
