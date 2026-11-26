@@ -676,6 +676,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       int stack = stackMax(getSharedPreferences(GAME_PREFS, MODE_PRIVATE));
       if (stack != 0) Log.i(TAG, "cheats: stack items up to " + stack);
       CoreBridge.setStackItems(stack);
+      sendCaseKey();
     }
     setContentView(root);
     // Android Automotive: the bars the car keeps stay off the picture (CarDisplay; nothing elsewhere)
@@ -1634,6 +1635,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       if (text == null) e.remove(key); else e.putString(key, text);
       e.apply();
       if (map.kind == ActionMap.KIND_KEYBOARD) input.setKeyboardMap(map); else input.setControllerMap(map);
+      if (map.kind == ActionMap.KIND_CONTROLLER) sendCaseKey();
       send();
       logLayout();
     }
@@ -2534,6 +2536,35 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       benchFlow.cancel();
     }
     touchBenchB = b;
+  }
+
+  /** (Mods, 26.11.2026, DevJunior: "so that the user knows which button to press") the button the controller layout
+   * puts on the map action (the GameCube Z: the case's auto-arrange, patch 0953) for the hint on the case screen. */
+  private void sendCaseKey() {
+    int code = 0;
+    try {
+      int[] k = input.controllerMap().keys(ActionMap.MAP);
+      if (k != null && k.length == 1) {
+        switch (input.faceLabel(k[0])) {
+          case KeyEvent.KEYCODE_BUTTON_A: code = 1; break;
+          case KeyEvent.KEYCODE_BUTTON_B: code = 2; break;
+          case KeyEvent.KEYCODE_BUTTON_X: code = 3; break;
+          case KeyEvent.KEYCODE_BUTTON_Y: code = 4; break;
+          case KeyEvent.KEYCODE_BUTTON_L1: code = 5; break;
+          case KeyEvent.KEYCODE_BUTTON_R1: code = 6; break;
+          case KeyEvent.KEYCODE_BUTTON_L2: code = 7; break;
+          case KeyEvent.KEYCODE_BUTTON_R2: code = 8; break;
+          case KeyEvent.KEYCODE_BUTTON_THUMBL: code = 9; break;
+          case KeyEvent.KEYCODE_BUTTON_THUMBR: code = 10; break;
+          case KeyEvent.KEYCODE_BUTTON_START: code = 11; break;
+          case KeyEvent.KEYCODE_BUTTON_SELECT: code = 12; break;
+          default: break;
+        }
+      }
+    } catch (RuntimeException e) {
+      Log.w(TAG, "case key: " + e);
+    }
+    CoreBridge.setCaseKey(code);
   }
 
   private void send() {

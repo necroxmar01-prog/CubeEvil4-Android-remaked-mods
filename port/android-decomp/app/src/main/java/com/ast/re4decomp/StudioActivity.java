@@ -1196,11 +1196,13 @@ public final class StudioActivity extends Activity {
   private String editName = "";      // the open archive's file name ("" none)
   private String[] editClips = {};
   private int editClip = -1;          // index into editClips
-  private int editPart = 3;           // the bone (part number); -1 the body's position (root, mm)
+  private int editPart = 3;           // the bone (part number); -1 the body's position (root, mm); -10 - k IK target k
+  private static final String[] IK_ENDS = {"IK: right hand", "IK: left hand", "IK: right foot", "IK: left foot"};
   private final float[] editDelta = new float[3];  // degrees, or mm for the body
   private int editFrom = 0, editTo = -1, editFade = 4, editSpeedPct = 100;
 
   private static String boneName(int part) {
+    if (part <= -10) return IK_ENDS[-10 - part];
     if (part < 0) return "Body position";
     String n = part < LEON_BONES.length ? LEON_BONES[part] : "";
     return n.isEmpty() ? "Bone " + part : n + " (" + part + ")";
@@ -1216,7 +1218,8 @@ public final class StudioActivity extends Activity {
   private void showEdit() {
     content.addView(note("Animations: open a motion archive (your mod pack's melee/move.dat, or a .dat on the phone), "
         + "pick an animation and a bone, turn it on X, Y, Z over a range of frames, then save it as a .dat and put it "
-        + "in your mod pack's melee folder. Model colours and textures come next."));
+        + "in your mod pack's melee folder. IK: pick \"IK: right hand\" (or a foot) as the bone and move it in mm. "
+        + "Model colours and textures come next."));
     if (!modelLoaded) {
       String leon = discFile("em/pl00.drs");
       Button load = card("Load Leon (pl00)", leon == null ? "import your discs in CubeEvil4 first" : "the model the "
@@ -1256,7 +1259,9 @@ public final class StudioActivity extends Activity {
     bone.setOnClickListener(v -> chooseBone());
     content.addView(bone, item());
 
-    boolean body = editPart < 0;
+    boolean body = editPart < 0, ik = editPart <= -10;
+    if (ik) content.addView(note("Move the hand or foot; the arm or leg bends to reach it, the hand or foot keeps its "
+        + "angle."));
     String unit = body ? " mm" : "°";
     int range = body ? 300 : 90;
     String[] axes = body ? new String[] {"X (side)", "Y (up)", "Z (forward)"} : new String[] {"X", "Y", "Z"};
@@ -1283,9 +1288,13 @@ public final class StudioActivity extends Activity {
     Button apply = pill("Apply", true);
     apply.setOnClickListener(v -> {
       float k = body ? 1f : (float) (Math.PI / 180.0);
-      String why = StudioBridge.editAdjust(clipEntry(), body ? 0 : editPart, body, editDelta[0] * k, editDelta[1] * k,
-          editDelta[2] * k, editFrom, editTo, editFade);
-      if (!why.isEmpty()) { toast(why); return; }
+      String why = ik
+          ? StudioBridge.editReach(clipEntry(), -10 - editPart, editDelta[0], editDelta[1], editDelta[2], editFrom,
+              editTo, editFade)
+          : StudioBridge.editAdjust(clipEntry(), body ? 0 : editPart, body, editDelta[0] * k, editDelta[1] * k,
+              editDelta[2] * k, editFrom, editTo, editFade);
+      if (why.startsWith("!")) toast(why.substring(1));
+      else if (!why.isEmpty()) { toast(why); return; }
       editDelta[0] = editDelta[1] = editDelta[2] = 0;
       preview();
       showTab(3);
@@ -1373,6 +1382,7 @@ public final class StudioActivity extends Activity {
     boolean root = false;
     for (int p : moves) root |= p == 0;
     List<Integer> list = new ArrayList<>();
+    for (int k = 0; k < IK_ENDS.length; k++) list.add(-10 - k);
     if (root) list.add(-1);
     for (int p : parts) list.add(p);
     String[] names = new String[list.size()];

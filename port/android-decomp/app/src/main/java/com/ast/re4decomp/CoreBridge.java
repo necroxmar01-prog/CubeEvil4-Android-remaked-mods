@@ -158,6 +158,9 @@ public final class CoreBridge {
   /** The cheat "Stack items" (1.1.0, Cheats & Mods): ammo, grenades and recovery items up to `max` a slot (0 Standard,
    *  250, 500, 999; patch 0254). */
   public static native void setStackItems(int max);
+  /** (Mods) The button on the GameCube Z for the case's "Auto-arrange" hint: 0 Z, 1 A, 2 B, 3 X, 4 Y, 5 L1, 6 R1, 7 L2,
+   * 8 R2, 9 L3, 10 R3, 11 START, 12 SELECT (patch 0953). */
+  public static native void setCaseKey(int code);
   /** The mouse in the game's title and options menus (1.1.0): the app's own pointer (u, v 0..1 over the game's
    *  picture) at each move, `click` for a left click (runtime/mouse_menu.cpp). */
   public static native void mouseMenu(float u, float v, boolean click);

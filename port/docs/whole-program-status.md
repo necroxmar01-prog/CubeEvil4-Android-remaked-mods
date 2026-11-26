@@ -20255,3 +20255,23 @@ Brust +0,5/−0,25 rad über Bild 5–15: nur Eintrag 2 anders, die übrigen Kur
 Bilder, Fußbilder 7/23 → 6/19; Studio-Betrachter (`studio_gl_check`) zeigt die gedrehte Brust. Nicht geprüft: die
 Oberfläche auf dem Gerät, die bearbeitete Datei im Spiel. IK (Hand/Fuß-Ziele) folgt; die Daten haben keine IK-Spuren
 (die Positionsspuren der Teile 10/16/20/24 sind feste Knochenlängen).
+
+### Studio: IK im Animations-Editor; Kofferhinweis; Namen in der Spielschrift (26.11.2026)
+
+- **IK** (DevJunior: „vamos con lo IK“): im Reiter „Edit“ als Knochen „IK: right/left hand/foot“. Hand oder Fuß wird
+  in mm (Modellraum) über den Bildbereich verschoben; Oberarm/Unterarm bzw. Oberschenkel/Wade drehen sich (gedämpfte
+  kleinste Quadrate, numerische Jacobi-Matrix, möglichst wenig weg von der Animation), Hand/Fuß behalten ihre Drehung
+  in der Welt. Eigene Vorwärtsrechnung wie `cCoord::matCalc` (T·Rz·Ry·Rx, Bindungsposition aus den Gelenken des
+  Modells, `Viewer::bindJoints`). Geprüft (Host, `tools/test_studio_motion_ik.cpp`, pl00 + move.dat v32): Pose aller
+  Gelenke = Studio-Betrachter (≤ 0,001 mm, 6 Clips); rechte Hand +100 mm → 99,8 mm, Drehung unverändert, außerhalb
+  des Bereichs unverändert; linker Fuß +80 mm vorwärts → 80,0 mm; Bilder im Betrachter plausibel. Nicht geprüft: Gerät.
+- **Kofferhinweis** (DevJunior: „falta la opción del autoacomodo en el HUD del inventario para que el usuario sepa qué
+  botón“): Patch 0953 ergänzt in `SsPzzlMain::move` bei freiem Cursor „<Taste>: Auto-arrange“ unten rechts, in der
+  Schrift des Spiels (MesFont[0], Glyphen über `messageTrans` in die OT wie die Spielmeldungen). Die Taste kommt aus
+  der Controller-Belegung der App (Aktion „Map“ = GameCube-Z; `CoreBridge.setCaseKey`, Bits 22..29 des dritten
+  Zielworts, `re4_case_key_set`). Nur mit `common_p.fnt` (nicht Japanisch). Kompiliert (i686); nicht auf dem Gerät
+  geprüft (Lage auf dem Bildschirm geschätzt).
+- **Namen „Leon“/„Ashley“** im Fenster „Pistole an Ashley geben“ (Patch 0912): jetzt mit den Buchstaben der Spielschrift
+  (`common_p.fnt`: CI4-Blatt 1024×192, Zellen 32×32, Glyphe 39+k = 'A'+k, 65+k = 'a'+k, Breiten aus der Tabelle) statt
+  der eigenen 5×7-Schrift (bleibt als Rückfall). Am Host mit den Schriftdateien von DevJunior nachgestellt; nicht auf
+  dem Gerät geprüft. Keine Schriftdateien im Repository: der Kern liest die geladene Schrift aus dem Speicher.

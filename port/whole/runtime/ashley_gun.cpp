@@ -66,6 +66,7 @@
 #include "pl_sub.h"
 #include "id_sys.h"
 #include "texture.h"
+#include "mes.h"
 #include <dolphin/dvd.h>
 
 #include <atomic>
@@ -82,6 +83,7 @@ extern "C" void re4_mod_pcm_play(const short* pcm, unsigned frames, int gain);  
 extern "C" int re4_sound_volume(int music);                       // runtime/sound_volume.cpp
 extern "C" const char* re4_data_dir(void);                        // runtime/dvd.cpp
 extern "C" void* re4_gx_cached(unsigned int physical);            // runtime/gx_fifo.cpp
+extern MessageFont MesFont[4];                                     // src/game/mes.cpp
 extern cTexSys* g_pIdTexSys;                                       // src/game/id_tex.cpp
 extern "C" int GXGetTexObjFmt(const GXTexObj* to);                // src/lib/GXTexture.c
 extern "C" u16 GXGetTexObjWidth(const GXTexObj* to);
@@ -1229,14 +1231,60 @@ static bool blankCmpr(const unsigned char* px, int bytes)
     return true;
 }
 
-static void writeName(unsigned char* px, int w, int h, const char* name)
+// (DevJunior, 26.11.2026: "the game's own font") the name in the letters of the game's message font when the loaded one
+// is Font/common_p.fnt (MesFont[0]: 32x32 cells on a 1024x192 CI4 sheet, white letters with a dark edge, 16 shades;
+// glyph 39 + k the capital 'A' + k, 65 + k the small 'a' + k; per glyph its left and right column in pWidth). 1 letter,
+// 2 edge, 3 the letter's grey rim, 0 nothing; false when that font is not there (Japanese: common_j, other codes).
+static bool gameFontName(unsigned char* pic, int w, int h, const char* name)
 {
-    // the picture: 1 letter, 2 edge, 0 nothing
-    static unsigned char pic[48 * 160];
-    if (w > 160 || h > 48) {
-        return;
+    MessageFont& f = MesFont[0];
+    if (!(f.be_flag & 1) || f.m_char_w != 32 || f.m_char_h != 32 || f.m_tex_w != 1024 || f.m_tex_h != 192 || !f.pWidth ||
+        GXGetTexObjFmt(&f.m_mTex[0].tex) != 8) {
+        return false;
     }
-    memset(pic, 0, sizeof pic);
+    const unsigned char* ci = (const unsigned char*) re4_gx_cached((unsigned) (uintptr_t) GXGetTexObjData(&f.m_mTex[0].tex));
+    if (!ci) {
+        return false;
+    }
+    const int n = (int) strlen(name);
+    int glyph[16], l[16], r[16], tw = 0;
+    for (int c = 0; c < n && c < 16; c++) {
+        const char ch = name[c];
+        glyph[c] = ch >= 'A' && ch <= 'Z' ? 39 + (ch - 'A') : ch >= 'a' && ch <= 'z' ? 65 + (ch - 'a') : -1;
+        if (glyph[c] < 0) {
+            return false;
+        }
+        l[c] = (signed char) f.pWidth[glyph[c] * 2];
+        r[c] = (signed char) f.pWidth[glyph[c] * 2 + 1];
+        if (l[c] < 0 || r[c] > 32 || r[c] <= l[c]) {
+            return false;
+        }
+        tw += r[c] - l[c];
+    }
+    if (n > 16 || tw > w || h < 32) {
+        return false;
+    }
+    int x = (w - tw) / 2;
+    const int y0 = (h - 32) / 2;
+    for (int c = 0; c < n; c++) {
+        const int cx = (glyph[c] % 32) * 32, cy = (glyph[c] / 32) * 32;
+        for (int u = l[c]; u < r[c]; u++, x++) {
+            for (int v = 0; v < 32; v++) {
+                const int sx = cx + u, sy = cy + v;
+                // CI4: 8x8 tiles, 32 bytes each, two texels a byte (the left one in the high nibble)
+                const unsigned char b = ci[((sy >> 3) * (1024 >> 3) + (sx >> 3)) * 32 + (sy & 7) * 4 + (sx & 7) / 2];
+                const int i = (sx & 1) ? (b & 15) : (b >> 4);
+                // the palette: 0, 1 clear; 2..8 black at rising alpha (0x1000..0x7000); 9..15 grey to white
+                pic[(y0 + v) * w + x] = i >= 12 ? 1 : i >= 9 ? 3 : i >= 5 ? 2 : 0;
+            }
+        }
+    }
+    return true;
+}
+
+// the name in a 5x7 font of its own (4 texels a dot) with a 2-texel edge: when the game's font is not there
+static void blockyName(unsigned char* pic, int w, int h, const char* name)
+{
     const int dot = 4, n = (int) strlen(name), tw = n * 6 * dot - dot, th = 7 * dot;
     const int x0 = (w - tw) / 2, y0 = (h - th) / 2;
     for (int c = 0; c < n; c++) {
@@ -1278,9 +1326,22 @@ static void writeName(unsigned char* px, int w, int h, const char* name)
             }
         }
     }
+}
+
+static void writeName(unsigned char* px, int w, int h, const char* name)
+{
+    // the picture: 1 letter, 2 edge, 3 grey, 0 nothing
+    static unsigned char pic[48 * 160];
+    if (w > 160 || h > 48) {
+        return;
+    }
+    memset(pic, 0, sizeof pic);
+    if (!gameFontName(pic, w, h, name)) {
+        blockyName(pic, w, h, name);
+    }
     // CMPR: 8x8 tiles row by row, each four 4x4 blocks (top left, top right, bottom left, bottom right); a block: colour
     // 0 = black 0x0000, colour 1 = white 0xFFFF (0 <= 1: three colours and transparent), 2 bits a texel, index 0 black,
-    // 1 white, 3 transparent
+    // 1 white, 2 grey (their middle), 3 transparent
     unsigned char* o = px;
     for (int ty = 0; ty < h; ty += 8) {
         for (int tx = 0; tx < w; tx += 8) {
@@ -1291,7 +1352,7 @@ static void writeName(unsigned char* px, int w, int h, const char* name)
                     unsigned char bits = 0;
                     for (int c = 0; c < 4; c++) {
                         const int v = pic[(by + r) * w + bx + c];
-                        bits = (unsigned char) (bits << 2 | (v == 1 ? 1 : v == 2 ? 0 : 3));
+                        bits = (unsigned char) (bits << 2 | (v == 1 ? 1 : v == 2 ? 0 : v == 3 ? 2 : 3));
                     }
                     o[4 + r] = bits;
                 }

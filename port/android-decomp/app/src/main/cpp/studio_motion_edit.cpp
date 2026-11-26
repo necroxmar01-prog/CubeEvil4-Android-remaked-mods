@@ -459,4 +459,236 @@ bool Editor::retime(unsigned entry, float speed, std::string *why) {
   return true;
 }
 
+// ---- the pose and IK
+namespace {
+
+Matrix rotation(float x, float y, float z) {
+  // RotMatrix (ports/motion64/math.cpp): R(z) R(y) R(x)
+  const float sx = std::sin(x), sy = std::sin(y), sz = std::sin(z), cx = std::cos(x), cy = std::cos(y), cz = std::cos(z);
+  return {cz * cy, cz * sx * sy - sz * cx, cz * cx * sy + sz * sx, 0,
+          sz * cy, sz * sx * sy + cz * cx, sz * cx * sy - cz * sx, 0,
+          -sy,     cy * sx,                cy * cx,                0};
+}
+
+Matrix multiply(const Matrix &a, const Matrix &b) {
+  Matrix o{};
+  for (int r = 0; r < 3; ++r) {
+    for (int c = 0; c < 4; ++c) {
+      float v = c == 3 ? a[std::size_t(r * 4 + 3)] : 0.0f;
+      for (int k = 0; k < 3; ++k) v += a[std::size_t(r * 4 + k)] * b[std::size_t(k * 4 + c)];
+      o[std::size_t(r * 4 + c)] = v;
+    }
+  }
+  return o;
+}
+
+// the angles RotMatrix makes `m` from (its rotation part)
+std::array<float, 3> anglesOf(const Matrix &m) {
+  const float sy = std::clamp(-m[8], -1.0f, 1.0f);
+  return {std::atan2(m[9], m[10]), std::asin(sy), std::atan2(m[4], m[0])};
+}
+
+// the angle nearest `near` that turns as `v` does
+float unwrap(float v, float near) {
+  const float tau = 6.28318530718f;
+  while (v - near > tau / 2) v -= tau;
+  while (v - near < -tau / 2) v += tau;
+  return v;
+}
+
+// the transpose of a rotation (its inverse), translation dropped
+Matrix inverseRotation(const Matrix &m) {
+  return {m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0};
+}
+
+struct Frame {
+  std::vector<std::array<float, 3>> angle, pos;
+};
+
+const Joint *track(const Motion &m, int part, int target) {
+  for (const auto &j : m.joints)
+    if (j.part == part && j.target() == target && j.type() != 15) return &j;
+  return nullptr;
+}
+
+Frame frameOf(const Motion &m, const Skeleton &s, float frame) {
+  Frame f;
+  const std::size_t n = s.parent.size();
+  f.angle.assign(n, {0, 0, 0});
+  f.pos = s.bind;
+  for (std::size_t p = 0; p < n; ++p) {
+    if (const Joint *j = track(m, int(p), 1))
+      for (int a = 0; a < 3; ++a) f.angle[p][std::size_t(a)] = Evaluate(j->axes[std::size_t(a)], frame, m.maxFrame());
+    if (const Joint *j = track(m, int(p), 2))
+      for (int a = 0; a < 3; ++a) f.pos[p][std::size_t(a)] = Evaluate(j->axes[std::size_t(a)], frame, m.maxFrame());
+  }
+  return f;
+}
+
+void worldOf(const Frame &f, const Skeleton &s, std::vector<Matrix> &out) {
+  const std::size_t n = s.parent.size();
+  out.assign(n, {});
+  std::vector<int> done(n, 0);
+  for (std::size_t start = 0; start < n; ++start) {
+    // the chain up to a done (or root) part, then down again
+    std::vector<std::size_t> chain;
+    for (std::size_t p = start; p < n && !done[p]; p = std::size_t(s.parent[p])) {
+      chain.push_back(p);
+      if (s.parent[p] < 0 || std::size_t(s.parent[p]) >= n) break;
+    }
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+      const std::size_t p = *it;
+      Matrix local = rotation(f.angle[p][0], f.angle[p][1], f.angle[p][2]);
+      local[3] = f.pos[p][0];
+      local[7] = f.pos[p][1];
+      local[11] = f.pos[p][2];
+      const int up = s.parent[p];
+      out[p] = up >= 0 && std::size_t(up) < n && done[std::size_t(up)] ? multiply(out[std::size_t(up)], local) : local;
+      done[p] = 1;
+    }
+  }
+}
+
+}  // namespace
+
+bool Editor::pose(unsigned entry, float frame, const Skeleton &s, std::vector<Matrix> &out) const {
+  const Motion *m = motion(entry);
+  if (!m || s.parent.empty()) return false;
+  worldOf(frameOf(*m, s, frame), s, out);
+  return true;
+}
+
+bool Editor::reach(unsigned entry, const Skeleton &s, int end, const float d[3], int f0, int f1, int fade,
+                   std::string *why) {
+  auto fail = [&](const std::string &w) {
+    if (why) *why = w;
+    return false;
+  };
+  static const int kChains[4][3] = {{7, 8, 10}, {13, 14, 16}, {18, 19, 20}, {22, 23, 24}};  // upper, lower, end
+  Motion *m = motion(entry);
+  if (!m) return fail("no such animation");
+  if (end < 0 || end > 3) return fail("no such hand or foot");
+  if (!d[0] && !d[1] && !d[2]) return fail("nothing to change (all three at 0)");
+  const int *c = kChains[end];
+  const std::size_t n = s.parent.size();
+  for (int k = 0; k < 3; ++k) {
+    if (std::size_t(c[k]) >= n) return fail("this model has no such bone (" + std::to_string(c[k]) + ")");
+    if (!track(*m, c[k], 1)) return fail("bone " + std::to_string(c[k]) + " does not turn in this animation");
+  }
+  // the end below the lower bone, the lower below the upper
+  auto below = [&](int child, int up) {
+    for (int p = child; p >= 0 && std::size_t(p) < n; p = s.parent[std::size_t(p)])
+      if (p == up) return true;
+    return false;
+  };
+  if (!below(c[2], c[1]) || !below(c[1], c[0])) return fail("the bones are not one chain on this model");
+  const int last = m->maxFrame();
+  f0 = std::clamp(f0, 0, last);
+  f1 = std::clamp(f1, 0, last);
+  if (f1 < f0) std::swap(f0, f1);
+  // per bone of the chain, per axis: its value at each frame
+  std::vector<std::array<std::vector<float>, 3>> values(3);
+  float worst = 0;
+  for (int f = 0; f <= last; ++f) {
+    Frame fr = frameOf(*m, s, float(f));
+    const float w = weight(f, f0, f1, fade);
+    if (w > 0) {
+      std::vector<Matrix> world;
+      worldOf(fr, s, world);
+      const Matrix endWorld = world[std::size_t(c[2])];
+      const float target[3] = {endWorld[3] + d[0] * w, endWorld[7] + d[1] * w, endWorld[11] + d[2] * w};
+      float theta[6], theta0[6];
+      for (int k = 0; k < 2; ++k)
+        for (int a = 0; a < 3; ++a) theta[k * 3 + a] = theta0[k * 3 + a] = fr.angle[std::size_t(c[k])][std::size_t(a)];
+      auto endAt = [&](const float *t, float out[3]) {
+        Frame g = fr;
+        for (int k = 0; k < 2; ++k)
+          for (int a = 0; a < 3; ++a) g.angle[std::size_t(c[k])][std::size_t(a)] = t[k * 3 + a];
+        std::vector<Matrix> wd;
+        worldOf(g, s, wd);
+        const Matrix &e = wd[std::size_t(c[2])];
+        out[0] = e[3], out[1] = e[7], out[2] = e[11];
+      };
+      // damped least squares: the end on the target, the bones as little away from the animation as it takes
+      const float keep = 40.0f;  // mm^2 a radian^2 away from the animation's angles
+      for (int it = 0; it < 40; ++it) {
+        float p[3];
+        endAt(theta, p);
+        const float e[3] = {target[0] - p[0], target[1] - p[1], target[2] - p[2]};
+        float J[3][6];
+        for (int k = 0; k < 6; ++k) {
+          float t2[6];
+          std::copy(theta, theta + 6, t2);
+          t2[k] += 1e-3f;
+          float q[3];
+          endAt(t2, q);
+          for (int r = 0; r < 3; ++r) J[r][k] = (q[r] - p[r]) / 1e-3f;
+        }
+        // (J^T J + (keep + mu) I) dx = J^T e - keep (theta - theta0)
+        double A[6][7] = {};
+        for (int i = 0; i < 6; ++i) {
+          for (int j = 0; j < 6; ++j) {
+            double v = 0;
+            for (int r = 0; r < 3; ++r) v += double(J[r][i]) * J[r][j];
+            A[i][j] = v + (i == j ? keep + 10.0 : 0.0);
+          }
+          double b = -keep * double(theta[i] - theta0[i]);
+          for (int r = 0; r < 3; ++r) b += double(J[r][i]) * e[r];
+          A[i][6] = b;
+        }
+        for (int i = 0; i < 6; ++i) {  // Gauss-Jordan (A is positive definite)
+          const double piv = A[i][i];
+          for (int j = i; j < 7; ++j) A[i][j] /= piv;
+          for (int r = 0; r < 6; ++r) {
+            if (r == i) continue;
+            const double f2 = A[r][i];
+            for (int j = i; j < 7; ++j) A[r][j] -= f2 * A[i][j];
+          }
+        }
+        float step = 0;
+        for (int i = 0; i < 6; ++i) {
+          const float dx = std::clamp(float(A[i][6]), -0.3f, 0.3f);
+          theta[i] += dx;
+          step = std::max(step, std::fabs(dx));
+        }
+        if (step < 1e-5f) break;
+      }
+      float p[3];
+      endAt(theta, p);
+      worst = std::max(worst, std::sqrt((p[0] - target[0]) * (p[0] - target[0]) + (p[1] - target[1]) * (p[1] - target[1]) +
+                                        (p[2] - target[2]) * (p[2] - target[2])));
+      // the end keeps its turn in the world: its own angles against the new parent
+      Frame g = fr;
+      for (int k = 0; k < 2; ++k)
+        for (int a = 0; a < 3; ++a) g.angle[std::size_t(c[k])][std::size_t(a)] = theta[k * 3 + a];
+      std::vector<Matrix> wd;
+      worldOf(g, s, wd);
+      const int up = s.parent[std::size_t(c[2])];
+      const Matrix local = multiply(inverseRotation(wd[std::size_t(up)]), endWorld);
+      const auto ang = anglesOf(local);
+      for (int a = 0; a < 3; ++a) {
+        g.angle[std::size_t(c[2])][std::size_t(a)] = unwrap(ang[std::size_t(a)], fr.angle[std::size_t(c[2])][std::size_t(a)]);
+        for (int k = 0; k < 2; ++k)
+          g.angle[std::size_t(c[k])][std::size_t(a)] = unwrap(g.angle[std::size_t(c[k])][std::size_t(a)],
+                                                               fr.angle[std::size_t(c[k])][std::size_t(a)]);
+      }
+      fr = g;
+    }
+    for (int k = 0; k < 3; ++k)
+      for (int a = 0; a < 3; ++a) values[std::size_t(k)][std::size_t(a)].push_back(fr.angle[std::size_t(c[k])][std::size_t(a)]);
+  }
+  remember({entry});
+  for (int k = 0; k < 3; ++k) {
+    Joint *j = nullptr;
+    for (auto &jj : m->joints)
+      if (jj.part == c[k] && jj.target() == 1 && jj.type() != 15) j = &jj;
+    for (int a = 0; a < 3; ++a) j->axes[std::size_t(a)] = dense(values[std::size_t(k)][std::size_t(a)]);
+    j->edited = true;
+  }
+  changed_[entry] = true;
+  edited_ = true;
+  lastReachMiss_ = worst;
+  return true;
+}
+
 }  // namespace re4::studio::motionedit

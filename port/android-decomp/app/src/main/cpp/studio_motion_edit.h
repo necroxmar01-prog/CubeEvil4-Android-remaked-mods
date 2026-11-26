@@ -47,6 +47,13 @@ Bytes WriteMotion(const Motion &m);
 // the axis' value at `frame` as HermiteInterpolation gives it (not looping)
 float Evaluate(const Axis &a, float frame, int maxFrame);
 
+// The skeleton the clips pose (the model's joints: parent, 255 none, and bind position against it)
+struct Skeleton {
+  std::vector<int> parent;
+  std::vector<std::array<float, 3>> bind;
+};
+using Matrix = std::array<float, 12>;  // 3x4, row major (the game's Mtx)
+
 class Editor {
  public:
   struct Clip {
@@ -67,9 +74,18 @@ class Editor {
   bool adjust(unsigned entry, int part, bool pos, const float d[3], int f0, int f1, int fade, std::string *why);
   // plays the clip `speed` times as fast (its frames, its MOV1 rows' length and foot frames)
   bool retime(unsigned entry, float speed, std::string *why);
+  // the model-space matrix of every part at `frame` (the game's cCoord: T(pos) R(z) R(y) R(x), the parent's times the
+  // own; the root's own placement left out)
+  bool pose(unsigned entry, float frame, const Skeleton &s, std::vector<Matrix> &out) const;
+  // IK (DevJunior, 25.11.2026: "IK bones to edit the animations"): the hand or foot (end) moved by d (mm, model
+  // space: X side, Y up, Z forward) from frame f0 to f1, easing over `fade` frames; its two bones above (upper arm and
+  // forearm, thigh and calf) turn to reach it, the end keeps its turn in the world
+  bool reach(unsigned entry, const Skeleton &s, int end, const float d[3], int f0, int f1, int fade, std::string *why);
   bool undo();
   int undoCount() const { return int(undo_.size()); }
   bool edited() const { return edited_; }
+  // how far (mm) the last reach stayed from its target at worst (out of the arm's or leg's length)
+  float lastReachMiss() const { return lastReachMiss_; }
 
  private:
   struct Saved {
@@ -89,6 +105,7 @@ class Editor {
   std::vector<bool> changed_;     // written from motions_ (else the entry's bytes)
   std::vector<Saved> undo_;
   bool edited_{};
+  float lastReachMiss_{};
 };
 
 }  // namespace re4::studio::motionedit

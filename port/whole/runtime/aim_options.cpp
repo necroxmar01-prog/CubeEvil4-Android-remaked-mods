@@ -48,6 +48,7 @@ extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_add_frame_hook(void (*hook)(unsigned));  // runtime/pad.cpp
 extern "C" unsigned re4_pad_frame(void);                      // runtime/pad.cpp
 extern "C" void re4_health_bars_set(int on);                 // runtime/health_bars.cpp (1.1.0)
+extern "C" void re4_case_key_set(int code);                 // runtime/case_arrange.cpp (mods, patch 0953)
 extern "C" void re4_stack_items_set(int step);               // runtime/cheats.cpp (1.1.0, patch 0254)
 
 namespace {
@@ -264,6 +265,7 @@ void re4_aim_set(int bits)
         }
         re4_health_bars_set((bits >> 19) & 1);
         re4_stack_items_set((bits >> 20) & 3);
+        re4_case_key_set((bits >> 22) & 0xFF);  // bits 22..29 the case's arrange button (mods)
         int knife = bits & 0xFFF;
         knife = knife == 0 ? 0 : knife < 50 ? 50 : knife > 300 ? 300 : knife;
         if (gKnifeSpeed.exchange(knife) != knife) {

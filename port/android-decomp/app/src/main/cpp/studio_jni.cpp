@@ -390,6 +390,29 @@ JNIEXPORT jstring JNICALL STUDIO(editAdjust)(JNIEnv *env, jclass, jint entry, ji
   return env->NewStringUTF(gEdit.adjust(unsigned(entry), part, pos, d, f0, f1, fade, &why) ? "" : why.c_str());
 }
 
+// IK: the hand or foot `end` (0 right hand, 1 left hand, 2 right foot, 3 left foot) moved by x, y, z mm (model space)
+// over frames f0..f1 on the model's skeleton: "" done, "!..." done but out of reach, else why not
+JNIEXPORT jstring JNICALL STUDIO(editReach)(JNIEnv *env, jclass, jint entry, jint end, jfloat x, jfloat y, jfloat z,
+                                            jint f0, jint f1, jint fade) {
+  std::lock_guard<std::mutex> lock(gLock);
+  const auto *joints = gViewer.bindJoints();
+  if (!joints) return env->NewStringUTF("load a model first (Models tab)");
+  motionedit::Skeleton s;
+  for (const auto &j : *joints) {
+    s.parent.push_back(j.parent == 255 ? -1 : int(j.parent));
+    s.bind.push_back(j.center);
+  }
+  const float d[3] = {x, y, z};
+  std::string why;
+  if (!gEdit.reach(unsigned(entry), s, end, d, f0, f1, fade, &why)) return env->NewStringUTF(why.c_str());
+  if (gEdit.lastReachMiss() > 5.0f) {
+    char line[96];
+    std::snprintf(line, sizeof(line), "!out of reach: up to %.0f mm short", double(gEdit.lastReachMiss()));
+    return env->NewStringUTF(line);
+  }
+  return env->NewStringUTF("");
+}
+
 JNIEXPORT jstring JNICALL STUDIO(editSpeed)(JNIEnv *env, jclass, jint entry, jfloat speed) {
   std::lock_guard<std::mutex> lock(gLock);
   std::string why;

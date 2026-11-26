@@ -12,6 +12,15 @@
 #include <string.h>
 
 #include "puzzle.h"
+#include "mes.h"
+#include "trans_ot.h"
+
+#include <atomic>
+#include <stdio.h>
+
+extern MessageFont MesFont[4];  // src/game/mes.cpp
+extern MessageControl cMes;
+void messageTrans(MSG_QUE* q);  // src/game/mes.cpp: one glyph (the OT's callback)
 
 namespace {
 
@@ -133,4 +142,77 @@ int re4_case_arrange(pzlPlayer* pl)
     pl->rehash();
     re4_log("case: %d items put in order, %d of %d from the side space put in", n, in, ns);
     return 1;
+}
+
+// The hint on the case screen (DevJunior, 26.11.2026: "the auto-arrange option is missing from the inventory's HUD, so
+// that the user knows which button to press"): "<button>: Auto-arrange" at the bottom right while the cursor is free
+// (patch 0953, SsPzzlMain::move with cur the PieceSelect), in the game's message font (MesFont[0], Font/common_p.fnt:
+// glyph 3 + d the digit d, 13 ':', 17 '-', 39 + k 'A' + k, 65 + k 'a' + k), each glyph one MSG_QUE drawn through the
+// OT as the game's messages are (Message::trans). The button: what the app's controller layout puts on the map action
+// (the GameCube Z), sent in bits 22..29 of the third aim word (re4_case_key_set; 0 unknown: "Z").
+namespace {
+std::atomic<int> gCaseKey(0);
+const char* const kKeyNames[] = {"Z", "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "L3", "R3", "START", "SELECT"};
+MSG_QUE gHint[2][48];  // two frames' glyphs (the OT draws the last frame's while this one is filled)
+int gHintBuf;
+
+int glyphOf(char c)
+{
+    if (c >= 'A' && c <= 'Z') return 39 + (c - 'A');
+    if (c >= 'a' && c <= 'z') return 65 + (c - 'a');
+    if (c >= '0' && c <= '9') return 3 + (c - '0');
+    if (c == ':') return 13;
+    if (c == '-') return 17;
+    return -1;  // a space
+}
+}  // namespace
+
+extern "C" void re4_case_key_set(int code)
+{
+    const int k = code >= 0 && code < (int) (sizeof kKeyNames / sizeof kKeyNames[0]) ? code : 0;
+    if (gCaseKey.exchange(k) != k) {
+        re4_log("case: the arrange button shown as %s", kKeyNames[k]);
+    }
+}
+
+void re4_case_arrange_hint()
+{
+    MessageFont& f = MesFont[0];
+    if (!(f.be_flag & 1) || f.m_char_w != 32 || f.m_char_h != 32 || !f.pWidth) {
+        return;  // not the Latin font (Japanese: common_j)
+    }
+    char text[40];
+    snprintf(text, sizeof text, "%s: Auto-arrange", kKeyNames[gCaseKey.load()]);
+    // the size of the case's item names (ss_pzzl.cpp pzzl_font_w / _h: 18 x 24 for a 32-texel cell)
+    const f32 sx = 18.0f / 32.0f;
+    const int h = 24, space = 8;
+    int width = 0;
+    for (const char* c = text; *c; c++) {
+        const int g = glyphOf(*c);
+        width += g < 0 ? space : (int) ((f.pWidth[g * 2 + 1] - (s8) f.pWidth[g * 2]) * sx + 0.5f);
+    }
+    int x = 500 - width;
+    const int y = 384 - 20 - h;
+    MSG_QUE* q = gHint[gHintBuf];
+    gHintBuf ^= 1;
+    const Message& slot = *(const Message*) cMes.getWork();
+    int n = 0;
+    for (const char* c = text; *c && n < 48; c++) {
+        const int g = glyphOf(*c);
+        if (g < 0) {
+            x += space;
+            continue;
+        }
+        const int w = (int) (((s8) f.pWidth[g * 2 + 1] - (s8) f.pWidth[g * 2]) * sx + 0.5f);
+        MSG_QUE& m = q[n++];
+        m.px = (s16) x;
+        m.py = (s16) y;
+        m.mes = (u16) g;
+        m.width = (u8) w;
+        m.height = (u8) h;
+        m.col = 0xFFFFFFFF;
+        m.m_p_font = &f;
+        AddOtDirect(slot.m_ot_type, &m, (void (*)()) messageTrans, slot.m_ot_no, 0x1000, NULL, 0.0f);
+        x += w;
+    }
 }

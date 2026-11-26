@@ -107,6 +107,8 @@ public:
   // the skeleton: joint positions and parents (255 the root) of the current pose
   const std::vector<std::array<float, 3>> &joints() const { return jointPositions_; }
   const std::vector<std::uint8_t> &parents() const { return parents_; }
+  // the model's own joints (parent, bind position against it): the animation editor's skeleton (studio_motion_edit.h)
+  const std::vector<SmdJoint> *bindJoints() const { return model_ ? &model_->mesh.joints : nullptr; }
   std::array<float, 3> minimum() const { return minimum_; }
   std::array<float, 3> maximum() const { return maximum_; }
   unsigned parts() const { return unsigned(parents_.size()); }

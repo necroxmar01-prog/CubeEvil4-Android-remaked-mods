@@ -3,9 +3,30 @@
 # with runtime/case_arrange.cpp.
 # Sscrn/ss_pzzl.cpp PieceSelect::move: with the cursor free on the case screen, Z (unused there; R1 on the Retroid)
 # puts the case in order on the spot (re4_case_arrange on the live pzlPlayer), with the sound of a put-down item.
+# SsPzzlMain::move (26.11.2026): with the cursor free, the hint "<button>: Auto-arrange" at the bottom right
+# (re4_case_arrange_hint, the button the app maps to Z).
 --- a/src/Sscrn/ss_pzzl.cpp
 +++ b/src/Sscrn/ss_pzzl.cpp
-@@ -1883,6 +1883,7 @@
+@@ -1493,6 +1493,7 @@
+ // link 4, 2 main menu; L (Key bit 22) jumps to the key items screen), or the tab row (state 1:
+ // 0 items, 1 back, 2 map, 3 files, 4 exit). Re-equips through weaponChangeRequest when the armed
+ // weapon changed (checkWeaponChange). Z / B on pad 1 toggle the CASE MAKE debug editor.
++extern void re4_case_arrange_hint(); /* port (patch 0953): runtime/case_arrange.cpp */
+ void SsPzzlMain::move(SUB_SCREEN* wk)
+ {
+     int old;
+@@ -1503,6 +1504,10 @@
+     pzzlClearZ(wk);
+     pieceModelDisp(wk);
+     pzzlCursorDisp(wk, 1);
++    if (cur == select) {
++        /* port (patch 0953, mods): the hint "<button>: Auto-arrange" while the cursor is free */
++        re4_case_arrange_hint();
++    }
+     if (cur != exam) {
+         ID_UNIT* u = IdSub.unitPtr(1, IDC_SSCRN_CKPT_2);
+         int id = 0;
+@@ -1883,6 +1888,7 @@
  // Case cursor: A on a piece opens PieceCommand, X picks it up (PzzlThinking) and the d-pad moves
  // between the case and space boards. Leaving with pieces still on the space board first opens the
  // "items left" message.
@@ -13,7 +34,7 @@
  void PieceSelect::move(SUB_SCREEN* wk)
  {
      pzlBoard* b;
-@@ -1967,6 +1968,11 @@
+@@ -1967,6 +1973,11 @@
                  transit(1, wk);
                  SndCall(0, 0xD, 0, 0, 0, 0);
              }

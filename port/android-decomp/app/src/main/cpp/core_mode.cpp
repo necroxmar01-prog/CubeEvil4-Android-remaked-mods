@@ -1175,6 +1175,9 @@ std::atomic<int> optHealthBars{0};
 // the cheat "Stack items" (CoreBridge.setStackItems, 1.1.0): its step in bits 20..21 of the third aim word (0 Standard, 1 250,
 // 2 500, 3 999; runtime/cheats.cpp, patch 0254)
 std::atomic<int> optStackItems{0};
+// the button the controller layout puts on the GameCube Z (CoreBridge.setCaseKey, mods 26.11.2026): bits 22..29 of the
+// third aim word, the case screen's "<button>: Auto-arrange" (runtime/case_arrange.cpp, patch 0953)
+std::atomic<int> optCaseKey{0};
 // the menu's "Field of view" (CoreBridge.setFov, -15 .. +15 degrees, patch 0205): bits 24..29 of the aim bits as
 // degrees + 32 (0: as the game; the core's runtime/aim_options.cpp)
 std::atomic<int> optFov{0};
@@ -3051,7 +3054,8 @@ bool drawGx() {
         // (the mods' fork: upstream's 1.1.0 bits of the first word moved here, the first word is full with the mods')
         | (vibration < 0 ? 0 : vibration ? 3 << 17 : 2 << 17)  // bits 17/18 the game's vibration (1.1.0)
         | (optHealthBars.load() ? 1 << 19 : 0)                 // bit 19 the enemy health bars (1.1.0)
-        | (optStackItems.load() & 3) << 20;                    // bits 20..21 the cheat "Stack items" (1.1.0)
+        | (optStackItems.load() & 3) << 20                     // bits 20..21 the cheat "Stack items" (1.1.0)
+        | (optCaseKey.load() & 0xFF) << 22;                    // bits 22..29 the case's arrange button (mods)
     if (api.setAim && knife != knifeSpeedSent) {
       api.setAim(static_cast<int>(0xC0000000u | static_cast<unsigned>(knife)));  // the third aim word
       knifeSpeedSent = knife;
@@ -4276,6 +4280,13 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setHealthBar
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setStackItems(JNIEnv *, jclass, jint max) {
   const int want = max >= 999 ? 3 : max >= 500 ? 2 : max >= 250 ? 1 : 0;
   if (optStackItems.exchange(want) != want) LOG("stack items: step %d (the menu, %d a slot)", want, (int) max);
+}
+
+// (Mods, 26.11.2026) the button on the GameCube Z as the case screen names it: 0 "Z", 1 A, 2 B, 3 X, 4 Y, 5 L1, 6 R1,
+// 7 L2, 8 R2, 9 L3, 10 R3, 11 START, 12 SELECT (runtime/case_arrange.cpp)
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setCaseKey(JNIEnv *, jclass, jint code) {
+  const int want = code >= 0 && code <= 12 ? code : 0;
+  if (optCaseKey.exchange(want) != want) LOG("case: the arrange button code %d", want);
 }
 
 // 1.1.0: "vibration" changed in the game's own options since the last call (-1: no; with the core in its own
