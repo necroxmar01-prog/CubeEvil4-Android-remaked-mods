@@ -33,6 +33,19 @@ final class StudioBridge {
   static native int useMotions(String path, String name);
   static native String lastError();
   static native String[] motionNames();
+  // the animation editor (Edit tab; cpp/studio_motion_edit.cpp): a motion archive (move.dat ...) opened, its
+  // animations ("entry|last frame|name"), the bones with a rotation (pos false) or a position track, a bone turned
+  // (radians) or moved (mm) over frames f0..f1 easing over `fade` frames, a speed, undo (steps left, -1 none), the
+  // archive written, the archive written and one animation of it on the model ("" or why not)
+  static native String editOpen(String path);
+  static native String[] editClips();
+  static native int[] editParts(int entry, boolean pos);
+  static native String editAdjust(int entry, int part, boolean pos, float x, float y, float z, int f0, int f1,
+      int fade);
+  static native String editSpeed(int entry, float speed);
+  static native int editUndo();
+  static native String editSave(String path);
+  static native String editPreview(String path, int entry);
   static native String setMotion(int clip);
   static native float motionLength();
   static native void setInPlace(boolean on);

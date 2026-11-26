@@ -2,6 +2,7 @@
 // The UI thread opens archives, loads models and picks animations; the GL thread poses and draws. One lock for both.
 #include "studio_convert.h"
 #include "studio_gl.h"
+#include "studio_motion_edit.h"
 #include <dirent.h>
 #include <fstream>
 #include <sys/stat.h>
@@ -20,6 +21,7 @@ GlView gView;
 bool gViewReady = false;
 bool gUpload = false;  // a new model: its textures and uvs to the GPU
 std::string gError;
+motionedit::Editor gEdit;  // the Edit tab's animations (studio_motion_edit.cpp)
 
 std::string text(JNIEnv *env, jstring s) {
   if (!s) return {};
@@ -350,6 +352,91 @@ JNIEXPORT jstring JNICALL STUDIO(convertReWeapon)(JNIEnv *env, jclass, jstring g
 // The disc's weapon archive (wep04 ...) an RE4 Remake weapon replaces (its folder wp4000 ...); "" none known
 JNIEXPORT jstring JNICALL STUDIO(reWeaponTarget)(JNIEnv *env, jclass, jstring wp) {
   return env->NewStringUTF(convert::ReWeaponTarget(text(env, wp)));
+}
+
+// ---- the animation editor (Edit tab; studio_motion_edit.cpp)
+// a motion archive's body (move.dat, finish.dat ...) to edit: "" or why not
+JNIEXPORT jstring JNICALL STUDIO(editOpen)(JNIEnv *env, jclass, jstring path) {
+  std::lock_guard<std::mutex> lock(gLock);
+  convert::Bytes data;
+  std::string why;
+  if (!ReadWhole(text(env, path), data, 16u * 1024 * 1024)) return env->NewStringUTF("cannot be read");
+  return env->NewStringUTF(gEdit.open(data, &why) ? "" : why.c_str());
+}
+
+// its animations: "entry|last frame|name"
+JNIEXPORT jobjectArray JNICALL STUDIO(editClips)(JNIEnv *env, jclass) {
+  std::lock_guard<std::mutex> lock(gLock);
+  std::vector<std::string> out;
+  for (const auto &c : gEdit.clips()) out.push_back(std::to_string(c.entry) + "|" + std::to_string(c.frames) + "|" + c.name);
+  return strings(env, out);
+}
+
+// the bones with a rotation (pos false) or a position track in the animation
+JNIEXPORT jintArray JNICALL STUDIO(editParts)(JNIEnv *env, jclass, jint entry, jboolean pos) {
+  std::lock_guard<std::mutex> lock(gLock);
+  const auto p = gEdit.parts(unsigned(entry), pos);
+  jintArray out = env->NewIntArray(jsize(p.size()));
+  if (!p.empty()) env->SetIntArrayRegion(out, 0, jsize(p.size()), p.data());
+  return out;
+}
+
+// turns a bone (radians) or moves it (mm) from frame f0 to f1, easing over `fade` frames: "" or why not
+JNIEXPORT jstring JNICALL STUDIO(editAdjust)(JNIEnv *env, jclass, jint entry, jint part, jboolean pos, jfloat x,
+                                             jfloat y, jfloat z, jint f0, jint f1, jint fade) {
+  std::lock_guard<std::mutex> lock(gLock);
+  const float d[3] = {x, y, z};
+  std::string why;
+  return env->NewStringUTF(gEdit.adjust(unsigned(entry), part, pos, d, f0, f1, fade, &why) ? "" : why.c_str());
+}
+
+JNIEXPORT jstring JNICALL STUDIO(editSpeed)(JNIEnv *env, jclass, jint entry, jfloat speed) {
+  std::lock_guard<std::mutex> lock(gLock);
+  std::string why;
+  return env->NewStringUTF(gEdit.retime(unsigned(entry), speed, &why) ? "" : why.c_str());
+}
+
+// how many steps can be undone after this one (-1: nothing was undone)
+JNIEXPORT jint JNICALL STUDIO(editUndo)(JNIEnv *, jclass) {
+  std::lock_guard<std::mutex> lock(gLock);
+  return gEdit.undo() ? gEdit.undoCount() : -1;
+}
+
+// the edited archive written to `path` ("" or why not)
+JNIEXPORT jstring JNICALL STUDIO(editSave)(JNIEnv *env, jclass, jstring path) {
+  std::lock_guard<std::mutex> lock(gLock);
+  if (!gEdit.isOpen()) return env->NewStringUTF("nothing open");
+  std::ofstream o(text(env, path), std::ios::binary | std::ios::trunc);
+  const auto b = gEdit.save();
+  if (!o || !o.write(reinterpret_cast<const char *>(b.data()), std::streamsize(b.size()))) return env->NewStringUTF("cannot be written");
+  return env->NewStringUTF("");
+}
+
+// the edited archive written to `path` and the animation `entry` of it on the model: "" or why not
+JNIEXPORT jstring JNICALL STUDIO(editPreview)(JNIEnv *env, jclass, jstring path, jint entry) {
+  std::lock_guard<std::mutex> lock(gLock);
+  if (!gEdit.isOpen()) return env->NewStringUTF("nothing open");
+  const std::string file = text(env, path);
+  {
+    std::ofstream o(file, std::ios::binary | std::ios::trunc);
+    const auto b = gEdit.save();
+    if (!o || !o.write(reinterpret_cast<const char *>(b.data()), std::streamsize(b.size())))
+      return env->NewStringUTF("cannot be written");
+  }
+  Archive a;
+  std::string why;
+  if (!a.open(file, &why, "edit.dat")) return env->NewStringUTF(why.c_str());
+  gViewer.clearMotions();
+  gViewer.addMotions(a, &why);
+  const std::string tail = " #" + std::to_string(entry);
+  for (int i = 0; i < gViewer.motionCount(); ++i) {
+    const std::string n = gViewer.motionName(i);
+    if (n.size() >= tail.size() && n.compare(n.size() - tail.size(), tail.size(), tail) == 0) {
+      if (!gViewer.setMotion(i, &why)) return env->NewStringUTF(why.empty() ? "it does not fit this skeleton" : why.c_str());
+      return env->NewStringUTF("");
+    }
+  }
+  return env->NewStringUTF("the animation is not in the written file");
 }
 
 JNIEXPORT jstring JNICALL STUDIO(lastError)(JNIEnv *env, jclass) {

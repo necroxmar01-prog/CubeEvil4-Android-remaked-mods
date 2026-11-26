@@ -675,6 +675,32 @@ public final class StudioActivity extends Activity {
       importMod(picked);
     } else if (request == SAVE_ZIP && data.getData() != null) {
       saveZip(data.getData());
+    } else if (request == PICK_ANIM && data.getData() != null) {
+      android.net.Uri u = data.getData();
+      java.io.File tmp = new java.io.File(getCacheDir(), "edit_source.dat");
+      try (java.io.InputStream in = getContentResolver().openInputStream(u);
+           java.io.OutputStream out = new java.io.FileOutputStream(tmp)) {
+        byte[] buf = new byte[1 << 16];
+        for (int n; (n = in.read(buf)) > 0;) out.write(buf, 0, n);
+      } catch (Exception e) {
+        toast("Cannot be read: " + e.getMessage());
+        return;
+      }
+      openEdit(tmp.getPath(), displayName(u));
+    } else if (request == SAVE_ANIM && data.getData() != null) {
+      java.io.File tmp = new java.io.File(getCacheDir(), "edit_save.dat");
+      String why = StudioBridge.editSave(tmp.getPath());
+      if (why.isEmpty()) {
+        try (java.io.InputStream in = new java.io.FileInputStream(tmp);
+             java.io.OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+          byte[] buf = new byte[1 << 16];
+          for (int n; (n = in.read(buf)) > 0;) out.write(buf, 0, n);
+        } catch (Exception e) {
+          why = String.valueOf(e.getMessage());
+        }
+      }
+      tmp.delete();
+      toast(why.isEmpty() ? "Saved: " + editName : "Not saved: " + why);
     } else if (request == SAVE_COPY && data.getData() != null && copyRel != null) {
       final android.net.Uri to = data.getData();
       final String rel = copyRel;
@@ -1156,9 +1182,230 @@ public final class StudioActivity extends Activity {
     f.delete();
   }
 
+  // ---- Edit: the animations (Mods, 26.11.2026, DevJunior: "I want to edit the animations I have and take them to the
+  // game myself"; "choose and adjust", good controls). A motion archive (a mod pack's melee/move.dat, finish.dat, or a
+  // .dat from the phone) is opened in cpp/studio_motion_edit.cpp; one animation of it plays on the model; a bone is
+  // turned on X, Y, Z (or the body moved) over a range of frames with a soft edge; the speed changes; undo; the result
+  // is saved as a .dat for the mod pack's melee folder.
+  private static final int PICK_ANIM = 44, SAVE_ANIM = 45;
+  // Leon's bones by their part number (the game's skeleton of pl00 .. pl10)
+  private static final String[] LEON_BONES = {
+      "Root", "Waist", "Spine", "Chest", "Head", "R clavicle", "", "R upper arm", "R forearm", "R twist", "R hand",
+      "L clavicle", "", "L upper arm", "L forearm", "L twist", "L hand", "Hips", "R thigh", "R calf", "R foot",
+      "R toe", "L thigh", "L calf", "L foot", "L toe", "", "Jaw"};
+  private String editName = "";      // the open archive's file name ("" none)
+  private String[] editClips = {};
+  private int editClip = -1;          // index into editClips
+  private int editPart = 3;           // the bone (part number); -1 the body's position (root, mm)
+  private final float[] editDelta = new float[3];  // degrees, or mm for the body
+  private int editFrom = 0, editTo = -1, editFade = 4, editSpeedPct = 100;
+
+  private static String boneName(int part) {
+    if (part < 0) return "Body position";
+    String n = part < LEON_BONES.length ? LEON_BONES[part] : "";
+    return n.isEmpty() ? "Bone " + part : n + " (" + part + ")";
+  }
+
+  private int clipEntry() { return editClip < 0 ? -1 : Integer.parseInt(editClips[editClip].split("\\|", 3)[0]); }
+  private int clipLast() { return editClip < 0 ? 0 : Integer.parseInt(editClips[editClip].split("\\|", 3)[1]); }
+  private String clipLabel(int i) {
+    String[] c = editClips[i].split("\\|", 3);
+    return c[2] + " · " + c[1] + " frames";
+  }
+
   private void showEdit() {
-    content.addView(note("Coming next: pick a bone on the model, move / turn / scale it along X, Y and Z over the grid, "
-        + "and save the result as a mod pack."));
+    content.addView(note("Animations: open a motion archive (your mod pack's melee/move.dat, or a .dat on the phone), "
+        + "pick an animation and a bone, turn it on X, Y, Z over a range of frames, then save it as a .dat and put it "
+        + "in your mod pack's melee folder. Model colours and textures come next."));
+    if (!modelLoaded) {
+      String leon = discFile("em/pl00.drs");
+      Button load = card("Load Leon (pl00)", leon == null ? "import your discs in CubeEvil4 first" : "the model the "
+          + "changes play on");
+      load.setEnabled(leon != null);
+      load.setOnClickListener(v -> { openArchive(leon, "pl00.drs"); if (modelLoaded) showTab(3); });
+      content.addView(load, item());
+    }
+    TextView head = text("Open", 14, TEXT, true);
+    content.addView(head);
+    for (String[] f : packMotions()) {
+      Button b = pill(f[1], f[1].equals(editName));
+      b.setOnClickListener(v -> openEdit(files.path(f[0]), f[1]));
+      content.addView(b, item());
+    }
+    Button pick = pill("A .dat on the phone…", false);
+    pick.setOnClickListener(v -> {
+      android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+      i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+      i.setType("*/*");
+      try { startActivityForResult(i, PICK_ANIM); } catch (Exception e) { toast("No file picker: " + e.getMessage()); }
+    });
+    content.addView(pick, item());
+    if (editName.isEmpty()) return;
+
+    TextView open = text(editName, 14, ACCENT, true);
+    open.setPadding(0, dp(10), 0, dp(2));
+    content.addView(open);
+    Button clip = card("Animation", editClip < 0 ? "tap to choose" : clipLabel(editClip));
+    clip.setOnClickListener(v -> chooseClip());
+    content.addView(clip, item());
+    if (editClip < 0) return;
+    final int last = clipLast();
+    if (editTo < 0 || editTo > last) editTo = last;
+
+    Button bone = card("Bone", boneName(editPart));
+    bone.setOnClickListener(v -> chooseBone());
+    content.addView(bone, item());
+
+    boolean body = editPart < 0;
+    String unit = body ? " mm" : "°";
+    int range = body ? 300 : 90;
+    String[] axes = body ? new String[] {"X (side)", "Y (up)", "Z (forward)"} : new String[] {"X", "Y", "Z"};
+    for (int a = 0; a < 3; a++) content.addView(slider(axes[a], -range, range, Math.round(editDelta[a]), unit, a));
+
+    TextView frames = text("Frames", 13, TEXT, true);
+    frames.setPadding(0, dp(8), 0, 0);
+    content.addView(frames);
+    content.addView(note("Pause, drag the timeline above to a frame, then tap From or To."));
+    LinearLayout fr = row();
+    Button from = pill("From " + editFrom, false);
+    from.setOnClickListener(v -> { editFrom = Math.min((int) frame, last); if (editFrom > editTo) editTo = editFrom; showTab(3); });
+    Button to = pill("To " + editTo, false);
+    to.setOnClickListener(v -> { editTo = Math.min((int) frame, last); if (editTo < editFrom) editFrom = editTo; showTab(3); });
+    Button all = pill("Whole", editFrom == 0 && editTo == last);
+    all.setOnClickListener(v -> { editFrom = 0; editTo = last; showTab(3); });
+    fr.addView(from, chip());
+    fr.addView(to, chip());
+    fr.addView(all, chip());
+    content.addView(fr);
+    content.addView(slider("Soft edge", 0, 15, editFade, " frames", 3));
+
+    LinearLayout act = row();
+    Button apply = pill("Apply", true);
+    apply.setOnClickListener(v -> {
+      float k = body ? 1f : (float) (Math.PI / 180.0);
+      String why = StudioBridge.editAdjust(clipEntry(), body ? 0 : editPart, body, editDelta[0] * k, editDelta[1] * k,
+          editDelta[2] * k, editFrom, editTo, editFade);
+      if (!why.isEmpty()) { toast(why); return; }
+      editDelta[0] = editDelta[1] = editDelta[2] = 0;
+      preview();
+      showTab(3);
+    });
+    Button undo = pill("Undo", false);
+    undo.setOnClickListener(v -> {
+      if (StudioBridge.editUndo() < 0) { toast("Nothing to undo"); return; }
+      preview();
+      showTab(3);
+    });
+    Button zero = pill("Reset sliders", false);
+    zero.setOnClickListener(v -> { editDelta[0] = editDelta[1] = editDelta[2] = 0; showTab(3); });
+    act.addView(apply, chip());
+    act.addView(undo, chip());
+    act.addView(zero, chip());
+    content.addView(act);
+
+    TextView sp = text("Speed", 13, TEXT, true);
+    sp.setPadding(0, dp(8), 0, 0);
+    content.addView(sp);
+    content.addView(slider("Speed", 50, 200, editSpeedPct, " %", 4));
+    Button speedApply = pill("Apply speed", false);
+    speedApply.setOnClickListener(v -> {
+      if (editSpeedPct == 100) { toast("The speed is 100 %"); return; }
+      String why = StudioBridge.editSpeed(clipEntry(), editSpeedPct / 100f);
+      if (!why.isEmpty()) { toast(why); return; }
+      editSpeedPct = 100;
+      editClips = StudioBridge.editClips();
+      preview();
+      showTab(3);
+    });
+    content.addView(speedApply, item());
+
+    Button save = card("Save as…", "a .dat for your mod pack's melee folder (" + editName + ")");
+    save.setOnClickListener(v -> {
+      android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
+      i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+      i.setType("application/octet-stream");
+      i.putExtra(android.content.Intent.EXTRA_TITLE, editName);
+      try { startActivityForResult(i, SAVE_ANIM); } catch (Exception e) { toast("No file picker: " + e.getMessage()); }
+    });
+    content.addView(save, item());
+  }
+
+  // a labelled slider: which 0..2 the bone's X, Y, Z, 3 the soft edge, 4 the speed
+  private LinearLayout slider(String label, int min, int max, int value, String unit, int which) {
+    LinearLayout box = new LinearLayout(this);
+    box.setOrientation(LinearLayout.VERTICAL);
+    TextView t = text(label + ": " + value + unit, 12, DIM, false);
+    SeekBar s = new SeekBar(this);
+    s.setMax(max - min);
+    s.setProgress(value - min);
+    s.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+      @Override public void onProgressChanged(SeekBar b, int p, boolean user) {
+        int v = p + min;
+        t.setText(label + ": " + v + unit);
+        if (which < 3) editDelta[which] = v;
+        else if (which == 3) editFade = v;
+        else editSpeedPct = v;
+      }
+      @Override public void onStartTrackingTouch(SeekBar b) {}
+      @Override public void onStopTrackingTouch(SeekBar b) {}
+    });
+    box.addView(t);
+    box.addView(s);
+    return box;
+  }
+
+  private void chooseClip() {
+    String[] names = new String[editClips.length];
+    for (int i = 0; i < names.length; i++) names[i] = clipLabel(i);
+    new android.app.AlertDialog.Builder(this).setTitle("Animation").setItems(names, (d, i) -> {
+      editClip = i;
+      editFrom = 0;
+      editTo = clipLast();
+      editDelta[0] = editDelta[1] = editDelta[2] = 0;
+      preview();
+      showTab(3);
+    }).show();
+  }
+
+  private void chooseBone() {
+    int[] parts = StudioBridge.editParts(clipEntry(), false);
+    int[] moves = StudioBridge.editParts(clipEntry(), true);
+    boolean root = false;
+    for (int p : moves) root |= p == 0;
+    List<Integer> list = new ArrayList<>();
+    if (root) list.add(-1);
+    for (int p : parts) list.add(p);
+    String[] names = new String[list.size()];
+    for (int i = 0; i < names.length; i++) names[i] = boneName(list.get(i));
+    new android.app.AlertDialog.Builder(this).setTitle("Bone").setItems(names, (d, i) -> {
+      editPart = list.get(i);
+      editDelta[0] = editDelta[1] = editDelta[2] = 0;
+      showTab(3);
+    }).show();
+  }
+
+  private void openEdit(String path, String name) {
+    String why = path == null ? "cannot be read" : StudioBridge.editOpen(path);
+    if (!why.isEmpty()) { toast(name + ": " + why); return; }
+    editName = name.contains(" · ") ? name.substring(name.lastIndexOf(" · ") + 3) : name;
+    editClips = StudioBridge.editClips();
+    editClip = editClips.length > 0 ? 0 : -1;
+    editFrom = 0;
+    editTo = -1;
+    editDelta[0] = editDelta[1] = editDelta[2] = 0;
+    toast(name + ": " + editClips.length + " animations");
+    preview();
+    showTab(3);
+  }
+
+  // the edited archive on the model (cache/edit_preview.dat), the chosen animation playing
+  private void preview() {
+    if (editClip < 0 || !modelLoaded) return;
+    String why = StudioBridge.editPreview(new java.io.File(getCacheDir(), "edit_preview.dat").getPath(), clipEntry());
+    if (!why.isEmpty()) { toast(why); return; }
+    length = StudioBridge.motionLength();
+    if (frame > length) frame = 0;
+    info.setText(StudioBridge.info() + " · " + clipLabel(editClip));
   }
 
   // ---- actions
@@ -1240,6 +1487,9 @@ public final class StudioActivity extends Activity {
     } else {
       collect(source + "/files/em", "", out);
       collect(source + "/files/etc", "", out);  // the core (etc/core.das: the HUD's textures), under "Other"
+      // the game's fonts (DevJunior, 26.11.2026: the inventory in the game's own letters), under "Other" to save a copy
+      collect(source + "/files/Font", "", out);
+      collect(source + "/files/font", "", out);
     }
     List<String[]> kept = new ArrayList<>();
     for (String[] f : out) {
@@ -1254,7 +1504,7 @@ public final class StudioActivity extends Activity {
   private void collect(String dir, String pack, List<String[]> out) {
     for (StudioFiles.Item f : files.list(dir)) {
       String n = f.name.toLowerCase(Locale.ROOT);
-      if (!f.dir && (n.endsWith(".drs") || n.endsWith(".das"))) {
+      if (!f.dir && (n.endsWith(".drs") || n.endsWith(".das") || n.endsWith(".fnt"))) {
         out.add(new String[] {dir + "/" + f.name, f.name, pack, String.valueOf(f.size)});
       }
     }

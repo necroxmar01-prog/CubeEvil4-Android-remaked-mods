@@ -20234,3 +20234,24 @@ Der Platz sollte früh reserviert werden (beim Laden von `libre4_platform`).
 - App: aus einem Zip kommen `.fbx`, `.mesh` und Bilder je Zip-Ordner in einen eigenen Ordner unter `fbx/` (zwei XNALara-Modelle heißen beide `generic_item.mesh`); ein `.mesh` erscheint unter dem Namen seines Ordners. JNI `convertXps` (mit `convertFbx` über `convertRig`/`picturesBeside`). `.rar` liest die App weiter nicht (als Zip neu packen).
 - Am PC: Leon USA 14 398 Dreiecke, Leon Asia 16 700 (leicht für Snapdragon), beide auf pl00 mit 512er-Texturen (Datenteil 3,6 / 3,8 MB); Ruhepose, zwei Bewegungen, Gesicht im Studio-Renderer in Ordnung. Nicht geprüft: App auf dem Gerät, im Spiel.
 
+
+### Studio: Animations-Editor im Reiter „Edit“ (26.11.2026)
+
+Wunsch von DevJunior („ich will meine Animationen selbst bearbeiten und ins Spiel bringen“; „auswählen und anpassen“,
+gute Bedienung). Neu `cpp/studio_motion_edit.cpp/.h`: öffnet den Rumpf eines Bewegungsarchivs (`melee/move.dat`,
+`finish.dat` aus einem Mod-Paket oder eine `.dat` vom Handy), listet die Animationen mit Namen aus der MOV1-Tabelle
+(Stehen, Gehen, Joggen, Übergänge, Nachladen …), dreht einen Knochen um X/Y/Z (Grad) oder verschiebt den Körper (mm)
+über einen Bildbereich mit weichem Rand, ändert die Geschwindigkeit (Länge und Fußbilder in MOV1 mit; das
+Schrotflinten-Tragen 0x98+k ändert sich mit seiner Bewegung; Nachladen abgelehnt, weil das Spiel es an der Länge
+erkennt), Rückgängig (40 Schritte), Speichern als `.dat`. Nur der bearbeitete Knochen wird neu geschrieben (eine Taste
+pro Bild, Typ 0, Tangenten aus den Nachbarn); alles andere behält seine Bytes. Vorschau: das bearbeitete Archiv in den
+Cache geschrieben und die Animation auf dem Modell abgespielt (`editPreview`). Ohne Modell bietet der Reiter Leon (pl00)
+an. Außerdem listet der Reiter „Models“ unter „Other“ die Schriften `Font/*.fnt` zum Kopieren (Inventar in der Schrift
+des Spiels, später).
+
+Geprüft (Host): `tools/test_studio_motion_edit.cpp` – move.dat v32 unverändert gelesen und geschrieben = gleiche Bytes;
+Brust +0,5/−0,25 rad über Bild 5–15: nur Eintrag 2 anders, die übrigen Kurven gleich (Abweichung 3e-8,
+`test_studio_motion_edit.py` mit `tools/motion/fcv.py`), Rückgängig zweimal = Original, Tempo 1,25 → Gehen und Tragen 26
+Bilder, Fußbilder 7/23 → 6/19; Studio-Betrachter (`studio_gl_check`) zeigt die gedrehte Brust. Nicht geprüft: die
+Oberfläche auf dem Gerät, die bearbeitete Datei im Spiel. IK (Hand/Fuß-Ziele) folgt; die Daten haben keine IK-Spuren
+(die Positionsspuren der Teile 10/16/20/24 sind feste Knochenlängen).

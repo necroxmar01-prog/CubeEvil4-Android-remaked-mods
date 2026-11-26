@@ -1,0 +1,94 @@
+#pragma once
+// CubeEvil4 Studio (Mods, 26.11.2026, DevJunior: "I want to edit the animations I have and take them to the game
+// myself"): the animation editor of the Edit tab. It opens a motion archive's body (a mod pack's melee/move.dat,
+// finish.dat ...: count, offsets, types, 32-aligned entries; port/tools/uhd_skin_convert.py build_body), turns a
+// bone of one clip (or moves the root) over a range of frames with a soft edge, changes a clip's speed, undoes, and
+// writes the body again. The FCV format is the one of tools/motion/fcv.py; what is not edited keeps its bytes.
+#include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace re4::studio::motionedit {
+
+using Bytes = std::vector<std::uint8_t>;
+
+struct Key {
+  float value{}, in{}, out{};  // as the game's Fcc_get_data_* reads them (s16 / s8 in 1/10000)
+};
+
+struct Axis {
+  std::vector<std::uint16_t> frames;
+  std::vector<Key> keys;
+};
+
+struct Joint {
+  std::uint16_t info{};  // kind (bits 0-7), channel (8-11), key type (12-15)
+  std::uint8_t part{};
+  std::array<Axis, 3> axes;
+  Bytes raw;             // its key block as read (written again unless edited)
+  bool edited{};         // written as key type 0 (f32 value and tangents)
+  int kind() const { return info & 0xFF; }
+  int type() const { return info >> 12; }
+  // 1 a rotation, 2 a position, 0 anything else (the root's own tracks, scale), MotionMoveCore's tests
+  int target() const;
+};
+
+struct Motion {
+  std::uint16_t rawMax{};  // maxFrame with its flags (bits 14-15)
+  std::vector<Joint> joints;
+  std::vector<int> layout;  // joint indices in key block order
+  std::uint8_t fill = 0xCD;
+  int maxFrame() const { return rawMax & 0x3FFF; }
+};
+
+bool ParseMotion(const Bytes &d, Motion &m, std::string *why);
+Bytes WriteMotion(const Motion &m);
+// the axis' value at `frame` as HermiteInterpolation gives it (not looping)
+float Evaluate(const Axis &a, float frame, int maxFrame);
+
+class Editor {
+ public:
+  struct Clip {
+    unsigned entry{};
+    int code = -1;  // its move.dat code (the MOV1 table), -1 none
+    int frames{};   // its last frame
+    std::string name;
+  };
+
+  bool open(const Bytes &file, std::string *why);
+  bool isOpen() const { return !entries_.empty(); }
+  Bytes save() const;
+  std::vector<Clip> clips() const;
+  // the parts with a rotation track (pos false) or a position track in the clip
+  std::vector<int> parts(unsigned entry, bool pos) const;
+  // adds d (radians for a rotation, millimetres for a position) on X, Y, Z from frame f0 to f1, easing in and out
+  // over `fade` frames on either side
+  bool adjust(unsigned entry, int part, bool pos, const float d[3], int f0, int f1, int fade, std::string *why);
+  // plays the clip `speed` times as fast (its frames, its MOV1 rows' length and foot frames)
+  bool retime(unsigned entry, float speed, std::string *why);
+  bool undo();
+  int undoCount() const { return int(undo_.size()); }
+  bool edited() const { return edited_; }
+
+ private:
+  struct Saved {
+    std::vector<std::pair<unsigned, Motion>> motions;
+    Bytes table;  // entry 0 (the MOV1 table) before
+  };
+  Motion *motion(unsigned entry);
+  const Motion *motion(unsigned entry) const;
+  void remember(std::vector<unsigned> which);
+  bool retimeOne(unsigned entry, float speed);
+
+  Bytes head_;  // bytes 4..15 of the body (written back as they were)
+  std::vector<Bytes> entries_;
+  std::vector<std::array<std::uint8_t, 4>> types_;
+  std::vector<Motion> motions_;   // per entry (no joints: not an FCV or not read)
+  std::vector<bool> isMotion_;
+  std::vector<bool> changed_;     // written from motions_ (else the entry's bytes)
+  std::vector<Saved> undo_;
+  bool edited_{};
+};
+
+}  // namespace re4::studio::motionedit

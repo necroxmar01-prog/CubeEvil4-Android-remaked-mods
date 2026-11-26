@@ -116,7 +116,7 @@ if(ANDROID)
     # CubeEvil4 Studio (Mods, 19.11.2026): its own viewer, without the game, in a library of its own (DevJunior,
     # 19.11.2026: the Studio is an APK of its own, the flavour "studio"; it loads only this one: libre4decomp's
     # JNI_OnLoad would load the game core)
-    add_library(re4studio SHARED studio_gl.cpp studio_jni.cpp studio_convert.cpp
+    add_library(re4studio SHARED studio_gl.cpp studio_jni.cpp studio_convert.cpp studio_motion_edit.cpp
         third_party/meshoptimizer/simplifier.cpp third_party/meshoptimizer/allocator.cpp)
     target_link_libraries(re4studio PRIVATE re4_platform GLESv3 log z)  # z: the .fbx's packed arrays, .png
     target_link_options(re4studio PRIVATE "-Wl,-z,max-page-size=16384")
@@ -333,7 +333,7 @@ else()
             target_compile_definitions(re4decomp_link_check PRIVATE __ANDROID_API__=21)
             target_link_options(re4decomp_link_check PRIVATE -Wl,--no-undefined)
             # the Studio's own library (the flavour "studio" loads only it): nothing left open but GLES and the log
-            add_library(re4studio_link_check SHARED studio_gl.cpp studio_jni.cpp studio_convert.cpp third_party/meshoptimizer/simplifier.cpp third_party/meshoptimizer/allocator.cpp ../../../../tools/host_android/android_log.c)
+            add_library(re4studio_link_check SHARED studio_gl.cpp studio_jni.cpp studio_convert.cpp studio_motion_edit.cpp third_party/meshoptimizer/simplifier.cpp third_party/meshoptimizer/allocator.cpp ../../../../tools/host_android/android_log.c)
             target_include_directories(re4studio_link_check PRIVATE ${RE4_GLES_INCLUDE_DIR}
                 ../../../../tools/host_android ${JNI_INCLUDE_DIRS})
             target_link_libraries(re4studio_link_check PRIVATE re4_platform ${RE4_GLES_LIBRARY} z)
