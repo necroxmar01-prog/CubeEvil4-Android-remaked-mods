@@ -1207,6 +1207,9 @@ public final class StudioActivity extends Activity {
   private final float[] editDelta = new float[3];  // degrees, or mm for the body
   private int editFrom = 0, editTo = -1, editFade = 8, editSpeedPct = 100;
   private int editGizmo = 2;          // the gizmo: 1 move (hands, feet, the root: IK), 2 turn
+  // what a gizmo drag changes (DevJunior, 26.11.2026: "I fix the twisted hands but the other frames bring them back"):
+  // 0 this frame (the frames around adapt), 1 From..To, 2 the whole animation
+  private int editScope = 2;
   private int dragAxis = -1;          // the gizmo axis being dragged
   private float dragX0, dragY0, dragAmount;
 
@@ -1312,16 +1315,18 @@ public final class StudioActivity extends Activity {
 
   private void applyGizmo(int axis, float amount) {
     int part = overlayPart(), f = Math.round(frame);
+    int f0 = editScope == 2 ? 0 : editScope == 1 ? editFrom : f;
+    int f1 = editScope == 2 ? clipLast() : editScope == 1 ? (editTo < 0 ? clipLast() : editTo) : f;
     float[] d = new float[3];
     d[axis] = amount;
     String why;
     if (editGizmo == 1) {
       int end = part == 10 ? 0 : part == 16 ? 1 : part == 20 ? 2 : part == 24 ? 3 : -1;
-      if (part == 0) why = StudioBridge.editAdjust(clipEntry(), 0, true, d[0], d[1], d[2], f, f, editFade);
-      else if (end >= 0) why = StudioBridge.editReach(clipEntry(), end, d[0], d[1], d[2], f, f, editFade);
+      if (part == 0) why = StudioBridge.editAdjust(clipEntry(), 0, true, d[0], d[1], d[2], f0, f1, editFade);
+      else if (end >= 0) why = StudioBridge.editReach(clipEntry(), end, d[0], d[1], d[2], f0, f1, editFade);
       else why = "Move works on the hands, the feet and the root: use Turn";
     } else {
-      why = StudioBridge.editAdjust(clipEntry(), part, false, d[0], d[1], d[2], f, f, editFade);
+      why = StudioBridge.editAdjust(clipEntry(), part, false, d[0], d[1], d[2], f0, f1, editFade);
     }
     if (why.startsWith("!")) toast(why.substring(1));
     else if (!why.isEmpty()) { toast(why); return; }
@@ -1373,7 +1378,8 @@ public final class StudioActivity extends Activity {
     bone.setOnClickListener(v -> chooseBone());
     content.addView(bone, item());
     content.addView(note("Or tap a circle on the model. Drag the gizmo's arrows (Move: hands, feet, root) or rings "
-        + "(Turn) at the paused frame; the frames around adapt over \"Adapt\"."));
+        + "(Turn). \"Whole animation\" changes every frame alike; \"This frame\" only the paused one, the frames "
+        + "around adapt over \"Adapt\"."));
     LinearLayout giz = row();
     Button move = pill("Move", editGizmo == 1), turn = pill("Turn", editGizmo == 2);
     move.setOnClickListener(v -> { editGizmo = 1; showTab(3); });
@@ -1381,6 +1387,20 @@ public final class StudioActivity extends Activity {
     giz.addView(move, chip());
     giz.addView(turn, chip());
     content.addView(giz);
+    // what a drag changes: the whole animation by default (a twisted hand stays fixed in every frame)
+    LinearLayout scope = row();
+    String[] scopes = {"Whole animation", "From–To", "This frame"};
+    int[] scopeOf = {2, 1, 0};
+    for (int k = 0; k < scopes.length; k++) {
+      final int sc = scopeOf[k];
+      Button b = pill(scopes[k], editScope == sc);
+      b.setOnClickListener(v -> { editScope = sc; showTab(3); });
+      scope.addView(b, chip());
+    }
+    HorizontalScrollView sscroll = new HorizontalScrollView(this);
+    sscroll.addView(scope);
+    content.addView(note("A drag changes:"));
+    content.addView(sscroll);
     LinearLayout weps = row();
     for (int k = 0; k < EDIT_WEAPONS.length; k++) {
       final int weaponPick = k;

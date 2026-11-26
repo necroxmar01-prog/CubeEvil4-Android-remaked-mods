@@ -20336,3 +20336,8 @@ r_no_1 > 3). Studio: Namen „Handgun classic stance: …“, Tempo/Schneiden de
 Schichten gehen mit). Paket v34 (move.dat mit 52 Bewegungen). Geprüft: Host-Bilder Stehen/Gehen/Joggen mit Pistole in
 der Hand, Tempo-Prüfung (Gehen, Schrotflinten- und Pistolenschicht 26 Bilder), kompiliert (i686). Nicht geprüft: im
 Spiel.
+- **Kopf beim Zielen, Editor-Bereich** (DevJunior: „cuando apunta mueve el cuello a otro lado“; „las trato de arreglar
+  pero los otros frames las regresan“): `head_as_game` dreht in Zielen und Schuss der Pistole den Kopf (Teil 4) in jedem
+  Bild so, wie ihn die Bewegung des Spiels hält (der Kopf des Remakes auf dem zum Spiel gedrehten Oberkörper sah zur
+  Seite); Paket v35. Studio: ein Gizmo-Zug ändert jetzt standardmäßig die ganze Animation („Whole animation“), wahlweise
+  From–To oder nur das Bild („This frame“, mit „Adapt“). Geprüft: Host-Bilder Kopf wie im Spiel. Nicht geprüft: Gerät.

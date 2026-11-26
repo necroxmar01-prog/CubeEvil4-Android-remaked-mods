@@ -792,6 +792,22 @@ def turn_torso_to(rows, model, order, tol, fixed, game, want_rot, frames, steps=
     return rows
 
 
+def head_as_game(rows, model, gdata, part=4):
+    """`rows` with the head (part 4) turned each frame to face as the game's motion `gdata` holds it at that frame
+    (device report 26.11.2026: "when he aims he turns the neck elsewhere": the remake's head on a torso turned to the
+    game's gun line looked off to the side; the game's own aim also has its neck control on top of this pose)."""
+    from tools.motion import evalhost
+    pl = evalhost.Player(model, fcv.parse(gdata), ik=False)
+    par = model.parts[part].parent
+    out = []
+    for i, r in enumerate(rows):
+        h = np.array(pl.frame(min(i, fcv.parse(gdata).max_frame)).mat[part]).reshape(3, 4)[:, :3]
+        h = h / np.linalg.norm(h, axis=0)
+        rot = fk(model, r)[0]
+        out.append(({**r[0], part: rot[par].T @ h},) + tuple(r[1:]))
+    return out
+
+
 def pistol_poses(motdir, ref, model, tol, archives):
     """The rows (code, entry data) of the handguns' aim idles and fire motions for move.dat (PISTOL_POSE_SETS)."""
     _v, mots = R.read_motlist(motlist_in(motdir, WEP_PISTOL))
@@ -825,6 +841,7 @@ def pistol_poses(motdir, ref, model, tol, archives):
                 fixed = {q: model.parts[q].pos for q in (10, 16, 20, 24) if q in fit.order}
                 gf = list(range(0, n + 1, 4))
                 rows = turn_torso_to(rows, model, fit.order, tol, fixed, game, hand_turn(model, gdata, gf), gf)
+                rows = head_as_game(rows, model, gdata)
                 data = with_game_arms(rows, fit.order, tol, fixed, game)
                 got = hand_turn(model, data, gf)
                 off = math.degrees(axis_angle(got @ hand_turn(model, gdata, gf).T)[1])
