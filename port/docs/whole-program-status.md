@@ -20189,3 +20189,12 @@ Der Platz sollte früh reserviert werden (beim Laden von `libre4_platform`).
   - Geprüft: i686 Build und alle Prüfungen, `check_translations.py`. Nicht geprüft: auf dem Gerät.
 - 25.11.2026 17:30 (DevJunior: „das Ordnen muss eine Option im Inventar sein“): Koffer ordnen jetzt im Koffer selbst. Patch 0953 neu: statt `SsPzzlMain::init` jetzt `PieceSelect::move`; mit freiem Zeiger (nichts in der Hand) ordnet Z (dort sonst unbenutzt, auf dem Retroid R1) den offenen Koffer sofort (`re4_case_arrange(pzlPlayer*)`, Ton des Ablegens 0xC), danach kommen die Gegenstände vom Platz daneben in den Koffer, wo sie passen; `rehash`. Die Modelle folgen von selbst (`pieceModelDisp` jedes Bild). Knopf, Bit 22 und die drei Texte der Mods-Seite wieder entfernt.
   - Geprüft: i686 Build und alle Prüfungen, `check_translations.py`. Nicht geprüft: auf dem Gerät (keine Disc-Daten in der Cloud).
+
+### Studio: innere Schicht nur noch an den Gelenken (25.11.2026)
+
+- Bericht DevJunior (Bilder 117751..117756, GTA-Skin „Leon Requiem“ auf pl00; ältere Bilder: Ashley von Sergio Van Dyk): „die Werkzeug macht die Modelle nicht gut“: Lippen hängen, Augen verzerrt, dunkle Flecken auf dem Mantel.
+- Ursache (am PC nachgestellt): die innere Schicht (19.11.2026) war die ganze Haut noch einmal, 10 mm entlang der Normalen nach innen. Flächen, die nach innen zeigen (Mundinneres, Zähne, Lider, das Futter des Mantels), wanderten dabei nach außen durch Gesicht und Mantel; außerdem kostete die Kopie die Hälfte des Platzes (Leon Requiem 21 784 statt 43 600 Dreiecke).
+- `studio_convert.cpp`: die innere Schicht nur noch für Dreiecke, deren drei Punkte von den Knochen weg zeigen (Normale gegen die Richtung vom nächsten Punkt der Knochenstrecke, gewichtet, mehr als 0,25) und von denen ein Punkt zwischen Knochen gebogen wird (größtes Gewicht unter 90 %) oder auf einer Platte liegt; versetzt zum Knochen hin (höchstens die halbe Entfernung), nicht entlang der Normalen. Platz: 19 100 Dreiecke je Modell für die Haut (vorher 10 900), der Rest bis 21 845 für die innere Schicht.
+- Ergebnis: Leon Requiem 38 200 Dreiecke (Abweichung 0,38 % statt 0,65 %), innere Schicht 5 490; Gesicht und Mantel sauber. Ashley (Sergio Van Dyk) auf pl01: 57 300 statt 32 700 Dreiecke (0,01 %), Mund und Gesicht sauber, Rock ohne dunklen Saum. Master Chief auf pl00: in drei Bewegungen wie vorher.
+- Geprüft: Host-Werkzeug `test_studio_dff.cpp` und Bilder im Studio-Renderer (`test_studio_gl.cpp`, Ruhepose und drei Bewegungen, alt gegen neu). Nicht geprüft: im Spiel und in der Studio-App auf dem Gerät.
+

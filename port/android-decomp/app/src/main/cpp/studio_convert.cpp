@@ -1669,7 +1669,7 @@ void reduceSkin(DffMesh &m, std::size_t target, std::string &log) {
     r.tris.push_back(t);
   }
   log += fmt("the skin reduced from %zu to %zu triangles, %zu vertices (deviation %.2f%% of its size; one model holds "
-             "21845 triangles, half of them with the inner layer)\n", before, r.tris.size(), r.pos.size(),
+             "21845 triangles, with the inner layer at the joints)\n", before, r.tris.size(), r.pos.size(),
              double(err) * 100.0);
   m = std::move(r);
 }
@@ -1944,7 +1944,10 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
     else if (stem == "pl08" || stem == "pl09" || stem == "pl10") extra = {6, 12};
     for (auto it = extra.begin(); it != extra.end();)
       it = (*it < gc.count() && gc.kind(*it) == "BIN" && !gc.entry(*it).empty()) ? it + 1 : extra.erase(it);
-    const std::size_t room = (o.innerLayer ? 10900 : 21800) * (1 + extra.size());
+    // the inner layer only at the bending joints (DevJunior, 25.11.2026, Leon Requiem: the whole skin once more cost
+    // half the room and its copy of the mouth, the eyelids and the coat's lining came out through the face and the
+    // coat): an eighth of the room kept for it (a Leon Requiem: 2815 triangles of it)
+    const std::size_t room = (o.innerLayer ? 19100 : 21800) * (1 + extra.size());
     reduceSkin(m, o.maxSkinTris ? std::min(o.maxSkinTris, room) : room, log);
     const std::size_t nb = m.boneAt.size(), nv = m.pos.size();
 
@@ -2490,26 +2493,61 @@ void skinOnLeon(const Bytes &gcData, const std::string &gcName, DffMesh m, const
       const unsigned mat = t[3] < m.matTex.size() ? t[3] : 0;
       byMat[mat].push_back(facing >= 0 ? std::array<unsigned, 3>{t[0], t[1], t[2]} : std::array<unsigned, 3>{t[0], t[2], t[1]});
     }
-    // An inner layer (DevJunior, 19.11.2026: "where it breaks, fill those gaps with the same tone"): the whole skin
-    // once more, kInset under its surface (deeper under the rigid plates), with the same texture and the smooth
-    // weights: where plates or pieces part at a bending joint, the inside shows the same colours, not the world.
+    // An inner layer (DevJunior, 19.11.2026: "where it breaks, fill those gaps with the same tone"): the skin round the
+    // bending joints once more, kInset under its surface (deeper under the rigid plates) towards the bones, with the same
+    // texture and the smooth weights: where plates or pieces part at a bending joint, the inside shows the same colours,
+    // not the world. Only the surfaces that face away from the bones: a copy of the inside of the mouth, the eyelids or
+    // a coat's lining (facing in) was pushed out through the face and the coat (DevJunior, 25.11.2026, Leon Requiem:
+    // the lips hanging, dark patches on the coat).
     if (o.innerLayer) {
       const double kInset = 10.0, kInsetPlate = 22.0;
+      std::map<int, int> childOf;
+      for (const auto &[id, b] : skel) {
+        if (b.parent < 0 || !transferBone(id) || !transferBone(b.parent) || !skel.count(b.parent)) continue;
+        const V3 d = b.at - skel.at(b.parent).at;
+        auto it = childOf.find(b.parent);
+        if (it == childOf.end() || std::fabs(unit(d).y) > std::fabs(unit(skel.at(it->second).at - skel.at(b.parent).at).y))
+          childOf[b.parent] = id;
+      }
       P.resize(nv * 2), N.resize(nv * 2), W.resize(nv * 2), m.uv.resize(nv * 2);
+      std::vector<char> outward(nv, 0), bend(nv, 0);
       for (std::size_t v = 0; v < nv; ++v) {
-        P[nv + v] = P[v] - N[v] * (plated[v] ? kInsetPlate : kInset);
+        V3 core{0, 0, 0};
+        double sum = 0, top = 0;
+        for (const auto &[bone, r] : Wsoft[v]) {
+          if (!skel.count(bone) || r <= 0) continue;
+          const V3 j = skel.at(bone).at;
+          V3 foot = j;
+          auto c = childOf.find(bone);
+          if (c != childOf.end()) {
+            const V3 seg = skel.at(c->second).at - j;
+            const double t = std::max(0.0, std::min(1.0, dot(P[v] - j, seg) / std::max(1e-9, dot(seg, seg))));
+            foot = j + seg * t;
+          }
+          core = core + foot * double(r), sum += r, top = std::max(top, double(r));
+        }
+        const V3 d = sum > 0 ? P[v] - core * (1.0 / sum) : V3{0, 0, 0};
+        const double len = std::sqrt(dot(d, d));
+        outward[v] = len > 1.0 && dot(N[v], d) > 0.25 * len;
+        bend[v] = plated[v] || (sum > 0 && top < 0.9 * sum);
+        const double in = std::min(plated[v] ? kInsetPlate : kInset, 0.5 * len);
+        P[nv + v] = len > 1.0 ? P[v] - d * (in / len) : P[v] - N[v] * in;
         N[nv + v] = N[v], W[nv + v] = Wsoft[v], m.uv[nv + v] = m.uv[v];
       }
-      std::size_t inner = 0;
+      std::size_t inner = 0, outer = 0;
+      const std::size_t cap = 21845 * (1 + extra.size());  // what the models hold
+      for (const auto &[mat, list] : byMat) outer += list.size();
       for (auto &[mat, list] : byMat) {
         const std::size_t n = list.size();
         for (std::size_t k = 0; k < n; ++k) {
           const auto t = list[k];
+          if (!outward[t[0]] || !outward[t[1]] || !outward[t[2]] || !(bend[t[0]] || bend[t[1]] || bend[t[2]])) continue;
+          if (outer + inner >= cap) break;
           list.push_back({unsigned(t[0] + nv), unsigned(t[1] + nv), unsigned(t[2] + nv)});
           ++inner;
         }
       }
-      log += fmt("an inner layer of %zu triangles under the surface fills the gaps at the joints\n", inner);
+      log += fmt("an inner layer of %zu triangles under the surface fills the gaps at the bending joints\n", inner);
     }
     std::size_t corners = 0;
     for (const auto &[mat, list] : byMat) corners += list.size() * 3;
