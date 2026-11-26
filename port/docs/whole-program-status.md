@@ -20372,3 +20372,11 @@ Spiel.
   Haare RaspTea (Hair00 60 %, Hair01 40 %, 17 172 Dreiecke), Farbe `26,21,17:78,63,50:142,124,104` (aschbraun, nach
   DevJuniors Bild), Kopfhaut in der Haarfarbe (keine schwarze Linie am Haaransatz), `skin_shapes.py --no-mouth-inside`
   (sonst helle Lippen beim Pakjuaan-Kopf). pl00 7,3 MB, pl08 7,0 MB. Am Host gerendert, auf dem Gerät nicht getestet.
+- **Rosa Gesicht aus der Ferne behoben, Haare mit Physik** (DevJunior, 26.11.2026, Gerätetest von Leon Clásico
+  Remasterizado v3: das Gesicht von weitem rosa und fleckig, magenta Ränder am Kiefer): `skin_graft.encode_image`
+  schrieb nur die Grundstufe, behielt aber den Kopf mit 11 Mipmap-Stufen; `skin_hair_fbx.scalp` malt die
+  Gesichtstextur nach `skin_head_fbx.py` noch einmal, die kleineren Stufen las die GPU danach aus fremden Daten (v3:
+  524 288 statt 699 136 Bytes). `encode_image` schreibt bei einem Kopf mit Mipmaps jetzt die ganze Kette. v4: die
+  Haare mit den Gewichten der Remake-Lite-Haare (`--weights-from`, Knochen 4 und die Schwungknochen 65–83 von
+  `leonHair`, `--physics 0.8`). Am Host gerendert (Ruhepose; die Physik läuft nur im Spiel), auf dem Gerät nicht
+  getestet.

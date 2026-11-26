@@ -161,7 +161,16 @@ def recolor(img, rgb, radius=0.0):
 
 
 def encode_image(img, hdr):
-    """img as CMPR with a header of its size (the rest of hdr kept)."""
+    """img as CMPR with a header of its size (the rest of hdr kept). A header with a mipmap chain (maxLOD above
+    minLOD) gets the whole chain anew (DevJunior, 26.11.2026, device test of Leon Clásico Remasterizado v3: the face
+    pink and blotchy from afar, its texture repainted by skin_hair_fbx.scalp with only the base level written while
+    the header still said 11 levels: the GPU read the smaller levels from past the data)."""
+    if hdr[0x22] > hdr[0x21]:
+        import skin_hair_fbx as H  # here: it imports this module
+        from PIL import Image
+        img = img.convert("RGBA")
+        levels = [img] + [img.resize(sz, Image.BOX) for sz in H.mip_sizes(*img.size)[1:]]
+        return H.encode_levels(levels, 0xE, hdr, H.enc_cmpr)
     w, h = img.size
     raw = img.convert("RGBA").tobytes()
     px = [tuple(raw[k:k + 4]) for k in range(0, len(raw), 4)]
