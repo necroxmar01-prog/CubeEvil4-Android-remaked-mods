@@ -340,6 +340,19 @@ class Fit:
                 d = pos[hand] - pos[fore]
                 d /= np.linalg.norm(d)
                 h = rotation_between(h0 @ v, d) @ h0
+                # (DevJunior, 26.11.2026, pictures of v38: palms up, cupped hands like claws) the roll about the forearm
+                # as well: the palm toward the chest's middle as in the stand (there toward the thigh), not as the
+                # chest's turn left it
+                ns = spos[2] - spos[hand]
+                ns -= np.dot(ns, ds) * ds
+                if np.linalg.norm(ns) > 1e-6:
+                    nloc = srot[hand].T @ (ns / np.linalg.norm(ns))
+                    nt = pos[2] - pos[hand]
+                    nt -= np.dot(nt, d) * d
+                    nc = h @ nloc
+                    nc -= np.dot(nc, d) * d
+                    if np.linalg.norm(nt) > 1e-6 and np.linalg.norm(nc) > 1e-6:
+                        h = rotation_between(nc / np.linalg.norm(nc), nt / np.linalg.norm(nt)) @ h
                 local[hand] = rot[par[hand]].T @ h
             rows.append((local,) + tuple(row[1:]))
         self.rows = rows

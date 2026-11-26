@@ -20460,3 +20460,7 @@ Spiel.
   anders gerollt ist. `Fit.natural_hands`: die Hand wie im Stand zur Brust (Teil 2) gehalten, dann um den kleinsten
   Winkel in Linie mit dem Unterarm gedreht (kein Knick im Handgelenk); für Reaktionen und Finisher. RE9 Finishers
   v38 (finish.dat 2 385 728, react.dat 489 440 Bytes). Am Host gerendert, im Spiel nicht getestet.
+- **Ganado-Hände: auch die Rollung um den Unterarm** (DevJunior, 26.11.2026, Ausschnitte von v38: Handflächen nach
+  oben, gekrümmte Hände wie Krallen): `Fit.natural_hands` dreht die Hand nach dem Ausrichten auch um den Unterarm, so
+  dass die Handfläche wie im Stand zur Mitte der Brust zeigt (im Stand zum Oberschenkel). RE9 Finishers v39
+  (finish.dat 2 333 472, react.dat 468 544 Bytes). Am Host gerendert, im Spiel nicht getestet.
