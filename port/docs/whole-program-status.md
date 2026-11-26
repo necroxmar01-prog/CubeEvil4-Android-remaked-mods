@@ -20424,3 +20424,9 @@ Spiel.
   jeder Unterordner und jede .zip ein Paket in Namensreihenfolge, ein Ordner mit em/ … oben ist selbst ein Paket;
   danach eine Meldung mit den hinzugefügten und den gescheiterten und Neustart). Texte in 11 Sprachen,
   `check_translations.py` ohne Fehler. Gebaut nur in der CI; auf dem Gerät nicht getestet.
+- **Leon Clásico Remasterizado v9 / Remake v4** (DevJunior, 26.11.2026, Gerätetest: „el cabello parece sobrepuesto en
+  ambos modelos“): das Haar lag wie eine Haube über dem Kopf: `skin_hair_fbx` hob 7 451 Punkte bis 29 über den
+  Schädel (`cover`), obwohl RaspTeas Haar für genau diesen Kopf (Pakjuaan, gleiche Platzierung 0,994) gemacht ist; jetzt
+  `--cover -1` (das Haar sitzt, wie es gebaut ist), ohne `--crown-under` (das zog den Scheitel unter das Haar von
+  Remake Lite, nicht unter dieses), Haarphysik 0,6 statt 0,8. Am Host gerendert (vorn, Seite, oben: anliegend, kein
+  Schädel sichtbar), auf dem Gerät nicht getestet.
