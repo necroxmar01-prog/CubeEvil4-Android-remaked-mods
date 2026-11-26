@@ -20396,3 +20396,7 @@ Spiel.
   `pl00` mit `skin_graft.py --entry 2/4/5 --tpl 3` (Texturen an Palette 3 angehängt; `skin_slim --take` ersetzte die
   Palette, die die Disc-Jacke mitbenutzt), in `pl08` mit `skin_slim --take 2,3,4,5`. Daten `pl00` 4,7 MB, `pl08`
   5,2 MB. Am Host gerendert (vorn, hinten), auf dem Gerät nicht getestet. Disc-Dateien und Pakete nicht im Repository.
+- **Leon Clásico Remasterizado v7** (DevJunior, 26.11.2026: „un poco corpulento … de fuerte y atlético“, Vorlage
+  Remake-Leon im schwarzen Hemd): v6 mit `skin_graft.py --physique athletic --inflate 0:26 --inflate 6:26`
+  (`pl08` dazu `12:26`: Messer und Holsterteil an der Brust gehen mit), breite Schultern und Arme, Taille schmal.
+  Am Host gerendert, auf dem Gerät nicht getestet.
