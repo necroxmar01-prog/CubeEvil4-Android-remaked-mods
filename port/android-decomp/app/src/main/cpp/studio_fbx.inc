@@ -8,7 +8,10 @@
 // Included by studio_convert.cpp (namespace of its helpers).
 
 #include <unordered_map>
-#include <zlib.h>
+
+// zlib's uncompress (libz; its header is not included: the NDK's zconf.h defines `far` and `near` away, words used in
+// studio_convert.cpp)
+extern "C" int uncompress(unsigned char *dest, unsigned long *destLen, const unsigned char *source, unsigned long sourceLen);
 
 struct FbxProp {
   char type = 0;
@@ -32,9 +35,9 @@ struct FbxNode {
 
 Bytes inflateZ(const std::uint8_t *src, std::size_t n, std::size_t want) {
   Bytes out(want);
-  uLongf got = uLongf(want);
+  unsigned long got = static_cast<unsigned long>(want);
   if (want == 0) return out;
-  if (uncompress(out.data(), &got, src, uLong(n)) != Z_OK || got != want) fail("a packed block does not unpack");
+  if (uncompress(out.data(), &got, src, static_cast<unsigned long>(n)) != 0 || got != want) fail("a packed block does not unpack");
   return out;
 }
 
