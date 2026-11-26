@@ -1383,9 +1383,9 @@ public final class StudioActivity extends Activity {
     content.addView(giz);
     LinearLayout weps = row();
     for (int k = 0; k < EDIT_WEAPONS.length; k++) {
-      final int pick = k;
+      final int weaponPick = k;
       Button b = pill(EDIT_WEAPONS[k][0], editWeaponPick == k);
-      b.setOnClickListener(v -> { editWeaponPick = pick; updateWeapon(); showTab(3); });
+      b.setOnClickListener(v -> { editWeaponPick = weaponPick; updateWeapon(); showTab(3); });
       weps.addView(b, chip());
     }
     HorizontalScrollView wscroll = new HorizontalScrollView(this);
