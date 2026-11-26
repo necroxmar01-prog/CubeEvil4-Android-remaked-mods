@@ -181,8 +181,8 @@ final class CoreMenu extends Dialog {
     void removeMods();
     /** Every mod in a folder the player picks (ModStore.copyAll; Mods by DevParalax, 26.11.2026). */
     void addAllMods();
-    /** One pack goes (the menu asked first); the game restarts so it no longer counts. */
-    void removeMod(String name);
+    /** One pack goes (the menu asked first); with `restart` the game restarts so it no longer counts at once. */
+    void removeMod(String name, boolean restart);
     /** The renderer (port/docs/vulkan-bauplan.md): Vulkan can run here (Android 10, Vulkan 1.1). */
     boolean vulkanSupported();
     /** Vulkan is the menu's choice (it may not run: not supported, or it fell back to OpenGL ES). */
@@ -2890,7 +2890,10 @@ final class CoreMenu extends Dialog {
         .setTitle(getContext().getString(R.string.ingame_mod_remove_one, name))
         .setMessage(getContext().getString(R.string.ingame_mod_remove_one_text, name))
         .setNegativeButton(R.string.ingame_cancel, null)
-        .setPositiveButton(R.string.ingame_restart, (d, w) -> { close(); host.removeMod(name); }).create();
+        // (DevJunior, 26.11.2026: "deleting a mod and restarting every time is tedious, it should be possible to delete
+        // several") delete now and restart later, after more, or delete and restart at once
+        .setNeutralButton(R.string.ingame_mod_delete, (d, w) -> { host.removeMod(name, false); refreshMods(); })
+        .setPositiveButton(R.string.ingame_mod_delete_restart, (d, w) -> { close(); host.removeMod(name, true); }).create();
     dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus());
     dialog.show();
   }

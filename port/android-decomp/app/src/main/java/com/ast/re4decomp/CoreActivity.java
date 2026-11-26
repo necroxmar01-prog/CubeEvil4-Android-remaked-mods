@@ -1519,10 +1519,10 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       startForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_MOD_ALL);
     }
 
-    @Override public void removeMod(String name) {
+    @Override public void removeMod(String name, boolean restart) {
       boolean gone = ModStore.remove(gameRoot(), name);
-      Log.i(TAG, "menu: mod " + name + " removed" + (gone ? "" : " (not all)"));
-      restartIntoGame("menu: mod removed");
+      Log.i(TAG, "menu: mod " + name + " removed" + (gone ? "" : " (not all)") + (restart ? ", restart" : ""));
+      if (restart) restartIntoGame("menu: mod removed");
     }
 
     @Override public String[] modPacks() {

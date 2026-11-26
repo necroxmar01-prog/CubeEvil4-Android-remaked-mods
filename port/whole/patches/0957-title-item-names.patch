@@ -1,0 +1,18 @@
+# Port patch (report of DevJunior, 26.11.2026, EU discs, Spanish, crash logs: the title's OPTIONS closed the app,
+# signal 11 in Message::CommandExec → WidthCk). A text of the options screen jumps to an item name (control code 0x11,
+# message type 3: CORE_MESSAGE_3). Type 3 is bound by MessageControl::gameInit only, at the first game start: on the
+# title before any game MesData.m_Data[3] is NULL and getAddr read through it. Now getAddr takes the core archive's
+# item names there (etc/core.das is loaded at boot, before the title), as gameInit binds them later. Not a bug of the
+# prototype as its texts are (the debug discs' title options have no such jump); the retail texts need it.
+--- a/src/game/mes.cpp
++++ b/src/game/mes.cpp
+@@ -255,6 +255,9 @@
+ u16* MessageData::getAddr(int no, int data_type)
+ {
+     u32* tbl = (u32*) m_Data[data_type];
++    if (tbl == NULL && data_type == 3) {
++        tbl = (u32*) CORE_ARC(CORE_MESSAGE_3); /* port (patch 0957): the title before gameInit bound type 3 */
++    }
+     MesTblBlock* blk = mesBlock(tbl, m_language);
+ 
+     /* port: the European core table (etc/core.das CORE_MESSAGE, 173 messages instead of 153) has 15

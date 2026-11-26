@@ -585,10 +585,12 @@
     <string name="ingame_mod_add_zip">Aggiungi mod .zip (una o più)</string>
     <string name="ingame_mod_add_all">Aggiungi tutte le mod di una cartella</string>
     <string name="ingame_mod_remove_one">Rimuovi %1$s</string>
-    <string name="ingame_mod_remove_one_text">“%1$s” viene eliminata. Il gioco si riavvia e usa le altre mod o i file del disco. I progressi dall\'ultimo salvataggio vanno persi.</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” viene eliminata. La modifica vale dopo un riavvio: se vuoi, elimina prima altre mod e poi riavvia.</string>
     <string name="ingame_mods_added_all">Aggiunte: %1$s</string>
     <string name="ingame_mods_failed_all">Non aggiunte: %1$s</string>
     <string name="ingame_mods_none_found">La cartella non contiene mod (cartelle come quelle del disco o file .zip).</string>
+    <string name="ingame_mod_delete">Elimina</string>
+    <string name="ingame_mod_delete_restart">Elimina e riavvia</string>
     <string name="ingame_mods_remove">Rimuovi tutte le mod</string>
     <string name="ingame_mods_remove_text">Il gioco si riavvia e usa di nuovo i file del disco. I progressi dall\'ultimo salvataggio vanno persi.</string>
     <string name="ingame_mod_copying">Copia della mod…</string>

@@ -20468,3 +20468,12 @@ Spiel.
   lo de tener la postura levantada, no queda bien“): `re9_finisher_pack.py` `PISTOL_CARRY = False`, move.dat ohne
   0xC8..0xCB; `locomotion.cpp` `pistolStance()` bleibt damit aus, die Pistole trägt Leon wie das Spiel, die Beine die
   des Remakes. RE9 Finishers v40 (move.dat 648 032 Bytes, sonst v39). Nicht im Spiel getestet.
+- **Absturz in den Titel-OPTIONEN mit EU-Discs (Patch 0957); mehrere Mods löschen** (DevJunior, 26.11.2026, EU-Discs
+  Spanisch, Absturzprotokolle: Signal 11 in `Message::CommandExec`, Adresse 0x188a94 der APK 88dce53 =
+  `MesData.m_Data[3]`, NULL): ein Text des Optionsbildschirms springt mit Steuercode 0x11 auf einen Gegenstandsnamen
+  (Typ 3, `CORE_MESSAGE_3`); Typ 3 bindet erst `MessageControl::gameInit` beim ersten Spielstart. Patch 0957
+  `mes.cpp` `getAddr`: ohne gebundenen Typ 3 die Namen aus `etc/core.das` (beim Titel schon geladen). App: Mod löschen
+  fragt „Abbrechen / Löschen / Löschen und neu starten“ (`removeMod(name, restart)`), so lassen sich mehrere Pakete vor
+  einem Neustart löschen; Texte in 11 Sprachen. Nur CI-Build, auf dem Gerät nicht getestet.
+
+| 0957 `game/mes.cpp` | Titel vor dem ersten Spiel: Typ-3-Texte (Gegenstandsnamen) aus `etc/core.das`, wenn `gameInit` sie noch nicht gebunden hat (EU-Optionen, Steuercode 0x11) |

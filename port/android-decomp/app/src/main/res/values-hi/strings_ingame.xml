@@ -581,10 +581,12 @@
     <string name="ingame_mod_add_zip">.zip मॉड जोड़ें (एक या कई)</string>
     <string name="ingame_mod_add_all">एक फ़ोल्डर के सभी मॉड जोड़ें</string>
     <string name="ingame_mod_remove_one">%1$s हटाएँ</string>
-    <string name="ingame_mod_remove_one_text">“%1$s” हटाया जाएगा। गेम फिर से शुरू होगा और दूसरे मॉड या डिस्क की अपनी फ़ाइलें इस्तेमाल करेगा। पिछली सेव के बाद की प्रगति खो जाएगी।</string>
+    <string name="ingame_mod_remove_one_text">“%1$s” हटाया जाएगा। बदलाव फिर से शुरू करने के बाद लागू होगा: चाहें तो पहले और मॉड हटाएँ, फिर गेम फिर से शुरू करें।</string>
     <string name="ingame_mods_added_all">जोड़े गए: %1$s</string>
     <string name="ingame_mods_failed_all">नहीं जोड़े गए: %1$s</string>
     <string name="ingame_mods_none_found">इस फ़ोल्डर में कोई मॉड नहीं है (डिस्क जैसे फ़ोल्डर या .zip फ़ाइलें)।</string>
+    <string name="ingame_mod_delete">हटाएँ</string>
+    <string name="ingame_mod_delete_restart">हटाएँ और फिर से शुरू करें</string>
     <string name="ingame_mods_remove">सभी मॉड हटाएँ</string>
     <string name="ingame_mods_remove_text">गेम रीस्टार्ट होगा और फिर से डिस्क की फ़ाइलें इस्तेमाल करेगा। पिछली सेव के बाद की प्रगति खो जाएगी।</string>
     <string name="ingame_mod_copying">मॉड कॉपी हो रहा है…</string>

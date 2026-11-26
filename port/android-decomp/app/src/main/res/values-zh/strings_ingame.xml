@@ -578,10 +578,12 @@
     <string name="ingame_mod_add_zip">添加 .zip 模组（一个或多个）</string>
     <string name="ingame_mod_add_all">添加文件夹中的所有模组</string>
     <string name="ingame_mod_remove_one">移除 %1$s</string>
-    <string name="ingame_mod_remove_one_text">将删除“%1$s”。游戏会重启并使用其他模组或光盘自身的文件。上次存档后的进度将丢失。</string>
+    <string name="ingame_mod_remove_one_text">将删除“%1$s”。更改在重启后生效：可以先删除其他模组，再重启。</string>
     <string name="ingame_mods_added_all">已添加：%1$s</string>
     <string name="ingame_mods_failed_all">未添加：%1$s</string>
     <string name="ingame_mods_none_found">该文件夹中没有模组（与光盘结构相同的文件夹或 .zip 文件）。</string>
+    <string name="ingame_mod_delete">删除</string>
+    <string name="ingame_mod_delete_restart">删除并重启</string>
     <string name="ingame_mods_remove">移除所有模组</string>
     <string name="ingame_mods_remove_text">游戏将重启并重新使用光盘上的文件。上次存档之后的进度会丢失。</string>
     <string name="ingame_mod_copying">正在复制模组…</string>
