@@ -20697,3 +20697,10 @@ Spiel.
   Insel). `--sculpt-ao` 0,6 → 0,35. Leon Clásico Remasterizado v24→v25 / Remake v21. Am Host gerendert (Band weg).
   Remake-Beleuchtung: Kontaktschatten 4 statt 8 Tiefen, Strahlen 8 statt 14 Schritte (höchstens 17 statt 27 Tiefen je
   Bildpunkt). Auf dem Gerät nicht getestet.
+- **„Remake“ auf Requiem-Basis** (DevJunior, 27.11.2026: „haz que el remake tome de base al requiem porque la
+  iluminación y colores son muy buenos“): Modus 4 läuft jetzt durch Requiems Farbdurchgang (Schärfung, Sättigung,
+  kalter Stich auf Grau, Kurve, Ecken, Korn) und legt das Gebiet darauf: halbe Belichtung des Gebiets, Tönung von
+  Schatten und Lichtern, Leuchten der Lichter, bei Gewitter Regen und Blitze; der Dunst je Gebiet halb zwischen
+  Gebiet und Requiem (`RemakeHaze`, mindestens Requiems Menge). Der eigene Modus-4-Block (Lebendigkeit, Weißabgleich,
+  eigene Kurve) entfällt; Requiem (Modus 3) unverändert. Shader mit glslangValidator geprüft, `gx_gl.cpp` am Host
+  übersetzt; auf dem Gerät nicht getestet.

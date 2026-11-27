@@ -2553,7 +2553,9 @@ struct VkRenderer final : GxCore {
     Put(pc, atmosFx, "size", size);
     Put(pc, atmosFx, "zmap", zmap);
     const fixed::RemakeZone &zone = fixed::RemakeZoneOf(room);  // 4 "Remake": the room's zone
-    Put(pc, atmosFx, "haze", colourMode == 4 ? zone.haze : colourMode == 3 ? fixed::kAtmosHaze : fixed::kAtmosNone);
+    float rh[4];
+    fixed::RemakeHaze(room, rh);
+    Put(pc, atmosFx, "haze", colourMode == 4 ? rh : colourMode == 3 ? fixed::kAtmosHaze : fixed::kAtmosNone);
     Put(pc, atmosFx, "shape", colourMode == 4 ? zone.shape : fixed::kAtmosShape);
     {
       // the light effects: their strengths, the shafts' source above the picture's top (Vulkan: y down), their colour

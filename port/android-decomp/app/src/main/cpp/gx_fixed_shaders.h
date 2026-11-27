@@ -642,6 +642,13 @@ inline void LightFxColour(int colourMode, unsigned room, float out[4]) {
   for (int i = 0; i < 4; ++i)
     out[i] = c[i];
 }
+// "Remake"'s mist: the zone's halfway to Requiem's (its base), at least Requiem's amount
+inline void RemakeHaze(unsigned room, float out[4]) {
+  const RemakeZone &z = RemakeZoneOf(room);
+  for (int i = 0; i < 3; ++i)
+    out[i] = 0.5f * (z.haze[i] + kAtmosHaze[i]);
+  out[3] = z.haze[3] > kAtmosHaze[3] ? z.haze[3] : kAtmosHaze[3];
+}
 // a lightning flash's light (0..1) at picture `n` (about 60 a second): every 7..16 s two quick pulses
 inline float StormFlash(unsigned n) {
   const unsigned period = 600;
@@ -742,45 +749,9 @@ constexpr char kColourFs[] =
     "    g = vec3(l) + (c - vec3(l)) * (1.0 + 0.30 * warm - 0.15 * (1.0 - warm));\n"
     "    g *= vec3(1.0) + vec3(0.06, 0.0, -0.14) * clamp(l * 1.6, 0.0, 1.0);\n"
     "    g = clamp(scurve(clamp(g, 0.0, 1.0), 0.25), 0.0, 1.0);\n"
-    "  } else if (mode == 4) {\n"
-    // "Remake": the sharpening of mode 3, then the zone's grade (RemakeZone; zoneLo/zoneHi/zoneGrade, zoneFx: storm,
-    // time, the lightning's light): a cold white balance, vibrance (the dull colours gain most, the skin little),
-    // the exposure, a gentle S-curve, the shadows and the lights tinted, the lights glowing a little, dark corners,
-    // a fine grain; with a storm rain streaks and the lightning's cold light
-    "    vec2 px = 1.0 / vec2(textureSize(src, 0));\n"
-    "    vec3 n = texture(src, vUv + vec2(0.0, px.y)).rgb, s = texture(src, vUv - vec2(0.0, px.y)).rgb;\n"
-    "    vec3 e = texture(src, vUv + vec2(px.x, 0.0)).rgb, w4 = texture(src, vUv - vec2(px.x, 0.0)).rgb;\n"
-    "    vec3 mn = min(c, min(min(n, s), min(e, w4))), mx = max(c, max(max(n, s), max(e, w4)));\n"
-    "    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(0.001)), 0.0, 1.0));\n"
-    "    vec3 wt = -amp * 0.06;\n"  // light sharpening only (bright edges read as outlines)
-
-    "    c = clamp((c + wt * (n + s + e + w4)) / (1.0 + 4.0 * wt), 0.0, 1.0);\n"
-    "    g = c * vec3(1.0 - zoneGrade.w, 1.0, 1.0 + zoneGrade.w * 1.2);\n"
-    "    float lv = lum(g);\n"
-    "    float sat = (max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b))) / max(max(g.r, max(g.g, g.b)), 0.02);\n"
-    "    g = vec3(lv) + (g - vec3(lv)) * (1.0 + zoneGrade.x * (1.0 - sat));\n"
-    "    g = clamp(g * zoneGrade.y, 0.0, 1.0);\n"
-    "    g = scurve(g, zoneGrade.z);\n"
-    "    float lg = lum(g);\n"
-    "    g += zoneLo.rgb * (1.0 - smoothstep(0.0, 0.45, lg)) * smoothstep(0.0, 0.06, lg)\n"
-    "       + zoneHi.rgb * smoothstep(0.40, 1.0, lg);\n"
-    "    g += zoneHi.a * smoothstep(0.65, 1.0, lg) * g;\n"
-    "    if (zoneFx.x > 0.0) {\n"
-    "      vec2 r = vUv * vec2(textureSize(src, 0)) / 900.0;\n"
-    "      float x = r.x * 160.0 + r.y * 28.0;\n"
-    "      float col = floor(x);\n"
-    "      float hr = fract(sin(col * 91.17) * 43758.5);\n"
-    "      float y = r.y * (2.0 + hr) + zoneFx.y * (2.2 + hr * 1.5) + hr * 17.0;\n"
-    "      float streak = smoothstep(0.90, 1.0, fract(y)) * (1.0 - smoothstep(0.0, 0.18, abs(fract(x) - 0.5)));\n"
-    "      g += zoneFx.x * streak * 0.10 * vec3(0.75, 0.82, 0.95);\n"
-    "      g += zoneFx.z * (0.30 * lg + 0.10) * vec3(0.80, 0.88, 1.0);\n"
-    "    }\n"
-    "    vec2 d = (vUv - 0.5) * vec2(1.0, 0.8);\n"
-    "    g *= 1.0 - 0.32 * smoothstep(0.32, 0.85, length(d));\n"
-    "    float h = fract(sin(dot(floor(gl_FragCoord.xy) + seed, vec2(12.9898, 78.233))) * 43758.5453);\n"
-    "    float lm = lum(g);\n"
-    "    g = clamp(g + (h - 0.5) * 0.04 * lm * (1.0 - lm) * 4.0, 0.0, 1.0);\n"
-    "  } else if (mode == 3) {\n"
+    // "Remake" (mode 4) is Requiem's grade with the zone on top (wish of DevJunior, 27.11.2026: "make the remake take
+    // the requiem as its base, its lighting and colours are very good"): see the mode 4 lines below
+    "  } else if (mode == 3 || mode == 4) {\n"
     // (third round, 15.11.2026, "like Requiem or the remake, without losing FPS": the GameCube's soft textures sharpened
     // as AMD's contrast-adaptive sharpening does, four more texels: strong where the detail is faint, little at hard
     // edges, so no halos)
@@ -809,6 +780,25 @@ constexpr char kColourFs[] =
     "    g = scurve(pow(g, vec3(0.95)), 0.35);\n"
     "    float lg = lum(g);\n"
     "    g = clamp(g + w * lg * (1.0 - lg) * 4.0 * vec3(-0.025, 0.008, 0.035), 0.0, 1.0);\n"
+    // "Remake": the zone (RemakeZone) on Requiem's grade: half its exposure, the shadows' and the lights' tint, the
+    // lights' glow; with a storm rain streaks and the lightning's cold light
+    "    if (mode == 4) {\n"
+    "      g = clamp(g * mix(1.0, zoneGrade.y, 0.5), 0.0, 1.0);\n"
+    "      float lz = lum(g);\n"
+    "      g += zoneLo.rgb * (1.0 - smoothstep(0.0, 0.45, lz)) * smoothstep(0.0, 0.06, lz)\n"
+    "         + zoneHi.rgb * smoothstep(0.40, 1.0, lz);\n"
+    "      g += zoneHi.a * smoothstep(0.65, 1.0, lz) * g;\n"
+    "      if (zoneFx.x > 0.0) {\n"
+    "        vec2 r = vUv * vec2(textureSize(src, 0)) / 900.0;\n"
+    "        float x = r.x * 160.0 + r.y * 28.0;\n"
+    "        float hr = fract(sin(floor(x) * 91.17) * 43758.5);\n"
+    "        float y = r.y * (2.0 + hr) + zoneFx.y * (2.2 + hr * 1.5) + hr * 17.0;\n"
+    "        float streak = smoothstep(0.90, 1.0, fract(y)) * (1.0 - smoothstep(0.0, 0.18, abs(fract(x) - 0.5)));\n"
+    "        g += zoneFx.x * streak * 0.10 * vec3(0.75, 0.82, 0.95);\n"
+    "        g += zoneFx.z * (0.30 * lz + 0.10) * vec3(0.80, 0.88, 1.0);\n"
+    "      }\n"
+    "      g = clamp(g, 0.0, 1.0);\n"
+    "    }\n"
     "    vec2 d = (vUv - 0.5) * vec2(1.0, 0.8);\n"
     "    g *= 1.0 - 0.30 * smoothstep(0.35, 0.85, length(d));\n"
     // a fine film grain that moves each picture, most in the middle tones (none in black, none in white)

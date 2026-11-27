@@ -2585,7 +2585,9 @@ struct GlRenderer final : GxCore {
     glUniform2f(atmosSize, static_cast<float>(Lo(kEfbWidth)), static_cast<float>(Lo(kEfbHeight)));
     glUniform4f(atmosZ, perspA, perspB, zRange, zFar);
     const fixed::RemakeZone &zone = fixed::RemakeZoneOf(room);  // 4 "Remake": the room's zone
-    glUniform4fv(atmosHaze, 1, colourMode == 4 ? zone.haze : colourMode == 3 ? fixed::kAtmosHaze : fixed::kAtmosNone);
+    float rh[4];
+    fixed::RemakeHaze(room, rh);
+    glUniform4fv(atmosHaze, 1, colourMode == 4 ? rh : colourMode == 3 ? fixed::kAtmosHaze : fixed::kAtmosNone);
     glUniform4fv(atmosShape, 1, colourMode == 4 ? zone.shape : fixed::kAtmosShape);
     {
       // the light effects: their strengths, the shafts' source above the picture's top (GL: y up), their colour
