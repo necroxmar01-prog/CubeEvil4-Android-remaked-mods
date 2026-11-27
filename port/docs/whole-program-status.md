@@ -20637,3 +20637,10 @@ Spiel.
   Geprüft am Host: Spur stumm bis zum ersten Bild, dann bitgenau, Ende bei START; Ereignis-Zeilen weiterhin bitgenau;
   i686-Build ohne Fehler, Patch 0959 im vorbereiteten Baum. Ob der GC-Film genau so lang ist wie der PC-Film (76 s),
   ist ungeprüft; auf dem Gerät nicht getestet.
+- **Gesicht mit Form** (DevJunior, 27.11.2026, eine Nahaufnahme des Leon von 2023: „detalles al rostro … para que no
+  quede muy plano en las cinemáticas“): `skin_head_fbx.py --sculpt-ao 0.6 --sculpt-key 0.45` (`sculpt`): aus dem Netz
+  selbst eine Umgebungsverdeckung (je Ecke der Anteil des Netzes in 18 Einheiten vor ihr: Augenhöhlen, Nasenseiten,
+  Lippenlinie, unter dem Kiefer dunkler) und ein weiches Licht von vorn oben (Nasenrücken, Wangenknochen heller, unter
+  Brauen, Nase und Lippe Schatten), auf die Gesichtstextur gemalt, im Mittel so hell wie vorher (durch den Median
+  geteilt). Leon Clásico Remasterizado v21 / Remake v17. Am Host gerendert (vorher/nachher, vorn und seitlich); auf
+  dem Gerät nicht getestet.

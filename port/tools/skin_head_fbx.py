@@ -182,6 +182,47 @@ def despeckle(img, texel_pos, above, darker=14.0, radius=6.0):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), int((k > 0.5).sum())
 
 
+def sculpt(img, texel_pos, Pc, Nc, ao=0.5, key=0.3, radius=18.0):
+    """The face's form painted in (DevJunior, 27.11.2026, a close-up of the 2023 game's Leon: "details so it does not
+    look so flat in the cutscenes"; the GameCube lights a head per vertex, the RE Engine face's own shading came from
+    its normal and cavity maps and from its renderer): (1) an ambient occlusion from the mesh itself: per corner (Pc,
+    Nc: positions and normals) the share of the mesh within `radius` in front of it, more than the face's usual: the
+    eye sockets, the sides of the nose, the lips' line, under the jaw darker by up to `ao`; (2) a soft key light from
+    above in front (the brows, the nose, the cheekbones and the chin cast their shade downwards) by `key`. Texels take
+    their 6 nearest corners' values. Returns (image, texels darker by more than 10 %)."""
+    from scipy.spatial import cKDTree
+    P = Pc.reshape(-1, 3)
+    N = Nc.reshape(-1, 3)
+    N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-6)
+    P, idx = np.unique(np.round(P, 2), axis=0, return_index=True)
+    N = N[idx]
+    tree = cKDTree(P)
+    occl = np.zeros(len(P))
+    for i, nb in enumerate(tree.query_ball_point(P, radius)):
+        d = P[nb] - P[i]
+        r = np.linalg.norm(d, axis=1)
+        m = r > 1.0
+        if m.any():
+            occl[i] = np.clip((d[m] @ N[i]) / r[m], 0, 1).mean()
+    base = np.median(occl)
+    dark = np.clip((occl - base) / 0.25, 0, 1)
+    L = np.array([0.0, 0.6, 0.8])
+    lit = N @ L
+    shade = (1.0 - ao * dark) * np.clip(1.0 + key * (lit - 0.55), 0.7, 1.15)
+    shade /= np.median(shade)  # the face as bright as before on the whole: only its form shows
+    a = np.asarray(img.convert("RGBA"), dtype=np.float64).copy()
+    ok = np.isfinite(texel_pos[..., 1])
+    dist, nn = tree.query(texel_pos[ok], k=6)
+    w = 1.0 / np.maximum(dist, 0.3)
+    val = (shade[nn] * w).sum(1) / w.sum(1)
+    out = np.ones(ok.shape)
+    out[ok] = val
+    from scipy.ndimage import gaussian_filter
+    out = gaussian_filter(out, 1.2)
+    a[..., :3] *= out[..., None]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), int((out < 0.9).sum())
+
+
 def calm_lids(img, texel_pos, eye_y, amount=0.8):
     """The eyelids' red taken back to the skin's (DevJunior, 26.11.2026, device pictures of a cutscene: the eyes looked
     sore, red rims round them): the RE Engine face's albedo paints the lids' wet inner rim red for its own eyeball and
@@ -436,6 +477,8 @@ def main(argv=None):
                     "evened out (despeckle)")
     ap.add_argument("--crown-under", type=float, help="the crown kept this far under the hair's inside (under_hair)")
     ap.add_argument("--scalp-depth", type=float, default=0.8)
+    ap.add_argument("--sculpt-ao", type=float, default=0.0, help="the mesh's own occlusion painted in this strong (0..1)")
+    ap.add_argument("--sculpt-key", type=float, default=0.0, help="a soft key light from above painted in (0..1)")
     ap.add_argument("--lids", type=float, help="the eyelids' red rims towards the cheeks' hue this much (0..1)")
     ap.add_argument("--nape", type=float, help="the nape behind the ears painted as a short fade from this height")
     ap.add_argument("--scalp-reach", type=float, default=0.0)
@@ -628,6 +671,10 @@ def main(argv=None):
     if a.despeckle is not None:
         face, n = despeckle(face, texel_pos, a.despeckle)
         print("face: %d texels of dark spots above y %.0f evened out" % (n, a.despeckle))
+    if a.sculpt_ao or a.sculpt_key:
+        Pc_, Nc_, _ = U.gc_triangles(entries[HEAD], skin_mat)
+        face, n = sculpt(face, texel_pos, Pc_, Nc_, a.sculpt_ao, a.sculpt_key)
+        print("face: form painted in (occlusion %.2f, key light %.2f), %d texels darker" % (a.sculpt_ao, a.sculpt_key, n))
     if a.lids:
         face, n = calm_lids(face, texel_pos, a.eye_y, a.lids)
         print("face: %d texels of the lids' red calmed" % n)
