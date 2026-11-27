@@ -20754,6 +20754,12 @@ Spiel.
   quer gekachelt, leicht nach der eigenen Albedo schattiert. Leon-Pakete Klassik v28, Remake v24 mit Textur 4 der
   Kopf-TPL (Eintrag 3) dieser Skin (Mittel 67,55,43; Kopfhaut/Brauen 70,58,45). Die Skin selbst kommt nicht ins
   Repository. Am Host gerendert; auf dem Gerät nicht getestet.
+- **Renderzeit aufgeschlüsselt, Nebel näher** (DevJunior, 27.11.2026, zwei Berichte der Odin 2 Portal mit und ohne
+  Umgebungsschatten: in beiden 12–17 ms Renderfaden je Chunk, davon „the rest“ 7–11 ms; „la luz que ilumina al
+  personaje no concuerda con la del ambiente“): `GxStats` zählt jetzt Echtzeitschatten (`ShadowCollect`, die Marke mit
+  `ShadowPass`) und Nebel/Bloom/Lichtreflexe (`kSplitShadow`, `kSplitPost`) getrennt, die Zeile „split per chunk“
+  nennt beide. Der Nebel der Gebiete beginnt bei 0,6–0,8 m statt 1,8–2,5 m: die Figuren vor der Kamera standen klar vor
+  dem dichten Hintergrund. Am Host übersetzt; auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →

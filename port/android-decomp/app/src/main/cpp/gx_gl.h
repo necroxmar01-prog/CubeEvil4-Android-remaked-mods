@@ -139,7 +139,7 @@ struct GxStats {
   // driver's (the draw calls, uniform blocks, binds, state) and which the renderer's own (Testers'
   // logs 28.10.2026: 29.8 ms of processor time for 862 draws on a Mali-G52, 12 ms for 873 on an Adreno 642L)
   enum { kSplitDraw, kSplitUniform, kSplitBind, kSplitState, kSplitProgram, kSplitTexture, kSplitBp, kSplitXf,
-         kSplitVertices, kSplitRest, kSplitKinds };
+         kSplitVertices, kSplitShadow, kSplitPost, kSplitRest, kSplitKinds };  // (27.11.2026) shadows, post passes
   unsigned long long splitNs[kSplitKinds] = {};
   // GPU time of the chunks (EXT_disjoint_timer_query; 0 when the driver has none); since 0.99.14 Vulkan's too (the
   // timestamps of each frame's work, a picture's, ReadGpuTime), for "Dynamic" (gx_auto_level.h)

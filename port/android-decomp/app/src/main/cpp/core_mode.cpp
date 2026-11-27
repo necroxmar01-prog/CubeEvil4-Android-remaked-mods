@@ -3288,11 +3288,12 @@ bool drawGx() {
           split[k] = (s.splitNs[k] - gxWork.splitNs[k]) / 1e6 / n;
         LOG("GX render thread split per chunk: draw calls %.1f ms, uniform blocks %.1f, binds (programs, textures, "
             "vertex setup) %.1f, render state %.1f, vertex buffers %.1f; shader keys and programs %.1f, textures in "
-            "(decode, upload) %.1f, BP (EFB copies, clears, effects) %.1f, XF %.1f, the rest %.1f",
+            "(decode, upload) %.1f, BP (EFB copies, clears, effects) %.1f, XF %.1f, real-time shadows %.1f, mist, bloom "
+            "and flares %.1f, the rest %.1f",
             split[GxStats::kSplitDraw], split[GxStats::kSplitUniform], split[GxStats::kSplitBind],
             split[GxStats::kSplitState], split[GxStats::kSplitVertices], split[GxStats::kSplitProgram],
             split[GxStats::kSplitTexture], split[GxStats::kSplitBp], split[GxStats::kSplitXf],
-            split[GxStats::kSplitRest]);
+            split[GxStats::kSplitShadow], split[GxStats::kSplitPost], split[GxStats::kSplitRest]);
         // Vulkan: its waits, submits and presents per picture, the shaders and pipelines it made (vulkan-bauplan E8)
         const std::string vkLine = gx->TimingLine();
         if (!vkLine.empty())

@@ -581,12 +581,14 @@ struct RemakeZone {
   float storm;     // lightning and rain (0..1)
   const char *name;
 };
+// (the mist from 0.6 m on, 27.11.2026: "the light on the character does not match the surroundings": the
+// figures near the camera stood clear in front of the mist)
 // the village by day (DevJunior, 27.11.2026, a picture of the 2023 village: a warm beige-grey mist, soft daylight)
-constexpr RemakeZone kZoneVillage = {{0.44f, 0.40f, 0.35f, 0.62f}, {1800.0f, 6000.0f, 0.75f, 0.0f},
+constexpr RemakeZone kZoneVillage = {{0.44f, 0.40f, 0.35f, 0.62f}, {600.0f, 6000.0f, 0.75f, 0.0f},
                                      {0.006f, 0.002f, -0.010f, 0.0f}, {0.030f, 0.018f, -0.010f, 0.06f},
                                      {0.0f, 1.04f, 0.0f, 0.0f}, 0.0f, "village by day"};
 // the forest paths (a picture of the 2023 forest path: dark, a cold blue-teal mist a few metres on)
-constexpr RemakeZone kZoneForest = {{0.05f, 0.08f, 0.10f, 0.72f}, {2000.0f, 6000.0f, 0.85f, 0.0f},
+constexpr RemakeZone kZoneForest = {{0.05f, 0.08f, 0.10f, 0.72f}, {600.0f, 6500.0f, 0.85f, 0.0f},
                                     {-0.012f, 0.004f, 0.022f, 0.0f}, {0.010f, 0.010f, 0.000f, 0.06f},
                                     {0.0f, 0.88f, 0.0f, 0.0f}, 0.0f, "forest"};
 // the lake by day: a pale teal-grey haze over the water
@@ -594,12 +596,12 @@ constexpr RemakeZone kZoneLake = {{0.16f, 0.20f, 0.22f, 0.55f}, {3000.0f, 9000.0
                                   {-0.012f, 0.010f, 0.022f, 0.0f}, {0.010f, 0.014f, 0.010f, 0.06f},
                                   {0.25f, 1.00f, 0.20f, 0.06f}, 0.0f, "lake"};
 // night with a storm (the lake at night, the village and the cemetery at night): dark blue, lightning and rain
-constexpr RemakeZone kZoneStorm = {{0.04f, 0.055f, 0.085f, 0.70f}, {2200.0f, 6000.0f, 0.85f, 0.0f},
+constexpr RemakeZone kZoneStorm = {{0.04f, 0.055f, 0.085f, 0.70f}, {700.0f, 6500.0f, 0.85f, 0.0f},
                                    {-0.008f, 0.002f, 0.030f, 0.0f}, {-0.010f, 0.006f, 0.030f, 0.08f},
                                    {0.22f, 0.92f, 0.28f, 0.09f}, 1.0f, "night storm"};
 // the castle and the interiors (DevJunior, 27.11.2026, a picture of the 2023 castle: golden amber light on stone and
 // wood, warm dust in the air, soft shadows rather than black ones)
-constexpr RemakeZone kZoneCandle = {{0.30f, 0.21f, 0.11f, 0.32f}, {2500.0f, 8000.0f, 0.35f, 0.0f},
+constexpr RemakeZone kZoneCandle = {{0.30f, 0.21f, 0.11f, 0.32f}, {800.0f, 8000.0f, 0.35f, 0.0f},
                                     {0.014f, 0.006f, -0.010f, 0.0f}, {0.050f, 0.030f, -0.024f, 0.12f},
                                     {0.0f, 1.03f, 0.0f, 0.0f}, 0.0f, "castle and interiors"};
 // the island: grey-green, cold and wet

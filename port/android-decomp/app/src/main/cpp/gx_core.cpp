@@ -2178,6 +2178,7 @@ std::uint32_t GxCore::Op(const Re4GxChunk &chunk, std::uint32_t at) {
   Split(op == RE4_GX_OP_BP || op == RE4_GX_OP_BP_STATE ? GxStats::kSplitBp
         : op == RE4_GX_OP_XF                          ? GxStats::kSplitXf
         : op == RE4_GX_OP_TEXTURE                     ? GxStats::kSplitTexture
+        : op == RE4_GX_OP_SHADOW                      ? GxStats::kSplitShadow
                                                       : GxStats::kSplitRest);
   return at + 1 + n;
 }
@@ -2293,14 +2294,21 @@ void GxCore::Run(const Re4GxChunk &chunk) {
       at = m.Op(chunk, at);
     if (m.atmosAfter && !m.atmosDone && at >= m.atmosAfter) {
       m.atmosDone = true;
+      m.Split(GxStats::kSplitRest);
       m.AtmospherePass();
+      m.Split(GxStats::kSplitPost);
     }
     if (m.bloomAfter && !m.bloomDone && at >= m.bloomAfter) {
       m.bloomDone = true;
+      m.Split(GxStats::kSplitRest);
       m.BloomPass();
+      m.Split(GxStats::kSplitPost);
     }
-    if (m.flareAfter && !m.flareDone && at >= m.flareAfter)
+    if (m.flareAfter && !m.flareDone && at >= m.flareAfter) {
+      m.Split(GxStats::kSplitRest);
       m.FlarePass();
+      m.Split(GxStats::kSplitPost);
+    }
   }
   m.RunEnd();  // the GPU timer, the fence after the chunk (GxStats::behind*)
   if (record) {
@@ -2367,8 +2375,11 @@ void GxCore::Draw(const Re4GxDraw &d, const Re4GxChunk &chunk, const MergeCall *
   else if (recordDraws)
     RecordDraw(d, k);
   // a figure's triangles for the real-time shadows (with the in-between picture's blended matrices)
-  if (shadowWanted && !merge)
+  if (shadowWanted && !merge) {
+    Split(GxStats::kSplitRest);
     ShadowCollect(d, chunk);
+    Split(GxStats::kSplitShadow);
+  }
   // a light source for the lens flares (with the in-between picture's blended matrices)
   if (flaresOn && flareAfter && !merge)
     FlareNote(d, chunk, curOpAt);
