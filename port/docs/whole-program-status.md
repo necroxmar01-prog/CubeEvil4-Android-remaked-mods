@@ -20555,3 +20555,12 @@ Spiel.
   `skin_matte.py` (Glanzfarbe der Teile höchstens 40, Stärke höchstens 60 %); das neue Haar hatte 112 bei 141 % (von
   der Remake-Lite-Vorlage). Leon Clásico Remasterizado v15 / Remake v10. Am Host gebaut, auf dem Gerät nicht
   getestet.
+- **Doblaje latino, erster Gerätebefund** (DevJunior, 26.11.2026, Bericht 210643, Bilder der ersten Szenen auf
+  Spanisch): `bio4evt.xwb` = 247 Wellen PCM 16 bit, 32 kHz Stereo; fünf Szenen ersetzt (Ereignisstimmen 30, 31, 15, 3,
+  140 → Wellen 156, 157, 131, 4, 44; 66,5 / 80 / 41,5 / 4,1 / 26,5 s), Längen passen zu den Szenen. „A veces hay
+  cortes en los audios“: der AI-Ring lief während der Szenen 43-mal leer (vorher 6): das Lesen der Datei auf dem
+  Spiel-Thread (pread auf dem gemeinsamen Speicher des Handys). Jetzt liest ein eigener Thread bis 4 s voraus in
+  einen Ring (`mod_voice.cpp` Reader/pump), der Mischer nimmt nur daraus; ein noch nicht gelesenes Bild ist Stille,
+  die Zeile behält ihre Zeit (Logzeile am Ende: „frames not read in time“). Geprüft am Host: PCM und MS-ADPCM
+  weiterhin bitgenau, auch mit dem Thread in Echtzeit (5-ms-Blöcke); i686-Build und Prüfungen ohne Fehler. Auf dem
+  Gerät nicht getestet.
