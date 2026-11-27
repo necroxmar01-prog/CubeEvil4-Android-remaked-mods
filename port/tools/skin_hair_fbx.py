@@ -741,7 +741,9 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
                     slum = float(skin @ np.array([0.3, 0.59, 0.11]))
                     # uncovered: no hair position over the texel, outwards from the skull's middle (within 2.5 units
                     # of that line, 0.5..14 units out)
-                    cand = np.isfinite(y) & (y > 1755) & (z > 25) & (lum < slum - 8.0)
+                    # (27.11.2026, second round: "it still has spots on the forehead": the scalp paint itself showed at the
+                    # temples beside the fringe) every texel of the forehead and the temples, dark or not
+                    cand = np.isfinite(y) & (y > 1745) & (z > 15)
                     cov = np.zeros(y.shape)
                     if cand.any():
                         Q = pos[cand]
@@ -755,11 +757,16 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
                             v = hair[nb] - Q[i]
                             along = v @ out_[i]
                             side = np.linalg.norm(v - along[:, None] * out_[i], axis=1)
-                            got[i] = float(((along > 0.5) & (side < 2.5)).any())
+                            got[i] = float(((along > 0.5) & (side < 3.0)).any())
                         cov[cand] = got
-                    k = np.where(cand, (1.0 - cov) * np.clip((slum - 8.0 - lum) / 20.0, 0, 1), 0.0)
+                    # the painted roots below the top of the forehead go whatever covers them: seen from the front the
+                    # temples show beside the fringe even where hair lies over them sideways
+                    low = np.clip((1815.0 - 0.25 * np.abs(x) - y) / 10.0, 0, 1)
+                    k = np.where(cand, np.maximum(1.0 - cov, low) * np.clip((slum - 8.0 - lum) / 20.0, 0, 1), 0.0)
                     from scipy.ndimage import gaussian_filter
                     k = np.where(np.isfinite(y), np.minimum(gaussian_filter(k, 1.5), 1.0), 0.0)
+                    covs = np.where(cand, gaussian_filter(cov, 2.0), 1.0)
+                    wgt = np.where(cand, wgt * np.clip(covs * 1.5, 0, 1) * (1.0 - low), wgt)  # no scalp paint there
                     img[..., :3] = img[..., :3] * (1 - k[..., None]) + skin[None, None, :] * k[..., None]
                     wgt = np.where(k > 0, wgt * (1 - k), wgt)
                     print("scalp: %d forehead texels of painted hair roots without hair over them back to skin"

@@ -20663,3 +20663,9 @@ Spiel.
   zurück zur Stirnhaut (~10 700 Texel); der Kopf malt keinen Haaransatz mehr (`--hairline` nur noch im Haarschritt,
   dort auf der Stirn nur unter Haar). Leon Clásico Remasterizado v22 / Remake v18. Am Host gerendert (Stirn, Seite);
   das Flackern (Bericht ohne Hinweis) nicht untersucht; auf dem Gerät nicht getestet.
+- **Stirn ohne Flecken, zweite Runde** (DevJunior, 27.11.2026, Bild: „aún tiene manchas en la frente“): die
+  Flecken waren gemalte Haaransätze der RE-Gesichtsfarbe an den Schläfen (von vorn sichtbar neben dem Pony, obwohl
+  Haar seitlich darüber liegt) und die Skalp-Farbe selbst. `scalp`: unter einer Linie y 1815 − 0,25·|x| (Stirn und
+  Schläfen) werden dunkle Haaransätze immer zur Stirnhaut, dort keine Skalp-Farbe; darüber nur, wo kein Haar nach
+  außen darüber liegt. Am Host gerendert (mit und ohne Haar: Stirn glatt, Haaransatz weich). Leon Clásico
+  Remasterizado v23 / Remake v19.
