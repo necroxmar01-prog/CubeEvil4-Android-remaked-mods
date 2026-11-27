@@ -20685,3 +20685,8 @@ Spiel.
   Lichtstrahlen nur in klaren Lücken (Anteil quadriert, höchstens 30 %); Randlicht nur bis 3,5 m, nur vor mindestens
   1,5-mal Fernerem und nur, wenn auch der dreifache Schritt fern ist (keine Zweige), halb so stark; die Schärfung von
   „Remake“ 0,14 → 0,06 (helle Säume). Shader mit glslangValidator geprüft; auf dem Gerät nicht getestet.
+- **Halstextur** (DevJunior, 27.11.2026, Bild: „¿podrías reparar el cuello? … su textura“): der Halsring von
+  `--neck-down` trug unten dieselben Texturstellen wie der Rand oben, die Haut lief als senkrechte Streifen herunter.
+  Jetzt nimmt jede untere Ecke die Texturstelle der Gesichtsecke, die so weit über dem Rand liegt, wie der Ring
+  darunter reicht (höchstens 45; die Halshaut am Rand gespiegelt). Leon Clásico Remasterizado v24 / Remake v20. Am
+  Host gerendert (Hals seitlich ohne Streifen); auf dem Gerät nicht getestet.
