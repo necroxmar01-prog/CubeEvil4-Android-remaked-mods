@@ -858,7 +858,7 @@ final class CoreMenu extends Dialog {
    */
   static final String COLOUR_MODE = "colourMode", COLOUR_LEVEL = "colourLevel";
   static int colourMode(SharedPreferences g) {
-    return Math.max(0, Math.min(3, g.getInt(COLOUR_MODE, 0)));  // 3 "Requiem" (the mods)
+    return Math.max(0, Math.min(4, g.getInt(COLOUR_MODE, 0)));  // 3 "Requiem", 4 "Remake" (the mods)
   }
   static int colourLevel(SharedPreferences g) {
     return g.getInt(COLOUR_LEVEL, 1) >= 2 ? 2 : 1;
@@ -1236,7 +1236,7 @@ final class CoreMenu extends Dialog {
     // its strength (light, strong); each press moves on
     MenuLayout.Buttons colourRow = buttonsRow(labelledOptions(R.string.ingame_colour));
     final int[] colourLabels = {R.string.ingame_off, R.string.ingame_colour_warm, R.string.ingame_colour_horror,
-        R.string.ingame_colour_requiem};  // "Requiem" (wish of DevJunior, 15.11.2026)
+        R.string.ingame_colour_requiem, R.string.ingame_colour_remake};  // "Requiem" (DevJunior, 15.11.2026), "Remake" (27.11.2026)
     final Button[] strength = new Button[1];
     selector(colourRow, R.string.ingame_colour, texts(colourLabels), colourMode(graphics), 0, next -> {
       graphics.edit().putInt(COLOUR_MODE, next).apply();

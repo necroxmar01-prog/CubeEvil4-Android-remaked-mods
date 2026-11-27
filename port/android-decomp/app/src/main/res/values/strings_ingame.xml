@@ -366,6 +366,7 @@
     <string name="ingame_colour_warm">Warm film</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Strength</string>
     <string name="ingame_colour_help">Warm film brings out the browns and golds; Survival horror pales the colours and hardens the contrast. Strength sets how much.</string>
     <string name="ingame_skip_normal_help">Frame skip Normal: while the graphics chip lags, a finished picture is left out so the game keeps its normal speed.</string>

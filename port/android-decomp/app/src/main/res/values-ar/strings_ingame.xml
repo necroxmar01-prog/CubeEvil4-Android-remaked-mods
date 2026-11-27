@@ -365,6 +365,7 @@
     <string name="ingame_colour_warm">فيلم دافئ</string>
     <string name="ingame_colour_horror">رعب البقاء</string>
     <string name="ingame_colour_requiem">&#x200F;Requiem</string>
+    <string name="ingame_colour_remake">&#x200F;Remake</string>
     <string name="ingame_colour_strength">الشدة</string>
     <string name="ingame_colour_help">يُبرز الفيلم الدافئ الألوان البنية والذهبية؛ ويجعل رعب البقاء الألوان باهتة والتباين أقوى. تحدد الشدة المقدار.</string>
     <string name="ingame_skip_normal_help">‏تخطي الإطارات عادي: عندما تتأخر شريحة الرسوميات يُتخطى إطار جاهز حتى تحافظ اللعبة على سرعتها العادية.</string>

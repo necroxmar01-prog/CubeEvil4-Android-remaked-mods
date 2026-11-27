@@ -2552,8 +2552,8 @@ struct VkRenderer final : GxCore {
     std::vector<std::uint8_t> pc(atmosFx.constants.bytes, 0);
     Put(pc, atmosFx, "size", size);
     Put(pc, atmosFx, "zmap", zmap);
-    Put(pc, atmosFx, "haze", fixed::kAtmosHaze);
-    Put(pc, atmosFx, "shape", fixed::kAtmosShape);
+    Put(pc, atmosFx, "haze", colourMode == 4 ? fixed::kAtmosHazeRemake : fixed::kAtmosHaze);  // 4 "Remake"
+    Put(pc, atmosFx, "shape", colourMode == 4 ? fixed::kAtmosShapeRemake : fixed::kAtmosShape);
     BindFixedNamed(atmosFx, {{"depths", efbDepth.view, nearestClamp}}, pc);
     vkCmdDraw(cb, 4, 1, 0, 0);
     if (samples <= 1)

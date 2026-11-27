@@ -348,6 +348,7 @@
     <string name="ingame_colour_warm">Warmer Film</string>
     <string name="ingame_colour_horror">Survival-Horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Stärke</string>
     <string name="ingame_colour_help">Warmer Film hebt Braun- und Goldtöne hervor; Survival-Horror macht die Farben blass und den Kontrast härter. Stärke legt fest, wie viel.</string>
     <string name="ingame_skip_normal_help">Frame-Skip Normal: Hinkt der Grafikchip hinterher, wird ein fertiges Bild weggelassen, damit das Spiel seine normale Geschwindigkeit behält.</string>

@@ -351,6 +351,7 @@
     <string name="ingame_colour_warm">Película cálida</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Intensidad</string>
     <string name="ingame_colour_help">Película cálida realza los marrones y dorados; Survival horror apaga los colores y endurece el contraste. Intensidad indica cuánto.</string>
     <string name="ingame_skip_normal_help">Salto de fotogramas Normal: si el chip gráfico se retrasa, se omite una imagen ya hecha para que el juego mantenga su velocidad normal.</string>

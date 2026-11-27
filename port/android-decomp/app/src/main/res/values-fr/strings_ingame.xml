@@ -353,6 +353,7 @@
     <string name="ingame_colour_warm">Film chaud</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Intensité</string>
     <string name="ingame_colour_help">Film chaud fait ressortir les bruns et les dorés ; Survival horror pâlit les couleurs et durcit le contraste. Intensité règle la force.</string>
     <string name="ingame_skip_normal_help">Saut d’images Normal : si la puce graphique prend du retard, une image déjà prête est sautée pour que le jeu garde sa vitesse normale.</string>

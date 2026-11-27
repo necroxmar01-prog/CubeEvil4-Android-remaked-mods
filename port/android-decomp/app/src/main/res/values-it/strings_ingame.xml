@@ -351,6 +351,7 @@
     <string name="ingame_colour_warm">Pellicola calda</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Intensità</string>
     <string name="ingame_colour_help">Pellicola calda esalta i marroni e gli ori; Survival horror sbiadisce i colori e indurisce il contrasto. Intensità regola quanto.</string>
     <string name="ingame_skip_normal_help">Salto fotogrammi Normale: se il chip grafico resta indietro, un’immagine già pronta viene saltata per mantenere la velocità normale del gioco.</string>

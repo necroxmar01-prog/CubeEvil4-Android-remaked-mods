@@ -348,6 +348,7 @@
     <string name="ingame_colour_warm">गर्म फ़िल्म</string>
     <string name="ingame_colour_horror">सर्वाइवल हॉरर</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">तीव्रता</string>
     <string name="ingame_colour_help">गर्म फ़िल्म भूरे और सुनहरे रंगों को उभारती है; सर्वाइवल हॉरर रंगों को फीका और कंट्रास्ट को तेज़ करता है। तीव्रता बताती है कितना।</string>
     <string name="ingame_skip_normal_help">फ़्रेम स्किप सामान्य: ग्राफ़िक्स चिप पिछड़ने पर एक तैयार फ़्रेम छोड़ दिया जाता है ताकि गेम सामान्य गति से चले।</string>

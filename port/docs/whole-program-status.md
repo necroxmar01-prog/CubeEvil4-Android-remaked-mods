@@ -20606,3 +20606,10 @@ Spiel.
   der Ring jetzt rundum bis mindestens 1560 (116 Randpunkte, 232 Dreiecke). Leon Clásico Remasterizado v19 / Remake
   v15. Auf dem Gerät nicht getestet. Noch offen: Stimmen außerhalb der Szenen (Leons Sätze im Spiel, Gegner: im GC-
   Spiel Klangbänke, auf dem PC `pl*.xwb`/`em*.xwb`/`room/*.xwb`) und der Vorspann (Film mit eigenem Ton).
+- **Farbmodus „Remake“ (Versuch)** (DevJunior, 27.11.2026, ein dunkler Waldweg des Spiels von 2023 als Vorlage:
+  „¿podemos tener una iluminación y ambientación así?“): Farbe → neuer Modus 4 „Remake“ (Menütext in allen 11
+  Sprachen, `check_translations.py` ok). `kColourFs` Modus 4: Schärfung wie Modus 3, ein Drittel der Sättigung weg,
+  Mitteltöne tiefer (pow 1,15 · 0,94), Schatten kalt blaugrün, Lichter leicht warm, sanfte S-Kurve, dunklere Ecken,
+  feines Korn; die Dunstschicht (`AtmospherePass`, GL und Vulkan) für Modus 4 dichter, kälter und näher
+  (`kAtmosHazeRemake` 0,11/0,14/0,18 · 0,62, ab 1800, Maß 8000, Himmel 0,78). Stärke „leicht/stark“ wie bei den
+  anderen Modi. Geprüft: Fragment-Shader mit glslangValidator ohne Fehler; auf dem Gerät nicht getestet.

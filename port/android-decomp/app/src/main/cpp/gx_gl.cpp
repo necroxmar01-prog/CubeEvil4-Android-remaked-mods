@@ -2565,8 +2565,8 @@ struct GlRenderer final : GxCore {
     glUseProgram(atmosProgram);
     glUniform2f(atmosSize, static_cast<float>(Lo(kEfbWidth)), static_cast<float>(Lo(kEfbHeight)));
     glUniform4f(atmosZ, perspA, perspB, zRange, zFar);
-    glUniform4fv(atmosHaze, 1, fixed::kAtmosHaze);
-    glUniform4fv(atmosShape, 1, fixed::kAtmosShape);
+    glUniform4fv(atmosHaze, 1, colourMode == 4 ? fixed::kAtmosHazeRemake : fixed::kAtmosHaze);  // 4 "Remake"
+    glUniform4fv(atmosShape, 1, colourMode == 4 ? fixed::kAtmosShapeRemake : fixed::kAtmosShape);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, efbDepth);
     glBindSampler(0, 0);

@@ -346,6 +346,7 @@
     <string name="ingame_colour_warm">暖色胶片</string>
     <string name="ingame_colour_horror">生存恐怖</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">强度</string>
     <string name="ingame_colour_help">暖色胶片突出棕色和金色；生存恐怖让颜色变淡、对比更强。强度决定效果的多少。</string>
     <string name="ingame_skip_normal_help">跳帧“普通”：图形芯片跟不上时，跳过一帧已完成的画面，使游戏保持正常速度。</string>

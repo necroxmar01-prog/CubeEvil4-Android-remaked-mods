@@ -1445,7 +1445,7 @@ void GxCore::SetTexturePack(std::shared_ptr<const TexPack> pack, unsigned firstL
 }
 void GxCore::SetCrt(int level) { this->crtLevel = level < 0 ? 0 : level > 2 ? 2 : level; }
 void GxCore::SetColour(int mode, int level) {
-  this->colourMode = mode < 0 || mode > 3 ? 0 : mode;  // 3 "Requiem" (the mods)
+  this->colourMode = mode < 0 || mode > 4 ? 0 : mode;  // 3 "Requiem", 4 "Remake" (the mods)
   this->colourStrength = level >= 2 ? 1.0f : 0.5f;
 }
 void GxCore::SetFlares(bool on) { this->flaresOn = on; }
@@ -2159,7 +2159,7 @@ void GxCore::Run(const Re4GxChunk &chunk) {
   m.bloomDone = false;
   // the "Requiem" atmosphere (colour mode 3): at the same place, before the bloom
   // (the scene's perspective is asked when the pass comes: AtmospherePass)
-  m.atmosAfter = m.colourMode == 3 && !m.atmosFailed && !m.skipDraws && !(chunk.flags & RE4_GX_CHUNK_STILL)
+  m.atmosAfter = (m.colourMode == 3 || m.colourMode == 4) && !m.atmosFailed && !m.skipDraws && !(chunk.flags & RE4_GX_CHUNK_STILL)
                      ? (m.bloomAfter ? m.bloomAfter : m.flaresOn ? m.flareAfter : m.FlareScan(chunk))
                      : 0;
   m.atmosDone = false;

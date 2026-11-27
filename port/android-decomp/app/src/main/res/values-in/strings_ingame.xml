@@ -345,6 +345,7 @@
     <string name="ingame_colour_warm">Film hangat</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
+    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Kekuatan</string>
     <string name="ingame_colour_help">Film hangat menonjolkan warna cokelat dan emas; Survival horror memudarkan warna dan mempertajam kontras. Kekuatan mengatur seberapa banyak.</string>
     <string name="ingame_skip_normal_help">Lewati frame Normal: saat chip grafis tertinggal, satu gambar yang sudah jadi dilewati agar game tetap berjalan dengan kecepatan normal.</string>

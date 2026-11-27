@@ -562,6 +562,10 @@ constexpr char kDofMixFs[] =
 // at 4 + 14 m; the sky (no depth) 60 % of the most (16.11.2026, "very dark": the haze was blue-black, 62 %, from 3 m)
 constexpr float kAtmosHaze[4] = {0.20f, 0.23f, 0.28f, 0.45f};
 constexpr float kAtmosShape[4] = {4000.0f, 14000.0f, 0.60f, 0.0f};
+// "Remake" (colour mode 4; experiment, wish of DevJunior, 27.11.2026, a forest path of the 2023 game as the reference):
+// a denser cold blue-grey mist from nearer on, the sky mostly lost in it
+constexpr float kAtmosHazeRemake[4] = {0.11f, 0.14f, 0.18f, 0.62f};
+constexpr float kAtmosShapeRemake[4] = {1800.0f, 8000.0f, 0.78f, 0.0f};
 constexpr char kAtmosFs[] =
     "uniform vec4 haze;\nuniform vec4 shape;\nout vec4 o;\n"
     "void main() {\n"
@@ -595,6 +599,30 @@ constexpr char kColourFs[] =
     "    g = vec3(l) + (c - vec3(l)) * (1.0 + 0.30 * warm - 0.15 * (1.0 - warm));\n"
     "    g *= vec3(1.0) + vec3(0.06, 0.0, -0.14) * clamp(l * 1.6, 0.0, 1.0);\n"
     "    g = clamp(scurve(clamp(g, 0.0, 1.0), 0.25), 0.0, 1.0);\n"
+    "  } else if (mode == 4) {\n"
+    // "Remake" (experiment, wish of DevJunior, 27.11.2026, a dark forest path of the 2023 game as the reference: "can
+    // we have lighting and ambience like that?"): the sharpening of mode 3, then a third of the colour gone, the middle
+    // tones lower and the shadows deeper (a toe), the shadows cold teal-blue and the lights a little warm (a split
+    // toning), a gentle S-curve, dark corners and a fine grain; the denser mist comes from the atmosphere pass
+    "    vec2 px = 1.0 / vec2(textureSize(src, 0));\n"
+    "    vec3 n = texture(src, vUv + vec2(0.0, px.y)).rgb, s = texture(src, vUv - vec2(0.0, px.y)).rgb;\n"
+    "    vec3 e = texture(src, vUv + vec2(px.x, 0.0)).rgb, w4 = texture(src, vUv - vec2(px.x, 0.0)).rgb;\n"
+    "    vec3 mn = min(c, min(min(n, s), min(e, w4))), mx = max(c, max(max(n, s), max(e, w4)));\n"
+    "    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(0.001)), 0.0, 1.0));\n"
+    "    vec3 wt = -amp * 0.14;\n"
+    "    c = clamp((c + wt * (n + s + e + w4)) / (1.0 + 4.0 * wt), 0.0, 1.0);\n"
+    "    l = lum(c);\n"
+    "    g = vec3(l) + (c - vec3(l)) * 0.68;\n"
+    "    g = pow(g, vec3(1.15)) * 0.94;\n"
+    "    float lg = lum(g);\n"
+    "    g += vec3(-0.022, 0.006, 0.034) * (1.0 - smoothstep(0.0, 0.45, lg)) * smoothstep(0.0, 0.08, lg)\n"
+    "       + vec3(0.030, 0.012, -0.022) * smoothstep(0.45, 1.0, lg);\n"
+    "    g = scurve(clamp(g, 0.0, 1.0), 0.28);\n"
+    "    vec2 d = (vUv - 0.5) * vec2(1.0, 0.8);\n"
+    "    g *= 1.0 - 0.42 * smoothstep(0.30, 0.85, length(d));\n"
+    "    float h = fract(sin(dot(floor(gl_FragCoord.xy) + seed, vec2(12.9898, 78.233))) * 43758.5453);\n"
+    "    float lm = lum(g);\n"
+    "    g = clamp(g + (h - 0.5) * 0.05 * lm * (1.0 - lm) * 4.0, 0.0, 1.0);\n"
     "  } else if (mode == 3) {\n"
     // (third round, 15.11.2026, "like Requiem or the remake, without losing FPS": the GameCube's soft textures sharpened
     // as AMD's contrast-adaptive sharpening does, four more texels: strong where the detail is faint, little at hard
