@@ -1195,6 +1195,21 @@ constexpr char kShadowMaskFs[] =
     // never the figures' maps (its own: stripes)
     "  if (d >= 0.9999995) return;\n"
     "  bool onFig = mk.r > 0.5;\n"
+    // a pixel next to a figure at its depth counts as the figure's (27.11.2026: the hair cards cast and mark nothing
+    // since the cost cut, and the head's own map shaded them anew each picture: the hair flickered); about 5 cm
+    // around the figure on screen
+    "  if (!onFig) {\n"
+    "    float rr = clamp(pr0.x * 0.5 * vp1.z * 50.0 / max(-e.z, 1.0), 1.0, 48.0);\n"
+    "    for (int k = 0; k < 4 && !onFig; k++) {\n"
+    "      vec2 off = k == 0 ? vec2(rr, 0.0) : k == 1 ? vec2(-rr, 0.0) : k == 2 ? vec2(0.0, rr) : vec2(0.0, -rr);\n"
+    "      vec2 q = floor(clamp(fc + off, region.xy, region.xy + region.zw - 1.0)) + 0.5;\n"
+    "      if (texelFetch(fig, ivec2(q), 0).r > 0.5) {\n"
+    "        float dn;\n"
+    "        vec3 en = ViewAt(q, dn);\n"
+    "        onFig = abs(en.z - e.z) < 150.0;\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
     "  float fade = 1.0 - smoothstep(look.y, look.z, -e.z);\n"
     "  if (fade <= 0.0) return;\n"
     "  vec3 ex1 = ViewAt(fc + vec2(1.0, 0.0), d1), ex0 = ViewAt(fc - vec2(1.0, 0.0), d2);\n"

@@ -1060,7 +1060,7 @@ SHOTGUN_RELOAD = False
 # (Mods, 26.11.2026, DevJunior: "las animaciones de recarga del remake siguen") the handguns' remake reload (0xB0.. /
 # 0xB4..) off too: every reload is the game's own again
 PISTOL_RELOAD = False
-SHOTGUN_CARRY = False
+SHOTGUN_CARRY = True  # (27.11.2026, DevJunior: "regresar las animaciones de la escopeta pero solo la de correr y la de estancia"; reload and aim stay the game's)
 
 
 def frozen(base, arm, frame):

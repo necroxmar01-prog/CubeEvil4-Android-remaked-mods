@@ -20777,7 +20777,18 @@ Spiel.
   je Chunk für die Schatten): Zeichenaufrufe einer Figur mit Alpha-Test werfen keinen Schatten mehr (Haarkarten,
   Wimpern, Fell; bei der Leon-Skin rund 53 000 beidseitige Dreiecke, je Bild umgerechnet, hochgeladen und dreimal
   gezeichnet); der Kopf darunter wirft weiter. Solche Pixel sind dann nicht als Figur markiert (Haar nimmt Figuren- und
-  Objektschatten wie die Umgebung, keinen Kulissenschatten). Am Host übersetzt; auf dem Gerät nicht gemessen.
+  Objektschatten wie die Umgebung, keinen Kulissenschatten). Am Host übersetzt. Gerätetest (DevJunior, 27.11.2026,
+  Video 119514): besserer Lauf, aber „el sombreado parpadea mucho“: das Haar wurde jedes Bild neu vom eigenen Kopf
+  beschattet (heller/dunkler im Wechsel).
+- **Haar flackert nicht mehr im Schatten** (DevJunior, 27.11.2026): `kShadowMaskFs` zählt ein Pixel neben einer Figur
+  (vier Nachbarn im Abstand von etwa 5 cm auf dem Bild, `pr0.x`/`vp1.z` und die Tiefe) bei gleicher Tiefe (±15 cm)
+  als Figurenpixel: keine Figurenkarten, dafür Objekt- und Kulissenschatten. Shader mit glslangValidator geprüft; auf
+  dem Gerät nicht getestet.
+- **Schrotflinte: Tragen und Stand wieder aus dem Remake** (DevJunior, 27.11.2026: „regresar las animaciones de la
+  escopeta pero solo la de correr y la de estancia … las que no funcionan son las de recargar y de apuntar“):
+  `re9_finisher_pack.py` `SHOTGUN_CARRY = True` (move.dat 0x98..0x9B: Stand, Gehen, Laufen, Rückschritt mit der
+  Flinte), Nachladen und Zielen bleiben die des Spiels. Paket RE9_Finishers v44 (move.dat 454 880 Bytes, 27 Einträge);
+  auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
