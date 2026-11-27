@@ -1053,6 +1053,11 @@ PISTOL_CLASSIC = False
 # runtime/locomotion.cpp's pistolStance() off, the handgun carried as the game carries it, the legs the remake's
 PISTOL_CARRY = False
 PISTOL_POSES = False  # move.dat 0xB8..0xC6: the remake's handgun aim and fire (see moves())
+# (Mods, 26.11.2026, DevJunior, device video 118329: "la animación de recarga de la escopeta no queda bien y tampoco la de
+# la escopeta") the remake's shotgun reload (0x90..0x92) and carry (0x98..) off like the handgun's: the game's own
+# (runtime/locomotion.cpp re4_move_reload returns the game's motion, the carry layer is skipped without an entry)
+SHOTGUN_RELOAD = False
+SHOTGUN_CARRY = False
 
 
 def frozen(base, arm, frame):
@@ -1381,7 +1386,7 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
         table.append(struct.pack(">BBHHHHH", slot, flags, len(entries) - 1, len(fit.frames) - 1, feet[0], feet[1], 0))
         # the strikes of a loop: all of them (a loop of several strides), the last frame being the first again
         steps.append([] if not flags & 1 else [(i, f) for i, f in contacts(m, fit.frames) if i < len(fit.frames) - 1])
-        if weapons and slot in CARRY_ARMS:
+        if SHOTGUN_CARRY and weapons and slot in CARRY_ARMS:
             _v, arms = R.read_motlist(motlist_in(weapons, WEP_CARRY_SHOTGUN))
             arm = next(x for x in arms if x.name.endswith(CARRY_ARMS[slot]))
             cf = Fit(carried(m, arm, first), model, "leon", 2.0, tol, m.frames, True, frames=fit.frames, loop=True)
@@ -1455,7 +1460,7 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
             steps.append([])
             print("pick-up %-24s 0x%x: %d game frames, %d bytes; check %.1f/%.1f deg" % (
                 name, code, len(fit.frames), len(data), c[0], c[1]))
-    if weapons and wep07:
+    if SHOTGUN_RELOAD and weapons and wep07:
         warc = U.Archive(Path(wep07).read_bytes(), ">")
         # the aims stay the game's (device report 23.11.2026, v24: the head turned away on firing: the game's fire
         # motions follow its own aim pose); shotgun_aims is kept for a later try

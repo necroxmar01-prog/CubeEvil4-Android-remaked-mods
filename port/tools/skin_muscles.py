@@ -84,13 +84,15 @@ def arm_shade(u, th, strength):
             dt = np.angle(np.exp(1j * (global_th - tc)))
             return k * np.exp(-(((u_ - uc) / ru) ** 2 + (dt / rt) ** 2) ** 1.5)
         return (b(345.0, 1.45, 70.0, 0.75, 1.2) + b(330.0, -1.45, 75.0, 0.8, 0.9) + b(255.0, 0.2, 45.0, 1.1, 0.7) +
-                b(470.0, 0.55, 75.0, 0.55, 0.9) + b(480.0, 2.4, 70.0, 0.7, 0.6))
+                b(470.0, 0.55, 75.0, 0.55, 0.7))
     e = 0.04
     h = hf(u, th)
     dth = (hf(u, th + e) - hf(u, th - e)) / (2 * e)
     du = (hf(u + 3.0, th) - hf(u - 3.0, th)) / 6.0
-    s = 1.0 + strength * (0.55 * dth * np.sign(th) + 0.18 * (h - 0.35) - 6.0 * np.abs(du) * (h < 0.25))
-    return np.clip(s, 0.5, 1.6)
+    # (DevJunior, 26.11.2026, device picture: "borra esa mancha negra de los antebrazos") no groove term, the shadows
+    # held lighter: the forearm's underside went near black
+    s = 1.0 + strength * (0.45 * dth * np.sign(th) + 0.15 * (h - 0.35))
+    return np.clip(s, 0.8, 1.45)
 
 
 def paint_arms(entries, tpl, mat, scale, mx, strength, imgs):

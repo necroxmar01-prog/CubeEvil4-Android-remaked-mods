@@ -667,7 +667,7 @@ def textures(albedo, alpha, channel, colour, ref, alpha_size=(1024, 512), colour
 
 
 def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, brow=1770.0, hairline=None,
-          rules=True):
+          rules=True, nape=None):
     """The head's scalp in the hair's colour (darker by `depth`): a card hair has gaps, and a head made for a hair
     of its own (the Remake mod's) is painted near black there. The head's colour textures' texels that lie above
     y 1700 on the model (at the back, z < -20, above 1630: the nape), not on the brow (in front, z > 60, below
@@ -677,7 +677,10 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
     (DevJunior, 11.11.2026, device test: "the bald head still shows": the brow and temples under the fringe).
     With `hairline` (a height): everything above a hairline at that height over the brow's middle, 0.3 lower per unit
     to the side (the temples), faded in over 8 units: no skin above it shows between the cards.
-    rules=False: only `hair` and `hairline`, not the fixed regions above (they fit the disc's head and the Remake
+    With `nape` (a height): the back of the neck behind the ears painted from there up as a short fade haircut,
+    faded in over 45 units (DevJunior, 26.11.2026, device picture while aiming: the bright skin between the collar
+    and the hair at the nape reads as a hole when the head bends forward).
+    rules=False: only `hair`, `hairline` and `nape`, not the fixed regions above (they fit the disc's head and the Remake
     mod's; a face with its own hairline painted, as an RE Engine face's albedo, keeps it, skin_head_fbx.py).
     Returns (texture, texels changed) pairs."""
     out = []
@@ -715,6 +718,11 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
                 top = np.where(np.isfinite(y), np.clip((y - line) / 8.0, 0, 1), 0.0)
                 top = np.where((np.abs(x) > 62) & (y < 1745) & (z > -35), 0.0, top)  # not the ears
             wgt = np.maximum(wgt, top)
+        if nape is not None:
+            with np.errstate(invalid="ignore"):
+                back = np.clip((-15.0 - z) / 20.0, 0, 1)  # behind the ears, faded in towards the back
+                fade = np.where(np.isfinite(y), np.clip((y - nape) / 45.0, 0, 1) * back, 0.0)
+            wgt = np.maximum(wgt, 0.9 * fade)
         if (wgt > 0.5).sum() < 50:
             continue
         # the texels outside every triangle next to painted ones too: filtering and the mipmaps blend them in at

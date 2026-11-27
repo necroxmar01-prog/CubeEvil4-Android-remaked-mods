@@ -20496,3 +20496,13 @@ Spiel.
   Trizeps, Deltamuskel-Rand, Unterarm-Wulst und -Unterseite als Höhenfeld um die Armachse (T-Pose, Achse je 10 mm aus
   dem Querschnitt), auf die Hauttextur der Arme (`pl08` Textur 0, 128×256 → 512×1024). Leon Clásico Remasterizado
   v12 / Remake v7 (`pl08` 7,3 MB, Daten 6,2 MB). Am Host gerendert, auf dem Gerät nicht getestet.
+- **Unterarm, Nacken, Mimik, Schrotflinte** (DevJunior, 26.11.2026, Videos 118321/118328/118329, Bild 118320):
+  `skin_muscles.py` `arm_shade` ohne die Rinne (`-6·|du|`), Schatten flacher (0,8..1,45 statt 0,5..1,6), Unterseite
+  des Unterarms nicht mehr abgedunkelt (der dunkle Fleck). Nacken: `skin_hair_fbx.scalp(nape=Y)` /
+  `skin_head_fbx.py --nape 1610`: die Haut hinter den Ohren ab dieser Höhe als kurzer Übergang in Haarfarbe (über 45
+  Einheiten, höchstens 90 %); beim Zielen beugt sich der Kopf vor und die helle Haut zwischen Kragen und Haar wirkte
+  wie ein Loch. Mimik beim Sprechen: `skin_shapes.py --mouth-gain 1.6`. Schrotflinte: `re9_finisher_pack.py`
+  `SHOTGUN_RELOAD = False`, `SHOTGUN_CARRY = False` (move.dat ohne 0x90..0x92 und 0x98..; `locomotion.cpp` fällt auf
+  die Bewegungen des Spiels zurück, wie bei der Pistole). Leon Clásico Remasterizado v13 / Remake v8,
+  RE9 Finishers v42 (move.dat 450 880 Bytes, 29 Einträge). Am Host gerendert (Unterarm, Nacken in Ruhe), auf dem
+  Gerät nicht getestet; der Nacken beim Zielen und die Mimik nur auf dem Gerät prüfbar.

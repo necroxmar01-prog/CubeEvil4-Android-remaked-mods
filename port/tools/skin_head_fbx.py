@@ -401,6 +401,7 @@ def main(argv=None):
                     "evened out (despeckle)")
     ap.add_argument("--crown-under", type=float, help="the crown kept this far under the hair's inside (under_hair)")
     ap.add_argument("--scalp-depth", type=float, default=0.8)
+    ap.add_argument("--nape", type=float, help="the nape behind the ears painted as a short fade from this height")
     ap.add_argument("--scalp-reach", type=float, default=0.0)
     a = ap.parse_args(argv)
 
@@ -529,7 +530,7 @@ def main(argv=None):
     colour = tuple(int(x) for x in a.hair_colour.split(","))
     for mc, n in H.scalp(imgs, entries[HEAD], entries[FACE], colour, depth=a.scalp_depth, hair=hair,
                          reach=a.scalp_reach, hairline=a.hairline,
-                         rules=a.scalp_rules):
+                         rules=a.scalp_rules, nape=a.nape):
         print("scalp: texture %d, %d texels in the hair's colour" % (mc, n))
     if a.iris:
         v = [float(x) for x in a.iris.split(",")]
