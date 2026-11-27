@@ -20789,6 +20789,15 @@ Spiel.
   `re9_finisher_pack.py` `SHOTGUN_CARRY = True` (move.dat 0x98..0x9B: Stand, Gehen, Laufen, Rückschritt mit der
   Flinte), Nachladen und Zielen bleiben die des Spiels. Paket RE9_Finishers v44 (move.dat 454 880 Bytes, 27 Einträge);
   auf dem Gerät nicht getestet.
+- **In Arbeit: Augen und Mund des Event-Kopfs in den neuen Kopf** (DevJunior, 27.11.2026: „modelarás la cabeza nueva …
+  y le cambiarás los ojos … y la boca por la del modelo clásico“): Entwurf `skin_face_transplant.py` (noch nicht
+  brauchbar). Er schneidet Augen- und Mundellipsen aus dem Gesicht des neuen Kopfs, setzt die Dreiecke des Event-Kopfs
+  ev0001 (aus der PC-Eventdatei, nach GameCube umgewandelt) dort ein, je Gebiet als Ganzes verschoben (Augen nach den
+  Augäpfeln, Mund nach der Lippenfuge), Rand auf die Haut gezogen, und gibt den eingesetzten Punkten die Formen des
+  Events eins zu eins (der Rest über `carry_shapes`). Stand am Host: die UV des umgewandelten Event-Kopfs sind
+  unbrauchbar (eigene Frontprojektion nötig), Teil 0 des Event-Kopfs sind nicht die Augäpfel (die liegen in Teil 2),
+  der Rand ist zackig. Nächster Schritt: den Event-Kopf in seine Teilnetze zerlegen (Augäpfel, Lider, Wimpern, Zähne,
+  Zunge) und sauber einsetzen.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
