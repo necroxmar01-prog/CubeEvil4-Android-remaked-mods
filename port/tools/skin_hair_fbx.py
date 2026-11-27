@@ -819,6 +819,8 @@ def main(argv=None):
     ap.add_argument("--ramp", help="SHADOW:MIDDLE:HIGHLIGHT (R,G,B each): the colour texture through this ramp "
                     "with --streaks, as skin_head_fbx.py --hair-ramp, instead of --colour")
     ap.add_argument("--streaks", type=float, default=0.3, help="lighter streaks with --ramp (default 0.3)")
+    ap.add_argument("--strand-detail", type=float, default=0.0,
+                    help="with --ramp: single strands, clumps and an ash/warm tint in the colour texture (e.g. 1.0)")
     ap.add_argument("--thicken", type=float, default=0.5, help="spread this share of the strand mask one texel")
     ap.add_argument("--straighten", type=float, default=0.0, metavar="SHARE",
                     help="average the strand mask along the cards over this share of their height (straight "
@@ -947,7 +949,7 @@ def main(argv=None):
     if a.ramp:
         import skin_head_fbx as HF  # here: it imports this module
         stops = [tuple(float(c) for c in x.split(",")) for x in a.ramp.split(":")]
-        cols = HF.hair_levels(a.albedo, a.alpha, (cw, ch), stops, a.streaks)
+        cols = HF.hair_levels(a.albedo, a.alpha, (cw, ch), stops, a.streaks, detail=a.strand_detail)
     imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
     imgs[ma] = (encode_levels(masks, 0x0, imgs[ma][0], enc_i4) if a.alpha_format == "I4" else
                 encode_levels(masks, 0x1, imgs[ma][0], enc_i8))

@@ -20716,3 +20716,10 @@ Spiel.
   Feste Kulisse (z. B. das Auto in r100) wirft weiterhin nicht, ihr Schatten ist in den Raum gemalt; dafür bräuchte es
   eine eigene Karte „Kulisse nur auf Figuren“ (offen). Shader mit glslangValidator geprüft, `gx_gl.cpp`/`gx_core.cpp`
   am Host übersetzt, Übersetzungsprüfung ok; auf dem Gerät nicht getestet.
+- **Haar mit Strähnen-Textur, Farbe wie im Klassiker** (DevJunior, 27.11.2026, Bild des Klassikers: „una textura
+  compleja en su cabello … basarte del color original de su cabello en el clásico“): `skin_hair_fbx.py
+  --strand-detail K` (über `skin_head_fbx.hair_levels`) legt in die Farbtextur einzelne hellere und dunklere Strähnen
+  (schmale Spalten), weiche Büschel entlang der Strähnen und einen Ton der Büschel zwischen Asch und Warm. Leon-Pakete
+  (Klassik v26, Remake v22): Haarfarbe aschblond wie im Klassiker (Rampe 32,27,20 → 100,84,63 → 170,148,112, vorher
+  dunkelbraun), Farbtextur 1024×512, Strähnen 0.15, Detail 0.8; Datenteile unter 8 MB. Am Host gerendert (Studio,
+  vier Blickwinkel); auf dem Gerät nicht getestet.

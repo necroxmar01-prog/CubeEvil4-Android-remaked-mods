@@ -337,7 +337,7 @@ def tint(img, colour, amount):
     return Image.fromarray(np.clip(x, 0, 255).astype(np.uint8), "RGBA")
 
 
-def hair_levels(albedo, alpha, size, stops, streaks, contrast=0.5, seed=3):
+def hair_levels(albedo, alpha, size, stops, streaks, contrast=0.5, seed=3, detail=0.0):
     """The hair's colour texture as a mipmap chain: the strands' shading (the RE Engine hair's albedo brightness on
     its strands, as skin_hair_fbx.textures) through a colour ramp shadow:middle:highlight (skin_face.ramp), with
     lighter streaks along the strands (random columns, smoothed: `streaks` of the highlight)."""
@@ -349,7 +349,19 @@ def hair_levels(albedo, alpha, size, stops, streaks, contrast=0.5, seed=3):
     cols = gaussian_filter1d(rng.standard_normal(size[0]), 2.0)
     cols = np.clip((cols - 0.6) / 0.8, 0, 1)  # about a quarter of the columns
     t = np.clip(t + streaks * cols[None, :], 0, 1)
+    if detail > 0:
+        # a busier strand texture (DevJunior, 27.11.2026: "una textura compleja en su cabello"): single strands a
+        # little lighter or darker (thin columns), soft clumps along the strands (noise stretched down the
+        # columns), and the clumps' tint between ash and warm
+        from scipy.ndimage import gaussian_filter
+        unit = lambda v: (v - v.mean()) / max(v.std(), 1e-6)
+        fine = unit(gaussian_filter1d(rng.standard_normal(size[0]), 0.7))
+        clump = unit(gaussian_filter(rng.standard_normal(t.shape), (t.shape[0] / 14.0, 1.2)))
+        t = np.clip(t + detail * (0.16 * fine[None, :] + 0.10 * clump), 0, 1)
+        tint = unit(gaussian_filter1d(rng.standard_normal(size[0]), 5.0))[None, :]
     rgb = F.ramp(t, stops)
+    if detail > 0:
+        rgb = rgb * (1.0 + detail * 0.05 * np.stack([tint, 0 * tint, -tint], -1))
     col = Image.fromarray(np.dstack([np.clip(rgb, 0, 255).astype(np.uint8),
                                      np.full(t.shape, 255, np.uint8)]), "RGBA")
     return [col] + [col.resize(sz, Image.BOX) for sz in H.mip_sizes(*col.size)[1:]]
