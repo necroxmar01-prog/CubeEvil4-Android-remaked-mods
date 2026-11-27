@@ -71,6 +71,62 @@ def shade(x, y, chest, navel, strength):
     return np.clip(s, 0.45, 1.8)
 
 
+def arm_shade(u, th, strength):
+    """Multiplier on the arms (T-pose along x): u the distance from the body's middle (mm), th the angle about the
+    arm (0 up, +90 the front, -90 the back, radians). Biceps and triceps on the upper arm, the deltoid's edge, the
+    forearm's ridge (brachioradialis) and its underside; light from above."""
+    def bump(uc, tc, ru, rt, k=1.0):
+        dt = np.angle(np.exp(1j * (th - tc)))
+        return k * np.exp(-(((u - uc) / ru) ** 2 + (dt / rt) ** 2) ** 1.5)
+    def hf(u_, th_):
+        global_th = th_
+        def b(uc, tc, ru, rt, k=1.0):
+            dt = np.angle(np.exp(1j * (global_th - tc)))
+            return k * np.exp(-(((u_ - uc) / ru) ** 2 + (dt / rt) ** 2) ** 1.5)
+        return (b(345.0, 1.45, 70.0, 0.75, 1.2) + b(330.0, -1.45, 75.0, 0.8, 0.9) + b(255.0, 0.2, 45.0, 1.1, 0.7) +
+                b(470.0, 0.55, 75.0, 0.55, 0.9) + b(480.0, 2.4, 70.0, 0.7, 0.6))
+    e = 0.04
+    h = hf(u, th)
+    dth = (hf(u, th + e) - hf(u, th - e)) / (2 * e)
+    du = (hf(u + 3.0, th) - hf(u - 3.0, th)) / 6.0
+    s = 1.0 + strength * (0.55 * dth * np.sign(th) + 0.18 * (h - 0.35) - 6.0 * np.abs(du) * (h < 0.25))
+    return np.clip(s, 0.5, 1.6)
+
+
+def paint_arms(entries, tpl, mat, scale, mx, strength, imgs):
+    hdr, data = imgs[mat]
+    h0, w0, fmt = struct.unpack_from(">HHI", hdr)
+    s = max(1, min(scale, mx // max(w0, h0)))
+    w, h = w0 * s, h0 * s
+    tex = U.decode_gx(h0, w0, fmt, data).convert("RGBA").resize((w, h), Image.LANCZOS)
+    pos = F.uv_positions([entries[0]], mat, w, h)
+    ok = np.isfinite(pos[..., 0])
+    x, y, z = (np.nan_to_num(pos[..., i]) for i in range(3))
+    arm = ok & (np.abs(x) > 200.0)
+    # the arm's axis per 10 mm along it: the middle of its section
+    u = np.abs(x)
+    bins = np.round(u / 10.0).astype(int)
+    yc, zc = np.zeros_like(x), np.zeros_like(x)
+    for side in (-1, 1):
+        sel = arm & (np.sign(x) == side)
+        for b in np.unique(bins[sel]):
+            m = sel & (bins == b)
+            yc[m] = (y[m].max() + y[m].min()) / 2.0
+            zc[m] = (z[m].max() + z[m].min()) / 2.0
+    th = np.arctan2(z - zc, y - yc)
+    mul = np.ones((h, w))
+    mul[arm] = arm_shade(u[arm], th[arm], strength)
+    from scipy.ndimage import gaussian_filter
+    mul = 1.0 + gaussian_filter(mul - 1.0, 0.6 * s)
+    px = np.asarray(tex, dtype=np.float64)
+    px[..., :3] = np.clip(px[..., :3] * mul[..., None], 0, 255)
+    img = Image.fromarray(px.astype(np.uint8), "RGBA")
+    imgs[mat] = H.encode_levels([img] + [img.resize(sz, Image.BOX) for sz in H.mip_sizes(w, h)[1:]], 0xE, hdr,
+                                H.enc_cmpr)
+    print("arms: %d texels of texture %d (%dx%d -> %dx%d)" % (int(arm.sum()), mat, w0, h0, w, h))
+    return img
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("skin")
@@ -82,6 +138,8 @@ def main(argv=None):
     ap.add_argument("--max", type=int, default=1024)
     ap.add_argument("--chest-y", type=float, default=1440.0)
     ap.add_argument("--navel-y", type=float, default=1190.0)
+    ap.add_argument("--arms", type=int, help="also the arms' skin texture (Leon's disc pl08: 0)")
+    ap.add_argument("--arm-strength", type=float, default=1.0)
     ap.add_argument("--preview", help="also write the painted texture here (PNG)")
     a = ap.parse_args(argv)
     arc = U.Archive(open(a.skin, "rb").read(), ">")
@@ -120,6 +178,10 @@ def main(argv=None):
         img.save(a.preview)
     imgs[a.mat] = H.encode_levels([img] + [img.resize(sz, Image.BOX) for sz in H.mip_sizes(w, h)[1:]], 0xE, hdr,
                                   H.enc_cmpr)
+    if a.arms is not None:
+        arm_img = paint_arms(entries, a.tpl, a.arms, a.scale, a.max, a.arm_strength, imgs)
+        if a.preview:
+            arm_img.save(a.preview.replace(".png", "_arms.png"))
     entries[a.tpl] = G.build_tpl(imgs)
     body = U.build_body(entries, arc.types)
     out = U.build_archive(arc, body)

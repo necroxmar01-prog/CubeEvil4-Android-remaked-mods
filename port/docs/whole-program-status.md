@@ -20492,3 +20492,7 @@ Spiel.
   Mittellinie und seitliche Bauchmuskeln als Höhenfeld im Modellraum (eigene Form, nichts aus dem Bild übernommen), von
   oben vorn beleuchtet und auf die Vorderseite der Hemdtextur gemalt (Textur 5 von `pl08`, 256×128 → 1024×512 mit
   Mipmaps). Leon Clásico Remasterizado v11 / Remake v6 (`pl08` 7,0 MB). Am Host gerendert, auf dem Gerät nicht getestet.
+- **Armmuskeln** (DevJunior, 26.11.2026: „también sus músculos en los brazos“): `skin_muscles.py --arms MAT`: Bizeps,
+  Trizeps, Deltamuskel-Rand, Unterarm-Wulst und -Unterseite als Höhenfeld um die Armachse (T-Pose, Achse je 10 mm aus
+  dem Querschnitt), auf die Hauttextur der Arme (`pl08` Textur 0, 128×256 → 512×1024). Leon Clásico Remasterizado
+  v12 / Remake v7 (`pl08` 7,3 MB, Daten 6,2 MB). Am Host gerendert, auf dem Gerät nicht getestet.
