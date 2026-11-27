@@ -53,8 +53,6 @@
     <string name="ingame_side_texture_options">纹理选项</string>
     <string name="ingame_perf_section">性能</string>
     <string name="ingame_minimap">小地图</string>
-    <string name="ingame_light_fx">重制版光照</string>
-    <string name="ingame_light_fx_help">重制版光照：物体相接处的柔和阴影、来自开阔天空的光束，以及角色周围的冷色轮廓光。轻度比强烈更省性能。</string>
     <string name="ingame_flares">镜头光晕</string>
     <string name="ingame_flares_lens">镜头光晕</string>
     <string name="ingame_flares_both">光环 + 镜头光晕</string>
@@ -348,7 +346,6 @@
     <string name="ingame_colour_warm">暖色胶片</string>
     <string name="ingame_colour_horror">生存恐怖</string>
     <string name="ingame_colour_requiem">Requiem</string>
-    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">强度</string>
     <string name="ingame_colour_help">暖色胶片突出棕色和金色；生存恐怖让颜色变淡、对比更强。强度决定效果的多少。</string>
     <string name="ingame_skip_normal_help">跳帧“普通”：图形芯片跟不上时，跳过一帧已完成的画面，使游戏保持正常速度。</string>

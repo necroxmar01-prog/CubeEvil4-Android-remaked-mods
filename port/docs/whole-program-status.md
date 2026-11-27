@@ -20704,3 +20704,15 @@ Spiel.
   Gebiet und Requiem (`RemakeHaze`, mindestens Requiems Menge). Der eigene Modus-4-Block (Lebendigkeit, Weißabgleich,
   eigene Kurve) entfällt; Requiem (Modus 3) unverändert. Shader mit glslangValidator geprüft, `gx_gl.cpp` am Host
   übersetzt; auf dem Gerät nicht getestet.
+- **Requiem mit Ton je Gebiet, „Remake“ und „Remake-Beleuchtung“ entfernt, Schatten auf Figuren** (DevJunior,
+  27.11.2026, Bilder vom Gerät und Remake-Vorlagen Dorf/Wald/Burg: „quita el filtro de color remake … el de requiem
+  queda bien pero falta agregarle las diferentes tonalidades de los lugares … da muchos tirones“): Requiem (Modus 3)
+  legt jetzt das Gebiet des Raums auf (Belichtung, Tönung, Gewitter) und nimmt den Dunst des Gebiets ganz
+  (`RemakeHaze`). Gebiete neu: Dorf bei Tag warm beige-grau (Stufe 1), Waldweg dunkel blaugrün (r100, r104), Burg und
+  Innenräume golden-bernsteinfarben (Stufe 2, Kirche r117), See, Nacht mit Gewitter, Insel wie bisher. Modus 4 gibt es
+  nicht mehr (gespeichert 4 → 3, App und Kern); die Menüzeile „Remake-Beleuchtung“ ist weg, die Stufe gilt immer als 0
+  (Texte `ingame_colour_remake`, `ingame_light_fx*` in allen Sprachen entfernt). Echtzeitschatten: Figuren empfangen
+  jetzt die Schatten der Objekte (Karte von Licht 0, Objekte), nie die Karten der Figuren (Eigenschatten-Streifen).
+  Feste Kulisse (z. B. das Auto in r100) wirft weiterhin nicht, ihr Schatten ist in den Raum gemalt; dafür bräuchte es
+  eine eigene Karte „Kulisse nur auf Figuren“ (offen). Shader mit glslangValidator geprüft, `gx_gl.cpp`/`gx_core.cpp`
+  am Host übersetzt, Übersetzungsprüfung ok; auf dem Gerät nicht getestet.

@@ -331,7 +331,7 @@ public final class CoreBridge {
   public static native void setLightFx(int level);
   static final String LIGHT_FX = "lightFx";
   static int lightFx(android.content.SharedPreferences g) {
-    return Math.max(0, Math.min(2, g.getInt(LIGHT_FX, 0)));
+    return 0;  // "Remake lighting" off for good (27.11.2026: stutters); a stored level is ignored
   }
   /** The Potato mode's "View distance" (0.99.6, patch 0223): percent of the room's distance fog and far plane. */
   public static native void setViewDistance(int percent);

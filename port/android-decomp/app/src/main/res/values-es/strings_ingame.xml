@@ -52,8 +52,6 @@
     <string name="ingame_side_texture_options">Opciones de textura</string>
     <string name="ingame_perf_section">Rendimiento</string>
     <string name="ingame_minimap">Minimapa</string>
-    <string name="ingame_light_fx">Iluminación Remake</string>
-    <string name="ingame_light_fx_help">Iluminación Remake: sombras suaves donde las cosas se tocan, rayos de luz desde el cielo abierto y un borde de luz fría alrededor de los personajes. Leve consume menos que fuerte.</string>
     <string name="ingame_flares">Destellos de lente</string>
     <string name="ingame_flares_lens">Destellos de lente</string>
     <string name="ingame_flares_both">Halos + destellos</string>
@@ -353,7 +351,6 @@
     <string name="ingame_colour_warm">Película cálida</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
-    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Intensidad</string>
     <string name="ingame_colour_help">Película cálida realza los marrones y dorados; Survival horror apaga los colores y endurece el contraste. Intensidad indica cuánto.</string>
     <string name="ingame_skip_normal_help">Salto de fotogramas Normal: si el chip gráfico se retrasa, se omite una imagen ya hecha para que el juego mantenga su velocidad normal.</string>

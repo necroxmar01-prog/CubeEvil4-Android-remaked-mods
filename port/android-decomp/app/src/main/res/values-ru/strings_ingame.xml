@@ -52,8 +52,6 @@
     <string name="ingame_side_texture_options">Параметры текстур</string>
     <string name="ingame_perf_section">Производительность</string>
     <string name="ingame_minimap">Мини-карта</string>
-    <string name="ingame_light_fx">Освещение Remake</string>
-    <string name="ingame_light_fx_help">Освещение Remake: мягкие тени там, где предметы соприкасаются, лучи света с открытого неба и холодный световой контур вокруг персонажей. Слабое требует меньше ресурсов, чем сильное.</string>
     <string name="ingame_flares">Блики объектива</string>
     <string name="ingame_flares_lens">Блики объектива</string>
     <string name="ingame_flares_both">Ореолы + блики</string>
@@ -356,7 +354,6 @@
     <string name="ingame_colour_warm">Тёплая плёнка</string>
     <string name="ingame_colour_horror">Хоррор на выживание</string>
     <string name="ingame_colour_requiem">Requiem</string>
-    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Сила</string>
     <string name="ingame_colour_help">Тёплая плёнка подчёркивает коричневые и золотые тона; хоррор на выживание делает цвета бледнее, а контраст жёстче. Сила задаёт степень.</string>
     <string name="ingame_skip_normal_help">Пропуск кадров «Обычный»: если графический чип не успевает, готовый кадр пропускается, чтобы игра шла с обычной скоростью.</string>

@@ -52,8 +52,6 @@
     <string name="ingame_side_texture_options">Opzioni texture</string>
     <string name="ingame_perf_section">Prestazioni</string>
     <string name="ingame_minimap">Minimappa</string>
-    <string name="ingame_light_fx">Illuminazione Remake</string>
-    <string name="ingame_light_fx_help">Illuminazione Remake: ombre morbide dove le cose si toccano, raggi di luce dal cielo aperto e un bordo di luce fredda attorno ai personaggi. Leggera richiede meno potenza di forte.</string>
     <string name="ingame_flares">Riflessi lente</string>
     <string name="ingame_flares_lens">Riflessi lente</string>
     <string name="ingame_flares_both">Aloni + riflessi</string>
@@ -353,7 +351,6 @@
     <string name="ingame_colour_warm">Pellicola calda</string>
     <string name="ingame_colour_horror">Survival horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
-    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Intensità</string>
     <string name="ingame_colour_help">Pellicola calda esalta i marroni e gli ori; Survival horror sbiadisce i colori e indurisce il contrasto. Intensità regola quanto.</string>
     <string name="ingame_skip_normal_help">Salto fotogrammi Normale: se il chip grafico resta indietro, un’immagine già pronta viene saltata per mantenere la velocità normale del gioco.</string>

@@ -52,8 +52,6 @@
     <string name="ingame_side_texture_options">Texturoptionen</string>
     <string name="ingame_perf_section">Leistung</string>
     <string name="ingame_minimap">Minikarte</string>
-    <string name="ingame_light_fx">Remake-Beleuchtung</string>
-    <string name="ingame_light_fx_help">Remake-Beleuchtung: weiche Schatten, wo Dinge sich berühren, Lichtstrahlen vom offenen Himmel und ein kühler Lichtrand um die Figuren. Leicht braucht weniger Leistung als stark.</string>
     <string name="ingame_flares">Lichthöfe (Lens Flares)</string>
     <string name="ingame_flares_lens">Lens Flares</string>
     <string name="ingame_flares_both">Lichthöfe + Lens Flares</string>
@@ -350,7 +348,6 @@
     <string name="ingame_colour_warm">Warmer Film</string>
     <string name="ingame_colour_horror">Survival-Horror</string>
     <string name="ingame_colour_requiem">Requiem</string>
-    <string name="ingame_colour_remake">Remake</string>
     <string name="ingame_colour_strength">Stärke</string>
     <string name="ingame_colour_help">Warmer Film hebt Braun- und Goldtöne hervor; Survival-Horror macht die Farben blass und den Kontrast härter. Stärke legt fest, wie viel.</string>
     <string name="ingame_skip_normal_help">Frame-Skip Normal: Hinkt der Grafikchip hinterher, wird ein fertiges Bild weggelassen, damit das Spiel seine normale Geschwindigkeit behält.</string>

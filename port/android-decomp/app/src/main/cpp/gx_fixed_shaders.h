@@ -581,11 +581,14 @@ struct RemakeZone {
   float storm;     // lightning and rain (0..1)
   const char *name;
 };
-// the village and the forest at dusk (DevJunior, 27.11.2026, a forest path of the 2023 game: "this is what we are
-// after"): dark, the colour held back, a cold blue-teal mist from a few metres on, deep shadows
-constexpr RemakeZone kZoneVillage = {{0.06f, 0.085f, 0.11f, 0.70f}, {2400.0f, 6500.0f, 0.80f, 0.0f},
-                                     {-0.012f, 0.004f, 0.022f, 0.0f}, {0.020f, 0.012f, -0.010f, 0.08f},
-                                     {0.12f, 0.86f, 0.30f, 0.09f}, 0.0f, "village at dusk"};
+// the village by day (DevJunior, 27.11.2026, a picture of the 2023 village: a warm beige-grey mist, soft daylight)
+constexpr RemakeZone kZoneVillage = {{0.44f, 0.40f, 0.35f, 0.62f}, {1800.0f, 6000.0f, 0.75f, 0.0f},
+                                     {0.006f, 0.002f, -0.010f, 0.0f}, {0.030f, 0.018f, -0.010f, 0.06f},
+                                     {0.0f, 1.04f, 0.0f, 0.0f}, 0.0f, "village by day"};
+// the forest paths (a picture of the 2023 forest path: dark, a cold blue-teal mist a few metres on)
+constexpr RemakeZone kZoneForest = {{0.05f, 0.08f, 0.10f, 0.72f}, {2000.0f, 6000.0f, 0.85f, 0.0f},
+                                    {-0.012f, 0.004f, 0.022f, 0.0f}, {0.010f, 0.010f, 0.000f, 0.06f},
+                                    {0.0f, 0.88f, 0.0f, 0.0f}, 0.0f, "forest"};
 // the lake by day: a pale teal-grey haze over the water
 constexpr RemakeZone kZoneLake = {{0.16f, 0.20f, 0.22f, 0.55f}, {3000.0f, 9000.0f, 0.65f, 0.0f},
                                   {-0.012f, 0.010f, 0.022f, 0.0f}, {0.010f, 0.014f, 0.010f, 0.06f},
@@ -594,10 +597,11 @@ constexpr RemakeZone kZoneLake = {{0.16f, 0.20f, 0.22f, 0.55f}, {3000.0f, 9000.0
 constexpr RemakeZone kZoneStorm = {{0.04f, 0.055f, 0.085f, 0.70f}, {2200.0f, 6000.0f, 0.85f, 0.0f},
                                    {-0.008f, 0.002f, 0.030f, 0.0f}, {-0.010f, 0.006f, 0.030f, 0.08f},
                                    {0.22f, 0.92f, 0.28f, 0.09f}, 1.0f, "night storm"};
-// a church or a hall by candle light: warm amber lights, deep shadows, little mist
-constexpr RemakeZone kZoneCandle = {{0.07f, 0.05f, 0.035f, 0.35f}, {3500.0f, 9000.0f, 0.40f, 0.0f},
-                                    {-0.004f, -0.006f, 0.008f, 0.0f}, {0.055f, 0.026f, -0.030f, 0.16f},
-                                    {0.30f, 1.00f, 0.30f, -0.02f}, 0.0f, "candle light"};
+// the castle and the interiors (DevJunior, 27.11.2026, a picture of the 2023 castle: golden amber light on stone and
+// wood, warm dust in the air, soft shadows rather than black ones)
+constexpr RemakeZone kZoneCandle = {{0.30f, 0.21f, 0.11f, 0.32f}, {2500.0f, 8000.0f, 0.35f, 0.0f},
+                                    {0.014f, 0.006f, -0.010f, 0.0f}, {0.050f, 0.030f, -0.024f, 0.12f},
+                                    {0.0f, 1.03f, 0.0f, 0.0f}, 0.0f, "castle and interiors"};
 // the island: grey-green, cold and wet
 constexpr RemakeZone kZoneIsland = {{0.11f, 0.14f, 0.13f, 0.55f}, {2800.0f, 8000.0f, 0.70f, 0.0f},
                                     {-0.010f, 0.010f, 0.006f, 0.0f}, {-0.004f, 0.012f, 0.004f, 0.08f},
@@ -610,10 +614,12 @@ constexpr RemakeZone kZoneDefault = {{0.08f, 0.10f, 0.13f, 0.45f}, {3000.0f, 800
 inline const RemakeZone &RemakeZoneOf(unsigned room) {
   const unsigned stage = room >> 8;
   switch (room) {
-  case 0x10B: case 0x118: case 0x11A: case 0x11B: case 0x11C:
-    return kZoneStorm;  // Del Lago, the cemetery, the village, the lake shore and the forest at night
-  case 0x103: case 0x107: case 0x10A:
-    return kZoneLake;
+  case 0x118: case 0x119: case 0x11A: case 0x11B: case 0x11C:
+    return kZoneStorm;  // the cemetery, the coliseum, the village, the lake and Luis' cabin at night
+  case 0x100: case 0x104:
+    return kZoneForest;  // the forest paths
+  case 0x107: case 0x10A: case 0x10B:
+    return kZoneLake;  // the fish farm, the lake, Del Lago
   case 0x117:
     return kZoneCandle;  // the church
   default:
@@ -645,9 +651,8 @@ inline void LightFxColour(int colourMode, unsigned room, float out[4]) {
 // "Remake"'s mist: the zone's halfway to Requiem's (its base), at least Requiem's amount
 inline void RemakeHaze(unsigned room, float out[4]) {
   const RemakeZone &z = RemakeZoneOf(room);
-  for (int i = 0; i < 3; ++i)
-    out[i] = 0.5f * (z.haze[i] + kAtmosHaze[i]);
-  out[3] = z.haze[3] > kAtmosHaze[3] ? z.haze[3] : kAtmosHaze[3];
+  for (int i = 0; i < 4; ++i)
+    out[i] = z.haze[i];  // the zone's own mist (a warm village, a dark forest)
 }
 // a lightning flash's light (0..1) at picture `n` (about 60 a second): every 7..16 s two quick pulses
 inline float StormFlash(unsigned n) {
@@ -782,7 +787,7 @@ constexpr char kColourFs[] =
     "    g = clamp(g + w * lg * (1.0 - lg) * 4.0 * vec3(-0.025, 0.008, 0.035), 0.0, 1.0);\n"
     // "Remake": the zone (RemakeZone) on Requiem's grade: half its exposure, the shadows' and the lights' tint, the
     // lights' glow; with a storm rain streaks and the lightning's cold light
-    "    if (mode == 4) {\n"
+    "    if (mode >= 3) {\n"  // Requiem with the zone (since 27.11.2026: "Remake" folded into Requiem)
     "      g = clamp(g * mix(1.0, zoneGrade.y, 0.5), 0.0, 1.0);\n"
     "      float lz = lum(g);\n"
     "      g += zoneLo.rgb * (1.0 - smoothstep(0.0, 0.45, lz)) * smoothstep(0.0, 0.06, lz)\n"
@@ -1183,7 +1188,10 @@ constexpr char kShadowMaskFs[] =
     "  float d, d1, d2, d3, d4;\n"
     "  vec3 e = ViewAt(fc, d);\n"
     "  vec2 mk = texelFetch(fig, ivec2(fc), 0).rg;\n"
-    "  if (d >= 0.9999995 || mk.r > 0.5) return;\n"
+    // a figure takes the objects' shadows too (DevJunior, 27.11.2026: "the shadows have to affect the character"),
+    // never the figures' maps (its own: stripes)
+    "  if (d >= 0.9999995) return;\n"
+    "  bool onFig = mk.r > 0.5;\n"
     "  float fade = 1.0 - smoothstep(look.y, look.z, -e.z);\n"
     "  if (fade <= 0.0) return;\n"
     "  vec3 ex1 = ViewAt(fc + vec2(1.0, 0.0), d1), ex0 = ViewAt(fc - vec2(1.0, 0.0), d2);\n"
@@ -1207,10 +1215,10 @@ constexpr char kShadowMaskFs[] =
     "  float w2 = la2.x < 0.0 ? -la2.x : min(amb.y, c2 / max(total, 1e-4)) * lit;\n"
     "  float dark = 0.0, f;\n"
     RE4_SHADOW_LIGHT("w0", "to0", "c0", "kl0", "dl0", "lb0",
-                     "    if (t0.w > 0.5) occ = Occ0(e, n, s, rat);\n"
+                     "    if (t0.w > 0.5 && !onFig) occ = Occ0(e, n, s, rat);\n"
                      "    if (t1.w > 0.5 && mk.g < 0.5) occ = max(occ, Occ1(e, n, s, rat));\n")
-    RE4_SHADOW_LIGHT("w1", "to1", "c1", "kl1", "dl1", "lb1", "    if (t2.w > 0.5) occ = Occ2(e, n, s, rat);\n")
-    RE4_SHADOW_LIGHT("w2", "to2", "c2", "kl2", "dl2", "lb2", "    if (t3.w > 0.5) occ = Occ3(e, n, s, rat);\n")
+    RE4_SHADOW_LIGHT("w1", "to1", "c1", "kl1", "dl1", "lb1", "    if (t2.w > 0.5 && !onFig) occ = Occ2(e, n, s, rat);\n")
+    RE4_SHADOW_LIGHT("w2", "to2", "c2", "kl2", "dl2", "lb2", "    if (t3.w > 0.5 && !onFig) occ = Occ3(e, n, s, rat);\n")
     "  o = vec4(vec3(1.0 - min(dark * fade, look.x)), 1.0);\n"
     "}\n";
 #undef RE4_SHADOW_OCC

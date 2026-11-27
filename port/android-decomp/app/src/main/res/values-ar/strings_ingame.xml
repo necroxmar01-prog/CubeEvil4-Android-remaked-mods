@@ -56,8 +56,6 @@
     <string name="ingame_side_texture_options">خيارات الخامات</string>
     <string name="ingame_perf_section">الأداء</string>
     <string name="ingame_minimap">خريطة مصغرة</string>
-    <string name="ingame_light_fx">&#x200F;إضاءة Remake</string>
-    <string name="ingame_light_fx_help">&#x200F;إضاءة Remake: ظلال ناعمة حيث تتلامس الأشياء، وأشعة ضوء من السماء المفتوحة، وحافة ضوء باردة حول الشخصيات. الخفيف يستهلك أداءً أقل من القوي.</string>
     <string name="ingame_flares">وهج العدسة</string>
     <string name="ingame_flares_lens">وهج العدسة</string>
     <string name="ingame_flares_both">هالات + وهج العدسة</string>
@@ -367,7 +365,6 @@
     <string name="ingame_colour_warm">فيلم دافئ</string>
     <string name="ingame_colour_horror">رعب البقاء</string>
     <string name="ingame_colour_requiem">&#x200F;Requiem</string>
-    <string name="ingame_colour_remake">&#x200F;Remake</string>
     <string name="ingame_colour_strength">الشدة</string>
     <string name="ingame_colour_help">يُبرز الفيلم الدافئ الألوان البنية والذهبية؛ ويجعل رعب البقاء الألوان باهتة والتباين أقوى. تحدد الشدة المقدار.</string>
     <string name="ingame_skip_normal_help">‏تخطي الإطارات عادي: عندما تتأخر شريحة الرسوميات يُتخطى إطار جاهز حتى تحافظ اللعبة على سرعتها العادية.</string>

@@ -858,7 +858,7 @@ final class CoreMenu extends Dialog {
    */
   static final String COLOUR_MODE = "colourMode", COLOUR_LEVEL = "colourLevel";
   static int colourMode(SharedPreferences g) {
-    return Math.max(0, Math.min(4, g.getInt(COLOUR_MODE, 0)));  // 3 "Requiem", 4 "Remake" (the mods)
+    return Math.max(0, Math.min(3, g.getInt(COLOUR_MODE, 0)));  // 3 "Requiem" (a stored 4, the former "Remake", is Requiem)
   }
   static int colourLevel(SharedPreferences g) {
     return g.getInt(COLOUR_LEVEL, 1) >= 2 ? 2 : 1;
@@ -1183,14 +1183,8 @@ final class CoreMenu extends Dialog {
       graphics.edit().putInt(BLOOM_LEVEL, next).apply();
       CoreBridge.setBloom(CoreBridge.bloomSent(graphics));
     });
-    // "Remake lighting" (wish of DevJunior, 27.11.2026: light and optional, beside the colour filters): contact
-    // shadows, light shafts from the open sky, a rim light at the figures' edges; off, light, strong
-    MenuLayout.Buttons effectRow3 = buttonsRow(effects);
-    selector(effectRow3, R.string.ingame_light_fx, texts(bloomLabels), CoreBridge.lightFx(graphics), 0, next -> {
-      graphics.edit().putInt(CoreBridge.LIGHT_FX, next).apply();
-      CoreBridge.setLightFx(next);
-    });
-    indentedHelp(s(R.string.ingame_light_fx_help));
+    // "Remake lighting" (27.11.2026) taken out again the same day (DevJunior: stutters and lower fps, little gain);
+    // the zones' look lives in "Requiem" now
     // Real-time shadows (RealtimeShadows; until 16.11.2026 debug builds only, since then every build, decisions of the
     // project owner): "Off > Characters > Characters and objects" (the project owner, 15.11.2026), since 16.11.2026
     // under the effects (the project owner: "Außerdem sollte der Echtzeitschatten unter ANZEIGE rein unter 'Effekte'"),
@@ -1244,7 +1238,7 @@ final class CoreMenu extends Dialog {
     // its strength (light, strong); each press moves on
     MenuLayout.Buttons colourRow = buttonsRow(labelledOptions(R.string.ingame_colour));
     final int[] colourLabels = {R.string.ingame_off, R.string.ingame_colour_warm, R.string.ingame_colour_horror,
-        R.string.ingame_colour_requiem, R.string.ingame_colour_remake};  // "Requiem" (DevJunior, 15.11.2026), "Remake" (27.11.2026)
+        R.string.ingame_colour_requiem};  // "Requiem" (DevJunior, 15.11.2026; since 27.11.2026 with a tone per zone)
     final Button[] strength = new Button[1];
     selector(colourRow, R.string.ingame_colour, texts(colourLabels), colourMode(graphics), 0, next -> {
       graphics.edit().putInt(COLOUR_MODE, next).apply();
