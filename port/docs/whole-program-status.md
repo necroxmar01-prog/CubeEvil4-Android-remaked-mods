@@ -20478,6 +20478,7 @@ Spiel.
 
 | 0957 `game/mes.cpp` | Titel vor dem ersten Spiel: Typ-3-Texte (Gegenstandsnamen) aus `etc/core.das`, wenn `gameInit` sie noch nicht gebunden hat (EU-Optionen, Steuercode 0x11) |
 | 0958 `game/snd.cpp`, `game/snd_str4.cpp` (+ `runtime/mod_voice.cpp`, `runtime/mod_voice_game.cpp`) | Stimmen-Mod für die Zwischensequenzen (Wunsch von DevJunior, 26.11.2026, Doblaje latino; kein Fehler des Prototyps): `SndStrReq` meldet jeden gestarteten Stream (Block 1 = Ereignisstimmen aus `bgm/bio4evt.sbb`), `Snd_str_work_calc_ax_vol` macht den ersetzten Stream stumm und gibt seine Lautstärke an die Zeile des Mods |
+| 0959 `st1/r120.cpp` | START im Vorspann überspringt nur den Film (Wunsch von DevJunior, 27.11.2026; kein Fehler des Prototyps): `R120Event` setzt `SCF_R120_EVENT_CANCEL` nicht mehr beim Abbruch des Films; die Fahrt (r120s00), die Ankunft (r120s01) und das erste Ereignis in r100 folgen wie nach dem ganzen Film; START in den Ereignissen selbst setzt die Marke weiter |
 - **Mod löschen: danach „Später / Neu starten“** (DevJunior, 26.11.2026: „un cuadro que dirá reiniciar o más tarde como
   cuando los instalas“): die Rückfrage hat wieder „Abbrechen / Löschen“; nach dem Löschen fragt ein zweites Fenster wie
   beim Hinzufügen „Später / Neu starten“ (`restartForMods`). Ersetzt die drei Knöpfe von 15bebf7. Nur CI-Build.
@@ -20627,3 +20628,12 @@ Spiel.
   RE-Gesichts sind dort zackig, wo die Lidinnenseite für die alten Augäpfel entfernt wurde), 2 statt 1,2 über den
   Schluss hinaus; `calm_lids` 1,0 und die Lidinnenseite nicht heller als die Wangen. Leon Clásico Remasterizado v20 /
   Remake v16. Am Host gerendert (Hals ohne Spitzen, geschlossene Lider); auf dem Gerät nicht getestet.
+- **Vorspann auf Spanisch, START nur für den Film** (DevJunior, 27.11.2026, `opening_eng.sfd` des Doblaje latino:
+  ADX Stereo 44,1 kHz, 76 s): `mod_voice.cpp` spielt eine Tonspur `voice/<film>.wav` (PCM 8/16 bit) über dem Film
+  gleichen Namens; `movie_status.cpp` ruft beim Start `re4_mod_voice_movie_start` (schaltet den Ton des Films je
+  Schritt mit `mwSfdSetOutVol(hn, -960)` ab), beim ersten Bild `..._shown` (die Spur beginnt) und am Ende/bei START
+  `..._end`. Wellen tragen jetzt ihre eigene Datei (`Wave::fd`). Pack für den Tester: „Doblaje Latino Intro“ mit
+  `voice/opening.wav` (aus dem PC-Film per ffmpeg, 32 kHz Stereo, 9,7 MB; nicht im Repository). Patch 0959 (Tabelle).
+  Geprüft am Host: Spur stumm bis zum ersten Bild, dann bitgenau, Ende bei START; Ereignis-Zeilen weiterhin bitgenau;
+  i686-Build ohne Fehler, Patch 0959 im vorbereiteten Baum. Ob der GC-Film genau so lang ist wie der PC-Film (76 s),
+  ist ungeprüft; auf dem Gerät nicht getestet.

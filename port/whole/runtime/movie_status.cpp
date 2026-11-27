@@ -11,6 +11,12 @@
 #include <string.h>
 
 extern "C" void re4_log(const char* fmt, ...);
+// a voice mod's sound track for a movie (runtime/mod_voice.cpp; DevJunior, 27.11.2026: the opening in the Latin
+// American dub): the movie's own sound muted while it plays
+extern "C" int re4_mod_voice_movie_start(const char* fname);
+extern "C" void re4_mod_voice_movie_shown(void);
+extern "C" void re4_mod_voice_movie_end(int skipped);
+extern "C" void mwSfdSetOutVol(MWPLY mwply, int vol);
 
 namespace {
 
@@ -19,6 +25,7 @@ int gFrames;
 int gLastFno = -1;
 char gName[0x40];
 int gLastSkipDec, gLastSkipDisp;
+bool gModTrack;  // a voice mod plays this movie's sound
 
 void report(MWPLY hn, const char* what, int stat)
 {
@@ -40,11 +47,18 @@ extern "C" void re4_movie_status(MWPLY hn, const char* fname, const MWS_FRM* frm
         gFrames = 0;
         gLastFno = -1;
         re4_log("movie: %s started", gName);
+        gModTrack = re4_mod_voice_movie_start(gName) != 0;
     }
     gSteps++;
+    if (gModTrack && hn) {
+        mwSfdSetOutVol(hn, -960);  // the movie's own sound off (each step: the player may set it again)
+    }
     if (frm && frm->bufadr != NULL && frm->fno != gLastFno) {
         gLastFno = frm->fno;
         gFrames++;
+        if (gFrames == 1 && gModTrack) {
+            re4_mod_voice_movie_shown();
+        }
     }
     if (gSteps % 300 == 0) {  // 5 s at 60 steps a second
         report(hn, "playing", stat);
@@ -62,6 +76,10 @@ extern "C" void re4_movie_end(MWPLY hn, int skipped)
 {
     if (gSteps > 0 && hn) {
         report(hn, skipped ? "skipped (START)" : "ended", mwPlyGetStat(hn));
+    }
+    if (gModTrack) {
+        re4_mod_voice_movie_end(skipped);
+        gModTrack = false;
     }
     gSteps = 0;
 }

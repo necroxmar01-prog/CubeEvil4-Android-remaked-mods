@@ -36,6 +36,7 @@ namespace {
 const unsigned kRate = 32000;  // the AI's
 
 struct Wave {
+    int fd;           // its file (the bank's, or a movie track's own)
     uint32_t format;
     uint32_t offset;  // in the file
     uint32_t length;  // bytes
@@ -183,6 +184,7 @@ bool readWaveBank(Bank& b)
     for (unsigned i = 0; i < count; i++) {
         const unsigned char* e = meta + i * entrySize;
         Wave& w = b.waves[i];
+        w.fd = b.fd;
         w.format = le32(e + 4);
         w.offset = dataAt + le32(e + 8);
         w.length = le32(e + 12);
@@ -283,6 +285,7 @@ struct Line {
     bool fadingOut;       // the game faded it out (a stop request, the scene's end)
     unsigned after;       // AI frames played since the stream ended or faded out
     float gain;           // from the stream's volume
+    bool movie;           // a movie's own sound track (re4_mod_voice_movie)
     Reader r;
 };
 Line gLines[kLines];
@@ -358,7 +361,7 @@ bool fill(Decoder& l, unsigned at)
         const unsigned bytes = w.bits16 ? 2 : 1;
         unsigned take = l.frames - at < kCache ? l.frames - at : kCache;
         static unsigned char raw[kCache * 2 * 8];
-        const ssize_t got = pread(gBank.fd, raw, take * ch * bytes, (off_t) w.offset + (off_t) at * ch * bytes);
+        const ssize_t got = pread(w.fd, raw, take * ch * bytes, (off_t) w.offset + (off_t) at * ch * bytes);
         if (got <= 0) {
             return false;
         }
@@ -384,7 +387,7 @@ bool fill(Decoder& l, unsigned at)
         }
         l.cacheAt = b * perBlock;
         while (l.cacheLen + perBlock <= kCache && (b + 1) * block <= w.length) {
-            if (pread(gBank.fd, raw, block, (off_t) w.offset + (off_t) b * block) != (ssize_t) block) {
+            if (pread(w.fd, raw, block, (off_t) w.offset + (off_t) b * block) != (ssize_t) block) {
                 break;
             }
             const unsigned got = adpcmBlock(raw, block, ch, pcm);
@@ -496,6 +499,116 @@ void stopAll(const char* why)
 // sounds, bit 2 an event runs, bit 3 the player skips it; NULL (tests): a stream that sounds
 int (*gState)(unsigned id);
 
+// A line on a free place (else the oldest line's), `skip` ms into its wave (negative: that much silence first).
+Line& startLine(unsigned id, const Wave& w, double skip)
+{
+    // a free place, else the oldest line's
+    static unsigned ages;
+    Line* pick = &gLines[0];
+    for (int i = 0; i < kLines; i++) {
+        Line& c2 = gLines[i];
+        if (c2.on && c2.sndId == id) {
+            pick = &c2;  // the same stream again
+            break;
+        }
+        if (!c2.on && pick->on) {
+            pick = &c2;
+        } else if (c2.on && pick->on && c2.age < pick->age) {
+            pick = &c2;
+        }
+    }
+    stop(*pick, "a new line in its place");
+    Line& l = *pick;
+    l.age = ++ages;
+    l.on = true;
+    l.sndId = id;
+    l.w = &w;
+    l.frames = waveFrames(w);
+    l.pos = skip > 0 ? skip / 1000.0 * w.rate : 0.0;
+    l.delay = skip < 0 ? (unsigned) (-skip / 1000.0 * kRate) : 0;
+    l.started = false;
+    l.streamGone = false;
+    l.fadingOut = false;
+    l.after = 0;
+    l.gain = 0.0f;
+    l.movie = false;
+    static unsigned numbers;
+    l.number = ++numbers ? numbers : ++numbers;
+    Reader& r = l.r;
+    r.late = 0;
+    r.w = w;
+    r.start = (unsigned) l.pos;
+    r.consumed.store(r.start, std::memory_order_relaxed);
+    r.want.store(l.number, std::memory_order_release);
+#ifndef RE4_VOICE_TEST
+    if (!gThread.exchange(true)) {
+        pthread_t t;
+        if (pthread_create(&t, 0, readerThread, 0) == 0) {
+            pthread_detach(t);
+        } else {
+            gThread = false;
+            re4_log("voice mod: the reading thread cannot start");
+        }
+    }
+#endif
+    return l;
+}
+
+// ---- the movies' sound tracks (wish of DevJunior, 27.11.2026: the opening movie with the Latin American dub's
+// narration): voice/<movie>.wav (PCM 8/16 bit, mono or stereo, any rate; made from the Steam release's movie with
+// ffmpeg), played from the movie's first picture over it, the movie's own sound muted (runtime/movie_status.cpp);
+// it ends with the movie (its end or START).
+
+struct MovieTrack {
+    char name[64];     // the movie's file name without folder and extension ("opening")
+    char path[1600];
+    bool tried, ok;
+    Wave w;
+};
+const int kMovies = 8;
+MovieTrack gMovies[kMovies];
+int gMovieCount;
+Line* gMovieLine;
+
+bool movieOpen(MovieTrack& m)
+{
+    if (m.tried) {
+        return m.ok;
+    }
+    m.tried = true;
+    m.w.fd = open(m.path, O_RDONLY);
+    unsigned char h[12];
+    if (m.w.fd < 0 || pread(m.w.fd, h, 12, 0) != 12 || memcmp(h, "RIFF", 4) != 0 || memcmp(h + 8, "WAVE", 4) != 0) {
+        re4_log("voice mod: %s is not a WAV file", m.path);
+        return false;
+    }
+    off_t at = 12;
+    bool fmt = false;
+    for (;;) {
+        unsigned char c[24];
+        if (pread(m.w.fd, c, 8, at) != 8) {
+            break;
+        }
+        const uint32_t len = le32(c + 4);
+        if (memcmp(c, "fmt ", 4) == 0 && len >= 16 && pread(m.w.fd, c + 8, 16, at + 8) == 16) {
+            const unsigned tag = le16(c + 8), bits = le16(c + 22);
+            m.w.channels = le16(c + 10);
+            m.w.rate = le32(c + 12);
+            m.w.tag = 0;
+            m.w.bits16 = bits == 16;
+            fmt = tag == 1 && (bits == 8 || bits == 16) && m.w.channels >= 1 && m.w.channels <= 2 && m.w.rate >= 4000;
+        } else if (memcmp(c, "data", 4) == 0) {
+            m.w.offset = (uint32_t) (at + 8);
+            m.w.length = len;
+            m.ok = fmt;
+            break;
+        }
+        at += 8 + len + (len & 1);
+    }
+    re4_log("voice mod: %s: %s", m.path, m.ok ? "a movie's sound track" : "no PCM sound in it");
+    return m.ok;
+}
+
 }  // namespace
 
 extern "C" {
@@ -512,6 +625,52 @@ void re4_mod_voice_reset(void)
     stopAll("the mods changed");
     bankClose();
     gBank.xwb[0] = gBank.xsb[0] = 0;
+    for (int i = 0; i < gMovieCount; i++) {
+        if (gMovies[i].w.fd > 0) {
+            close(gMovies[i].w.fd);
+        }
+    }
+    memset(gMovies, 0, sizeof(gMovies));
+    gMovieCount = 0;
+    gMovieLine = 0;
+}
+
+// runtime/movie_status.cpp: a movie (its file name, e.g. "movie/opening.sfd") starts. 1: the mod has its sound track,
+// the movie's own sound is to be muted.
+int re4_mod_voice_movie_start(const char* fname)
+{
+    const char* base = strrchr(fname, '/') ? strrchr(fname, '/') + 1 : fname;
+    const char* dot = strrchr(base, '.');
+    const int n = dot ? (int) (dot - base) : (int) strlen(base);
+    for (int i = 0; i < gMovieCount; i++) {
+        MovieTrack& m = gMovies[i];
+        if ((int) strlen(m.name) == n && strncasecmp(m.name, base, n) == 0 && movieOpen(m)) {
+            Line& l = startLine(0xFFFFFFFFu, m.w, 0.0);
+            l.movie = true;
+            l.gain = 1.0f;
+            gMovieLine = &l;
+            re4_log("voice mod: movie %s -> %s, %.1f s at %u Hz", fname, m.path, (double) l.frames / m.w.rate,
+                    m.w.rate);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// runtime/movie_status.cpp: the movie shows its first picture (the track starts) / ends (START or its end)
+void re4_mod_voice_movie_shown(void)
+{
+    if (gMovieLine && gMovieLine->on && gMovieLine->movie) {
+        gMovieLine->started = true;
+    }
+}
+
+void re4_mod_voice_movie_end(int skipped)
+{
+    if (gMovieLine && gMovieLine->on && gMovieLine->movie) {
+        stop(*gMovieLine, skipped ? "the movie is skipped" : "the movie ended");
+    }
+    gMovieLine = 0;
 }
 
 // dvd.cpp modFolder: a pack's voice/<name>; a later pack's replaces it
@@ -521,8 +680,30 @@ void re4_mod_voice_add(const char* name, const char* path)
         snprintf(gBank.xwb, sizeof(gBank.xwb), "%s", path);
     } else if (strcasecmp(name, "bio4evt.xsb") == 0) {
         snprintf(gBank.xsb, sizeof(gBank.xsb), "%s", path);
+    } else if (strlen(name) > 4 && strcasecmp(name + strlen(name) - 4, ".wav") == 0) {
+        // a movie's sound track: voice/<movie>.wav
+        MovieTrack* m = 0;
+        char base[64];
+        snprintf(base, sizeof(base), "%.*s", (int) (strlen(name) - 4), name);
+        for (int i = 0; i < gMovieCount; i++) {
+            if (strcasecmp(gMovies[i].name, base) == 0) {
+                m = &gMovies[i];
+            }
+        }
+        if (!m && gMovieCount < kMovies) {
+            m = &gMovies[gMovieCount++];
+        }
+        if (m) {
+            if (m->w.fd > 0) {
+                close(m->w.fd);
+            }
+            memset(m, 0, sizeof(*m));
+            snprintf(m->name, sizeof(m->name), "%s", base);
+            snprintf(m->path, sizeof(m->path), "%s", path);
+        }
+        return;
     } else {
-        re4_log("voice mod: %s is not read (only bio4evt.xwb and bio4evt.xsb for now)", path);
+        re4_log("voice mod: %s is not read (bio4evt.xwb, bio4evt.xsb and <movie>.wav)", path);
         return;
     }
     gBank.tried = false;
@@ -550,55 +731,7 @@ int re4_mod_voice_prepare(unsigned id, int blk, int no, float start)
         }
         return 0;
     }
-    // a free place, else the oldest line's
-    static unsigned ages;
-    Line* pick = &gLines[0];
-    for (int i = 0; i < kLines; i++) {
-        Line& c2 = gLines[i];
-        if (c2.on && c2.sndId == id) {
-            pick = &c2;  // the same stream again
-            break;
-        }
-        if (!c2.on && pick->on) {
-            pick = &c2;
-        } else if (c2.on && pick->on && c2.age < pick->age) {
-            pick = &c2;
-        }
-    }
-    stop(*pick, "a new line in its place");
-    Line& l = *pick;
-    l.age = ++ages;
-    l.on = true;
-    l.sndId = id;
-    l.w = &w;
-    l.frames = waveFrames(w);
-    const double skip = start * 1000.0 - c.delay;  // a line started part way (a cutscene's debug start)
-    l.pos = skip > 0 ? skip / 1000.0 * w.rate : 0.0;
-    l.delay = skip < 0 ? (unsigned) (-skip / 1000.0 * kRate) : 0;
-    l.started = false;
-    l.streamGone = false;
-    l.fadingOut = false;
-    l.after = 0;
-    l.gain = 0.0f;
-    static unsigned numbers;
-    l.number = ++numbers ? numbers : ++numbers;
-    Reader& r = l.r;
-    r.late = 0;
-    r.w = w;
-    r.start = (unsigned) l.pos;
-    r.consumed.store(r.start, std::memory_order_relaxed);
-    r.want.store(l.number, std::memory_order_release);
-#ifndef RE4_VOICE_TEST
-    if (!gThread.exchange(true)) {
-        pthread_t t;
-        if (pthread_create(&t, 0, readerThread, 0) == 0) {
-            pthread_detach(t);
-        } else {
-            gThread = false;
-            re4_log("voice mod: the reading thread cannot start");
-        }
-    }
-#endif
+    Line& l = startLine(id, w, start * 1000.0 - c.delay);
     re4_log("voice mod: event voice %d (stream %u) -> wave %d, %.1f s at %u Hz%s", no, id, c.wave,
             (double) l.frames / w.rate, w.rate, c.delay ? " after a delay" : "");
     return 1;
@@ -638,7 +771,10 @@ static void mixLine(Line& l, short* lr, unsigned frames)
     if (!l.on) {
         return;
     }
-    const int st = gState ? gState(l.sndId) : 3;
+    if (l.movie && !l.started) {
+        return;  // the movie's first picture not shown yet
+    }
+    const int st = l.movie ? 7 : gState ? gState(l.sndId) : 3;
     if (!l.started) {
         if (!(st & 1)) {
             stop(l, "the game's stream did not start");

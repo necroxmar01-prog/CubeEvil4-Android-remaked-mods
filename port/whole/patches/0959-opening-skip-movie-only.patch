@@ -1,0 +1,19 @@
+# START on the opening movie skips only the movie (wish of DevJunior, 27.11.2026: "that START skips only the reddish
+# explanation and goes on to the police with Leon in the car"; not a bug of the prototype): R120Event set
+# SCF_R120_EVENT_CANCEL when the movie was skipped, and the flag left out r120s01 (the arrival) and r100's first event;
+# the drive (r120s00) and both then play as after the whole movie. Skipping the events themselves (START in them) still
+# sets the flag as before (Evt_R120S00_Func / S01_Func funcMode 3).
+--- a/src/st1/r120.cpp
++++ b/src/st1/r120.cpp
+@@ -75,9 +75,8 @@
+     SceSleep(1);
+     FadeSetW(2, 0, 0, 0);
+     SceSleep(1);
+-    if (Sofdec.isCancel()) {
+-        ScfFlagOn(pG, SCF_R120_EVENT_CANCEL);
+-    }
++    /* port (patch 0959, wish of DevJunior, 27.11.2026): START skips only the movie; the drive with the police and the
++       arrival follow as without it (the game skipped them too) */
+     SceEventStart(0);
+     // The first of the two sequential `if`s masks with a variable so jump1's thread_jumps cannot fold
+     // its branch into the second early. That keeps the EvtMgr/string highs of the s01 block fresh and
