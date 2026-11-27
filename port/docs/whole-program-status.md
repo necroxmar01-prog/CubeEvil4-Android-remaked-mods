@@ -20564,3 +20564,7 @@ Spiel.
   die Zeile behält ihre Zeit (Logzeile am Ende: „frames not read in time“). Geprüft am Host: PCM und MS-ADPCM
   weiterhin bitgenau, auch mit dem Thread in Echtzeit (5-ms-Blöcke); i686-Build und Prüfungen ohne Fehler. Auf dem
   Gerät nicht getestet.
+- **Remake-Fassung, Hemd unter der Jacke** (DevJunior, 26.11.2026: „Leon trae la camisa del remake en el suéter del
+  remake de mi modelo“): auch `pl00` (Kapitel-1-Jacke der Remake-Fassung, aus Remake Lite) trug das blaue Remake-Hemd;
+  `skin_recolor.py --mat 2 --grey 32` (Textur 2, 256×128, die Brust y 1141..1604). Leon Remasterizado Remake v11. Am
+  Host gerendert (Hemd grau), auf dem Gerät nicht getestet.
