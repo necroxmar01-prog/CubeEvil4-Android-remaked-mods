@@ -20535,3 +20535,15 @@ Spiel.
   das Format von `bio4evt.xwb` selbst (nur der Kopf von `pl00.xwb` lag vor), ob die Nummern der Ereignisstimmen der
   GC-Fassung den Cues der PC-Fassung entsprechen (Logzeile `voice mod: event voice N -> wave M, x s` je Szene) und
   alles auf dem Gerät.
+- **Augen, Hemd des Pullovers** (DevJunior, 26.11.2026, Bilder einer Zwischensequenz: „no tiene buenas expresiones
+  con sus ojos y le pusiste la camisa del remake en lugar de la gris al del suéter“): `skin_head_fbx.py --lids 0.8`
+  (`calm_lids`): rote Lidränder der RE-Engine-Gesichtsfarbe (für deren eigene Augäpfel und Tränenfilm gemalt) um die
+  Augen zum Farbton der Wangen, Helligkeit bleibt. `skin_shapes.py --face-gain 1.6`: Augen-, Brauen- und
+  Wangenformen (Slots 10..28, nicht das Blinzeln) stärker. Neues Werkzeug `skin_recolor.py`: eine Textur ohne
+  Farbton auf mittlere Helligkeit `--grey` (rötliche Texel und unbenutzte bleiben); Pullover-Fassung `pl08` Textur 9
+  (das blaue Remake-Hemd) → grau 32. Leon Clásico Remasterizado v14 / Remake v9. Am Host geprüft: Gesichtstextur
+  vorher/nachher (Lidränder neutral), Pullover-Hemd grau gerendert; auf dem Gerät nicht getestet.
+- **Doblaje latino, erster Gerätetest** (Video 118818): der Vorspann ist ein Film (`movie/opening.sfd`, Ton im
+  Film), nicht die Ereignisstimmen; der Stimmen-Mod ersetzt ihn nicht. Vorschlag an den Tester: `opening_eng.sfd`
+  des PC-Mods als `movie/opening.sfd` in den Pack (ob die CRI-Bibliothek des GC-Spiels die PC-Filme abspielt, ist
+  ungeprüft). Log der Szenen erbeten.

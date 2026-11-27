@@ -182,6 +182,34 @@ def despeckle(img, texel_pos, above, darker=14.0, radius=6.0):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), int((k > 0.5).sum())
 
 
+def calm_lids(img, texel_pos, eye_y, amount=0.8):
+    """The eyelids' red taken back to the skin's (DevJunior, 26.11.2026, device pictures of a cutscene: the eyes looked
+    sore, red rims round them): the RE Engine face's albedo paints the lids' wet inner rim red for its own eyeball and
+    tear meshes, which this head does not have. Around the eyes (12 under to 10 over `eye_y`, 8..52 to the side, on the
+    face's front) a texel redder than the cheeks (red over green) keeps its brightness and moves towards the cheeks'
+    hue by `amount`, faded out over the last 4 units of the region. Returns (image, texels changed)."""
+    from scipy.ndimage import gaussian_filter
+    a = np.asarray(img.convert("RGBA"), dtype=np.float64).copy()
+    mean = skin_mean(a, texel_pos)
+    if mean is None:
+        return img, 0
+    x, y, z = texel_pos[..., 0], texel_pos[..., 1], texel_pos[..., 2]
+    with np.errstate(invalid="ignore"):
+        dy = np.where(y < eye_y, (eye_y - y) / 12.0, (y - eye_y) / 10.0)
+        ax = np.abs(x)
+        edge = np.minimum.reduce([(1.0 - dy) * 3.0, (ax - 8.0) / 4.0, (52.0 - ax) / 4.0])
+        reg = np.where(np.isfinite(y) & (z > 40), np.clip(edge, 0, 1), 0.0)
+    reg = gaussian_filter(reg, 1.0)
+    ratio = mean[0] / max(mean[1], 1.0)
+    g = np.maximum(a[..., 1], 1.0)
+    red = np.clip((a[..., 0] / g - ratio * 1.04) / 0.15, 0, 1)
+    k = reg * red * amount
+    lum = a[..., :3] @ np.array([0.3, 0.59, 0.11])
+    tone = mean / (mean @ np.array([0.3, 0.59, 0.11]))
+    a[..., :3] = a[..., :3] * (1 - k[..., None]) + (lum[..., None] * tone[None, None, :]) * k[..., None]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), int((k > 0.3).sum())
+
+
 def corner_mesh(Pc, Nc, Tc):
     """Per-corner arrays (n x 3 x k) as (positions, triangles of (p, n, t) indices, normals, uvs)."""
     n = len(Pc)
@@ -401,6 +429,7 @@ def main(argv=None):
                     "evened out (despeckle)")
     ap.add_argument("--crown-under", type=float, help="the crown kept this far under the hair's inside (under_hair)")
     ap.add_argument("--scalp-depth", type=float, default=0.8)
+    ap.add_argument("--lids", type=float, help="the eyelids' red rims towards the cheeks' hue this much (0..1)")
     ap.add_argument("--nape", type=float, help="the nape behind the ears painted as a short fade from this height")
     ap.add_argument("--scalp-reach", type=float, default=0.0)
     a = ap.parse_args(argv)
@@ -525,6 +554,9 @@ def main(argv=None):
     if a.despeckle is not None:
         face, n = despeckle(face, texel_pos, a.despeckle)
         print("face: %d texels of dark spots above y %.0f evened out" % (n, a.despeckle))
+    if a.lids:
+        face, n = calm_lids(face, texel_pos, a.eye_y, a.lids)
+        print("face: %d texels of the lids' red calmed" % n)
     imgs[skin_mat] = G.encode_image(face, bytes(hdr))
     hair = G.positions(entries[HAIR]) if entries[HAIR] else None
     colour = tuple(int(x) for x in a.hair_colour.split(","))
