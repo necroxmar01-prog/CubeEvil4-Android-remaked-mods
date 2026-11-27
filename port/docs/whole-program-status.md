@@ -20613,3 +20613,9 @@ Spiel.
   feines Korn; die Dunstschicht (`AtmospherePass`, GL und Vulkan) für Modus 4 dichter, kälter und näher
   (`kAtmosHazeRemake` 0,11/0,14/0,18 · 0,62, ab 1800, Maß 8000, Himmel 0,78). Stärke „leicht/stark“ wie bei den
   anderen Modi. Geprüft: Fragment-Shader mit glslangValidator ohne Fehler; auf dem Gerät nicht getestet.
+- **„Remake“ ohne Färbung der Figuren** (DevJunior, 27.11.2026: „no pinta al personaje de ese color“): Modus 4 nimmt
+  im Farbdurchgang keine Farbe mehr weg und tönt nicht mehr (nur Schärfung, sanfte S-Kurve, Ecken, Korn); das Dunkle
+  und Kalte kommt allein mit der Entfernung aus der Dunstschicht (`kAtmosHazeRemake` 0,055/0,075/0,105 · 0,72, ab
+  2800 vor der Kamera, Maß 6500, Himmel 0,82): Leon nahe der Kamera behält seine Farben, die HUD bleibt unberührt
+  (die Schicht kommt vor ihr). Shader mit glslangValidator geprüft; auf dem Gerät nicht getestet. Offen (sein
+  Hinweis: „en el remake la iluminación cambia y el clima también“): Licht und Wetter je Gebiet.
