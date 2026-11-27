@@ -420,6 +420,7 @@ def main(argv=None):
     ap.add_argument("--match", type=float, default=0.6, help="the skin tone moved towards the old face's (0..1)")
     ap.add_argument("--neck-down", type=float, help="the face mesh's neck below this height stretched down to the old "
                     "head's lowest (an RE Engine face ends at the neck's top)")
+    ap.add_argument("--neck-floor", type=float, default=1e9, help="--neck-down's ring at least this low all round")
     ap.add_argument("--neck-fit", type=float, default=1625.0,
                     help="below this height the neck no wider than the old head's (0: off): it fits the collar")
     ap.add_argument("--tuck", type=int, default=-1, help="the body entry whose collar the neck stays under (-1: off)")
@@ -496,7 +497,10 @@ def main(argv=None):
                 v = int(c[0])
                 if v not in ring:
                     q = Pf[v].copy()
-                    q[1] = min(q[1], target[angf(q)] - 6.0)
+                    # (27.11.2026, device video: "al disparar y recargar se le ve el hueco por la nuca") at the back the
+                    # old head ended high (~1600) and the head bends forward aiming: the ring goes at least to
+                    # --neck-floor there too
+                    q[1] = min(q[1], target[angf(q)] - 6.0, a.neck_floor)
                     ring[v] = count
                     Pn.append(q[None])
                     count += 1

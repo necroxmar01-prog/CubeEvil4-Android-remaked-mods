@@ -238,7 +238,9 @@ void bankClose()
 
 const unsigned kCache = 4096;    // source frames decoded at a time
 const unsigned kRing = 1u << 17; // source frames read ahead per line (4 s at 32 kHz)
-const int kLines = 4;            // as many as the sound driver's stream works (SND_STR_MAX)
+const int kLines = 4;
+const unsigned kAfter = 4 * 32000;  // AI frames a line plays on after its stream
+const unsigned kFade = 9600;        // ... the last of them faded out            // as many as the sound driver's stream works (SND_STR_MAX)
 
 // The reading: a thread of its own decodes each line's wave ahead into the line's ring (DevJunior, 26.11.2026, report
 // 210643: "a veces hay cortes en los audios", the AI ring ran dry 43 times in four minutes of dubbed cutscenes: the
@@ -278,7 +280,8 @@ struct Line {
     unsigned delay;       // AI frames of silence still to go
     bool started;         // the game's stream sounded
     bool streamGone;      // ... and is over
-    bool fadingOut;       // the game faded it out (a stop request)
+    bool fadingOut;       // the game faded it out (a stop request, the scene's end)
+    unsigned after;       // AI frames played since the stream ended or faded out
     float gain;           // from the stream's volume
     Reader r;
 };
@@ -490,7 +493,7 @@ void stopAll(const char* why)
 }
 
 // the game's side (runtime/mod_voice_game.cpp, set at the first line): bit 0 the line's stream is there, bit 1 it
-// sounds, bit 2 an event runs; NULL (tests): a stream that sounds
+// sounds, bit 2 an event runs, bit 3 the player skips it; NULL (tests): a stream that sounds
 int (*gState)(unsigned id);
 
 }  // namespace
@@ -575,6 +578,7 @@ int re4_mod_voice_prepare(unsigned id, int blk, int no, float start)
     l.started = false;
     l.streamGone = false;
     l.fadingOut = false;
+    l.after = 0;
     l.gain = 0.0f;
     static unsigned numbers;
     l.number = ++numbers ? numbers : ++numbers;
@@ -616,7 +620,10 @@ int re4_mod_voice_stream_vol(unsigned id, int axVol, int nowVol, int fading, int
         return axVol;
     }
     if (fading && fadeEnd == 0) {
+        // (DevJunior, 27.11.2026: "se siguen cortando las partes finales de los diálogos") the game fades its stream
+        // out as the scene ends; a dub line runs longer than the game's: it keeps its volume and plays on (mixLine)
         l->fadingOut = true;
+        return -904;
     }
     if (nowVol != 0 || fading) {
         l->gain = axVol <= -904 ? 0.0f : powf(10.0f, (float) axVol / 200.0f);
@@ -645,13 +652,17 @@ static void mixLine(Line& l, short* lr, unsigned frames)
     if (!(st & 1)) {
         l.streamGone = true;
     }
-    if (l.streamGone && !(st & 4)) {
-        stop(l, "the cutscene is over");
+    if (st & 8) {
+        stop(l, "the scene is skipped");
         return;
     }
-    if (l.streamGone && (l.fadingOut || l.gain <= 0.0f)) {
-        stop(l, "the game's stream was stopped");
-        return;
+    // a line longer than the game's goes on after its stream (stopped, faded or over, the scene over or not) to its
+    // own end, 4 s at most, the last 0.3 s faded out
+    if (l.streamGone || l.fadingOut) {
+        if (l.after >= kAfter) {
+            stop(l, "4 s after the game's stream");
+            return;
+        }
     }
     const double step = (double) l.w->rate / kRate;
     const int g = (int) (l.gain * 256.0f + 0.5f);
@@ -675,10 +686,20 @@ static void mixLine(Line& l, short* lr, unsigned frames)
             b1 = b0;
         }
         const double f = l.pos - at;
+        int gi = g;
+        if (l.streamGone || l.fadingOut) {
+            if (l.after >= kAfter) {
+                break;
+            }
+            if (kAfter - l.after < kFade) {
+                gi = (int) ((long long) g * (kAfter - l.after) / kFade);
+            }
+            l.after++;
+        }
         if (lr && got > 0) {
             const int left = (int) (a0 + (a1 - a0) * f), right = (int) (b0 + (b1 - b0) * f);
-            lr[i * 2] = clamp16(lr[i * 2] + ((left * g) >> 8));
-            lr[i * 2 + 1] = clamp16(lr[i * 2 + 1] + ((right * g) >> 8));
+            lr[i * 2] = clamp16(lr[i * 2] + ((left * gi) >> 8));
+            lr[i * 2 + 1] = clamp16(lr[i * 2 + 1] + ((right * gi) >> 8));
         }
         l.pos += step;
     }

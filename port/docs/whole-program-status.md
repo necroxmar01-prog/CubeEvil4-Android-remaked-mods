@@ -20596,3 +20596,13 @@ Spiel.
   Remake v14. `mod_voice.cpp`: höchstens 2 s voraus statt 4, 1 ms Pause zwischen den Lesevorgängen (die Vorlesen-
   Spitze beim Start einer Zeile konkurrierte mit dem Lesen der Szene; Vermutung, ohne Log). Geprüft am Host: Hals vorn
   geschlossen, Kiefer wie vor v16 (Bilder), Ausgabe bitgenau; i686-Build ohne Fehler. Auf dem Gerät nicht getestet.
+- **Zeilenenden, Nacken beim Zielen** (DevJunior, 27.11.2026, vier Videos: „se siguen cortando las partes finales de
+  los diálogos … al disparar y recargar se le ve el hueco por la nuca“): (1) `mod_voice.cpp`: das Ausblenden des
+  Spiel-Streams auf 0 (Ende der Szene) senkt die Zeile nicht mehr; nach dem Ende oder Ausblenden des Streams spielt
+  die Zeile bis zu ihrem eigenen Ende weiter, höchstens 4 s, die letzten 0,3 s ausgeblendet, auch wenn das Ereignis
+  vorbei ist; nur das Überspringen (START, `STA_EVENT_CANCEL`, neues Bit 3 aus `mod_voice_game.cpp`) beendet sie
+  sofort. Am Host: Zeile nach Ausblenden und verschwundenem Stream bis zum Ende, bitgenau. (2) Der Kopf endete hinten
+  bei y 1649 (das Gesichtsnetz; die Randkanten lagen über 1630, ohne Ring): `--neck-down 1680 --neck-floor 1560`,
+  der Ring jetzt rundum bis mindestens 1560 (116 Randpunkte, 232 Dreiecke). Leon Clásico Remasterizado v19 / Remake
+  v15. Auf dem Gerät nicht getestet. Noch offen: Stimmen außerhalb der Szenen (Leons Sätze im Spiel, Gegner: im GC-
+  Spiel Klangbänke, auf dem PC `pl*.xwb`/`em*.xwb`/`room/*.xwb`) und der Vorspann (Film mit eigenem Ton).
