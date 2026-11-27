@@ -205,7 +205,11 @@ def calm_lids(img, texel_pos, eye_y, amount=0.8):
     red = np.clip((a[..., 0] / g - ratio * 1.04) / 0.15, 0, 1)
     k = reg * red * amount
     lum = a[..., :3] @ np.array([0.3, 0.59, 0.11])
-    tone = mean / (mean @ np.array([0.3, 0.59, 0.11]))
+    mlum = float(mean @ np.array([0.3, 0.59, 0.11]))
+    tone = mean / mlum
+    # (27.11.2026, the blink's close-up: the lid's wet lining, light pink, showed as a bright band over the closed eye)
+    # no brighter than the cheeks there
+    lum = np.minimum(lum, mlum * 0.95)
     a[..., :3] = a[..., :3] * (1 - k[..., None]) + (lum[..., None] * tone[None, None, :]) * k[..., None]
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA"), int((k > 0.3).sum())
 
@@ -484,12 +488,32 @@ def main(argv=None):
             for k in range(3):
                 e = (int(tri[k, 0]), int(tri[(k + 1) % 3, 0]))
                 edges.setdefault((min(e), max(e)), []).append((ti, k))
+        # only the neck's own open edge (27.11.2026, device video: "a bit or two sticking out of his face": the lips'
+        # and nostrils' open edges below --neck-down got rings too): the boundary edges in loops (by shared
+        # positions), the loop with the most positions below --neck-down
+        bnd = [(i, j) for (i, j), uses in edges.items() if len(uses) == 1 and max(Pf[i, 1], Pf[j, 1]) < a.neck_down]
+        parent = {}
+        def root(v):
+            while parent.setdefault(v, v) != v:
+                parent[v] = parent[parent[v]]
+                v = parent[v]
+            return v
+        for i, j in bnd:
+            parent[root(i)] = root(j)
+        loops = {}
+        for i, j in bnd:
+            loops.setdefault(root(i), set()).update((i, j))
+        neck_loop = max(loops.values(), key=len) if loops else set()
+        for vs in loops.values():
+            if vs is not neck_loop:
+                ys = Pf[list(vs), 1]
+                print("neck: an open edge of %d positions (y %.0f..%.0f) left as it is" % (len(vs), ys.min(), ys.max()))
         ring = {}
         new_tris = []
         Pn = [Pf]
         count = len(Pf)
         for (i, j), uses in edges.items():
-            if len(uses) != 1 or max(Pf[i, 1], Pf[j, 1]) >= a.neck_down:
+            if len(uses) != 1 or i not in neck_loop or j not in neck_loop or max(Pf[i, 1], Pf[j, 1]) >= a.neck_down:
                 continue
             ti, k = uses[0]
             ca, cb = trisf[ti, k], trisf[ti, (k + 1) % 3]  # the edge as the triangle runs: a -> b

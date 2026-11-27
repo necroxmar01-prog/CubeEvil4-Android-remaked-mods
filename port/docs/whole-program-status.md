@@ -20619,3 +20619,11 @@ Spiel.
   2800 vor der Kamera, Maß 6500, Himmel 0,82): Leon nahe der Kamera behält seine Farben, die HUD bleibt unberührt
   (die Schicht kommt vor ihr). Shader mit glslangValidator geprüft; auf dem Gerät nicht getestet. Offen (sein
   Hinweis: „en el remake la iluminación cambia y el clima también“): Licht und Wetter je Gebiet.
+- **Linie durch den Kopf, Lidschlag** (DevJunior, 27.11.2026, Video und Bild: „un poquito o 2 sobresaliendo de su cara
+  … es una línea que atraviesa la cabeza … uno de los ojos no cierra bien“): der Halsring von v19 bekam auch die
+  kleinen offenen Ränder an Lippen und Nasenlöchern (Schleifen aus 3 Punkten bei y ~1663) und zog sie bis 1560
+  herunter: dünne lange Dreiecke durch Kinn und Hals. `--neck-down` nimmt jetzt nur die größte offene Randschleife
+  (den Hals; 104 statt 116 Punkte). Lidschlag (`synth_blink`): die Lidränder als Parabeln geglättet (die Ränder des
+  RE-Gesichts sind dort zackig, wo die Lidinnenseite für die alten Augäpfel entfernt wurde), 2 statt 1,2 über den
+  Schluss hinaus; `calm_lids` 1,0 und die Lidinnenseite nicht heller als die Wangen. Leon Clásico Remasterizado v20 /
+  Remake v16. Am Host gerendert (Hals ohne Spitzen, geschlossene Lider); auf dem Gerät nicht getestet.

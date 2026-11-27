@@ -301,7 +301,7 @@ def _pieces(T, n):
     return np.array([find(i) for i in range(n)])
 
 
-def synth_blink(head, eyes_y=1722.0, close=0.8, up=9.0, low=6.0, overshoot=1.2):
+def synth_blink(head, eyes_y=1722.0, close=0.8, up=9.0, low=6.0, overshoot=2.0):
     """A blink made for the skin's own lids (the event's blink, carried over, tore lids shaped otherwise; DevJunior,
     10.11.2026: "a blink, so his face looks natural when he talks"). The eyeballs: the head's part whose positions on
     each side lie on a sphere. The lid rims: the skin's positions just outside that sphere (within 0.3..3 of it), in
@@ -366,6 +366,13 @@ def synth_blink(head, eyes_y=1722.0, close=0.8, up=9.0, low=6.0, overshoot=1.2):
             log.append("blink: the eye at x %.0f: no opening found" % c[0])
             continue
         bx, yu, yl = np.array(bx), np.array(yu), np.array(yl)
+        # the rims as smooth arcs (DevJunior, 27.11.2026: "one of the eyes does not close well and does not blink
+        # right"; the per-bin rims of the RE Engine face are ragged where its lid lining was cut away for the old
+        # eyeballs: the closed lid came out wavy with gaps): a parabola through each rim, the upper rim no higher
+        # than its lowest found points allow
+        if len(bx) >= 5:
+            yu = np.minimum(np.polyval(np.polyfit(bx, yu, 2), bx), yu + 0.8)
+            yl = np.maximum(np.polyval(np.polyfit(bx, yl, 2), bx), yl - 0.8)
         rho = R + 1.5
 
         def ang(y):
