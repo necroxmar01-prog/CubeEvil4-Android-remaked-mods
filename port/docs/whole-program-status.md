@@ -20588,3 +20588,11 @@ Spiel.
   `re9_finisher_pack.py` `PISTOL_RELOAD = False` (move.dat ohne 0xB0.. / 0xB4..; `locomotion.cpp re4_move_reload`
   nimmt die Bewegung des Spiels wie bei der Schrotflinte). RE9 Finishers v43 (move.dat 365 920 Bytes, 23 Einträge
   statt 29). Auf dem Gerät nicht getestet.
+- **Kiefer und Hals, Vorlesen gedrosselt** (DevJunior, 27.11.2026, Bilder und zwei Videos: „quedó mal la quijada y
+  cuello y aparte a veces se cortan los diálogos y cinemáticas“): `--neck-down` streckt nicht mehr das Halsband (das
+  zog den Kiefer mit nach unten), sondern setzt an den offenen unteren Rand des Gesichts (Randkanten unter y 1630)
+  einen eigenen Ring darunter, je Seite 6 unter dem tiefsten Punkt des alten Kopfes (gleiche Normalen und
+  Texturstellen; ~50 Punkte, ~97 Dreiecke); `--neck-fit` hält ihn in der Halsbreite. Leon Clásico Remasterizado v18 /
+  Remake v14. `mod_voice.cpp`: höchstens 2 s voraus statt 4, 1 ms Pause zwischen den Lesevorgängen (die Vorlesen-
+  Spitze beim Start einer Zeile konkurrierte mit dem Lesen der Szene; Vermutung, ohne Log). Geprüft am Host: Hals vorn
+  geschlossen, Kiefer wie vor v16 (Bilder), Ausgabe bitgenau; i686-Build ohne Fehler. Auf dem Gerät nicht getestet.

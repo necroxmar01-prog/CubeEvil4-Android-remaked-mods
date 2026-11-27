@@ -468,26 +468,47 @@ def main(argv=None):
     if a.neck_down:
         # (DevJunior, 26.11.2026, device pictures: "el cuello está invisible") an RE Engine face's mesh ends at the
         # neck's top (y ~1610 in front); the old head's neck went down to ~1540 under the collar, and the body has no
-        # neck of its own there: a gap under the jaw. The neck band (below --neck-down) is stretched downwards, per side
-        # to 6 units under the old head's lowest there.
-        top = a.neck_down
+        # neck of its own there: a gap under the jaw. v16 stretched the neck band down, and the jaw with it (27.11.2026:
+        # "quedó mal la quijada y cuello"); now the face stays as it is and its open lower edge (the boundary edges
+        # below --neck-down) gets a ring of its own below, per side 6 units under the old head's lowest there (the
+        # same normals and texture places as the edge: the neck's skin runs on; --neck-fit then keeps it in the old
+        # neck's width).
         angf = lambda X: ((np.arctan2(X[..., 0], X[..., 2] + 30.0) + np.pi) / (2 * np.pi) * 24).astype(int) % 24
         target = np.full(24, np.inf)
         np.minimum.at(target, angf(old), old[:, 1])
         for _ in range(3):
             target = np.where(np.isfinite(target), target, np.minimum(np.roll(target, 1), np.roll(target, -1)))
-        used = np.unique(trisf[:, :, 0])
-        cur = np.full(24, np.inf)
-        np.minimum.at(cur, angf(Pf[used]), Pf[used, 1])
-        for _ in range(3):
-            cur = np.where(np.isfinite(cur), cur, np.minimum(np.roll(cur, 1), np.roll(cur, -1)))
-        band = used[Pf[used, 1] < top]
-        k = angf(Pf[band])
-        scale = np.clip((top - (target[k] - 6.0)) / np.maximum(top - cur[k], 1.0), 1.0, 4.0)
-        Pf = Pf.copy()
-        Pf[band, 1] = top - (top - Pf[band, 1]) * scale
-        print("neck: %d positions below y %.0f stretched down, now from y %.0f (the old head's from %.0f)" % (
-            len(band), top, Pf[used, 1].min(), old[:, 1].min()))
+        edges = {}
+        for ti, tri in enumerate(trisf):
+            for k in range(3):
+                e = (int(tri[k, 0]), int(tri[(k + 1) % 3, 0]))
+                edges.setdefault((min(e), max(e)), []).append((ti, k))
+        ring = {}
+        new_tris = []
+        Pn = [Pf]
+        count = len(Pf)
+        for (i, j), uses in edges.items():
+            if len(uses) != 1 or max(Pf[i, 1], Pf[j, 1]) >= a.neck_down:
+                continue
+            ti, k = uses[0]
+            ca, cb = trisf[ti, k], trisf[ti, (k + 1) % 3]  # the edge as the triangle runs: a -> b
+            for c in (ca, cb):
+                v = int(c[0])
+                if v not in ring:
+                    q = Pf[v].copy()
+                    q[1] = min(q[1], target[angf(q)] - 6.0)
+                    ring[v] = count
+                    Pn.append(q[None])
+                    count += 1
+            a2 = ca.copy()
+            b2 = cb.copy()
+            a2[0], b2[0] = ring[int(ca[0])], ring[int(cb[0])]
+            new_tris += [np.stack([cb, ca, a2]), np.stack([cb, a2, b2])]
+        if new_tris:
+            Pf = np.concatenate(Pn)
+            trisf = np.concatenate([trisf, np.stack(new_tris)])
+        print("neck: %d edge positions below y %.0f given a ring below (%d triangles), down to y %.0f (the old head's "
+              "from %.0f)" % (len(ring), a.neck_down, len(new_tris), Pf[trisf[:, :, 0], 1].min(), old[:, 1].min()))
     # the kept parts of the old head, per corner; with the FBX's eyeballs each eye moved into their place (the box
     # centres): the new lids close over the old eyes as over their own
     shift = {1: np.zeros(3), -1: np.zeros(3)}

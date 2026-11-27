@@ -416,7 +416,9 @@ bool pump(Reader& r)
         return false;
     }
     const unsigned at = r.written.load(std::memory_order_relaxed);
-    if (at >= d.frames || at - r.consumed.load(std::memory_order_acquire) + kCache > kRing - 2) {
+    // 2 s ahead at most (DevJunior, 27.11.2026: "a veces se cortan los diálogos y cinemáticas": the 4 s at once at a
+    // line's start competed with the game's own reads of the scene)
+    if (at >= d.frames || at - r.consumed.load(std::memory_order_acquire) + kCache > kRing / 2) {
         return false;
     }
     if (!fill(d, at) || at < d.cacheAt || at >= d.cacheAt + d.cacheLen) {
@@ -443,9 +445,7 @@ void* readerThread(void*)
         for (int i = 0; i < kLines; i++) {
             busy |= pump(gLines[i].r);
         }
-        if (!busy) {
-            usleep(4000);
-        }
+        usleep(busy ? 1000 : 4000);  // a pause between the reads too: the game's own file reads go first
     }
     return 0;
 }
