@@ -124,7 +124,7 @@ def landmarks(P, mouth=None, opening=None):
 
 
 def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.0, skin_mouth=None,
-                 eye_r=(18.0, 11.0), mouth_gain=1.0, threshold=0.2, slots=None, inside=6.0, face_gain=1.0):
+                 eye_r=(18.0, 11.0), mouth_gain=1.0, threshold=0.2, slots=None, inside=6.0, face_gain=1.0, eye_gain=1.0):
     """The event's shapes (on positions E) carried onto the skin's positions S. Returns a list of
     {skin vertex: (dx, dy, dz)} in model units, one per shape slot."""
     from scipy.spatial import cKDTree
@@ -220,6 +220,10 @@ def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.
         # other proportions they come out weaker than on the event's head
         if slot >= 10:
             got *= face_gain
+        # (DevJunior, 26.11.2026, close-ups of v16: "raras o exageradas ... más que nada los ojos") the eyes' own shapes
+        # (10..13: squint, wide, looks) on their own: on this face's lids they read as a squint
+        if 10 <= slot <= 13:
+            got *= eye_gain
         moving = np.where(np.abs(got).max(1) > 0.01)[0]
         for _ in range(2):
             new = got.copy()
@@ -440,6 +444,7 @@ def main(argv=None):
     ap.add_argument("--entry", type=int, default=2, help="the skin's head (Leon: 2, archive part 6)")
     ap.add_argument("--mouth", type=float, help="the height of the skin's lips' parting (default: 36 under its nose tip)")
     ap.add_argument("--mouth-gain", type=float, default=1.0, help="the mouth shapes (1..8) times this")
+    ap.add_argument("--eye-gain", type=float, default=1.0, help="the eyes' shapes (10..13) times this (on top of --face-gain)")
     ap.add_argument("--face-gain", type=float, default=1.0, help="the eyes', brows' and cheeks' shapes (10..28) times this")
     ap.add_argument("--slots", default="1-28", help="the shape slots to fill (the others stay empty; fewer bytes); "
                     "default all")
@@ -465,7 +470,7 @@ def main(argv=None):
             lo, _, hi = part.partition("-")
             slots.update(range(int(lo), int(hi or lo) + 1))
     shapes, ls, le = carry_shapes(S, E, ev_shapes, skin_mouth=a.mouth, mouth_gain=a.mouth_gain,
-                                  threshold=a.threshold, slots=slots, face_gain=a.face_gain)
+                                  threshold=a.threshold, slots=slots, face_gain=a.face_gain, eye_gain=a.eye_gain)
     if a.blink == "own" and (slots is None or 9 in slots) and len(shapes) > 9:
         blink, line = synth_blink(head)
         print(line)

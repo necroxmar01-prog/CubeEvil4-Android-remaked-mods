@@ -20578,3 +20578,9 @@ Spiel.
   tiefsten Punkt des alten Kopfes gestreckt (jetzt ab 1531). Nacken-Übergang `--nape` 1610 → 1665 (er färbte den
   Hals hinten mit). Leon Clásico Remasterizado v16 / Remake v12. Am Host gerendert (Hals vorn geschlossen); auf dem
   Gerät nicht getestet.
+- **Augen ruhiger** (DevJunior, 26.11.2026, Nahaufnahmen aus Szenen mit v16: „raras o exageradas las expresiones …
+  más que nada los ojos“: die Lider wirkten zusammengekniffen, dunkle zackige Flecken um die Augen):
+  `skin_shapes.py --eye-gain` (Augenformen 10..13 für sich) 0,5 und `--face-gain` wieder 1,0; `skin_head_fbx.py
+  --lashes 0.2` statt 0,5 (die auf die Gesichtstextur gemalten Wimpernkarten der RE-Engine lagen nach den Formen
+  zackig neben den Lidern). Leon Clásico Remasterizado v17 / Remake v13. Am Host gerendert (Ruhestellung, weniger
+  Flecken unter den Augen); die Ausdrücke in den Szenen nur auf dem Gerät prüfbar.
