@@ -20808,7 +20808,11 @@ Spiel.
   die Öffnung des neuen Kopfs skaliert (0,86–1,01), Formen mit; das Gesicht wird mit der vergrößerten Ellipse
   geschnitten, die offenen Kanten des Einsatzes auf die Lochkante der Haut gezogen (Abklingen über 6 Einheiten), die
   Augäpfel des neuen Kopfs bewegen sich nicht mit. Am Host: Ring um das Auge dunkler als die Haut, Lücken (schwarze
-  Dreiecke) an der Naht; noch nicht brauchbar.
+  Dreiecke) an der Naht; noch nicht brauchbar. Vierter Stand: Naht auf die nächsten Punkte der Lochkanten (Strecken)
+  statt der Ecken gezogen, Lücken kleiner. Befund: der Event-Kopf hat in Ruhe den Mund offen und die Lider weit offen,
+  erst die Formen der Zwischensequenz schließen sie; ein Standbild zeigt das Transplantat daher nicht so, wie es in
+  einer Zwischensequenz aussieht. Testpakete für das Gerät: Klassik v30, Remake v26 („prueba_trasplante“, aus den
+  fertigen v28/v24-Dateien), Datenteile 5,9–7,4 MB.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →

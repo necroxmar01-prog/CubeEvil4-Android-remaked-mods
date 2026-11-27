@@ -108,6 +108,35 @@ def boundary(tris):
     return np.array(sorted(pts), float).reshape(-1, 3)
 
 
+def open_edges(tris):
+    """The open edges (n x 2 x 3) of a triangle soup."""
+    key = lambda q: tuple(np.round(q, 3))
+    count = {}
+    for t in tris:
+        for i in range(3):
+            e = tuple(sorted((key(t[i]), key(t[(i + 1) % 3]))))
+            count[e] = count.get(e, 0) + 1
+    return np.array([e for e, n in count.items() if n == 1], float).reshape(-1, 2, 3)
+
+
+def onto_edges(Q, edges):
+    """Each point's nearest point on these segments."""
+    from scipy.spatial import cKDTree
+    mids = edges.mean(1)
+    _d, j = cKDTree(mids).query(Q, k=min(8, len(mids)))
+    best = np.full((len(Q), 3), np.nan)
+    bd = np.full(len(Q), np.inf)
+    for c in range(j.shape[1]):
+        e = edges[j[:, c]]
+        ab = e[:, 1] - e[:, 0]
+        t = np.clip(((Q - e[:, 0]) * ab).sum(1) / np.maximum((ab * ab).sum(1), 1e-9), 0, 1)
+        p = e[:, 0] + ab * t[:, None]
+        d = np.linalg.norm(p - Q, axis=1)
+        better = d < bd
+        best[better], bd[better] = p[better], d[better]
+    return best
+
+
 def bake(tris_pos, tris_uv, size, colour_of):
     """A texture of `size` for these triangles: colour_of(points) -> colours (n x 4) at each covered texel's place."""
     W, H_ = size
@@ -276,10 +305,9 @@ def main(argv=None):
         shape_scale[reg == side] = fits[side][0]
     # the patch's open edge onto the skin hole's edge (the skin cut by the grown ellipses, so nothing lies twice), the
     # move fading out over 6 units into the patch
-    skin_open = boundary(fp[inside(fp.mean(1), holes_grown) < 0])
+    skin_edges = open_edges(fp[inside(fp.mean(1), holes_grown) < 0])
     pe = boundary(A.reshape(P0.shape)[tl[take] == head_comp])
-    _d, j = cKDTree(skin_open).query(pe)
-    shift = skin_open[j] - pe
+    shift = onto_edges(pe, skin_edges) - pe
     bt = cKDTree(pe)
     dd, jj = bt.query(A, k=4)
     ww = 1.0 / (dd + 0.5) ** 2
