@@ -360,6 +360,7 @@ public:
   // last 3D draw (under the HUD), only where the source is not hidden in the EFB depth, faded in and out over
   // a few pictures. Takes effect with the next chunk.
   void SetFlares(bool on);
+  void SetLightFx(int level);  // "Remake lighting" (GxCore::SetLightFx)
   // With the lens flares on: the soft glow and fine star at each light too (true, the default: the menu's "Halos +
   // lens flares"), or only the coloured ghosts towards the picture's centre (false: "Lens flares"; 0.99.6).
   void SetFlareHalos(bool on);
