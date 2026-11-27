@@ -551,16 +551,20 @@ def main(argv=None):
             if vs is not neck_loop:
                 ys = Pf[list(vs), 1]
                 print("neck: an open edge of %d positions (y %.0f..%.0f) left as it is" % (len(vs), ys.min(), ys.max()))
-        # the ring's texture places (DevJunior, 27.11.2026, device picture: "repair the neck, its texture"): the edge's
-        # places carried straight down read as vertical streaks; each lower corner takes the place of the face's corner
-        # nearest to the point as far above the edge as the ring goes below it (the neck's skin mirrored at the edge)
-        from scipy.spatial import cKDTree
-        cp = Pf[trisf[:, :, 0].reshape(-1)]
-        ct = trisf[:, :, 2].reshape(-1)
-        above = cp[:, 1] > a.neck_down - 80
-        mirror = cKDTree(cp[above]) if above.any() else None
-        mirror_t = ct[above]
-        new_t = []
+        # the ring's texture places (DevJunior, 27.11.2026, device pictures: "repair the neck, its texture", then "faults
+        # in the face's texture at the mouth, jaw and neck"): straight down they read as streaks, and a place looked up
+        # by position (v20) could lie in another island of the texture, its triangle sweeping across the face's
+        # texture (a band along the jaw). Each lower corner takes the place of the edge corner's neighbour one step up
+        # in the same triangle (the same island; the neck's skin mirrored at the edge by one step)
+        up_t = {}
+        for tri in trisf:
+            for k in range(3):
+                v = int(tri[k, 0])
+                for j in range(3):
+                    if j != k and Pf[int(tri[j, 0]), 1] > Pf[v, 1] + 0.5:
+                        best = up_t.get((v, int(tri[k, 2])))
+                        if best is None or Pf[int(tri[j, 0]), 1] > best[0]:
+                            up_t[(v, int(tri[k, 2]))] = (Pf[int(tri[j, 0]), 1], int(tri[j, 2]))
         ring = {}
         new_tris = []
         Pn = [Pf]
@@ -584,16 +588,11 @@ def main(argv=None):
             a2 = ca.copy()
             b2 = cb.copy()
             a2[0], b2[0] = ring[int(ca[0])], ring[int(cb[0])]
-            if mirror is not None:
-                for c2, c0 in ((a2, ca), (b2, cb)):
-                    q0 = Pf[int(c0[0])]
-                    drop = min(q0[1] - Pn[ring[int(c0[0])] - len(Pf) + 1][0][1], 45.0)
-                    tgt = q0 + np.array([0.0, max(drop, 4.0), 0.0])
-                    c2[2] = len(Tf) + len(new_t)
-                    new_t.append(Tf[mirror_t[mirror.query(tgt)[1]]])
+            for c2, c0 in ((a2, ca), (b2, cb)):
+                got = up_t.get((int(c0[0]), int(c0[2])))
+                if got is not None:
+                    c2[2] = got[1]
             new_tris += [np.stack([cb, ca, a2]), np.stack([cb, a2, b2])]
-        if new_t:
-            Tf = np.concatenate([Tf, np.array(new_t)])
         if new_tris:
             Pf = np.concatenate(Pn)
             trisf = np.concatenate([trisf, np.stack(new_tris)])

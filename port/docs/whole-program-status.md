@@ -20690,3 +20690,10 @@ Spiel.
   Jetzt nimmt jede untere Ecke die Texturstelle der Gesichtsecke, die so weit über dem Rand liegt, wie der Ring
   darunter reicht (höchstens 45; die Halshaut am Rand gespiegelt). Leon Clásico Remasterizado v24 / Remake v20. Am
   Host gerendert (Hals seitlich ohne Streifen); auf dem Gerät nicht getestet.
+- **Kieferband, Licht günstiger** (DevJunior, 27.11.2026, Bilder aus der Fahrt: „fallos en la textura de la cara
+  por la boca, quijada y cuello; la mejora gráfica baja fps pero no cambia mucho“): v20 suchte die Texturstellen des
+  Halsrings nach der Lage und traf andere Inseln der Gesichtstextur; die Dreiecke spannten über die Textur (ein Band
+  am Kiefer). Jetzt nimmt jede untere Ecke die Stelle des Nachbarn einen Schritt höher im selben Dreieck (dieselbe
+  Insel). `--sculpt-ao` 0,6 → 0,35. Leon Clásico Remasterizado v24→v25 / Remake v21. Am Host gerendert (Band weg).
+  Remake-Beleuchtung: Kontaktschatten 4 statt 8 Tiefen, Strahlen 8 statt 14 Schritte (höchstens 17 statt 27 Tiefen je
+  Bildpunkt). Auf dem Gerät nicht getestet.
