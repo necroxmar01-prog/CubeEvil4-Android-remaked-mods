@@ -830,6 +830,7 @@ struct GxCore {
   // that is parallel (the sky), in tile 3 (light 2's figures then cast nothing)
   std::vector<float> sceneryTris;
   static constexpr std::size_t kSceneryBudget = 6000;  // triangles a picture at most
+  bool sceneryShadows = false;       // the menu's "Scenery shadows" (CoreBridge.setSceneryShadows), off by default
   bool sceneryLast = false;           // last picture had a parallel light 0 and figures: collect the scenery
   float figLo[3] = {}, figHi[3] = {}; // last picture's figures' box (view space, 1 m more)
   static constexpr float kSceneryReach = 6000.0f;   // how far behind the scenery its shadow reaches a figure
@@ -1000,6 +1001,7 @@ struct GxCore {
   void SetColour(int mode, int level);
   void SetFlares(bool on);
   void SetLightFx(int level);
+  void SetSceneryShadows(bool on);
   void SetFlareHalos(bool on);
   void SetBloom(int level);
   void SetDofStrong(bool on);

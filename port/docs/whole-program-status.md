@@ -20742,6 +20742,15 @@ Spiel.
   Kiste (Modellraum, 8 Ecken durch die Matrix) gegen die Kiste der Figuren des vorigen Bildes (+1 m) plus 6 m
   verworfen, ohne jeden Punkt umzurechnen; jedes Dreieck ebenso statt „10 m um die Kamera“. Am Host übersetzt; auf dem
   Gerät nicht gemessen.
-- **Haar weniger gelb** (DevJunior, 27.11.2026, Bilder vom Gerät: „demasiado amarillo patito“): Leon-Pakete Klassik
-  v27, Remake v23 mit dunklerem, entsättigtem Aschton (Rampe 28,25,21 → 78,70,58 → 132,121,103), Strähnen 0.08,
-  Detail 0.45 (vorher 0.15/0.8, wirkte auf dem Gerät wie Maserung).
+- **Haar weniger gelb** (DevJunior, 27.11.2026, Bilder vom Gerät: „demasiado amarillo patito“; „puedes usar la textura
+  del leon remake“): Leon-Pakete Klassik v27, Remake v23 im Ton des Remake-Haars (aus dem Bild der Haar-Mod
+  abgelesen: Asch mit wenig Sättigung, ~0,22), dunkler als dort, weil Spiellicht und Requiem aufhellen: Rampe
+  34,30,26 → 88,79,69 → 150,136,122, Strähnen 0.08, Detail 0.45 (vorher 0.15/0.8, wirkte auf dem Gerät wie
+  Maserung). Die Haar-Textur der Mod ist grau (die RE Engine färbt im Shader), ihre Farbe kommt daher aus der Rampe.
+- **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
+  el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
+  (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
+  `GxCore::SetSceneryShadows`, ohne ihn sammelt der Renderer keine Kulisse. Auf Figurenpixeln gilt eine Fläche dem
+  Licht als zugewandt (`f` mindestens 0,6): die aus der Tiefe geschätzten Normalen der Haarkarten zeigten oft vom Licht
+  weg, das Haar blieb hell, während der Körper im Schatten lag. Übersetzungsprüfung ok, Shader geprüft, am Host
+  übersetzt; auf dem Gerät nicht getestet.

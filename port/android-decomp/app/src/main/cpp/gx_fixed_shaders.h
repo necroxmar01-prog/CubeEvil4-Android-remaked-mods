@@ -1066,6 +1066,7 @@ constexpr char kShadowMarkFs[] = "#version 300 es\nprecision mediump float;\nuni
 // 1.7 times as large as the caster (none from 3.3 times: a real lamp is no point; stage 7)
 #define RE4_SHADOW_LIGHT(W, TOL, C, KEEP, DIST, LB, OCC_EXPR)                                                       \
   "  f = dot(n, " TOL ");\n"                                                                                        \
+  "  if (onFig) f = max(f, 0.6);\n"                                                                                \
   "  if ((" W " > 0.0 || " KEEP " > 0.0) && f > 0.0) {\n"                                                           \
   "    float s = sqrt(max(0.0, 1.0 - f * f)) / max(f, 0.1);\n"                                                     \
   "    float occ = 0.0, rat = 1.0;\n" OCC_EXPR                                                                      \

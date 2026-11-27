@@ -329,6 +329,9 @@ public final class CoreBridge {
   /** "Remake lighting" (wish of DevJunior, 27.11.2026): contact shadows, light shafts, rim light; 0 off (the default),
    *  1 light, 2 strong. */
   public static native void setLightFx(int level);
+  // "Scenery shadows" (DevJunior, 27.11.2026): walls, roofs and the car shade the figures in daylight; off by default
+  public static native void setSceneryShadows(boolean on);
+  static final String SCENERY_SHADOWS = "sceneryShadows";
   static final String LIGHT_FX = "lightFx";
   static int lightFx(android.content.SharedPreferences g) {
     return 0;  // "Remake lighting" off for good (27.11.2026: stutters); a stored level is ignored

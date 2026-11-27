@@ -1200,10 +1200,16 @@ final class CoreMenu extends Dialog {
             graphics.edit().putInt(RealtimeShadows.KEY, next).apply();
             host.shadowsChanged();
           });
+      // "Scenery shadows" beside them (DevJunior, 27.11.2026: an option of its own, for the cost)
+      toggle(effectRow2, R.string.ingame_rt_shadows_scenery,
+          graphics.getBoolean(CoreBridge.SCENERY_SHADOWS, false), on -> {
+            graphics.edit().putBoolean(CoreBridge.SCENERY_SHADOWS, on).apply();
+            CoreBridge.setSceneryShadows(on);
+          });
     }
     indentedHelp(s(R.string.ingame_flares_help));
     indentedHelp(s(R.string.ingame_bloom_help));
-    if (shadowsRow) indentedHelp(s(R.string.ingame_rt_shadows_help));
+    if (shadowsRow) indentedHelp(s(R.string.ingame_rt_shadows_help) + " " + s(R.string.ingame_rt_shadows_scenery_help));
     if (shadowsRow && shadowsCheck != RealtimeShadows.CAPABLE) {
       indentedHelp(getContext().getString(R.string.ingame_rt_shadows_not_recommended, s(shadowsWhy(shadowsCheck))));
     }

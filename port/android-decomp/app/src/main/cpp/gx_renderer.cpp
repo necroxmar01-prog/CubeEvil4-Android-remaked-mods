@@ -54,6 +54,7 @@ void GxRenderer::SetCrt(int level) { impl_->SetCrt(level); }
 void GxRenderer::SetColour(int mode, int level) { impl_->SetColour(mode, level); }
 void GxRenderer::SetFlares(bool on) { impl_->SetFlares(on); }
 void GxRenderer::SetLightFx(int level) { impl_->SetLightFx(level); }
+void GxRenderer::SetSceneryShadows(bool on) { impl_->SetSceneryShadows(on); }
 void GxRenderer::SetFlareHalos(bool on) { impl_->SetFlareHalos(on); }
 void GxRenderer::SetBloom(int level) { impl_->SetBloom(level); }
 void GxRenderer::SetShadows(int level) { impl_->SetShadows(level); }

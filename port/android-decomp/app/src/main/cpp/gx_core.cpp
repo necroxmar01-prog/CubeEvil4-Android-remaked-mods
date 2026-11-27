@@ -1449,6 +1449,7 @@ void GxCore::SetColour(int mode, int level) {
   this->colourStrength = level >= 2 ? 1.0f : 0.5f;
 }
 void GxCore::SetFlares(bool on) { this->flaresOn = on; }
+void GxCore::SetSceneryShadows(bool on) { this->sceneryShadows = on; }
 void GxCore::SetLightFx(int level) { this->lightFx = level < 0 ? 0 : level > 2 ? 2 : level; }
 void GxCore::SetFlareHalos(bool on) { this->flareHalos = on; }
 void GxCore::SetBloom(int level) { this->bloomLevel = level < 0 ? 0 : level > 2 ? 2 : level; }
@@ -1475,7 +1476,8 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
     return;
   const bool figure = (ownerWords[2] & (RE4_GX_OWNER_FIGURE | RE4_GX_OWNER_PART)) != 0;
   const bool object = !figure && shadowLevel >= 2 && (ownerWords[2] & RE4_GX_OWNER_OBJECT) != 0;
-  const bool scenery = !figure && !object && shadowLevel >= 2 && (ownerWords[2] & RE4_GX_OWNER_SCENERY) != 0;
+  const bool scenery = !figure && !object && shadowLevel >= 2 && sceneryShadows &&
+                       (ownerWords[2] & RE4_GX_OWNER_SCENERY) != 0;
   if (!figure && !object && !scenery)
     return;
   const std::uint32_t z = bp[0x40];
@@ -1908,7 +1910,7 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
   const int tile = sizeEnv >= 256 && sizeEnv <= 2048 ? sizeEnv : kShadowTile;
   s.atlas = 2 * tile;
   // the scenery onto the figures: light 0 parallel (the sky), with figures and scenery near the camera
-  const bool sceneryWanted = shadowLevel >= 2 && k > 0 && !sceneryTris.empty() && !shadowTris.empty() &&
+  const bool sceneryWanted = shadowLevel >= 2 && sceneryShadows && k > 0 && !sceneryTris.empty() && !shadowTris.empty() &&
                              s.light[0].lp[3] == 0.0f && s.light[0].la[0] != 0.0f && s.light[0].la[1] > 0.0f;
   // each light's figures in a tile of their own (0, 2, 3), with "Characters and objects" light 0's objects in tile 1;
   // a tile is drawn only with casters
@@ -1938,7 +1940,7 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
   }
   // the next picture's scenery collecting: only while light 0 is parallel, around these figures (1 m more: the camera
   // moves between pictures)
-  sceneryLast = shadowLevel >= 2 && k > 0 && s.light[0].lp[3] == 0.0f && !shadowTris.empty();
+  sceneryLast = shadowLevel >= 2 && sceneryShadows && k > 0 && s.light[0].lp[3] == 0.0f && !shadowTris.empty();
   if (sceneryLast) {
     for (int r = 0; r < 3; r++) {
       figLo[r] = 1e30f;
