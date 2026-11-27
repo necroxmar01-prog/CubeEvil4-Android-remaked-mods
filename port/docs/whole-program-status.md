@@ -20760,6 +20760,17 @@ Spiel.
   `ShadowPass`) und Nebel/Bloom/Lichtreflexe (`kSplitShadow`, `kSplitPost`) getrennt, die Zeile „split per chunk“
   nennt beide. Der Nebel der Gebiete beginnt bei 0,6–0,8 m statt 1,8–2,5 m: die Figuren vor der Kamera standen klar vor
   dem dichten Hintergrund. Am Host übersetzt; auf dem Gerät nicht getestet.
+- **Kopf des Klassikers mit dem neuen Gesicht** (DevJunior, 27.11.2026: „ponle los ojos, párpados y boca del clásico
+  pero adaptando la textura … para que salgan bien las cinemáticas“): neues Werkzeug `skin_face_bake.py`. Die Ziel-Skin
+  behält Kopf und Gesicht der Disc (Einträge 2 und 4: Augen, Lider, Mund, die die Ereignisse bewegen), deren
+  Farbtextur wird aus dem Kopf der Quell-Skin neu gebacken (1024×512 statt 256×128): jeder Texel nimmt die Farbe der
+  nächsten Hautstelle der Quelle (4 nächste, nach Abstand gewichtet), nachdem seine Stelle durch eine
+  Thin-Plate-Verformung über Merkpunkte (Augäpfel, Nasenspitze, Oberlippe, Kinn, Stirn; feste Anker an Scheitel,
+  Hinterkopf, Ohren, Nacken) in den Raum der Quelle gebracht ist; die Augäpfel nehmen die Augentextur der Quelle nach
+  ihrem Versatz von der Vorderseite des Augapfels (Iris 11 Einheiten breit), Zähne und Zunge behalten ihre Texel,
+  Lücken werden aus den Nachbarn gefüllt. Leon-Pakete Klassik v29 (Disc-Körper, Disc-Kopf, neues Haar) und Remake v25
+  (Remake-Körper und -Haar, Disc-Kopf eingesetzt), Datenteile 4,6–7,3 MB. Am Host gerendert (Augen, Gesicht von
+  vorn); die Mimik in Zwischensequenzen ist die der Disc und auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
