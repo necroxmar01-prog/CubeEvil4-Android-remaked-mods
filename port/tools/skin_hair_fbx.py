@@ -704,12 +704,14 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
         wgt = np.where(under, 1.0, wgt)
         if not rules:
             wgt = np.zeros_like(wgt)
-        if hair is not None and reach > 0:
+        d = None
+        if hair is not None:
             from scipy.spatial import cKDTree
             ok = np.isfinite(y) & (y > brow)
             d = np.full(y.shape, np.inf)
             if ok.any():
                 d[ok] = cKDTree(hair).query(pos[ok], k=1)[0]
+        if hair is not None and reach > 0:
             near = np.clip((reach - d) / (reach / 3.0), 0, 1)
             wgt = np.maximum(wgt, near)
         if hairline is not None:
@@ -717,12 +719,51 @@ def scalp(imgs, head, face, colour, depth=0.6, dark=40.0, hair=None, reach=0.0, 
                 line = hairline - 0.3 * np.abs(x)
                 top = np.where(np.isfinite(y), np.clip((y - line) / 8.0, 0, 1), 0.0)
                 top = np.where((np.abs(x) > 62) & (y < 1745) & (z > -35), 0.0, top)  # not the ears
+                if d is not None:
+                    # (DevJunior, 27.11.2026: "the painted bald part shows" where the fringe parts) on the forehead only
+                    # under hair: no hair within 14 units, no paint (faded over 8)
+                    top = np.where(z > 25, top * np.clip((14.0 - d) / 8.0, 0, 1), top)
             wgt = np.maximum(wgt, top)
         if nape is not None:
             with np.errstate(invalid="ignore"):
                 back = np.clip((-15.0 - z) / 20.0, 0, 1)  # behind the ears, faded in towards the back
                 fade = np.where(np.isfinite(y), np.clip((y - nape) / 45.0, 0, 1) * back, 0.0)
             wgt = np.maximum(wgt, 0.9 * fade)
+        if d is not None:
+            # (DevJunior, 27.11.2026, device pictures: "the painted bald part shows") the RE Engine face's albedo has
+            # its own hairline painted (dark hair roots); where this hair does not cover the forehead (no position
+            # within 9 units: the fringe's parting), those roots read as a bald patch painted on: back to the
+            # forehead's skin there
+            with np.errstate(invalid="ignore"):
+                band = np.isfinite(y) & (y > 1735) & (y < 1765) & (z > 40)
+                if band.sum() > 100:
+                    skin = np.median(img[band][:, :3], axis=0)
+                    slum = float(skin @ np.array([0.3, 0.59, 0.11]))
+                    # uncovered: no hair position over the texel, outwards from the skull's middle (within 2.5 units
+                    # of that line, 0.5..14 units out)
+                    cand = np.isfinite(y) & (y > 1755) & (z > 25) & (lum < slum - 8.0)
+                    cov = np.zeros(y.shape)
+                    if cand.any():
+                        Q = pos[cand]
+                        out_ = Q - np.array([0.0, 1715.0, -10.0])
+                        out_ /= np.linalg.norm(out_, axis=1, keepdims=True)
+                        tree = cKDTree(hair)
+                        got = np.zeros(len(Q))
+                        for i, nb in enumerate(tree.query_ball_point(Q, 14.0)):
+                            if not nb:
+                                continue
+                            v = hair[nb] - Q[i]
+                            along = v @ out_[i]
+                            side = np.linalg.norm(v - along[:, None] * out_[i], axis=1)
+                            got[i] = float(((along > 0.5) & (side < 2.5)).any())
+                        cov[cand] = got
+                    k = np.where(cand, (1.0 - cov) * np.clip((slum - 8.0 - lum) / 20.0, 0, 1), 0.0)
+                    from scipy.ndimage import gaussian_filter
+                    k = np.where(np.isfinite(y), np.minimum(gaussian_filter(k, 1.5), 1.0), 0.0)
+                    img[..., :3] = img[..., :3] * (1 - k[..., None]) + skin[None, None, :] * k[..., None]
+                    wgt = np.where(k > 0, wgt * (1 - k), wgt)
+                    print("scalp: %d forehead texels of painted hair roots without hair over them back to skin"
+                          % int((k > 0.5).sum()))
         if (wgt > 0.5).sum() < 50:
             continue
         # the texels outside every triangle next to painted ones too: filtering and the mipmaps blend them in at
@@ -803,6 +844,7 @@ def main(argv=None):
     ap.add_argument("--weights-from", metavar="SKIN.drs",
                     help="take the hair's bone weights from this skin's hair (entry 5) instead of the input's: "
                          "a hair with the game's swinging hair bones (65..85) brings their physics back")
+    ap.add_argument("--double-sided", action="store_true", help="the cards drawn from both sides (the game culls one)")
     ap.add_argument("--no-scalp", action="store_true", help="keep the head's scalp as it is (see scalp())")
     a = ap.parse_args(argv)
     if a.albedo and a.albedo_contrast != 1.0:
@@ -857,6 +899,13 @@ def main(argv=None):
         po, no, to = po + len(P), no + len(N), to + len(T)
     P, N, T = np.concatenate(allP), np.concatenate(allN), np.concatenate(allT)
     tris = np.concatenate(allTris)
+    if a.double_sided:
+        # (DevJunior, 27.11.2026, device pictures: "strands disappear in the rendering") the game culls one side of
+        # every model (trans.cpp: cModel::CullMode 0 for all); the RE Engine draws its hair cards from both sides: each
+        # card again with its corners in the other order and its normals turned
+        back = tris[:, ::-1, :].copy()  # the same normals: both sides lit alike (no darker copy on top)
+        print("hair: %d triangles drawn from both sides (%d in all)" % (len(tris), 2 * len(tris)))
+        tris = np.concatenate([tris, back])
     hair = build_hair(template, P, N, T, tris)
     wref = U.Archive(open(a.weights_from, "rb").read(), ">").entry(HAIR) if a.weights_from else template
     ne, step, bones = skin_weights(hair, wref, physics=a.physics)

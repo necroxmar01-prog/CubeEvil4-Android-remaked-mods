@@ -346,6 +346,7 @@ struct GlRenderer final : GxCore {
   GLuint filterFbo = 0, colourProgram = 0, colourTex = 0;
   int colourTexW = 0, colourTexH = 0;
   GLint colourModeLoc = -1, colourStrengthLoc = -1, colourSeedLoc = -1;
+  GLint colourZoneLo = -1, colourZoneHi = -1, colourZoneGrade = -1, colourZoneFx = -1;  // "Remake" (mode 4)
   // the "Requiem" atmosphere (AtmospherePass): its program and a framebuffer of the EFB's colour without its depth
   GLuint atmosProgram = 0, atmosFbo = 0;
   GLint atmosSize = -1, atmosZ = -1, atmosHaze = -1, atmosShape = -1;
@@ -2120,6 +2121,10 @@ struct GlRenderer final : GxCore {
       colourModeLoc = glGetUniformLocation(colourProgram, "mode");
       colourStrengthLoc = glGetUniformLocation(colourProgram, "strength");
       colourSeedLoc = glGetUniformLocation(colourProgram, "seed");
+      colourZoneLo = glGetUniformLocation(colourProgram, "zoneLo");
+      colourZoneHi = glGetUniformLocation(colourProgram, "zoneHi");
+      colourZoneGrade = glGetUniformLocation(colourProgram, "zoneGrade");
+      colourZoneFx = glGetUniformLocation(colourProgram, "zoneFx");
     }
     PassTexture(&colourTex, &colourTexW, &colourTexH, w, h);
     const GLuint from = ShownXfb();
@@ -2127,6 +2132,16 @@ struct GlRenderer final : GxCore {
     glUniform1i(colourModeLoc, colourMode);
     glUniform1f(colourStrengthLoc, colourStrength);
     glUniform1f(colourSeedLoc, static_cast<float>(stats.colourPasses % 97u) * 1.37f);  // the grain moves (mode 3)
+    {
+      // "Remake" (mode 4): the room's zone (fixed::RemakeZoneOf), the storm's rain and lightning
+      const fixed::RemakeZone &z = fixed::RemakeZoneOf(room);
+      const float fx[4] = {z.storm, static_cast<float>(stats.colourPasses % 36000u) / 60.0f,
+                           z.storm > 0.0f ? fixed::StormFlash(stats.colourPasses) * z.storm : 0.0f, 0.0f};
+      glUniform4fv(colourZoneLo, 1, z.lo);
+      glUniform4fv(colourZoneHi, 1, z.hi);
+      glUniform4fv(colourZoneGrade, 1, z.grade);
+      glUniform4fv(colourZoneFx, 1, fx);
+    }
     FilterDraw(colourProgram, colourTex, w, h, from);
     colourShown = true;
     stats.colourPasses++;
@@ -2565,8 +2580,9 @@ struct GlRenderer final : GxCore {
     glUseProgram(atmosProgram);
     glUniform2f(atmosSize, static_cast<float>(Lo(kEfbWidth)), static_cast<float>(Lo(kEfbHeight)));
     glUniform4f(atmosZ, perspA, perspB, zRange, zFar);
-    glUniform4fv(atmosHaze, 1, colourMode == 4 ? fixed::kAtmosHazeRemake : fixed::kAtmosHaze);  // 4 "Remake"
-    glUniform4fv(atmosShape, 1, colourMode == 4 ? fixed::kAtmosShapeRemake : fixed::kAtmosShape);
+    const fixed::RemakeZone &zone = fixed::RemakeZoneOf(room);  // 4 "Remake": the room's zone
+    glUniform4fv(atmosHaze, 1, colourMode == 4 ? zone.haze : fixed::kAtmosHaze);
+    glUniform4fv(atmosShape, 1, colourMode == 4 ? zone.shape : fixed::kAtmosShape);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, efbDepth);
     glBindSampler(0, 0);

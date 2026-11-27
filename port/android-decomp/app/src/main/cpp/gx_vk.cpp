@@ -2552,8 +2552,9 @@ struct VkRenderer final : GxCore {
     std::vector<std::uint8_t> pc(atmosFx.constants.bytes, 0);
     Put(pc, atmosFx, "size", size);
     Put(pc, atmosFx, "zmap", zmap);
-    Put(pc, atmosFx, "haze", colourMode == 4 ? fixed::kAtmosHazeRemake : fixed::kAtmosHaze);  // 4 "Remake"
-    Put(pc, atmosFx, "shape", colourMode == 4 ? fixed::kAtmosShapeRemake : fixed::kAtmosShape);
+    const fixed::RemakeZone &zone = fixed::RemakeZoneOf(room);  // 4 "Remake": the room's zone
+    Put(pc, atmosFx, "haze", colourMode == 4 ? zone.haze : fixed::kAtmosHaze);
+    Put(pc, atmosFx, "shape", colourMode == 4 ? zone.shape : fixed::kAtmosShape);
     BindFixedNamed(atmosFx, {{"depths", efbDepth.view, nearestClamp}}, pc);
     vkCmdDraw(cb, 4, 1, 0, 0);
     if (samples <= 1)
@@ -3810,6 +3811,16 @@ struct VkRenderer final : GxCore {
     Put(pc, colourFx, "strength", colourStrength);
     const float seed = static_cast<float>(stats.colourPasses % 97u) * 1.37f;  // the grain moves (mode 3)
     Put(pc, colourFx, "seed", seed);
+    {
+      // "Remake" (mode 4): the room's zone (fixed::RemakeZoneOf), the storm's rain and lightning
+      const fixed::RemakeZone &z = fixed::RemakeZoneOf(room);
+      const float fx[4] = {z.storm, static_cast<float>(stats.colourPasses % 36000u) / 60.0f,
+                           z.storm > 0.0f ? fixed::StormFlash(stats.colourPasses) * z.storm : 0.0f, 0.0f};
+      Put(pc, colourFx, "zoneLo", z.lo);
+      Put(pc, colourFx, "zoneHi", z.hi);
+      Put(pc, colourFx, "zoneGrade", z.grade);
+      Put(pc, colourFx, "zoneFx", fx);
+    }
     Image *src[1] = {ShownImage()};
     FilterPass(colourFx, colourImg, src, 1, pc);
     colourShown = true;

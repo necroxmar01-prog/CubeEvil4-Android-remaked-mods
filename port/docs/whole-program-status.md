@@ -20644,3 +20644,22 @@ Spiel.
   Brauen, Nase und Lippe Schatten), auf die Gesichtstextur gemalt, im Mittel so hell wie vorher (durch den Median
   geteilt). Leon Clásico Remasterizado v21 / Remake v17. Am Host gerendert (vorher/nachher, vorn und seitlich); auf
   dem Gerät nicht getestet.
+- **„Remake“ mit Stimmung je Gebiet** (DevJunior, 27.11.2026: „sistema de iluminación avanzado y ambiente por zona
+  … el pueblo al atardecer con neblina fría, el lago de noche con tormenta, el castillo con luz cálida de velas y la
+  isla gris verdosa … no toques el de Requiem“; Vorlage ein dunkler Waldweg des Spiels von 2023): Modus 4 nimmt je
+  Raum (`GxCore::room`, Stufe << 8 | Raum) ein Gebiet (`fixed::RemakeZoneOf`): Dorf/Wald bei Dämmerung (Stufe 1,
+  dunkel, kalter blaugrüner Dunst), See bei Tag (r103/r107/r10a), Nacht mit Gewitter (r10b, r118, r11a–r11c:
+  Blitze `StormFlash` alle 10 s mit zwei Pulsen, schräge Regenstreifen im Farbdurchgang), Kerzenlicht (Kirche r117,
+  Stufe 2 Schloss), Insel grau-grün (Stufe 3), sonst kalt und klar. Je Gebiet Dunst (Farbe, Menge, ab, Maß,
+  Himmel) und Farbe (Tönung von Schatten und Lichtern, Leuchten der Lichter, Lebendigkeit, Belichtung, Kontrast,
+  kalter Weißabgleich); neue Uniforms `zoneLo/zoneHi/zoneGrade/zoneFx` in `kColourFs` (GL und Vulkan). Requiem
+  (Modus 3) unverändert. Shader mit glslangValidator geprüft, `gx_gl.cpp` am Host übersetzt (Vulkan nur in der CI);
+  auf dem Gerät nicht getestet.
+- **Haar beidseitig, kahle Stellen an der Stirn** (Bericht 041621, Bilder: „mechones desaparecen por el renderizado
+  … dejando ver la parte de la calva pintada“): das Spiel zeichnet jedes Modell einseitig (`trans.cpp`, CullMode 0):
+  `skin_hair_fbx.py --double-sided` legt jede Haarkarte ein zweites Mal mit umgekehrter Eckenfolge an (gleiche
+  Normalen; 53 404 Dreiecke, Datenteil 7,35 MB von 8 MB). Die RE-Gesichtsfarbe hat eigene gemalte Haaransätze; wo
+  das Haar die Stirn nicht deckt (kein Haarpunkt nach außen über dem Texel, 0,5..14 Einheiten, seitlich < 2,5):
+  zurück zur Stirnhaut (~10 700 Texel); der Kopf malt keinen Haaransatz mehr (`--hairline` nur noch im Haarschritt,
+  dort auf der Stirn nur unter Haar). Leon Clásico Remasterizado v22 / Remake v18. Am Host gerendert (Stirn, Seite);
+  das Flackern (Bericht ohne Hinweis) nicht untersucht; auf dem Gerät nicht getestet.

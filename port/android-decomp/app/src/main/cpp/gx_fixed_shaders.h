@@ -562,12 +562,82 @@ constexpr char kDofMixFs[] =
 // at 4 + 14 m; the sky (no depth) 60 % of the most (16.11.2026, "very dark": the haze was blue-black, 62 %, from 3 m)
 constexpr float kAtmosHaze[4] = {0.20f, 0.23f, 0.28f, 0.45f};
 constexpr float kAtmosShape[4] = {4000.0f, 14000.0f, 0.60f, 0.0f};
-// "Remake" (colour mode 4; experiment, wish of DevJunior, 27.11.2026, a forest path of the 2023 game as the reference):
-// the darkness and the cold blue-grey come with the distance, as a dark mist (DevJunior, 27.11.2026: "it does not
-// paint the character that colour": the figure near the camera keeps its own colours; only what lies beyond ~2.8 m from the camera
-// behind it sinks into the dark cold air, the sky mostly lost in it)
-constexpr float kAtmosHazeRemake[4] = {0.055f, 0.075f, 0.105f, 0.72f};
-constexpr float kAtmosShapeRemake[4] = {2800.0f, 6500.0f, 0.82f, 0.0f};
+// "Remake" (colour mode 4; wish of DevJunior, 27.11.2026: "an ambience per zone: each area its tone, its light and its
+// mist, the village at dusk with a cold mist, the lake at night with a storm, the castle with warm candle light and the
+// island grey-green ... a remake ambience for low-end devices"; "the light of the remake is colder and more vibrant,
+// modern"): per area a mist (the atmosphere pass: colour and amount, from how far, its scale, the sky's share), a
+// grade (the colour pass: the shadows' and the lights' tint, vibrance, exposure, contrast, a cold white balance) and
+// a storm (lightning and rain). The mist only takes what lies a few metres beyond the camera, the grade is mild: the
+// figures keep their colours. Requiem (mode 3) stays as it was.
+struct RemakeZone {
+  float haze[4];   // the mist's colour and its most
+  float shape[4];  // from (units), scale, the sky's share
+  float lo[4];     // the shadows' tint (added), a = their lift
+  float hi[4];     // the lights' tint (added), a = the bloom-like glow of the lights
+  float grade[4];  // vibrance, exposure, contrast (S-curve), cold white balance
+  float storm;     // lightning and rain (0..1)
+  const char *name;
+};
+// the village and the forest at dusk (DevJunior, 27.11.2026, a forest path of the 2023 game: "this is what we are
+// after"): dark, the colour held back, a cold blue-teal mist from a few metres on, deep shadows
+constexpr RemakeZone kZoneVillage = {{0.06f, 0.085f, 0.11f, 0.70f}, {2400.0f, 6500.0f, 0.80f, 0.0f},
+                                     {-0.012f, 0.004f, 0.022f, 0.0f}, {0.020f, 0.012f, -0.010f, 0.08f},
+                                     {0.12f, 0.86f, 0.30f, 0.09f}, 0.0f, "village at dusk"};
+// the lake by day: a pale teal-grey haze over the water
+constexpr RemakeZone kZoneLake = {{0.16f, 0.20f, 0.22f, 0.55f}, {3000.0f, 9000.0f, 0.65f, 0.0f},
+                                  {-0.012f, 0.010f, 0.022f, 0.0f}, {0.010f, 0.014f, 0.010f, 0.06f},
+                                  {0.25f, 1.00f, 0.20f, 0.06f}, 0.0f, "lake"};
+// night with a storm (the lake at night, the village and the cemetery at night): dark blue, lightning and rain
+constexpr RemakeZone kZoneStorm = {{0.04f, 0.055f, 0.085f, 0.70f}, {2200.0f, 6000.0f, 0.85f, 0.0f},
+                                   {-0.008f, 0.002f, 0.030f, 0.0f}, {-0.010f, 0.006f, 0.030f, 0.08f},
+                                   {0.22f, 0.92f, 0.28f, 0.09f}, 1.0f, "night storm"};
+// a church or a hall by candle light: warm amber lights, deep shadows, little mist
+constexpr RemakeZone kZoneCandle = {{0.07f, 0.05f, 0.035f, 0.35f}, {3500.0f, 9000.0f, 0.40f, 0.0f},
+                                    {-0.004f, -0.006f, 0.008f, 0.0f}, {0.055f, 0.026f, -0.030f, 0.16f},
+                                    {0.30f, 1.00f, 0.30f, -0.02f}, 0.0f, "candle light"};
+// the island: grey-green, cold and wet
+constexpr RemakeZone kZoneIsland = {{0.11f, 0.14f, 0.13f, 0.55f}, {2800.0f, 8000.0f, 0.70f, 0.0f},
+                                    {-0.010f, 0.010f, 0.006f, 0.0f}, {-0.004f, 0.012f, 0.004f, 0.08f},
+                                    {0.18f, 0.98f, 0.24f, 0.04f}, 0.0f, "island"};
+// elsewhere (caves, mines, Ada's chapters): cold and clear
+constexpr RemakeZone kZoneDefault = {{0.08f, 0.10f, 0.13f, 0.45f}, {3000.0f, 8000.0f, 0.60f, 0.0f},
+                                     {-0.008f, 0.004f, 0.018f, 0.0f}, {0.012f, 0.008f, -0.006f, 0.08f},
+                                     {0.25f, 1.00f, 0.22f, 0.05f}, 0.0f, "default"};
+// the room (stage << 8 | room) to its zone (rooms as the 10b walk-through named them)
+inline const RemakeZone &RemakeZoneOf(unsigned room) {
+  const unsigned stage = room >> 8;
+  switch (room) {
+  case 0x10B: case 0x118: case 0x11A: case 0x11B: case 0x11C:
+    return kZoneStorm;  // Del Lago, the cemetery, the village, the lake shore and the forest at night
+  case 0x103: case 0x107: case 0x10A:
+    return kZoneLake;
+  case 0x117:
+    return kZoneCandle;  // the church
+  default:
+    break;
+  }
+  if (stage == 1)
+    return kZoneVillage;
+  if (stage == 2)
+    return kZoneCandle;  // the castle
+  if (stage == 3)
+    return kZoneIsland;
+  return kZoneDefault;
+}
+// a lightning flash's light (0..1) at picture `n` (about 60 a second): every 7..16 s two quick pulses
+inline float StormFlash(unsigned n) {
+  const unsigned period = 600;
+  const unsigned k = n / period;
+  const unsigned h = (k * 2654435761u) >> 16;
+  const unsigned at = 120 + h % 360;  // when in this period
+  const unsigned d = n % period;
+  if (d < at || d > at + 40)
+    return 0.0f;
+  const float t = static_cast<float>(d - at);
+  const float p1 = t < 6 ? 1.0f - t / 6.0f : 0.0f;
+  const float p2 = t >= 10 ? (t < 40 ? 1.0f - (t - 10) / 30.0f : 0.0f) : 0.0f;
+  return p1 > p2 ? p1 : p2 * 0.8f;
+}
 constexpr char kAtmosFs[] =
     "uniform vec4 haze;\nuniform vec4 shape;\nout vec4 o;\n"
     "void main() {\n"
@@ -589,6 +659,7 @@ constexpr char kColourFs[] =
     "uniform int mode;\n"
     "uniform float strength;\n"
     "uniform float seed;\n"
+    "uniform vec4 zoneLo;\nuniform vec4 zoneHi;\nuniform vec4 zoneGrade;\nuniform vec4 zoneFx;\n"
     "in vec2 vUv;\nout vec4 o;\n"
     "float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }\n"
     "vec3 scurve(vec3 c, float a) { return c + a * (c * c * (3.0 - 2.0 * c) - c); }\n"
@@ -602,10 +673,10 @@ constexpr char kColourFs[] =
     "    g *= vec3(1.0) + vec3(0.06, 0.0, -0.14) * clamp(l * 1.6, 0.0, 1.0);\n"
     "    g = clamp(scurve(clamp(g, 0.0, 1.0), 0.25), 0.0, 1.0);\n"
     "  } else if (mode == 4) {\n"
-    // "Remake" (experiment, wish of DevJunior, 27.11.2026, a dark forest path of the 2023 game as the reference): the
-    // sharpening of mode 3, a gentle S-curve, dark corners and a fine grain; no colour taken or tinted here, the
-    // figures keep theirs ("no pinta al personaje de ese color"): the cold dark comes with the distance (the
-    // atmosphere pass, kAtmosHazeRemake)
+    // "Remake": the sharpening of mode 3, then the zone's grade (RemakeZone; zoneLo/zoneHi/zoneGrade, zoneFx: storm,
+    // time, the lightning's light): a cold white balance, vibrance (the dull colours gain most, the skin little),
+    // the exposure, a gentle S-curve, the shadows and the lights tinted, the lights glowing a little, dark corners,
+    // a fine grain; with a storm rain streaks and the lightning's cold light
     "    vec2 px = 1.0 / vec2(textureSize(src, 0));\n"
     "    vec3 n = texture(src, vUv + vec2(0.0, px.y)).rgb, s = texture(src, vUv - vec2(0.0, px.y)).rgb;\n"
     "    vec3 e = texture(src, vUv + vec2(px.x, 0.0)).rgb, w4 = texture(src, vUv - vec2(px.x, 0.0)).rgb;\n"
@@ -613,12 +684,31 @@ constexpr char kColourFs[] =
     "    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(0.001)), 0.0, 1.0));\n"
     "    vec3 wt = -amp * 0.14;\n"
     "    c = clamp((c + wt * (n + s + e + w4)) / (1.0 + 4.0 * wt), 0.0, 1.0);\n"
-    "    g = scurve(c, 0.22);\n"
+    "    g = c * vec3(1.0 - zoneGrade.w, 1.0, 1.0 + zoneGrade.w * 1.2);\n"
+    "    float lv = lum(g);\n"
+    "    float sat = (max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b))) / max(max(g.r, max(g.g, g.b)), 0.02);\n"
+    "    g = vec3(lv) + (g - vec3(lv)) * (1.0 + zoneGrade.x * (1.0 - sat));\n"
+    "    g = clamp(g * zoneGrade.y, 0.0, 1.0);\n"
+    "    g = scurve(g, zoneGrade.z);\n"
+    "    float lg = lum(g);\n"
+    "    g += zoneLo.rgb * (1.0 - smoothstep(0.0, 0.45, lg)) * smoothstep(0.0, 0.06, lg)\n"
+    "       + zoneHi.rgb * smoothstep(0.40, 1.0, lg);\n"
+    "    g += zoneHi.a * smoothstep(0.65, 1.0, lg) * g;\n"
+    "    if (zoneFx.x > 0.0) {\n"
+    "      vec2 r = vUv * vec2(textureSize(src, 0)) / 900.0;\n"
+    "      float x = r.x * 160.0 + r.y * 28.0;\n"
+    "      float col = floor(x);\n"
+    "      float hr = fract(sin(col * 91.17) * 43758.5);\n"
+    "      float y = r.y * (2.0 + hr) + zoneFx.y * (2.2 + hr * 1.5) + hr * 17.0;\n"
+    "      float streak = smoothstep(0.90, 1.0, fract(y)) * (1.0 - smoothstep(0.0, 0.18, abs(fract(x) - 0.5)));\n"
+    "      g += zoneFx.x * streak * 0.10 * vec3(0.75, 0.82, 0.95);\n"
+    "      g += zoneFx.z * (0.30 * lg + 0.10) * vec3(0.80, 0.88, 1.0);\n"
+    "    }\n"
     "    vec2 d = (vUv - 0.5) * vec2(1.0, 0.8);\n"
-    "    g *= 1.0 - 0.40 * smoothstep(0.30, 0.85, length(d));\n"
+    "    g *= 1.0 - 0.32 * smoothstep(0.32, 0.85, length(d));\n"
     "    float h = fract(sin(dot(floor(gl_FragCoord.xy) + seed, vec2(12.9898, 78.233))) * 43758.5453);\n"
     "    float lm = lum(g);\n"
-    "    g = clamp(g + (h - 0.5) * 0.05 * lm * (1.0 - lm) * 4.0, 0.0, 1.0);\n"
+    "    g = clamp(g + (h - 0.5) * 0.04 * lm * (1.0 - lm) * 4.0, 0.0, 1.0);\n"
     "  } else if (mode == 3) {\n"
     // (third round, 15.11.2026, "like Requiem or the remake, without losing FPS": the GameCube's soft textures sharpened
     // as AMD's contrast-adaptive sharpening does, four more texels: strong where the detail is faint, little at hard
