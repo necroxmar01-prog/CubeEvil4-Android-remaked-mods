@@ -20487,3 +20487,8 @@ Spiel.
   Aufhebe-Hinweis („(10“): im Protokoll ersetzt der Mod „Remake HUD“ `etc/core.das` (3 118 368 Bytes) – ein Kern der
   Debug-Disc – auf den EU-Discs; dessen Texttabellen haben für Spanisch nur Platzhalter, die Namen (Typ 3,
   `CORE_MESSAGE_3`) kommen leer. Nicht im Spiel getestet.
+- **Muskeln auf dem engen Hemd** (DevJunior, 26.11.2026: „a nuestro modelo también deberían verse músculos
+  definidos“, Vorbild ein Leon im engen schwarzen Hemd): neues Werkzeug `port/tools/skin_muscles.py`: Brust, Sixpack,
+  Mittellinie und seitliche Bauchmuskeln als Höhenfeld im Modellraum (eigene Form, nichts aus dem Bild übernommen), von
+  oben vorn beleuchtet und auf die Vorderseite der Hemdtextur gemalt (Textur 5 von `pl08`, 256×128 → 1024×512 mit
+  Mipmaps). Leon Clásico Remasterizado v11 / Remake v6 (`pl08` 7,0 MB). Am Host gerendert, auf dem Gerät nicht getestet.
