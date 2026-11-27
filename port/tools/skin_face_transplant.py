@@ -161,11 +161,11 @@ def main(argv=None):
     fok = np.isfinite(fpos[..., 0])
     ftree = cKDTree(fpos[fok])
     fcol = face_img[fok]
-    # the event's parts, each region moved as a whole onto the skin's (its shapes stay the event's own): each eye by
-    # its eyeball's middle, the mouth by the lips' parting and the lips' front
-    egc = {gc[p + 0xC]: U.gc_triangles(gc, gc[p + 0xC]) for p in G.parts(gc) if not G.is_empty(gc, p)}
-    ball_m = min(egc, key=lambda m: len(egc[m][0]))
-    eb = egc[ball_m][0].reshape(-1, 3)
+    # the event head (ev0001): texture 2 its head in one piece (the eyes' surfaces in it, the lids around them; the
+    # blink, slot 9, moves only the lids) and three loose pieces in the mouth (the teeth above and below, the
+    # tongue); texture 0 the lashes' cards (left out: their colour is in the alpha of a texture this tool has not)
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
 
     def mid(q):
         return (q.min(0) + q.max(0)) / 2
@@ -173,21 +173,41 @@ def main(argv=None):
     def lip_front(Q, y):
         sel = (np.abs(Q[:, 0]) < 4) & (np.abs(Q[:, 1] - y) < 4) & (Q[:, 2] > 40)
         return float(Q[sel, 2].max()) if sel.any() else 0.0
+    etree = cKDTree(E)
+    big = max((gc[p + 0xC] for p in G.parts(gc) if not G.is_empty(gc, p)),
+              key=lambda m: len(U.gc_triangles(gc, m)[0]))
+    P, N, T = U.gc_triangles(gc, big)
+    _d, vi = etree.query(P.reshape(-1, 3))
+    vi = vi.reshape(-1, 3)
+    r, c = np.r_[vi[:, 0], vi[:, 1], vi[:, 2]], np.r_[vi[:, 1], vi[:, 2], vi[:, 0]]
+    _n, lab = connected_components(coo_matrix((np.ones(len(r)), (r, c)), shape=(len(E), len(E))), directed=False)
+    tl = lab[vi[:, 0]]
+    head_comp = np.bincount(tl).argmax()
+    blink = shapes[9] if len(shapes) > 9 else {}
+    lids = np.array(sorted(blink), int)
+    lidq = E[lids] if len(lids) else np.zeros((0, 3))
+    ecs = {}
+    for side in (1, -1):
+        q = lidq[lidq[:, 0] * side > 0]
+        ecs[side] = (q.min(0) + q.max(0)) / 2 if len(q) else np.array([side * 30.0, _le["eyes"], 75.0])
     moves = {}
     for side in (1, -1):
-        se = mid(eb[eb[:, 0] * side > 0])
-        sk = mid(eyeq[eyeq[:, 0] * side > 0]) if eyeq is not None else np.array([side * ex, ey, se[2]])
-        moves[side] = sk - se
+        sk = mid(eyeq[eyeq[:, 0] * side > 0]) if eyeq is not None else np.array([side * ex, ey, ecs[side][2]])
+        moves[side] = np.array([sk[0] - ecs[side][0], sk[1] - ecs[side][1], 0.0])
+        # the depth: the event's eye opening as far forward as the skin's eyeballs' front
+        if eyeq is not None:
+            q = eyeq[eyeq[:, 0] * side > 0]
+            moves[side][2] = float(q[:, 2].max()) - float(E[lids][E[lids][:, 0] * side > 0][:, 2].max()) + 2.0
     mouth_move = np.array([0.0, ls["mouth"] - _le["mouth"], lip_front(Sk, ls["mouth"]) - lip_front(E, _le["mouth"])])
-    ecx = float(np.abs(mid(eb[eb[:, 0] > 0])[0]))
-    ecy = float(mid(eb)[1])
-    ev_holes = [(ecx, ecy, erx, ery, 30.0), (-ecx, ecy, erx, ery, 30.0), (0.0, _le["mouth"], mrx, mry, 30.0)]
+    ecx = float(abs(ecs[1][0]))
+    ecy = float((ecs[1][1] + ecs[-1][1]) / 2)
+    ev_holes = [(ecs[1][0], ecs[1][1], erx, ery, 30.0), (ecs[-1][0], ecs[-1][1], erx, ery, 30.0),
+                (0.0, _le["mouth"], mrx, mry, 30.0)]
     ev_grown = [(cx, cy, rx * (1 + a.margin), ry * (1 + a.margin), z) for cx, cy, rx, ry, z in ev_holes]
     print("moved: eyes by %s / %s, mouth by %s" % (np.round(moves[1], 1).tolist(), np.round(moves[-1], 1).tolist(),
                                                    np.round(mouth_move, 1).tolist()))
 
     def place(Q):
-        """The event's points (n x 3) moved by their region's move (the eyes by side, the mouth below the nose)."""
         out = Q.copy()
         mouth = Q[:, 1] < (_le["mouth"] + _le["nose"]) / 2
         for side in (1, -1):
@@ -195,80 +215,82 @@ def main(argv=None):
             out[sel] += moves[side]
         out[mouth] += mouth_move
         return out
-    groups_src = []
-    patch_src = []  # (placed point, event vertex index, snap weight)
-    etree = cKDTree(E)
-    for m, (P, N, T) in egc.items():
-        is_ball = m == ball_m
-        depth = inside(P.mean(1), ev_grown)
-        take = np.ones(len(P), bool) if is_ball else depth >= 0
-        if not take.any():
+    # the triangles taken: the head's within the grown ellipses, the mouth's loose pieces whole; their kinds: the
+    # eyes' surfaces (inside an opening, still in the blink), the teeth, the mouth's inside, the rest skin
+    still = np.ones(len(E), bool)
+    still[lids] = False
+    cen = P.mean(1)
+    take = (tl != head_comp) | (inside(cen, ev_grown) >= 0)
+    kind = np.zeros(len(P), int)  # 0 skin, 1 eye, 2 teeth, 3 inside
+    for side in (1, -1):
+        e = ecs[side]
+        opening = (((cen[:, 0] - e[0]) / 13.0) ** 2 + ((cen[:, 1] - e[1]) / 6.5) ** 2 < 1.0) & (cen[:, 2] > 50)
+        kind[opening & still[vi].all(1)] = 1
+    for k in np.unique(tl):
+        if k == head_comp:
             continue
-        P0 = P[take]
-        A = place(P0.reshape(-1, 3))
-        w = np.zeros(len(A))
-        if not is_ball:
-            # the patch's edge onto the skin's surface, fading in over the margin
-            d = inside(P0.reshape(-1, 3), ev_holes)  # < 0 in the margin
-            w = np.clip(-d / max(a.margin, 1e-3), 0, 1)
-            _dist, j = ftree.query(A)
-            A = A + (fpos[fok][j] - A) * w[:, None]
-        _d, vi = etree.query(P0.reshape(-1, 3))
-        patch_src.append((A, vi, w))
-        groups_src.append((m, is_ball, A.reshape(P0.shape), N[take], T[take]))
-    # the patch's texture coordinates are its own (the event model's are not usable as converted): the skin patch
-    # a front projection of its box into one new texture (the mouth's inside, more than `inside` behind the face, in
-    # a strip of its own: dark, the teeth light), the eyeballs straight onto the skin's eye texture by each point's
-    # offset from its ball's front
+        sel = tl == k
+        q = P[sel].reshape(-1, 3)
+        kind[sel] = 2 if (q[:, 1].max() - q[:, 1].min()) > 15 else 3  # the teeth's arches stand taller than the tongue
+    kind[(tl == head_comp) & (inside(cen, [ev_holes[2]]) > 0.2) & (cen[:, 2] < lip_front(E, _le["mouth"]) - 8)] = 3
+    P0, N0, T0, k0, v0 = P[take], N[take], T[take], kind[take], vi[take]
+    A = place(P0.reshape(-1, 3))
+    d = inside(P0.reshape(-1, 3), ev_holes)  # < 0 in the margin
+    w = np.clip(-d / max(a.margin, 1e-3), 0, 1) * (np.repeat(tl[take] == head_comp, 3))
+    # (onto the face that stays: the skin's own lids inside the holes are no surface to meet)
+    outer = fpos[fok][inside(fpos[fok], holes) < -0.02]
+    _dist, j = cKDTree(outer).query(A)
+    A = A + (outer[j] - A) * w[:, None]
+    patch_src = [(A, v0.reshape(-1), w)]
+    A = A.reshape(P0.shape)
+    print("event patch: %d triangles: %d skin, %d eyes, %d teeth, %d the mouth's inside" %
+          tuple([len(A)] + [int((k0 == q).sum()) for q in range(4)]))
+    # their texture coordinates are their own: the skin a front projection of the patch's box into one new texture
+    # (beside it a strip for the teeth and one for the mouth's inside), the eyes straight onto the skin's eye texture
+    # by each point's offset from its eye's middle
     new_imgs = list(imgs)
     groups = []
-    skin = [(A, N) for m, is_ball, A, N, T in groups_src if not is_ball]
-    balls = [(A, N) for m, is_ball, A, N, T in groups_src if is_ball]
-    if skin:
-        A = np.concatenate([q for q, _n in skin])
-        N = np.concatenate([n for _q, n in skin])
-        flat = A.reshape(-1, 3)
-        ds, _ = ftree.query(A.mean(1))
-        deep = (ds > a.inside) & (np.abs(A.mean(1)[:, 1] - ls["mouth"]) < mry * 1.3) & (np.abs(A.mean(1)[:, 0]) < mrx)
-        lo, hi = flat.min(0), flat.max(0)
-        T = np.zeros(A.shape[:2] + (2,))
-        T[..., 0] = (A[..., 0] - lo[0]) / (hi[0] - lo[0]) * 0.8
-        T[..., 1] = 1.0 - (A[..., 1] - lo[1]) / (hi[1] - lo[1])
-        teeth = deep & (A.mean(1)[:, 1] > ls["mouth"] - 1.0) & (ds < a.inside + 5.0)
-        T[deep, :, 0] = np.where(teeth[deep, None], 0.85, 0.95)
-        T[deep, :, 1] = 0.5
-        S_ = a.tex
+    S_ = a.tex
+    Tn = np.zeros(A.shape[:2] + (2,))
+    sk = k0 == 0
+    flat = A[sk].reshape(-1, 3)
+    lo, hi = flat.min(0), flat.max(0)
+    Tn[sk, :, 0] = (A[sk][..., 0] - lo[0]) / (hi[0] - lo[0]) * 0.8
+    Tn[sk, :, 1] = 1.0 - (A[sk][..., 1] - lo[1]) / (hi[1] - lo[1])
+    Tn[k0 == 2] = (0.85, 0.5)
+    Tn[k0 == 3] = (0.95, 0.5)
 
-        def colour_of(Q):
-            d, j = ftree.query(Q, k=4)
-            w = 1.0 / np.maximum(d, 0.05)
-            return (fcol[j] * w[..., None]).sum(1) / w.sum(1)[:, None]
-        img = bake(A[~deep], T[~deep], (S_, S_), colour_of)
-        arr = np.asarray(img).copy()
-        arr[:, int(0.8 * S_):int(0.9 * S_)] = (205, 198, 182, 255)  # the teeth
-        arr[:, int(0.9 * S_):] = (62, 26, 26, 255)  # the mouth's inside
-        img = Image.fromarray(arr, "RGBA")
-        if a.preview:
-            Path(a.preview).mkdir(parents=True, exist_ok=True)
-            img.save(Path(a.preview) / "patch.png")
-        hdr = bytearray(imgs[face_mat][0])
-        struct.pack_into(">HH", hdr, 0, S_, S_)
-        new_imgs.append(G.encode_image(img, bytes(hdr)))
-        groups.append((len(new_imgs) - 1, A, N, T))
-        print("patch: %d triangles, %d of them the mouth's inside (%d teeth)" % (len(A), int(deep.sum()),
-                                                                                int(teeth.sum())))
-    if balls and eye_mat is not None:
-        A = np.concatenate([q for q, _n in balls])
-        N = np.concatenate([n for _q, n in balls])
-        T = np.zeros(A.shape[:2] + (2,))
-        k = 0.227 / 5.5
+    def colour_of(Q):
+        dd, jj = ftree.query(Q, k=4)
+        ww = 1.0 / np.maximum(dd, 0.05)
+        return (fcol[jj] * ww[..., None]).sum(1) / ww.sum(1)[:, None]
+    img = bake(A[sk], Tn[sk], (S_, S_), colour_of)
+    arr = np.asarray(img).copy()
+    arr[:, int(0.8 * S_):int(0.9 * S_)] = (205, 198, 182, 255)  # the teeth
+    arr[:, int(0.9 * S_):] = (62, 26, 26, 255)  # the mouth's inside
+    img = Image.fromarray(arr, "RGBA")
+    if a.preview:
+        Path(a.preview).mkdir(parents=True, exist_ok=True)
+        img.save(Path(a.preview) / "patch.png")
+    hdr = bytearray(imgs[face_mat][0])
+    struct.pack_into(">HH", hdr, 0, S_, S_)
+    new_imgs.append(G.encode_image(img, bytes(hdr)))
+    notes = k0 != 1
+    groups.append((len(new_imgs) - 1, A[notes], N0[notes], Tn[notes]))
+    if eye_mat is not None and (k0 == 1).any():
+        sel_e = k0 == 1
+        Ae = A[sel_e]
+        Te = np.zeros(Ae.shape[:2] + (2,))
+        kk = 0.227 / 5.5
         for side in (1, -1):
-            sel = A.mean(1)[:, 0] * side > 0
-            q = A[sel].reshape(-1, 3)
-            f = q[np.argmax(q[:, 2])]
-            T[sel, :, 0] = np.clip(0.5 + (A[sel][..., 0] - f[0]) * k * side, 0.0, 1.0)
-            T[sel, :, 1] = np.clip(0.5 - (A[sel][..., 1] - f[1]) * k, 0.0, 1.0)
-        groups.append((eye_mat, A, N, T))
+            sel = Ae.mean(1)[:, 0] * side > 0
+            q = Ae[sel].reshape(-1, 3)
+            if not len(q):
+                continue
+            f = (q.min(0) + q.max(0)) / 2
+            Te[sel, :, 0] = np.clip(0.5 + (Ae[sel][..., 0] - f[0]) * kk * side, 0.0, 1.0)
+            Te[sel, :, 1] = np.clip(0.5 - (Ae[sel][..., 1] - f[1]) * kk, 0.0, 1.0)
+        groups.append((eye_mat, Ae, N0[sel_e], Te))
     if len(new_imgs) > 255:
         raise SystemExit("too many textures")
     # the new head: the skin's face (without the holes), its other parts but the eyeballs and their wet layer, the
@@ -290,7 +312,9 @@ def main(argv=None):
     wet = [m for _p, m in parts if m not in (face_mat, eye_mat) and
            abs(U.gc_triangles(head, m)[0].reshape(-1, 3)[:, 1].mean() - ey) < 15]
     for p, m in parts:
-        if m in (face_mat, eye_mat) or m in wet:
+        # the skin's eyeballs and their wet layer stay: the event head has none (its eye openings are holes; the
+        # event draws its eyes apart), its lids close over the skin's
+        if m == face_mat:
             continue
         Pc, Nc, Tc = U.gc_triangles(head, m)
         add(p, Pc, Nc, Tc)

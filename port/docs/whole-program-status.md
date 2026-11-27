@@ -20796,8 +20796,13 @@ Spiel.
   Augäpfeln, Mund nach der Lippenfuge), Rand auf die Haut gezogen, und gibt den eingesetzten Punkten die Formen des
   Events eins zu eins (der Rest über `carry_shapes`). Stand am Host: die UV des umgewandelten Event-Kopfs sind
   unbrauchbar (eigene Frontprojektion nötig), Teil 0 des Event-Kopfs sind nicht die Augäpfel (die liegen in Teil 2),
-  der Rand ist zackig. Nächster Schritt: den Event-Kopf in seine Teilnetze zerlegen (Augäpfel, Lider, Wimpern, Zähne,
-  Zunge) und sauber einsetzen.
+  der Rand ist zackig. Zweiter Stand (27.11.2026): der Event-Kopf zerlegt – Textur 2 ein Kopfnetz ohne Augäpfel
+  (die Augenöffnungen sind Löcher, das Event zeichnet die Augen gesondert) plus drei lose Teile im Mund (Zähne oben und
+  unten, Zunge), Textur 0 die Wimpernkarten. Das Werkzeug behält jetzt die Augäpfel des neuen Kopfs, setzt die Lider
+  des Events darum (nach dem Lidschlag-Bereich zentriert), Zähne/Zunge mit eigener Farbe, eigene Frontprojektion als
+  UV, Rand nur auf die verbleibende Haut gezogen. Am Host gerendert: die Lider des Events stehen als runder, zu weiter
+  Ring um die größeren Augäpfel des neuen Kopfs (Glupschaugen-Eindruck), am Rand noch Zacken; nicht brauchbar,
+  Entscheidung des Projektinhabers zum weiteren Weg offen.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
