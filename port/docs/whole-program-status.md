@@ -20770,7 +20770,14 @@ Spiel.
   ihrem Versatz von der Vorderseite des Augapfels (Iris 11 Einheiten breit), Zähne und Zunge behalten ihre Texel,
   Lücken werden aus den Nachbarn gefüllt. Leon-Pakete Klassik v29 (Disc-Körper, Disc-Kopf, neues Haar) und Remake v25
   (Remake-Körper und -Haar, Disc-Kopf eingesetzt), Datenteile 4,6–7,3 MB. Am Host gerendert (Augen, Gesicht von
-  vorn); die Mimik in Zwischensequenzen ist die der Disc und auf dem Gerät nicht getestet.
+  vorn). Gerätetest (DevJunior, 27.11.2026): verworfen – in Zwischensequenzen bewegt sich nichts (der Disc-Kopf hat
+  keine Formtabelle für Patch 0907, `skin_shapes.py` lief nicht), die Stirn wirkt zu hoch, das neue Haar sitzt schlecht
+  auf dem Disc-Kopf; gewünscht ist der neue Kopf mit Augen und Mund des Klassikers. Zurück zu Klassik v28 / Remake v24.
+- **Echtzeitschatten günstiger** (DevJunior, 27.11.2026, zwei Berichte mit und ohne Schatten: 3,7–3,9 ms der ~10,5 ms
+  je Chunk für die Schatten): Zeichenaufrufe einer Figur mit Alpha-Test werfen keinen Schatten mehr (Haarkarten,
+  Wimpern, Fell; bei der Leon-Skin rund 53 000 beidseitige Dreiecke, je Bild umgerechnet, hochgeladen und dreimal
+  gezeichnet); der Kopf darunter wirft weiter. Solche Pixel sind dann nicht als Figur markiert (Haar nimmt Figuren- und
+  Objektschatten wie die Umgebung, keinen Kulissenschatten). Am Host übersetzt; auf dem Gerät nicht gemessen.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →

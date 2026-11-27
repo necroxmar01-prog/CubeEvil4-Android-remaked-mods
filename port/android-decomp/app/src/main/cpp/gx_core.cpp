@@ -1480,6 +1480,16 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
                        (ownerWords[2] & RE4_GX_OWNER_SCENERY) != 0;
   if (!figure && !object && !scenery)
     return;
+  if (figure) {
+    // a figure's alpha-tested draws cast nothing (27.11.2026, the owner's Odin 2 Portal: the shadows took 3.8 ms of
+    // the render thread's ~10.5 per chunk, most of it a skin's hair: some 53000 card triangles drawn from both sides,
+    // each transformed, uploaded and drawn three times a picture). Cards (hair, lashes, fur) throw a blotchy shadow
+    // anyway; the head under them still casts.
+    const unsigned at = (bp[0xF3] >> 16) & 0xFF;
+    const unsigned f0 = at & 7, f1 = (at >> 3) & 7, logic = (at >> 6) & 3;
+    if (!((f0 == 7 && f1 == 7) || (logic == 1 && (f0 == 7 || f1 == 7))))
+      return;
+  }
   const std::uint32_t z = bp[0x40];
   if (!(z & 1) || !((z >> 4) & 1) || d.stride < 12 || d.vertexCount == 0)
     return;  // the solid parts only: depth tested and written
