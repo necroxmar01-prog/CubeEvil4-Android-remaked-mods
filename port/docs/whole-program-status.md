@@ -20506,3 +20506,13 @@ Spiel.
   die Bewegungen des Spiels zurück, wie bei der Pistole). Leon Clásico Remasterizado v13 / Remake v8,
   RE9 Finishers v42 (move.dat 450 880 Bytes, 29 Einträge). Am Host gerendert (Unterarm, Nacken in Ruhe), auf dem
   Gerät nicht getestet; der Nacken beim Zielen und die Mimik nur auf dem Gerät prüfbar.
+- **Doblaje latino (IG Studios), Bestandsaufnahme** (DevJunior, 26.11.2026, Dateiliste und Muster): der Mod ist für
+  RE4 UHD (Steam) gemacht. Neues Werkzeug `uhd_lfs.py`: entpackt die `.lfs`-Dateien der PC-Fassung (Kopf „RDLX“,
+  64-KiB-Stücke, XMemDecompress = LZX mit 128-KiB-Fenster, eigener Decoder nach dem CAB-Format; Aufbau nach emoose
+  `re4lfs.cpp`). Geprüft: `r100s03.evd.lfs` → 2 146 144 Bytes, Kopf und alle 259 Dateinamen an denselben Stellen wie
+  in der GC-Datei (2 058 912 Bytes; der Rest anders, vermutlich Byte-Reihenfolge der PC-Fassung, nicht untersucht);
+  `core.udas.lfs` → 2 452 064 Bytes (Inhalt noch nicht ausgewertet). Stimmen: `pl00.xwb` = XACT-Wellenbank, 70 Einträge,
+  16-bit-PCM mono 22/32 kHz (ohne Umwandlung lesbar); `bio4evt.xwb` (655 MB, 280 Einträge laut `bio4evt.xsb`) die
+  Stimmen der Zwischensequenzen, im GC-Spiel Stream-Dateien (`snd_str*`). Die Zuordnung PC-Eintrag → GC-Stimme und der
+  Weg ins Spiel (Ersatz zur Laufzeit wie beim Musik-Mod oder Umwandeln in die GC-Dateien) sind offen;
+  Grundsatzentscheidung beim Projektinhaber. Nichts aus dem Mod ins Repository.
