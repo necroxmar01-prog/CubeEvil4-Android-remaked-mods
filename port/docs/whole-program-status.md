@@ -20747,6 +20747,13 @@ Spiel.
   abgelesen: Asch mit wenig Sättigung, ~0,22), dunkler als dort, weil Spiellicht und Requiem aufhellen: Rampe
   34,30,26 → 88,79,69 → 150,136,122, Strähnen 0.08, Detail 0.45 (vorher 0.15/0.8, wirkte auf dem Gerät wie
   Maserung). Die Haar-Textur der Mod ist grau (die RE Engine färbt im Shader), ihre Farbe kommt daher aus der Rampe.
+- **Haarfarbe aus einer Leon-Skin** (DevJunior, 27.11.2026, „Leon_Remake_Lite_optimized“ mit Bild: „podrías utilizar
+  la textura de cabello de él“): `skin_hair_fbx.py --colour-image PNG [--colour-rows LO:HI]` nimmt die Farbtextur aus
+  der Haartextur einer anderen Skin (Strähnen von oben nach unten): ihr beleuchtetes Mittelstück (Zeilen 0,45–0,85,
+  ohne Ansatz und Spitzen, weil die Wurzel der beiden Haare nicht am selben Ende liegt), entlang der Strähnen gestreckt,
+  quer gekachelt, leicht nach der eigenen Albedo schattiert. Leon-Pakete Klassik v28, Remake v24 mit Textur 4 der
+  Kopf-TPL (Eintrag 3) dieser Skin (Mittel 67,55,43; Kopfhaut/Brauen 70,58,45). Die Skin selbst kommt nicht ins
+  Repository. Am Host gerendert; auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →

@@ -819,6 +819,11 @@ def main(argv=None):
     ap.add_argument("--ramp", help="SHADOW:MIDDLE:HIGHLIGHT (R,G,B each): the colour texture through this ramp "
                     "with --streaks, as skin_head_fbx.py --hair-ramp, instead of --colour")
     ap.add_argument("--streaks", type=float, default=0.3, help="lighter streaks with --ramp (default 0.3)")
+    ap.add_argument("--colour-image", metavar="PNG",
+                    help="the colour texture from another skin's hair texture (strands top to bottom): the rows "
+                         "--colour-rows of it, stretched along the strands, tiled across, shaded a little by --albedo")
+    ap.add_argument("--colour-rows", default="0.45:0.85", metavar="LO:HI",
+                    help="with --colour-image: the share of its rows to take (its lit middle, not roots nor tips)")
     ap.add_argument("--strand-detail", type=float, default=0.0,
                     help="with --ramp: single strands, clumps and an ash/warm tint in the colour texture (e.g. 1.0)")
     ap.add_argument("--thicken", type=float, default=0.5, help="spread this share of the strand mask one texel")
@@ -950,6 +955,22 @@ def main(argv=None):
         import skin_head_fbx as HF  # here: it imports this module
         stops = [tuple(float(c) for c in x.split(",")) for x in a.ramp.split(":")]
         cols = HF.hair_levels(a.albedo, a.alpha, (cw, ch), stops, a.streaks, detail=a.strand_detail)
+    if a.colour_image:
+        # (DevJunior, 27.11.2026: "podrías utilizar la textura de cabello de él", a Leon skin's hair) its colours and
+        # strands as they are; no gradient along the strands (which end is the root differs between the two hairs)
+        src = Image.open(a.colour_image).convert("RGB")
+        lo, hi = (float(v) for v in a.colour_rows.split(":"))
+        band = src.crop((0, int(lo * src.height), src.width, max(int(lo * src.height) + 1, int(hi * src.height))))
+        tile_w = src.width  # its strands as wide as there
+        band = np.asarray(band.resize((tile_w, ch), Image.LANCZOS), dtype=np.float64)
+        rgb = np.concatenate([band] * (cw // tile_w + 1), axis=1)[:, :cw]
+        shade = np.asarray(cols[0].convert("L"), dtype=np.float64) / float(np.median(np.asarray(cols[0].convert("L"))))
+        rgb *= np.clip(1.0 + 0.5 * (shade - 1.0), 0.85, 1.15)[..., None]
+        col = Image.fromarray(np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), np.full((ch, cw), 255, np.uint8)]),
+                              "RGBA")
+        cols = [col] + [col.resize(sz, Image.BOX) for sz in mip_sizes(*col.size)[1:]]
+        print("hair: colour from %s (rows %.2f..%.2f), mean %s" % (a.colour_image, lo, hi,
+                                                                  tuple(int(v) for v in rgb.reshape(-1, 3).mean(0))))
     imgs[mc] = encode_levels(cols, 0xE, imgs[mc][0], enc_cmpr)
     imgs[ma] = (encode_levels(masks, 0x0, imgs[ma][0], enc_i4) if a.alpha_format == "I4" else
                 encode_levels(masks, 0x1, imgs[ma][0], enc_i8))
