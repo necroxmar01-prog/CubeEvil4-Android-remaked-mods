@@ -681,9 +681,11 @@ constexpr char kAtmosFs[] =
     "      float an = float(i) * 0.785398 + 0.39;\n"
     "      float ds = distanceAt(t + vec2(cos(an), sin(an)) * r * (i % 2 == 0 ? 1.0 : 0.55));\n"
     "      float df = d - ds;\n"
-    "      occ += clamp(df / 250.0, 0.0, 1.0) * (1.0 - clamp((df - 800.0) / 1200.0, 0.0, 1.0));\n"
+    // only an occluder within ~40 cm in front counts (DevJunior, 27.11.2026, device pictures: "looks more like a
+    // rendering error and outlines": leaves far in front of the ground drew dark halos round all the foliage)
+    "      occ += clamp(df / 120.0, 0.0, 1.0) * (1.0 - clamp((df - 250.0) / 150.0, 0.0, 1.0));\n"
     "    }\n"
-    "    over(acc, vec3(0.0), clamp(occ / 8.0 * 1.4, 0.0, 1.0) * fx.x * 0.55);\n"
+    "    over(acc, vec3(0.0), clamp(occ / 8.0 * 1.2 - 0.15, 0.0, 1.0) * fx.x * 0.45);\n"
     "  }\n"
     // light shafts: from this pixel towards the source, how much open sky lies on the way (nearer counts more)
     "  if (fx.y > 0.0) {\n"
@@ -694,18 +696,22 @@ constexpr char kAtmosFs[] =
     "      wsum += w;\n"
     "      w *= 0.88;\n"
     "    }\n"
+    // only clear gaps (squared; a forest with sky everywhere above washed the whole picture out)
     "    float shaft = acc2 / wsum;\n"
-    "    shaft *= sky ? 0.35 : 1.0;\n"
-    "    over(acc, lightCol.rgb, clamp(shaft * fx.y * 0.30, 0.0, 0.5));\n"
+    "    shaft = shaft * shaft * (sky ? 0.25 : 1.0);\n"
+    "    over(acc, lightCol.rgb, clamp(shaft * fx.y * 0.20, 0.0, 0.3));\n"
     "  }\n"
     // rim light: a near thing's edge against something far behind it (the figures against the background)
-    "  if (fx.z > 0.0 && !sky && d < 7000.0) {\n"
+    // only the figures near the camera (within 3.5 m), against something at least half again as far, on a side where
+    // the far side holds over 3 times the step (not twigs and leaves); faint
+    "  if (fx.z > 0.0 && !sky && d < 3500.0) {\n"
     "    float e = 2.0 * fx.w, far = 0.0;\n"
-    "    far += distanceAt(t + vec2(e, 0.0)) - d > 900.0 ? 1.0 : 0.0;\n"
-    "    far += distanceAt(t - vec2(e, 0.0)) - d > 900.0 ? 1.0 : 0.0;\n"
-    "    far += distanceAt(t + vec2(0.0, e)) - d > 900.0 ? 1.0 : 0.0;\n"
-    "    far += distanceAt(t - vec2(0.0, e)) - d > 900.0 ? 1.0 : 0.0;\n"
-    "    over(acc, mix(vec3(0.75, 0.85, 1.0), lightCol.rgb, 0.4), clamp(far * 0.25, 0.0, 1.0) * fx.z * lightCol.a);\n"
+    "    for (int k = 0; k < 4; ++k) {\n"
+    "      vec2 dir = k == 0 ? vec2(1.0, 0.0) : k == 1 ? vec2(-1.0, 0.0) : k == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);\n"
+    "      float d1 = distanceAt(t + dir * e), d3 = distanceAt(t + dir * e * 3.0);\n"
+    "      far += (d1 > d * 1.5 + 600.0 && d3 > d * 1.5 + 600.0) ? 1.0 : 0.0;\n"
+    "    }\n"
+    "    over(acc, lightCol.rgb * 0.8, clamp(far * 0.25, 0.0, 0.5) * fx.z * lightCol.a * 0.5);\n"
     "  }\n"
     "  if (acc.a < 0.004) discard;\n"
     "  o = vec4(acc.rgb / acc.a, acc.a);\n"
@@ -746,7 +752,8 @@ constexpr char kColourFs[] =
     "    vec3 e = texture(src, vUv + vec2(px.x, 0.0)).rgb, w4 = texture(src, vUv - vec2(px.x, 0.0)).rgb;\n"
     "    vec3 mn = min(c, min(min(n, s), min(e, w4))), mx = max(c, max(max(n, s), max(e, w4)));\n"
     "    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(0.001)), 0.0, 1.0));\n"
-    "    vec3 wt = -amp * 0.14;\n"
+    "    vec3 wt = -amp * 0.06;\n"  // light sharpening only (bright edges read as outlines)
+
     "    c = clamp((c + wt * (n + s + e + w4)) / (1.0 + 4.0 * wt), 0.0, 1.0);\n"
     "    g = c * vec3(1.0 - zoneGrade.w, 1.0, 1.0 + zoneGrade.w * 1.2);\n"
     "    float lv = lum(g);\n"

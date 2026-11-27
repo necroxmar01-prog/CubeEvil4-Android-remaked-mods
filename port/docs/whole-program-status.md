@@ -20679,3 +20679,9 @@ Spiel.
   und Stärke des Randlichts je Gebiet bei „Remake“ (`LightFxColour`), sonst neutral warm. Shader mit
   glslangValidator geprüft, `gx_gl.cpp`/`gx_core.cpp` am Host übersetzt; Vulkan, Java und JNI nur in der CI; auf dem
   Gerät nicht getestet (Richtung der Strahlen unter Vulkan angenommen: y nach unten).
+- **Remake-Beleuchtung entschärft** (DevJunior, 27.11.2026, Odin 2 Portal, Bilder und Videos: „parece más error de
+  renderizado y de contornos“): Randlicht an allem Laub und an den Bäumen vor dem Dunst, dunkle Säume um die Blätter,
+  ein ausgewaschenes Bild. Kontaktschatten nur noch von Verdeckern bis ~40 cm davor (vorher bis 2 m), schwächer;
+  Lichtstrahlen nur in klaren Lücken (Anteil quadriert, höchstens 30 %); Randlicht nur bis 3,5 m, nur vor mindestens
+  1,5-mal Fernerem und nur, wenn auch der dreifache Schritt fern ist (keine Zweige), halb so stark; die Schärfung von
+  „Remake“ 0,14 → 0,06 (helle Säume). Shader mit glslangValidator geprüft; auf dem Gerät nicht getestet.
