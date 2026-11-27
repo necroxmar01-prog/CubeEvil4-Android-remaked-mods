@@ -54,6 +54,8 @@
     <string name="ingame_side_texture_options">Options de texture</string>
     <string name="ingame_perf_section">Performances</string>
     <string name="ingame_minimap">Mini-carte</string>
+    <string name="ingame_light_fx">Éclairage Remake</string>
+    <string name="ingame_light_fx_help">Éclairage Remake : ombres douces là où les objets se touchent, rayons de lumière venant du ciel ouvert et un liseré de lumière froide autour des personnages. Léger demande moins de puissance que fort.</string>
     <string name="ingame_flares">Halos lumineux</string>
     <string name="ingame_flares_lens">Reflets d\'objectif</string>
     <string name="ingame_flares_both">Halos + reflets</string>

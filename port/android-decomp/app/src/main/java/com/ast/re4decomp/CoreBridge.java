@@ -326,6 +326,13 @@ public final class CoreBridge {
   /** Lens flares at the game's lights (the menu, off by default; GxRenderer::SetFlares): 0 off, 1 lens flares (the
    *  ghosts only), 2 halos + lens flares (the glow and star at each light too; 0.99.6). */
   public static native void setFlares(int mode);
+  /** "Remake lighting" (wish of DevJunior, 27.11.2026): contact shadows, light shafts, rim light; 0 off (the default),
+   *  1 light, 2 strong. */
+  public static native void setLightFx(int level);
+  static final String LIGHT_FX = "lightFx";
+  static int lightFx(android.content.SharedPreferences g) {
+    return Math.max(0, Math.min(2, g.getInt(LIGHT_FX, 0)));
+  }
   /** The Potato mode's "View distance" (0.99.6, patch 0223): percent of the room's distance fog and far plane. */
   public static native void setViewDistance(int percent);
   /** The minimap: the current room's outline at the bottom left, turning with the player (off by default). */

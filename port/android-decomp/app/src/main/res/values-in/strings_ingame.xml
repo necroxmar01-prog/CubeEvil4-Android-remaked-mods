@@ -53,6 +53,8 @@
     <string name="ingame_side_texture_options">Opsi tekstur</string>
     <string name="ingame_perf_section">Performa</string>
     <string name="ingame_minimap">Peta mini</string>
+    <string name="ingame_light_fx">Pencahayaan Remake</string>
+    <string name="ingame_light_fx_help">Pencahayaan Remake: bayangan lembut di tempat benda bersentuhan, berkas cahaya dari langit terbuka, dan tepi cahaya dingin di sekitar karakter. Ringan memakai daya lebih sedikit daripada kuat.</string>
     <string name="ingame_flares">Pantulan lensa (lens flare)</string>
     <string name="ingame_flares_lens">Lens flare</string>
     <string name="ingame_flares_both">Halo + lens flare</string>

@@ -52,6 +52,8 @@
     <string name="ingame_side_texture_options">Texturoptionen</string>
     <string name="ingame_perf_section">Leistung</string>
     <string name="ingame_minimap">Minikarte</string>
+    <string name="ingame_light_fx">Remake-Beleuchtung</string>
+    <string name="ingame_light_fx_help">Remake-Beleuchtung: weiche Schatten, wo Dinge sich berühren, Lichtstrahlen vom offenen Himmel und ein kühler Lichtrand um die Figuren. Leicht braucht weniger Leistung als stark.</string>
     <string name="ingame_flares">Lichthöfe (Lens Flares)</string>
     <string name="ingame_flares_lens">Lens Flares</string>
     <string name="ingame_flares_both">Lichthöfe + Lens Flares</string>

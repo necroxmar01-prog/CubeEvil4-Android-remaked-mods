@@ -1183,6 +1183,14 @@ final class CoreMenu extends Dialog {
       graphics.edit().putInt(BLOOM_LEVEL, next).apply();
       CoreBridge.setBloom(CoreBridge.bloomSent(graphics));
     });
+    // "Remake lighting" (wish of DevJunior, 27.11.2026: light and optional, beside the colour filters): contact
+    // shadows, light shafts from the open sky, a rim light at the figures' edges; off, light, strong
+    MenuLayout.Buttons effectRow3 = buttonsRow(effects);
+    selector(effectRow3, R.string.ingame_light_fx, texts(bloomLabels), CoreBridge.lightFx(graphics), 0, next -> {
+      graphics.edit().putInt(CoreBridge.LIGHT_FX, next).apply();
+      CoreBridge.setLightFx(next);
+    });
+    indentedHelp(s(R.string.ingame_light_fx_help));
     // Real-time shadows (RealtimeShadows; until 16.11.2026 debug builds only, since then every build, decisions of the
     // project owner): "Off > Characters > Characters and objects" (the project owner, 15.11.2026), since 16.11.2026
     // under the effects (the project owner: "Außerdem sollte der Echtzeitschatten unter ANZEIGE rein unter 'Effekte'"),

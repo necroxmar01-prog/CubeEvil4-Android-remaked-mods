@@ -738,6 +738,9 @@ struct GxCore {
   // (gx_fixed_shaders.h kAtmosFs), one pass at the EFB's resolution; not on the game's menu screens, nor in movies
   // and 2D pictures (no 3D draw), nor without the scene's perspective.
   bool atmosFailed = false, atmosDone = false;
+  // the light effects (contact shadows, light shafts, rim light; wish of DevJunior, 27.11.2026; the menu's "Remake
+  // lighting"): 0 off, 1 light, 2 strong; drawn in the atmosphere pass (with or without its haze)
+  int lightFx = 0;
   std::uint32_t atmosAfter = 0;  // the op offset after the scene's last 3D draw (0: no haze in this chunk)
   // the haze's colour and most (x, y, z, w) and its shape (start, build-up, the sky's share): fixed::kAtmos*
   virtual void AtmospherePass() = 0;
@@ -984,6 +987,7 @@ struct GxCore {
   void SetCrt(int level);
   void SetColour(int mode, int level);
   void SetFlares(bool on);
+  void SetLightFx(int level);
   void SetFlareHalos(bool on);
   void SetBloom(int level);
   void SetDofStrong(bool on);

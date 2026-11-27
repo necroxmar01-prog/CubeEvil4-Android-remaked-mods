@@ -562,6 +562,9 @@ constexpr char kDofMixFs[] =
 // at 4 + 14 m; the sky (no depth) 60 % of the most (16.11.2026, "very dark": the haze was blue-black, 62 %, from 3 m)
 constexpr float kAtmosHaze[4] = {0.20f, 0.23f, 0.28f, 0.45f};
 constexpr float kAtmosShape[4] = {4000.0f, 14000.0f, 0.60f, 0.0f};
+constexpr float kAtmosNone[4] = {0.0f, 0.0f, 0.0f, 0.0f};  // no haze (the light effects alone)
+// the light effects' strengths per level (GxCore::lightFx 1 light, 2 strong): contact shadows, shafts, rim
+constexpr float kLightFx[2][3] = {{0.6f, 0.7f, 0.6f}, {1.0f, 1.0f, 1.0f}};
 // "Remake" (colour mode 4; wish of DevJunior, 27.11.2026: "an ambience per zone: each area its tone, its light and its
 // mist, the village at dusk with a cold mist, the lake at night with a storm, the castle with warm candle light and the
 // island grey-green ... a remake ambience for low-end devices"; "the light of the remake is colder and more vibrant,
@@ -624,6 +627,21 @@ inline const RemakeZone &RemakeZoneOf(unsigned room) {
     return kZoneIsland;
   return kZoneDefault;
 }
+// the light effects' colour (the shafts; .a the rim's strength): the zone's light with "Remake", else a neutral warm
+inline void LightFxColour(int colourMode, unsigned room, float out[4]) {
+  const float neutral[4] = {0.95f, 0.90f, 0.80f, 0.5f};
+  const float *c = neutral;
+  static const float village[4] = {0.95f, 0.86f, 0.72f, 0.5f}, lake[4] = {0.85f, 0.92f, 0.95f, 0.5f},
+                     storm[4] = {0.62f, 0.72f, 0.95f, 0.7f}, candle[4] = {1.0f, 0.74f, 0.45f, 0.45f},
+                     island[4] = {0.80f, 0.90f, 0.84f, 0.5f};
+  if (colourMode == 4) {
+    const RemakeZone &z = RemakeZoneOf(room);
+    c = &z == &kZoneVillage ? village : &z == &kZoneLake ? lake : &z == &kZoneStorm ? storm
+        : &z == &kZoneCandle ? candle : &z == &kZoneIsland ? island : neutral;
+  }
+  for (int i = 0; i < 4; ++i)
+    out[i] = c[i];
+}
 // a lightning flash's light (0..1) at picture `n` (about 60 a second): every 7..16 s two quick pulses
 inline float StormFlash(unsigned n) {
   const unsigned period = 600;
@@ -639,12 +657,58 @@ inline float StormFlash(unsigned n) {
   return p1 > p2 ? p1 : p2 * 0.8f;
 }
 constexpr char kAtmosFs[] =
-    "uniform vec4 haze;\nuniform vec4 shape;\nout vec4 o;\n"
+    "uniform vec4 haze;\nuniform vec4 shape;\n"
+    // the light effects (wish of DevJunior, 27.11.2026: "an advanced lighting, light, as an option"; GxCore::lightFx):
+    // fx = contact shadows, light shafts, rim light, the picture's scale (EFB pixels per GameCube pixel); light = the
+    // shafts' source (EFB pixels) and the shafts' reach; lightCol = their colour and the rim's share of it
+    "uniform vec4 fx;\nuniform vec4 light;\nuniform vec4 lightCol;\nout vec4 o;\n"
+    "void over(inout vec4 acc, vec3 c, float a) {\n"
+    "  acc.rgb = c * a + acc.rgb * (1.0 - a);\n"
+    "  acc.a = a + acc.a * (1.0 - a);\n"
+    "}\n"
     "void main() {\n"
-    "  float d = distanceAt(gl_FragCoord.xy);\n"
-    "  float a = d > 1.0e8 ? haze.a * shape.z : haze.a * (1.0 - exp(-max(d - shape.x, 0.0) / shape.y));\n"
-    "  if (a < 0.004) discard;\n"
-    "  o = vec4(haze.rgb, a);\n"
+    "  vec2 t = gl_FragCoord.xy;\n"
+    "  float d = distanceAt(t);\n"
+    "  bool sky = d > 1.0e8;\n"
+    "  vec4 acc = vec4(0.0);\n"
+    "  float a = sky ? haze.a * shape.z : haze.a * (1.0 - exp(-max(d - shape.x, 0.0) / shape.y));\n"
+    "  if (a > 0.004) over(acc, haze.rgb, a);\n"
+    // contact shadows: eight depths on a ring that shrinks with the distance; a nearer one (within 2 m in front) darkens
+    "  if (fx.x > 0.0 && !sky) {\n"
+    "    float r = clamp(60000.0 / d, 1.5, 12.0) * fx.w;\n"
+    "    float occ = 0.0;\n"
+    "    for (int i = 0; i < 8; ++i) {\n"
+    "      float an = float(i) * 0.785398 + 0.39;\n"
+    "      float ds = distanceAt(t + vec2(cos(an), sin(an)) * r * (i % 2 == 0 ? 1.0 : 0.55));\n"
+    "      float df = d - ds;\n"
+    "      occ += clamp(df / 250.0, 0.0, 1.0) * (1.0 - clamp((df - 800.0) / 1200.0, 0.0, 1.0));\n"
+    "    }\n"
+    "    over(acc, vec3(0.0), clamp(occ / 8.0 * 1.4, 0.0, 1.0) * fx.x * 0.55);\n"
+    "  }\n"
+    // light shafts: from this pixel towards the source, how much open sky lies on the way (nearer counts more)
+    "  if (fx.y > 0.0) {\n"
+    "    vec2 st = (light.xy - t) * light.z / 14.0;\n"
+    "    float acc2 = 0.0, wsum = 0.0, w = 1.0;\n"
+    "    for (int i = 1; i <= 14; ++i) {\n"
+    "      acc2 += w * (distanceAt(t + st * float(i)) > 1.0e8 ? 1.0 : 0.0);\n"
+    "      wsum += w;\n"
+    "      w *= 0.88;\n"
+    "    }\n"
+    "    float shaft = acc2 / wsum;\n"
+    "    shaft *= sky ? 0.35 : 1.0;\n"
+    "    over(acc, lightCol.rgb, clamp(shaft * fx.y * 0.30, 0.0, 0.5));\n"
+    "  }\n"
+    // rim light: a near thing's edge against something far behind it (the figures against the background)
+    "  if (fx.z > 0.0 && !sky && d < 7000.0) {\n"
+    "    float e = 2.0 * fx.w, far = 0.0;\n"
+    "    far += distanceAt(t + vec2(e, 0.0)) - d > 900.0 ? 1.0 : 0.0;\n"
+    "    far += distanceAt(t - vec2(e, 0.0)) - d > 900.0 ? 1.0 : 0.0;\n"
+    "    far += distanceAt(t + vec2(0.0, e)) - d > 900.0 ? 1.0 : 0.0;\n"
+    "    far += distanceAt(t - vec2(0.0, e)) - d > 900.0 ? 1.0 : 0.0;\n"
+    "    over(acc, mix(vec3(0.75, 0.85, 1.0), lightCol.rgb, 0.4), clamp(far * 0.25, 0.0, 1.0) * fx.z * lightCol.a);\n"
+    "  }\n"
+    "  if (acc.a < 0.004) discard;\n"
+    "  o = vec4(acc.rgb / acc.a, acc.a);\n"
     "}\n";
 
 // ---- Colour and CRT (wishes of the project owner, 11.11.2026; the mock-ups of 0.99.9 in numpy, the same maths) ----

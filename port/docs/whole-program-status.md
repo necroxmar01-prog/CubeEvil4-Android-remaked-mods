@@ -20669,3 +20669,13 @@ Spiel.
   Schläfen) werden dunkle Haaransätze immer zur Stirnhaut, dort keine Skalp-Farbe; darüber nur, wo kein Haar nach
   außen darüber liegt. Am Host gerendert (mit und ohne Haar: Stirn glatt, Haaransatz weich). Leon Clásico
   Remasterizado v23 / Remake v19.
+- **„Remake-Beleuchtung“ (leicht, wahlweise)** (DevJunior, 27.11.2026: „vamos con los 3“, für die Odin 2 Portal):
+  neuer Menüpunkt unter Effekte (aus/leicht/stark, Text in 11 Sprachen, `check_translations.py` ok;
+  `CoreBridge.setLightFx`, `GxCore::SetLightFx`). Im Dunstdurchgang (`AtmospherePass`, GL und Vulkan; läuft jetzt
+  auch ohne Requiem/Remake, dann ohne Dunst, `kAtmosNone`), nur aus der Tiefe, je Bildpunkt höchstens 27 Tiefen:
+  (1) Kontaktschatten: 8 Tiefen auf einem Ring, der mit der Entfernung kleiner wird; Näheres davor (bis ~2 m)
+  dunkelt ab; (2) Lichtstrahlen: 14 Schritte zur Quelle über dem oberen Bildrand, Anteil offenen Himmels auf dem Weg
+  (abklingend); (3) Randlicht: Kante eines nahen Dings (unter 7 m) vor viel Fernerem, kühles Licht. Farbe der Strahlen
+  und Stärke des Randlichts je Gebiet bei „Remake“ (`LightFxColour`), sonst neutral warm. Shader mit
+  glslangValidator geprüft, `gx_gl.cpp`/`gx_core.cpp` am Host übersetzt; Vulkan, Java und JNI nur in der CI; auf dem
+  Gerät nicht getestet (Richtung der Strahlen unter Vulkan angenommen: y nach unten).

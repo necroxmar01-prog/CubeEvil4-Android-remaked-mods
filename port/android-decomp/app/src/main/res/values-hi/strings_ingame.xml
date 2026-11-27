@@ -52,6 +52,8 @@
     <string name="ingame_side_texture_options">टेक्सचर विकल्प</string>
     <string name="ingame_perf_section">परफ़ॉर्मेंस</string>
     <string name="ingame_minimap">मिनी-मैप</string>
+    <string name="ingame_light_fx">Remake रोशनी</string>
+    <string name="ingame_light_fx_help">Remake रोशनी: जहाँ चीज़ें मिलती हैं वहाँ नरम छायाएँ, खुले आसमान से रोशनी की किरणें और पात्रों के चारों ओर ठंडी रोशनी की किनारी। हल्का, तेज़ से कम शक्ति लेता है।</string>
     <string name="ingame_flares">लेंस फ़्लेयर</string>
     <string name="ingame_flares_lens">लेंस फ़्लेयर</string>
     <string name="ingame_flares_both">हेलो + लेंस फ़्लेयर</string>

@@ -61,6 +61,8 @@
     <string name="ingame_side_texture_options">Texture options</string>
     <string name="ingame_perf_section">Performance</string>
     <string name="ingame_minimap">Minimap</string>
+    <string name="ingame_light_fx">Remake lighting</string>
+    <string name="ingame_light_fx_help">Remake lighting: soft shadows where things meet, light shafts from the open sky and a cold rim of light around the characters. Light uses less power than strong.</string>
     <string name="ingame_flares">Lens flares</string>
     <string name="ingame_flares_lens">Lens flares</string>
     <string name="ingame_flares_both">Halos + lens flares</string>

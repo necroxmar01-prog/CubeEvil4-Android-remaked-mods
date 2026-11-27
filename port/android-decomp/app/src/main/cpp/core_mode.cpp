@@ -738,6 +738,7 @@ std::atomic<int> optUpscaler{0};  // the menu's upscaler (CoreBridge.setUpscaler
 std::atomic<int> optSharperText{1};  // "Sharper menu text" (CoreBridge.setSharperText; on by default)
 std::atomic<int> optLaserColour{0};  // the menu's laser sight colour (CoreBridge.setLaserColour), sent at the start
 std::atomic<int> optMinimap{0};   // the menu's minimap (CoreBridge.setMinimap)
+std::atomic<int> optLightFx{0};  // the menu's "Remake lighting": 0 off, 1 light, 2 strong (CoreBridge.setLightFx)
 std::atomic<int> optFlares{0};    // the menu's lens flares: 0 off, 1 lens flares, 2 halos + lens flares (CoreBridge.setFlares; or RE4_GX_FLARES=1)
 std::atomic<int> optCrt{0};       // the menu's CRT (CoreBridge.setCrt: 0 off, 1 light, 2 strong; or RE4_GX_CRT)
 std::atomic<int> optShadows{0};  // real-time shadows (CoreBridge.setShadows, RealtimeShadows.java)
@@ -2758,6 +2759,7 @@ bool drawGx() {
     gx->SetColour(colour / 4, colour % 4);
   static const bool flaresEnv = getenv("RE4_GX_FLARES") && *getenv("RE4_GX_FLARES") == '1';
   gx->SetFlares(optFlares.load() != 0 || flaresEnv);
+  gx->SetLightFx(optLightFx.load());
   gx->SetFlareHalos(optFlares.load() != 1);
   gx->SetDofStrong(optDof.load() == 2);
   static const bool mergeEnv = getenv("RE4_GX_MERGE") && *getenv("RE4_GX_MERGE") == '1';
@@ -4555,6 +4557,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setCodecCall
   }
   std::lock_guard<std::mutex> g(codecBox.lock);
   codecBox.callers = std::move(callers);
+}
+
+// "Remake lighting" (the menu, wish of DevJunior, 27.11.2026: an advanced lighting, light and optional): contact
+// shadows, light shafts from the open sky and a rim light at the figures' edges (GxCore::SetLightFx); 0 off, 1 light,
+// 2 strong.
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setLightFx(JNIEnv *, jclass, jint level) {
+  const int want = level < 0 ? 0 : level > 2 ? 2 : level;
+  if (optLightFx.exchange(want) != want)
+    LOG("remake lighting: %s", want == 2 ? "strong" : want == 1 ? "light" : "off");
 }
 
 // Lens flares (the menu, wish of the project owner, 04.11.2026): a faint glow at the game's lights (GxRenderer::SetFlares);

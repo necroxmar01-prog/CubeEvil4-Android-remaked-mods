@@ -350,6 +350,7 @@ struct GlRenderer final : GxCore {
   // the "Requiem" atmosphere (AtmospherePass): its program and a framebuffer of the EFB's colour without its depth
   GLuint atmosProgram = 0, atmosFbo = 0;
   GLint atmosSize = -1, atmosZ = -1, atmosHaze = -1, atmosShape = -1;
+  GLint atmosFx = -1, atmosLight = -1, atmosLightCol = -1;  // the light effects (GxCore::lightFx)
   GLuint crtLineProgram = 0, crtGlowProgram = 0, crtProgram = 0, crtLineTex = 0, crtGlowTex = 0;
   int crtLineW = 0, crtLineH = 0, crtGlowW = 0, crtGlowH = 0;
   GLint crtBleedLoc = -1, crtStepLoc = -1, crtRowsLoc = -1, crtLinesLoc = -1, crtBoxLoc = -1, crtShapeLoc = -1,
@@ -2558,6 +2559,9 @@ struct GlRenderer final : GxCore {
       atmosZ = glGetUniformLocation(atmosProgram, "zmap");
       atmosHaze = glGetUniformLocation(atmosProgram, "haze");
       atmosShape = glGetUniformLocation(atmosProgram, "shape");
+      atmosFx = glGetUniformLocation(atmosProgram, "fx");
+      atmosLight = glGetUniformLocation(atmosProgram, "light");
+      atmosLightCol = glGetUniformLocation(atmosProgram, "lightCol");
       glGenFramebuffers(1, &atmosFbo);
     }
     float zRange = AsFloat(xfReg[0x1C]);
@@ -2581,8 +2585,18 @@ struct GlRenderer final : GxCore {
     glUniform2f(atmosSize, static_cast<float>(Lo(kEfbWidth)), static_cast<float>(Lo(kEfbHeight)));
     glUniform4f(atmosZ, perspA, perspB, zRange, zFar);
     const fixed::RemakeZone &zone = fixed::RemakeZoneOf(room);  // 4 "Remake": the room's zone
-    glUniform4fv(atmosHaze, 1, colourMode == 4 ? zone.haze : fixed::kAtmosHaze);
+    glUniform4fv(atmosHaze, 1, colourMode == 4 ? zone.haze : colourMode == 3 ? fixed::kAtmosHaze : fixed::kAtmosNone);
     glUniform4fv(atmosShape, 1, colourMode == 4 ? zone.shape : fixed::kAtmosShape);
+    {
+      // the light effects: their strengths, the shafts' source above the picture's top (GL: y up), their colour
+      const float *lv = lightFx > 0 ? fixed::kLightFx[lightFx - 1] : fixed::kAtmosNone;
+      const float scale = static_cast<float>(Lo(kEfbWidth)) / 640.0f;
+      glUniform4f(atmosFx, lv[0], lv[1], lv[2], scale);
+      glUniform4f(atmosLight, region[0] + 0.62f * region[2], region[1] + 1.15f * region[3], 0.6f, 0.0f);
+      float lc[4];
+      fixed::LightFxColour(colourMode, room, lc);
+      glUniform4fv(atmosLightCol, 1, lc);
+    }
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, efbDepth);
     glBindSampler(0, 0);

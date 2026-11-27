@@ -631,6 +631,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setPsx(g.getBoolean("psx", false));
       TexturePacks.apply(this, g);
       CoreBridge.setFlares(CoreBridge.flareMode(g));
+      CoreBridge.setLightFx(CoreBridge.lightFx(g));
       CoreBridge.setViewDistance(CoreBridge.VIEW_PERCENT[CoreBridge.viewDistance(g)]);
       CoreBridge.setMinimap(g.getBoolean("minimap", false));
       CoreBridge.setLaserColour(getSharedPreferences(INPUT_PREFS, MODE_PRIVATE).getInt(LASER_COLOUR, 0));
@@ -3289,6 +3290,7 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     CoreBridge.setTvFilter(g.getBoolean("tvFilter", false));
     CoreBridge.setPsx(g.getBoolean("psx", false));
     CoreBridge.setFlares(CoreBridge.flareMode(g));
+    CoreBridge.setLightFx(CoreBridge.lightFx(g));
     CoreBridge.setViewDistance(CoreBridge.VIEW_PERCENT[CoreBridge.viewDistance(g)]);
     CoreBridge.setDynamicCaps(g.getInt(CoreMenu.DYN_CAP_30, 0), g.getInt(CoreMenu.DYN_CAP_60, 0));
     CoreBridge.setFastCores(g.getInt("fastCores", 0) == 1);

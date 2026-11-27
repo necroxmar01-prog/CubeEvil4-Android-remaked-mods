@@ -52,6 +52,8 @@
     <string name="ingame_side_texture_options">Opzioni texture</string>
     <string name="ingame_perf_section">Prestazioni</string>
     <string name="ingame_minimap">Minimappa</string>
+    <string name="ingame_light_fx">Illuminazione Remake</string>
+    <string name="ingame_light_fx_help">Illuminazione Remake: ombre morbide dove le cose si toccano, raggi di luce dal cielo aperto e un bordo di luce fredda attorno ai personaggi. Leggera richiede meno potenza di forte.</string>
     <string name="ingame_flares">Riflessi lente</string>
     <string name="ingame_flares_lens">Riflessi lente</string>
     <string name="ingame_flares_both">Aloni + riflessi</string>

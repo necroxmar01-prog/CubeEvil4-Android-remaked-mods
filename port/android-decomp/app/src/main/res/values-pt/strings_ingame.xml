@@ -53,6 +53,8 @@
     <string name="ingame_side_texture_options">Opções de textura</string>
     <string name="ingame_perf_section">Desempenho</string>
     <string name="ingame_minimap">Minimapa</string>
+    <string name="ingame_light_fx">Iluminação Remake</string>
+    <string name="ingame_light_fx_help">Iluminação Remake: sombras suaves onde as coisas se tocam, raios de luz vindos do céu aberto e uma borda de luz fria em volta dos personagens. Leve exige menos desempenho que forte.</string>
     <string name="ingame_flares">Reflexos de lente</string>
     <string name="ingame_flares_lens">Reflexos de lente</string>
     <string name="ingame_flares_both">Halos + reflexos</string>

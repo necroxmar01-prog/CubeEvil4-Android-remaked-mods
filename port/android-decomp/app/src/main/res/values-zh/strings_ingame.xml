@@ -53,6 +53,8 @@
     <string name="ingame_side_texture_options">纹理选项</string>
     <string name="ingame_perf_section">性能</string>
     <string name="ingame_minimap">小地图</string>
+    <string name="ingame_light_fx">重制版光照</string>
+    <string name="ingame_light_fx_help">重制版光照：物体相接处的柔和阴影、来自开阔天空的光束，以及角色周围的冷色轮廓光。轻度比强烈更省性能。</string>
     <string name="ingame_flares">镜头光晕</string>
     <string name="ingame_flares_lens">镜头光晕</string>
     <string name="ingame_flares_both">光环 + 镜头光晕</string>

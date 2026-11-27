@@ -2553,8 +2553,19 @@ struct VkRenderer final : GxCore {
     Put(pc, atmosFx, "size", size);
     Put(pc, atmosFx, "zmap", zmap);
     const fixed::RemakeZone &zone = fixed::RemakeZoneOf(room);  // 4 "Remake": the room's zone
-    Put(pc, atmosFx, "haze", colourMode == 4 ? zone.haze : fixed::kAtmosHaze);
+    Put(pc, atmosFx, "haze", colourMode == 4 ? zone.haze : colourMode == 3 ? fixed::kAtmosHaze : fixed::kAtmosNone);
     Put(pc, atmosFx, "shape", colourMode == 4 ? zone.shape : fixed::kAtmosShape);
+    {
+      // the light effects: their strengths, the shafts' source above the picture's top (Vulkan: y down), their colour
+      const float *lv = lightFx > 0 ? fixed::kLightFx[lightFx - 1] : fixed::kAtmosNone;
+      const float fxv[4] = {lv[0], lv[1], lv[2], static_cast<float>(Lo(kEfbWidth)) / 640.0f};
+      const float lp[4] = {region[0] + 0.62f * region[2], region[1] - 0.15f * region[3], 0.6f, 0.0f};
+      float lc[4];
+      fixed::LightFxColour(colourMode, room, lc);
+      Put(pc, atmosFx, "fx", fxv);
+      Put(pc, atmosFx, "light", lp);
+      Put(pc, atmosFx, "lightCol", lc);
+    }
     BindFixedNamed(atmosFx, {{"depths", efbDepth.view, nearestClamp}}, pc);
     vkCmdDraw(cb, 4, 1, 0, 0);
     if (samples <= 1)
