@@ -20568,3 +20568,13 @@ Spiel.
   remake de mi modelo“): auch `pl00` (Kapitel-1-Jacke der Remake-Fassung, aus Remake Lite) trug das blaue Remake-Hemd;
   `skin_recolor.py --mat 2 --grey 32` (Textur 2, 256×128, die Brust y 1141..1604). Leon Remasterizado Remake v11. Am
   Host gerendert (Hemd grau), auf dem Gerät nicht getestet.
+- **Stimmen gleichzeitig, Hals sichtbar** (DevJunior, 26.11.2026, 22:15: „el audio sigue entrecortándose, el cuello
+  está invisible“, zwei Bilder): (1) `mod_voice.cpp` spielt bis zu 4 Zeilen zugleich (eine je Stream-Work, je mit
+  eigenem Vorlese-Ring; ein Thread liest für alle). Vorher schnitt jede neue Zeile die laufende ab (Bericht 210643:
+  Stimme 3 nach 0,9 von 4,1 s durch Stimme 140). Geprüft am Host: zwei überlappende Zeilen = Summe der Quellen (bis
+  auf Rundung, 3 Stufen), Einzelzeilen weiterhin bitgenau; i686-Build und Prüfungen ohne Fehler. (2) Das Gesichtsnetz
+  der RE Engine endet vorn bei y ~1610, der alte Kopf reichte bis 1537 unter den Kragen, der Körper hat dort keinen
+  Hals: eine Lücke unter dem Kinn. `skin_head_fbx.py --neck-down 1660`: das Halsband darunter je Seite bis 6 unter den
+  tiefsten Punkt des alten Kopfes gestreckt (jetzt ab 1531). Nacken-Übergang `--nape` 1610 → 1665 (er färbte den
+  Hals hinten mit). Leon Clásico Remasterizado v16 / Remake v12. Am Host gerendert (Hals vorn geschlossen); auf dem
+  Gerät nicht getestet.

@@ -418,6 +418,8 @@ def main(argv=None):
     ap.add_argument("--clean-below", type=float, default=1660.0,
                     help="below this height marks on one side of the face only are taken from the other (0: off)")
     ap.add_argument("--match", type=float, default=0.6, help="the skin tone moved towards the old face's (0..1)")
+    ap.add_argument("--neck-down", type=float, help="the face mesh's neck below this height stretched down to the old "
+                    "head's lowest (an RE Engine face ends at the neck's top)")
     ap.add_argument("--neck-fit", type=float, default=1625.0,
                     help="below this height the neck no wider than the old head's (0: off): it fits the collar")
     ap.add_argument("--tuck", type=int, default=-1, help="the body entry whose collar the neck stays under (-1: off)")
@@ -463,6 +465,29 @@ def main(argv=None):
         keep_t &= Pf[trisf[:, :, 0], 1].max(1) >= low[ang(C)]
         print("neck: cut as low as the old head reaches, per side %s" % np.round(low).astype(int).tolist())
     trisf = trisf[keep_t]
+    if a.neck_down:
+        # (DevJunior, 26.11.2026, device pictures: "el cuello está invisible") an RE Engine face's mesh ends at the
+        # neck's top (y ~1610 in front); the old head's neck went down to ~1540 under the collar, and the body has no
+        # neck of its own there: a gap under the jaw. The neck band (below --neck-down) is stretched downwards, per side
+        # to 6 units under the old head's lowest there.
+        top = a.neck_down
+        angf = lambda X: ((np.arctan2(X[..., 0], X[..., 2] + 30.0) + np.pi) / (2 * np.pi) * 24).astype(int) % 24
+        target = np.full(24, np.inf)
+        np.minimum.at(target, angf(old), old[:, 1])
+        for _ in range(3):
+            target = np.where(np.isfinite(target), target, np.minimum(np.roll(target, 1), np.roll(target, -1)))
+        used = np.unique(trisf[:, :, 0])
+        cur = np.full(24, np.inf)
+        np.minimum.at(cur, angf(Pf[used]), Pf[used, 1])
+        for _ in range(3):
+            cur = np.where(np.isfinite(cur), cur, np.minimum(np.roll(cur, 1), np.roll(cur, -1)))
+        band = used[Pf[used, 1] < top]
+        k = angf(Pf[band])
+        scale = np.clip((top - (target[k] - 6.0)) / np.maximum(top - cur[k], 1.0), 1.0, 4.0)
+        Pf = Pf.copy()
+        Pf[band, 1] = top - (top - Pf[band, 1]) * scale
+        print("neck: %d positions below y %.0f stretched down, now from y %.0f (the old head's from %.0f)" % (
+            len(band), top, Pf[used, 1].min(), old[:, 1].min()))
     # the kept parts of the old head, per corner; with the FBX's eyeballs each eye moved into their place (the box
     # centres): the new lids close over the old eyes as over their own
     shift = {1: np.zeros(3), -1: np.zeros(3)}

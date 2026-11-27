@@ -234,15 +234,20 @@ void bankClose()
     b.fd = -1;
 }
 
-// ---- the playing line ------------------------------------------------------------------------------------------------
+// ---- the playing lines -----------------------------------------------------------------------------------------------
 
 const unsigned kCache = 4096;    // source frames decoded at a time
-const unsigned kRing = 1u << 17; // source frames read ahead (4 s at 32 kHz)
+const unsigned kRing = 1u << 17; // source frames read ahead per line (4 s at 32 kHz)
+const int kLines = 4;            // as many as the sound driver's stream works (SND_STR_MAX)
 
-// The reading: a thread of its own decodes the line's wave ahead into a ring (DevJunior, 26.11.2026, report
+// The reading: a thread of its own decodes each line's wave ahead into the line's ring (DevJunior, 26.11.2026, report
 // 210643: "a veces hay cortes en los audios", the AI ring ran dry 43 times in four minutes of dubbed cutscenes: the
 // first version read the file on the game's thread, a few ms per read on the phone's shared storage). The mixer only
-// takes from the ring; a frame not read yet plays as silence, the line keeps its time.
+// takes from the rings; a frame not read yet plays as silence, the line keeps its time.
+// Several lines at once (DevJunior, 26.11.2026, 22:15: "el audio sigue entrecortándose"; the log of 210643: event
+// voice 3 cut after 0.9 of 4.1 s when voice 140 started): a scene may start the next voice stream while one still
+// plays, each in a stream work of its own; one line per stream now, up to kLines, a new one takes a free place (or the
+// oldest).
 struct Decoder {
     Wave w;
     unsigned frames;
@@ -258,14 +263,14 @@ struct Reader {
     Wave w;                          // the wanted line's wave and its first frame (set before `want`)
     unsigned start;
     int16_t ring[kRing * 2];
-    std::atomic<bool> thread;
     std::atomic<unsigned> late;      // frames the mixer found not read yet
+    Decoder dec;                     // the reading thread's
 };
-Reader gReader;
 
 struct Line {
     bool on;
     unsigned number;      // its number for the reader
+    unsigned age;         // when it started (lines started before)
     uint32_t sndId;
     const Wave* w;
     unsigned frames;      // the wave's
@@ -275,8 +280,10 @@ struct Line {
     bool streamGone;      // ... and is over
     bool fadingOut;       // the game faded it out (a stop request)
     float gain;           // from the stream's volume
+    Reader r;
 };
-Line gLine;
+Line gLines[kLines];
+std::atomic<bool> gThread(false);
 
 unsigned waveFrames(const Wave& w)
 {
@@ -390,10 +397,10 @@ bool fill(Decoder& l, unsigned at)
     return false;
 }
 
-// one step of the reader: decodes the wanted line ahead into the ring; false when there is nothing to do
-bool pump(Decoder& d)
+// one step of a line's reader: decodes its wave ahead into its ring; false when there is nothing to do
+bool pump(Reader& r)
 {
-    Reader& r = gReader;
+    Decoder& d = r.dec;
     const unsigned want = r.want.load(std::memory_order_acquire);
     if (want != r.serving.load(std::memory_order_relaxed)) {
         d.w = r.w;
@@ -431,9 +438,12 @@ bool pump(Decoder& d)
 #ifndef RE4_VOICE_TEST
 void* readerThread(void*)
 {
-    static Decoder d;
     for (;;) {
-        if (!pump(d)) {
+        bool busy = false;
+        for (int i = 0; i < kLines; i++) {
+            busy |= pump(gLines[i].r);
+        }
+        if (!busy) {
             usleep(4000);
         }
     }
@@ -441,16 +451,15 @@ void* readerThread(void*)
 }
 #endif
 
-// frame `at` of the line from the ring: 1 there, 0 not read yet, -1 past its end
+// frame `at` of the line from its ring: 1 there, 0 not read yet, -1 past its end
 int frameAt(Line& l, unsigned at, int* left, int* right)
 {
     if (at >= l.frames) {
         return -1;
     }
-    Reader& r = gReader;
+    Reader& r = l.r;
 #ifdef RE4_VOICE_TEST
-    static Decoder d;
-    while (pump(d)) {
+    while (pump(r)) {
     }
 #endif
     if (r.serving.load(std::memory_order_acquire) != l.number || at < r.start ||
@@ -463,15 +472,21 @@ int frameAt(Line& l, unsigned at, int* left, int* right)
     return 1;
 }
 
-void stop(const char* why)
+void stop(Line& l, const char* why)
 {
-    if (gLine.on) {
+    if (l.on) {
         re4_log("voice mod: line of stream %u ends (%s) at %.1f of %.1f s, %u frames not read in time",
-                (unsigned) gLine.sndId, why, gLine.pos / gLine.w->rate, (double) gLine.frames / gLine.w->rate,
-                gReader.late.exchange(0));
+                (unsigned) l.sndId, why, l.pos / l.w->rate, (double) l.frames / l.w->rate, l.r.late.exchange(0));
     }
-    gLine.on = false;
-    gReader.want.store(0, std::memory_order_release);
+    l.on = false;
+    l.r.want.store(0, std::memory_order_release);
+}
+
+void stopAll(const char* why)
+{
+    for (int i = 0; i < kLines; i++) {
+        stop(gLines[i], why);
+    }
 }
 
 // the game's side (runtime/mod_voice_game.cpp, set at the first line): bit 0 the line's stream is there, bit 1 it
@@ -491,7 +506,7 @@ void re4_mod_voice_set_state(int (*state)(unsigned id))
 // dvd.cpp applyMods: before the packs are read
 void re4_mod_voice_reset(void)
 {
-    stop("the mods changed");
+    stopAll("the mods changed");
     bankClose();
     gBank.xwb[0] = gBank.xsb[0] = 0;
 }
@@ -532,8 +547,24 @@ int re4_mod_voice_prepare(unsigned id, int blk, int no, float start)
         }
         return 0;
     }
-    stop("a new line");
-    Line& l = gLine;
+    // a free place, else the oldest line's
+    static unsigned ages;
+    Line* pick = &gLines[0];
+    for (int i = 0; i < kLines; i++) {
+        Line& c2 = gLines[i];
+        if (c2.on && c2.sndId == id) {
+            pick = &c2;  // the same stream again
+            break;
+        }
+        if (!c2.on && pick->on) {
+            pick = &c2;
+        } else if (c2.on && pick->on && c2.age < pick->age) {
+            pick = &c2;
+        }
+    }
+    stop(*pick, "a new line in its place");
+    Line& l = *pick;
+    l.age = ++ages;
     l.on = true;
     l.sndId = id;
     l.w = &w;
@@ -547,18 +578,19 @@ int re4_mod_voice_prepare(unsigned id, int blk, int no, float start)
     l.gain = 0.0f;
     static unsigned numbers;
     l.number = ++numbers ? numbers : ++numbers;
-    Reader& r = gReader;
+    Reader& r = l.r;
+    r.late = 0;
     r.w = w;
     r.start = (unsigned) l.pos;
     r.consumed.store(r.start, std::memory_order_relaxed);
     r.want.store(l.number, std::memory_order_release);
 #ifndef RE4_VOICE_TEST
-    if (!r.thread.exchange(true)) {
+    if (!gThread.exchange(true)) {
         pthread_t t;
         if (pthread_create(&t, 0, readerThread, 0) == 0) {
             pthread_detach(t);
         } else {
-            r.thread = false;
+            gThread = false;
             re4_log("voice mod: the reading thread cannot start");
         }
     }
@@ -574,30 +606,35 @@ int re4_mod_voice_prepare(unsigned id, int blk, int no, float start)
 // the line's volume as it was: a dub line longer than the game's goes on; a fade to 0 (a stop request) ends it.
 int re4_mod_voice_stream_vol(unsigned id, int axVol, int nowVol, int fading, int fadeEnd)
 {
-    if (!gLine.on || id != gLine.sndId) {
+    Line* l = 0;
+    for (int i = 0; i < kLines; i++) {
+        if (gLines[i].on && gLines[i].sndId == id) {
+            l = &gLines[i];
+        }
+    }
+    if (!l) {
         return axVol;
     }
     if (fading && fadeEnd == 0) {
-        gLine.fadingOut = true;
+        l->fadingOut = true;
     }
     if (nowVol != 0 || fading) {
-        gLine.gain = axVol <= -904 ? 0.0f : powf(10.0f, (float) axVol / 200.0f);
+        l->gain = axVol <= -904 ? 0.0f : powf(10.0f, (float) axVol / 200.0f);
     }
     return -904;
 }
 
 // ai.cpp play: on top of the game's block, 32 kHz stereo (L, R); lr NULL: the block was lost (the app does not read),
 // the line goes on in step
-void re4_mod_voice_mix(short* lr, unsigned frames)
+static void mixLine(Line& l, short* lr, unsigned frames)
 {
-    Line& l = gLine;
     if (!l.on) {
         return;
     }
     const int st = gState ? gState(l.sndId) : 3;
     if (!l.started) {
         if (!(st & 1)) {
-            stop("the game's stream did not start");
+            stop(l, "the game's stream did not start");
             return;
         }
         if (!(st & 2)) {
@@ -609,11 +646,11 @@ void re4_mod_voice_mix(short* lr, unsigned frames)
         l.streamGone = true;
     }
     if (l.streamGone && !(st & 4)) {
-        stop("the cutscene is over");
+        stop(l, "the cutscene is over");
         return;
     }
     if (l.streamGone && (l.fadingOut || l.gain <= 0.0f)) {
-        stop("the game's stream was stopped");
+        stop(l, "the game's stream was stopped");
         return;
     }
     const double step = (double) l.w->rate / kRate;
@@ -627,11 +664,11 @@ void re4_mod_voice_mix(short* lr, unsigned frames)
         int a0 = 0, b0 = 0, a1, b1;
         const int got = frameAt(l, at, &a0, &b0);
         if (got < 0) {
-            stop("its end");
+            stop(l, "its end");
             return;
         }
         if (got == 0) {
-            gReader.late++;
+            l.r.late++;
         }
         if (frameAt(l, at + 1, &a1, &b1) <= 0) {
             a1 = a0;
@@ -645,7 +682,14 @@ void re4_mod_voice_mix(short* lr, unsigned frames)
         }
         l.pos += step;
     }
-    gReader.consumed.store((unsigned) l.pos, std::memory_order_release);
+    l.r.consumed.store((unsigned) l.pos, std::memory_order_release);
+}
+
+void re4_mod_voice_mix(short* lr, unsigned frames)
+{
+    for (int i = 0; i < kLines; i++) {
+        mixLine(gLines[i], lr, frames);
+    }
 }
 
 }  // extern "C"
