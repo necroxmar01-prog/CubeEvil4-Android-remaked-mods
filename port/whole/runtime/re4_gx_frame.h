@@ -111,6 +111,10 @@ enum Re4GxOp {
  * never marked: its light and shadows are pre-lit. */
 #define RE4_GX_OWNER_OBJECT 0x200u
 #define RE4_GX_OWNER_PART 0x400u
+/* RE4_GX_OP_OWNER word 2, with "Characters and objects" (27.11.2026): the room's static scenery (its scroll models that
+ * do not move: walls, the police car in r100, houses, trees of the room). Its shadows are painted into the room, so the
+ * app casts them only onto the figures (a figure walks into the car's shadow). */
+#define RE4_GX_OWNER_SCENERY 0x800u
 
 /* Primitive classes (Re4GxDraw.primitive bits 0-7). Quads, strips and fans
  * arrive as triangle lists with GX's winding kept (strips: every second

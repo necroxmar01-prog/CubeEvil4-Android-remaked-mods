@@ -2790,17 +2790,21 @@ struct VkRenderer final : GxCore {
     Frame &fr = F();
     std::size_t blk = 0;
     VkDeviceSize at = 0;
-    const std::size_t figTris = s.figTriangles, objTris = s.objTriangles;
-    const std::size_t figBytes = figTris * 9 * sizeof(float), bytes = figBytes + objTris * 9 * sizeof(float);
+    const std::size_t figTris = s.figTriangles, objTris = s.objTriangles, scnTris = s.sceneryTriangles;
+    const std::size_t figBytes = figTris * 9 * sizeof(float), objEnd = figBytes + objTris * 9 * sizeof(float);
+    const std::size_t bytes = objEnd + scnTris * 9 * sizeof(float);
     if (!Alloc(fr.vertex, bytes, 64, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, &blk, &at))
       return;
     if (figTris)
       std::memcpy(fr.vertex[blk].map + at, shadowTris.data(), figBytes);
     if (objTris)
-      std::memcpy(fr.vertex[blk].map + at + figBytes, objectTris.data(), bytes - figBytes);
+      std::memcpy(fr.vertex[blk].map + at + figBytes, objectTris.data(), objEnd - figBytes);
+    if (scnTris)
+      std::memcpy(fr.vertex[blk].map + at + objEnd, sceneryTris.data(), bytes - objEnd);
     const VkBuffer vb = fr.vertex[blk].buffer;
     const std::uint32_t figCorners = static_cast<std::uint32_t>(figTris * 3);
     const std::uint32_t objCorners = static_cast<std::uint32_t>(objTris * 3);
+    const std::uint32_t scnCorners = static_cast<std::uint32_t>(scnTris * 3);
     const float glz[4] = {0.0f, 0.0f, 0.0f, 0.0f};  // Vulkan's depth 0..1 (kShadowDepthVs)
     // the marks' depth as the GX pipelines compute the EFB's (1.1.0): with VK_EXT_depth_clip_control GL's clip range
     // (2 z - w, then the viewport's (z / w + 1) / 2), as OpenGL ES does. Before, the marks went the shorter way (z / w
@@ -2853,9 +2857,9 @@ struct VkRenderer final : GxCore {
         Put(pc, shadowDepthFx, "lw", m.row[3]);
         Put(pc, shadowDepthFx, "glz", glz);
         BindFixed(shadowDepthFx, nullptr, nullptr, 0, pc);
-        const VkDeviceSize offset = at + (m.objects ? figBytes : 0);
+        const VkDeviceSize offset = at + (m.scenery ? objEnd : m.objects ? figBytes : 0);
         vkCmdBindVertexBuffers(cb, 0, 1, &vb, &offset);
-        vkCmdDraw(cb, m.objects ? objCorners : figCorners, 1, 0, 0);
+        vkCmdDraw(cb, m.scenery ? scnCorners : m.objects ? objCorners : figCorners, 1, 0, 0);
       }
       EndPass();
       map.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;  // the pass's final layout

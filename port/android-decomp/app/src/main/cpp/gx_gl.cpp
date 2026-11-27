@@ -2757,8 +2757,9 @@ struct GlRenderer final : GxCore {
       return;
     }
     // the casters' corners: the figures', then the objects' (when tile 1 casts)
-    const std::size_t figTris = s.figTriangles, objTris = s.objTriangles;
-    const std::size_t figBytes = figTris * 9 * sizeof(float), bytes = figBytes + objTris * 9 * sizeof(float);
+    const std::size_t figTris = s.figTriangles, objTris = s.objTriangles, scnTris = s.sceneryTriangles;
+    const std::size_t figBytes = figTris * 9 * sizeof(float), objEnd = figBytes + objTris * 9 * sizeof(float);
+    const std::size_t bytes = objEnd + scnTris * 9 * sizeof(float);
     glBindVertexArray(shadowVao);
     glBindBuffer(GL_ARRAY_BUFFER, shadowVbo);
     if (bytes > shadowVboBytes) {
@@ -2768,9 +2769,13 @@ struct GlRenderer final : GxCore {
     if (figTris)
       glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(figBytes), shadowTris.data());
     if (objTris)
-      glBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(figBytes), static_cast<GLsizeiptr>(bytes - figBytes),
+      glBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(figBytes), static_cast<GLsizeiptr>(objEnd - figBytes),
                       objectTris.data());
+    if (scnTris)
+      glBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(objEnd), static_cast<GLsizeiptr>(bytes - objEnd),
+                      sceneryTris.data());
     const GLsizei figCorners = static_cast<GLsizei>(figTris * 3), objCorners = static_cast<GLsizei>(objTris * 3);
+    const GLsizei scnCorners = static_cast<GLsizei>(scnTris * 3);
     // 1. the depth atlas: each casting tile's casters from its light (only those tiles cleared: one light without
     // objects clears a quarter of it)
     BindFbo(shadowAtlasFbo);
@@ -2793,7 +2798,10 @@ struct GlRenderer final : GxCore {
       glScissor((t & 1) * tile, (t >> 1) * tile, tile, tile);
       glClear(GL_DEPTH_BUFFER_BIT);
       ShadowRows(shadowDepthProg, m, "");
-      glDrawArrays(GL_TRIANGLES, m.objects ? figCorners : 0, m.objects ? objCorners : figCorners);
+      if (m.scenery)
+        glDrawArrays(GL_TRIANGLES, figCorners + objCorners, scnCorners);  // the scenery (no marks: never a receiver)
+      else
+        glDrawArrays(GL_TRIANGLES, m.objects ? figCorners : 0, m.objects ? objCorners : figCorners);
     }
     glDisable(GL_SCISSOR_TEST);
     // 2. the casters' marks: the same triangles with the scene's camera where they are the visible surface (the EFB's

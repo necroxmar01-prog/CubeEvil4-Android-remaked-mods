@@ -794,6 +794,7 @@ struct GxCore {
     std::size_t triangles;
     bool casts;                      // it has casters; only such a tile is drawn
     bool objects;                    // the objects' triangles (tile 1), else the figures'
+    bool scenery;                    // the scenery's triangles, cast onto the figures only (tile 3, light 0, parallel)
   };
   // one light as kShadowMaskFs takes it (LightAt): lp place (point, spot) or direction it travels (parallel) in view
   // space, w the kind (0 parallel, 1 point, 2 spot); la the colour's luminance (negative: a fixed weight, the marks of
@@ -810,7 +811,7 @@ struct GxCore {
                                      // with the camera), the darkest one light's shadow gets (stage 7: 0.6), 0, 0
     int lights;                      // lights that cast
     int atlas;                       // the atlas' texels each way (2 tiles)
-    std::size_t figTriangles, objTriangles;
+    std::size_t figTriangles, objTriangles, sceneryTriangles;
     int region[4];                   // the scene's part of the EFB in the renderer's texels
     int maskW, maskH;                // the mask's texels (one per GameCube pixel from 2x on, else one per texel)
     float grid[4];                   // EFB texels per mask texel (x, y)
@@ -824,6 +825,12 @@ struct GxCore {
   bool shadowLogged = false;
   std::vector<float> shadowTris;     // the figures' triangles so far, view space, three floats a corner
   std::vector<float> objectTris;     // the objects' (level 2: RE4_GX_OWNER_OBJECT)
+  // the static scenery's near the camera (level 2: RE4_GX_OWNER_SCENERY; 27.11.2026, DevJunior: "el carro por ejemplo
+  // no afecta a Leon"): its shadows are painted into the room, so it casts onto the figures only, from light 0 when
+  // that is parallel (the sky), in tile 3 (light 2's figures then cast nothing)
+  std::vector<float> sceneryTris;
+  static constexpr float kSceneryRange = 10000.0f;  // a corner within this of the camera (view units)
+  static constexpr float kSceneryReach = 6000.0f;   // how far behind the scenery its shadow reaches a figure
   std::vector<float> shadowVerts;    // one draw's corners (ShadowCollect's scratch)
   std::uint32_t shadowXf[12] = {};   // XF 0x101A..0x1025 of the last figure draw: the scene's viewport and projection
   bool shadowXfValid = false;
@@ -833,7 +840,10 @@ struct GxCore {
   void ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk);
   // a parallel light's map along D (unit, view space), a point light's or a spot's from its place (L.lp), aimed with
   // the scene's projection `proj` (XF 0x1020..0x1023); false without triangles
-  static bool ShadowFitParallel(const std::vector<float> &tris, const float D[3], int size, ShadowMapParams *m);
+  // (`occluders`: the map's depth range also takes those of them that lie over its square towards the light; false
+  // when none does)
+  static bool ShadowFitParallel(const std::vector<float> &tris, const float D[3], int size, ShadowMapParams *m,
+                                const std::vector<float> *occluders = nullptr);
   bool ShadowFitPoint(const std::vector<float> &tris, const ShadowLightParams &L, int which, int size,
                       ShadowMapParams *m);
   // a point light's map as ShadowFitPoint fitted it last, per tile: kept while the light stays where it was in view

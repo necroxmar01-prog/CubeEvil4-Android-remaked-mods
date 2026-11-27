@@ -28,6 +28,7 @@ namespace {
 const unsigned kFigure = 0x100;  // re4_gx_frame.h RE4_GX_OWNER_FIGURE
 const unsigned kObject = 0x200;  // RE4_GX_OWNER_OBJECT
 const unsigned kPart = 0x400;    // RE4_GX_OWNER_PART
+const unsigned kScenery = 0x800; // RE4_GX_OWNER_SCENERY
 
 bool isFigure(const void* p)
 {
@@ -96,7 +97,11 @@ unsigned shadowClass(const void* p, const void* func, int level)
             // the room's scroll models: only those that turn (SMX type 1, cObjScr::moveRotate) or swing (2,
             // moveSwingRot), and those a room script set up (SetObjSmd: type 0 with be_flag 0x20, moved by the
             // script, never pre-lit into the room); not the other types (no motion of their own; 15 a mirror)
-            return ob->type == 1 || ob->type == 2 || (ob->type == 0 && (ob->be_flag & 0x20)) ? object : 0;
+            // (since 27.11.2026, DevJunior: "el carro por ejemplo no afecta a Leon") the others with level 2 as scenery:
+            // the app casts them onto the figures only, their shadows on the room are painted in; a mirror (15) none
+            if (ob->type == 1 || ob->type == 2 || (ob->type == 0 && (ob->be_flag & 0x20)))
+                return object;
+            return level >= 2 && ob->type != 15 ? kScenery : 0;
         }
         switch (ob->id) {
         case 11: case 16: case 17: case 26: case 33: case 34: case 35: case 36: case 37: case 39: case 40:
@@ -199,7 +204,9 @@ extern "C" void re4_gx_owner(void* data, void* func, int table)
         }
         shadow = shadowClass(data, func, classes);
         if (shadow == kObject && gameCasts(data, re4_rt_shadow_frame_no())) {
-            shadow = 0;  // the game's own shadow already
+            // the game's own shadow already falls on the room (the police car in r100), not on the figures: such an
+            // object casts onto the figures only (27.11.2026)
+            shadow = kScenery;
         }
     }
     re4_gx_put_owner((unsigned) (size_t) data, (unsigned) (size_t) func,

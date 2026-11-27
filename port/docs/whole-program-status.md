@@ -20723,3 +20723,15 @@ Spiel.
   (Klassik v26, Remake v22): Haarfarbe aschblond wie im Klassiker (Rampe 32,27,20 → 100,84,63 → 170,148,112, vorher
   dunkelbraun), Farbtextur 1024×512, Strähnen 0.15, Detail 0.8; Datenteile unter 8 MB. Am Host gerendert (Studio,
   vier Blickwinkel); auf dem Gerät nicht getestet.
+- **Kulisse wirft Schatten auf Figuren** (DevJunior, 27.11.2026: „el carro por ejemplo no afecta a Leon … con que
+  afecten al personaje estaría bien“): neues Besitzer-Bit `RE4_GX_OWNER_SCENERY` (0x800, `re4_gx_frame.h`). Der Kern
+  (`gx_owner.cpp`) setzt es bei „Figuren und Objekte“ für die festen Raummodelle (ObjMgr `kindid 2` ohne eigene
+  Bewegung, kein Spiegel) und für Objekte, die das Spiel schon selbst beschattet (vorher warfen sie gar nicht, z. B. das
+  Polizeiauto in r100). Der Renderer sammelt deren Dreiecke mit einer Ecke innerhalb 10 m der Kamera (`sceneryTris`)
+  und zeichnet sie, wenn Licht 0 parallel ist (Himmel, Sonne, Mond), in Kachel 3: die Karte über dem Quadrat der Figuren,
+  ihr Tiefenbereich zum Licht hin bis zur Kulisse darüber (`ShadowFitParallel` mit `occluders`, höchstens 6 m vor der
+  nächsten Figur; ohne solche Kulisse keine Kachel). `kShadowMaskFs` nimmt sie nur auf Figurenpixeln (`tileInfo.w` 2),
+  der Raum bekommt sie nie (seine Schatten sind gemalt). Licht 2 wirft dann keine Figurenschatten (weiter im
+  Lichtanteil). Keine Marken für die Kulisse. Shader mit glslangValidator geprüft, `gx_core.cpp`/`gx_gl.cpp` am Host
+  übersetzt, Kern i686 gebaut (0 Fehler); ohne Disc-Daten in der Cloud nicht gerendert, auf dem Gerät nicht getestet
+  (offen: ob Decken in Innenräumen mit parallelem Licht Leon abdunkeln, und die Kosten).

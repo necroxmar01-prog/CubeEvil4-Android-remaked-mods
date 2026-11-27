@@ -1216,9 +1216,10 @@ constexpr char kShadowMaskFs[] =
     "  float dark = 0.0, f;\n"
     RE4_SHADOW_LIGHT("w0", "to0", "c0", "kl0", "dl0", "lb0",
                      "    if (t0.w > 0.5 && !onFig) occ = Occ0(e, n, s, rat);\n"
-                     "    if (t1.w > 0.5 && mk.g < 0.5) occ = max(occ, Occ1(e, n, s, rat));\n")
+                     "    if (t1.w > 0.5 && mk.g < 0.5) occ = max(occ, Occ1(e, n, s, rat));\n"
+                     "    if (t3.w > 1.5 && onFig) occ = max(occ, Occ3(e, n, s, rat));\n")
     RE4_SHADOW_LIGHT("w1", "to1", "c1", "kl1", "dl1", "lb1", "    if (t2.w > 0.5 && !onFig) occ = Occ2(e, n, s, rat);\n")
-    RE4_SHADOW_LIGHT("w2", "to2", "c2", "kl2", "dl2", "lb2", "    if (t3.w > 0.5 && !onFig) occ = Occ3(e, n, s, rat);\n")
+    RE4_SHADOW_LIGHT("w2", "to2", "c2", "kl2", "dl2", "lb2", "    if (t3.w > 0.5 && t3.w < 1.5 && !onFig) occ = Occ3(e, n, s, rat);\n")
     "  o = vec4(vec3(1.0 - min(dark * fade, look.x)), 1.0);\n"
     "}\n";
 #undef RE4_SHADOW_OCC

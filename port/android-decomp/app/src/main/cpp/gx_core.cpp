@@ -181,7 +181,7 @@ std::uint64_t GxCore::OwnerKey(const std::uint32_t *p) {
   for (int i = 0; i < 3; i++) {
     // (word 2 without the real-time shadows' classes: they come and go with the shadows, the in-between picture
     // finds its draws either way)
-    h ^= i == 2 ? p[i] & ~(RE4_GX_OWNER_OBJECT | RE4_GX_OWNER_PART) : p[i];
+    h ^= i == 2 ? p[i] & ~(RE4_GX_OWNER_OBJECT | RE4_GX_OWNER_PART | RE4_GX_OWNER_SCENERY) : p[i];
     h *= 1099511628211ull;
   }
   return h | 1;
@@ -1475,7 +1475,8 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
     return;
   const bool figure = (ownerWords[2] & (RE4_GX_OWNER_FIGURE | RE4_GX_OWNER_PART)) != 0;
   const bool object = !figure && shadowLevel >= 2 && (ownerWords[2] & RE4_GX_OWNER_OBJECT) != 0;
-  if (!figure && !object)
+  const bool scenery = !figure && !object && shadowLevel >= 2 && (ownerWords[2] & RE4_GX_OWNER_SCENERY) != 0;
+  if (!figure && !object && !scenery)
     return;
   const std::uint32_t z = bp[0x40];
   if (!(z & 1) || !((z >> 4) & 1) || d.stride < 12 || d.vertexCount == 0)
@@ -1504,6 +1505,26 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
     cx += e[0];
     cy += e[1];
     cz += e[2];
+  }
+  if (scenery) {
+    // the scenery: each triangle with a corner within kSceneryRange of the camera (a room's big draws reach far)
+    const float r2 = kSceneryRange * kSceneryRange;
+    for (std::uint32_t i = 0; i + 2 < d.indexCount; i += 3) {
+      const std::uint32_t i0 = chunk.indices[d.indexOffset + i], i1 = chunk.indices[d.indexOffset + i + 1],
+                          i2 = chunk.indices[d.indexOffset + i + 2];
+      if (i0 >= d.vertexCount || i1 >= d.vertexCount || i2 >= d.vertexCount)
+        return;
+      const float *c[3] = {&shadowVerts[static_cast<std::size_t>(i0) * 3], &shadowVerts[static_cast<std::size_t>(i1) * 3],
+                           &shadowVerts[static_cast<std::size_t>(i2) * 3]};
+      bool near = false;
+      for (int k = 0; k < 3 && !near; k++)
+        near = c[k][0] * c[k][0] + c[k][1] * c[k][1] + c[k][2] * c[k][2] < r2;
+      if (!near)
+        continue;
+      for (int k = 0; k < 3; k++)
+        sceneryTris.insert(sceneryTris.end(), c[k], c[k] + 3);
+    }
+    return;
   }
   const double n = static_cast<double>(d.vertexCount);
   cx /= n;
@@ -1543,7 +1564,8 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
 // square around them on a fixed grid (its side in steps of a fourth of an octave, its middle on whole texels, its depth
 // range in half metres), so that a caster that moves does not shift another's shadow by a texel. False without
 // triangles.
-bool GxCore::ShadowFitParallel(const std::vector<float> &tris, const float D[3], int size, ShadowMapParams *m) {
+bool GxCore::ShadowFitParallel(const std::vector<float> &tris, const float D[3], int size, ShadowMapParams *m,
+                               const std::vector<float> *occluders) {
   if (tris.size() < 9)
     return false;
   float up[3] = {0.0f, 1.0f, 0.0f};
@@ -1571,7 +1593,32 @@ bool GxCore::ShadowFitParallel(const std::vector<float> &tris, const float D[3],
   const float texel = 2.0f * half / static_cast<float>(size);
   const float mx = std::floor(0.5f * (lo[0] + hi[0]) / texel + 0.5f) * texel;
   const float my = std::floor(0.5f * (lo[1] + hi[1]) / texel + 0.5f) * texel;
-  const float zn = std::floor((lo[2] - 100.0f) / 500.0f) * 500.0f;
+  float near = lo[2];
+  if (occluders) {
+    // the occluders over the square (light space x, y), the nearest of them towards the light
+    std::size_t over = 0;
+    for (std::size_t i = 0; i + 8 < occluders->size(); i += 9) {
+      const float *v = &(*occluders)[i];
+      float tlo[3] = {1e30f, 1e30f, 1e30f}, thi[3] = {-1e30f, -1e30f, -1e30f};
+      for (int k = 0; k < 3; k++) {
+        const float *c = v + 3 * k;
+        const float l[3] = {R[0] * c[0] + R[1] * c[1] + R[2] * c[2], U[0] * c[0] + U[1] * c[1] + U[2] * c[2],
+                            D[0] * c[0] + D[1] * c[1] + D[2] * c[2]};
+        for (int j = 0; j < 3; j++) {
+          tlo[j] = std::min(tlo[j], l[j]);
+          thi[j] = std::max(thi[j], l[j]);
+        }
+      }
+      if (thi[0] < mx - half || tlo[0] > mx + half || thi[1] < my - half || tlo[1] > my + half ||
+          tlo[2] > hi[2] || thi[2] < lo[2] - kSceneryReach)
+        continue;  // beside the square, behind every figure, or too far towards the light to reach one
+      near = std::min(near, tlo[2]);
+      over++;
+    }
+    if (over == 0)
+      return false;
+  }
+  const float zn = std::floor((near - 100.0f) / 500.0f) * 500.0f;
   const float zf = std::ceil((hi[2] + 1.5f * kShadowReach) / 500.0f) * 500.0f;
   const float sx = 1.0f / half, sz = 2.0f / (zf - zn), tz = -(zf + zn) / (zf - zn);
   const float rows[4][4] = {{sx * R[0], sx * R[1], sx * R[2], -sx * mx},
@@ -1584,7 +1631,7 @@ bool GxCore::ShadowFitParallel(const std::vector<float> &tris, const float D[3],
   m->tp[2] = 0.0f;
   m->tp[3] = texel;
   m->size = size;
-  m->triangles = tris.size() / 9;
+  m->triangles = (occluders ? occluders : &tris)->size() / 9;
   m->extent = 2.0f * half;
   m->bias[0] = 1.5f;
   m->bias[1] = 1.0f;
@@ -1788,6 +1835,7 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
   if ((shadowTris.empty() && objectTris.empty()) || !shadowXfValid || !any) {
     shadowTris.clear();
     objectTris.clear();
+    sceneryTris.clear();
     return;
   }
   // the scene's part of the EFB: the scissor now within the figures' viewport (as BloomRegion)
@@ -1808,6 +1856,7 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
     if (x1 - x0 < 32 || y1 - y0 < 32) {
       shadowTris.clear();
       objectTris.clear();
+      sceneryTris.clear();
       return;
     }
     s.region[0] = Lo(x0);
@@ -1821,6 +1870,9 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
   }();
   const int tile = sizeEnv >= 256 && sizeEnv <= 2048 ? sizeEnv : kShadowTile;
   s.atlas = 2 * tile;
+  // the scenery onto the figures: light 0 parallel (the sky), with figures and scenery near the camera
+  const bool sceneryWanted = shadowLevel >= 2 && k > 0 && !sceneryTris.empty() && !shadowTris.empty() &&
+                             s.light[0].lp[3] == 0.0f && s.light[0].la[0] != 0.0f && s.light[0].la[1] > 0.0f;
   // each light's figures in a tile of their own (0, 2, 3), with "Characters and objects" light 0's objects in tile 1;
   // a tile is drawn only with casters
   for (int i = 0; i < k; i++) {
@@ -1828,6 +1880,8 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
     if (L.la[0] == 0.0f || !(L.la[1] > 0.0f))
       continue;
     const int fig = i == 0 ? 0 : i + 1;
+    if (fig == 3 && sceneryWanted)
+      continue;  // tile 3 holds light 0's scenery; light 2 still lights (the mask's sum)
     auto fit = [&](const std::vector<float> &tris, ShadowMapParams *m) {
       return L.lp[3] == 0.0f ? ShadowFitParallel(tris, L.lp, tile, m)
                              : ShadowFitPoint(tris, L, static_cast<int>(m - s.tile), tile, m);
@@ -1845,15 +1899,22 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
       continue;
     s.lights++;
   }
+  // light 0's scenery (tile 3): the map over the figures' square, deep enough towards the light for the scenery
+  // above them (kShadowMaskFs: tileInfo w 2 marks it, only the figures' pixels take it)
+  if (sceneryWanted && s.tile[0].casts && ShadowFitParallel(shadowTris, s.light[0].lp, tile, &s.tile[3], &sceneryTris)) {
+    s.tile[3].bias[3] = soft[0];
+    s.tile[3].scenery = true;
+  }
   for (int t = 0; t < kShadowTiles; t++) {
     s.tileInfo[t][0] = (t & 1) ? 0.5f : 0.0f;
     s.tileInfo[t][1] = (t & 2) ? 0.5f : 0.0f;
-    s.tileInfo[t][2] = kShadowReach;
-    s.tileInfo[t][3] = s.tile[t].casts ? 1.0f : 0.0f;
+    s.tileInfo[t][2] = s.tile[t].scenery ? kSceneryReach : kShadowReach;
+    s.tileInfo[t][3] = s.tile[t].casts ? (s.tile[t].scenery ? 2.0f : 1.0f) : 0.0f;
   }
   if (s.lights == 0) {
     shadowTris.clear();
     objectTris.clear();
+    sceneryTris.clear();
     return;
   }
   // the mask: a texel per GameCube pixel from 2x on (the shadows are soft; the apply pass smooths), else per texel
@@ -1888,6 +1949,7 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
   s.look[3] = 0.5f / static_cast<float>(s.atlas);
   s.figTriangles = shadowTris.size() / 9;
   s.objTriangles = s.tile[1].casts ? objectTris.size() / 9 : 0;
+  s.sceneryTriangles = s.tile[3].scenery ? sceneryTris.size() / 9 : 0;
   if (!shadowLogged) {
     shadowLogged = true;
     GXLOG("real-time shadows: first picture with them: %d light(s) (kinds %.0f %.0f %.0f), %zu triangles of the "
@@ -1896,9 +1958,10 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
           s.maskW, s.maskH);
   }
   ShadowPass(s);
-  stats.shadowTriangles = static_cast<unsigned>(s.figTriangles + s.objTriangles);
+  stats.shadowTriangles = static_cast<unsigned>(s.figTriangles + s.objTriangles + s.sceneryTriangles);
   shadowTris.clear();
   objectTris.clear();
+  sceneryTris.clear();
 }
 const GxCore::BloomLook &GxCore::BloomLookOf(int level) {
   // light: the brightest parts only, a soft glow (two blurs, about 13 game pixels); strong: a little more of the
@@ -2126,6 +2189,7 @@ void GxCore::Run(const Re4GxChunk &chunk) {
   if (m.shadowWanted) {
     m.shadowTris.clear();
     m.objectTris.clear();
+    m.sceneryTris.clear();
     m.shadowXfValid = false;
   }
   if (m.mergeOn && m.BaseVertex() && !m.interpPass && !m.recordDraws && !m.skipDraws && !uploaded && !m.shadowWanted)
