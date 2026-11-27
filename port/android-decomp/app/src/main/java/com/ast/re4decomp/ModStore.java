@@ -253,7 +253,8 @@ final class ModStore {
   private static boolean looksLikeDiscFolder(String n) {
     String l = n.toLowerCase(java.util.Locale.ROOT);
     return l.equals("em") || l.equals("files") || l.equals("etc") || l.equals("bio4") || l.matches("st\\d|r\\d{3}")
-        || l.equals("melee") || l.equals("music") || l.equals("sound") || l.equals("event") || l.equals("ss");
+        || l.equals("melee") || l.equals("music") || l.equals("sound") || l.equals("event") || l.equals("ss")
+        || l.equals("voice");
   }
 
   private static String displayName(ContentResolver resolver, Uri doc) {

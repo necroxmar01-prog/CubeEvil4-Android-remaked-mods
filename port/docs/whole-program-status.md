@@ -20477,6 +20477,7 @@ Spiel.
   einem Neustart löschen; Texte in 11 Sprachen. Nur CI-Build, auf dem Gerät nicht getestet.
 
 | 0957 `game/mes.cpp` | Titel vor dem ersten Spiel: Typ-3-Texte (Gegenstandsnamen) aus `etc/core.das`, wenn `gameInit` sie noch nicht gebunden hat (EU-Optionen, Steuercode 0x11) |
+| 0958 `game/snd.cpp`, `game/snd_str4.cpp` (+ `runtime/mod_voice.cpp`, `runtime/mod_voice_game.cpp`) | Stimmen-Mod für die Zwischensequenzen (Wunsch von DevJunior, 26.11.2026, Doblaje latino; kein Fehler des Prototyps): `SndStrReq` meldet jeden gestarteten Stream (Block 1 = Ereignisstimmen aus `bgm/bio4evt.sbb`), `Snd_str_work_calc_ax_vol` macht den ersetzten Stream stumm und gibt seine Lautstärke an die Zeile des Mods |
 - **Mod löschen: danach „Später / Neu starten“** (DevJunior, 26.11.2026: „un cuadro que dirá reiniciar o más tarde como
   cuando los instalas“): die Rückfrage hat wieder „Abbrechen / Löschen“; nach dem Löschen fragt ein zweites Fenster wie
   beim Hinzufügen „Später / Neu starten“ (`restartForMods`). Ersetzt die drei Knöpfe von 15bebf7. Nur CI-Build.
@@ -20516,3 +20517,21 @@ Spiel.
   Stimmen der Zwischensequenzen, im GC-Spiel Stream-Dateien (`snd_str*`). Die Zuordnung PC-Eintrag → GC-Stimme und der
   Weg ins Spiel (Ersatz zur Laufzeit wie beim Musik-Mod oder Umwandeln in die GC-Dateien) sind offen;
   Grundsatzentscheidung beim Projektinhaber. Nichts aus dem Mod ins Repository.
+- **Doblaje latino, Weg 1** (Entscheidung des Projektinhabers, 26.11.2026: „La 1“, die Stimmen werden beim Spielen
+  ersetzt, die Disc-Dateien bleiben unberührt): neuer Mod-Ordner `voice/` mit `bio4evt.xwb` und `bio4evt.xsb` der
+  Steam-Fassung (oder der Ordner des PC-Mods so, wie er ist: `BIO4/snd/bio4evt.*` wird erkannt; `ModStore.java`
+  nimmt `voice` als Ordner eines Packs). `runtime/mod_voice.cpp` (Plattform): Soundbank (281 Cues, einfache und
+  komplexe mit Play-Wave-Ereignis und Verzögerung) → Eintrag der Wellenbank (XACT 3, PCM 8/16 bit und MS-ADPCM, mono
+  oder Stereo, beliebige Rate; XMA/xWMA nicht), beim Spielen aus der Datei gelesen (pread), linear auf 32 kHz Stereo,
+  in `ai.cpp` zu den AI-Blöcken addiert (auch verlorene Blöcke zählen mit, damit es im Takt bleibt).
+  `runtime/mod_voice_game.cpp` (Spielseite) sagt je Block, ob der Stream noch da ist, klingt (0x10) und ob ein
+  Ereignis läuft. Patch 0958: der Stream des Spiels läuft stumm weiter (Zeitablauf und Warten des Ereignisses bleiben
+  die des Spiels); die Zeile beginnt, wenn er zu klingen beginnt, übernimmt Lautstärke und Ausblenden (die Musik-
+  Lautstärke der App inklusive), endet mit ihrem Ende, beim Ausblenden auf 0 (Stopp) oder wenn der Stream weg ist und
+  kein Ereignis mehr läuft (übersprungene Szene); eine längere Zeile als die des Spiels läuft weiter, solange die
+  Szene läuft. **Geprüft am Host:** Zuordnung Cue → Welle aus der echten `bio4evt.xsb` wie in der Python-Auswertung
+  (Cue 21 → 82, 50 → 161 über das Ereignis), PCM-Ausgabe bitgenau gleich der Quelle (`pl00.xwb`, 32 kHz), MS-ADPCM
+  bitgenau gleich ffmpegs Decoder; i686-Build und alle Prüfungen von `whole_build.sh` ohne Fehler. **Nicht geprüft:**
+  das Format von `bio4evt.xwb` selbst (nur der Kopf von `pl00.xwb` lag vor), ob die Nummern der Ereignisstimmen der
+  GC-Fassung den Cues der PC-Fassung entsprechen (Logzeile `voice mod: event voice N -> wave M, x s` je Szene) und
+  alles auf dem Gerät.

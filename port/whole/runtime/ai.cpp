@@ -145,6 +145,7 @@ void play(u32 addr, u32 length)
     const u32 r = gRead.load(std::memory_order_acquire);
     if (w - r + frames > kRing) {
         gOverruns++;  // the app does not read (paused): this block is lost
+        re4_mod_voice_mix(0, frames);  // a voice mod's line keeps in step with the game's stream
         return;
     }
     // a mod's sound (runtime/mod_sound.cpp, the D-pad quick slots) on top of the game's, front left and right
@@ -156,6 +157,7 @@ void play(u32 addr, u32 length)
             lr[i * 2 + 1] = block[i * 2];
         }
         re4_mod_music_mix(lr, frames);  // a mod's music (runtime/mod_music.cpp) under the sound
+        re4_mod_voice_mix(lr, frames);  // a mod's cutscene voices (runtime/mod_voice.cpp, patch 0958)
         re4_mod_sound_mix(lr, frames);
     }
     for (u32 i = 0; i < frames; i++) {

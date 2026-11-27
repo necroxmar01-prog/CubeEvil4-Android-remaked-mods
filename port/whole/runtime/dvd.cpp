@@ -578,6 +578,17 @@ void modFolder(Disc& d, const char* pack, const char* full, const char* rel, int
             free(names[k]);
             continue;
         }
+        // a voice mod's cutscene voices (runtime/mod_voice.cpp, patch 0958), no file of the disc either: voice/<name>,
+        // or the Steam release's own place BIO4/snd/bio4evt.xwb | .xsb (a PC mod's folder added as it is)
+        const char* base = strrchr(name, '/') ? strrchr(name, '/') + 1 : name;
+        const bool pcVoice = strncasecmp(base, "bio4evt.", 8) == 0 && base - name >= 4 &&
+                             strncasecmp(base - 4, "snd/", 4) == 0;
+        if ((strncmp(name, "voice/", 6) == 0 && !strchr(name + 6, '/')) || pcVoice) {
+            re4_mod_voice_add(base, path);
+            re4_log("DVD: mod %s: %s is for the cutscenes' voices (runtime/mod_voice.cpp)", pack, name);
+            free(names[k]);
+            continue;
+        }
         if (strncmp(name, "codec/", 6) == 0) {
             // the radio box's portraits and calls.txt: the app reads them (CodecPortraits.java), no file of the disc
             re4_log("DVD: mod %s: %s is for the app's radio box", pack, name);
@@ -629,6 +640,7 @@ void applyMods(Disc& d, int no)
 {
     gModsGeneration++;
     re4_mod_sound_path_set("");  // a pack switched off takes its sound along
+    re4_mod_voice_reset();       // ... and its voices
     char mods[1200];
     snprintf(mods, sizeof(mods), "%s/mods", gDataDir);
     int count = 0;

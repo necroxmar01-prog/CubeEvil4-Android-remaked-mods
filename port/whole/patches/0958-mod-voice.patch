@@ -1,0 +1,45 @@
+# A voice mod for the cutscenes (wish of DevJunior, 26.11.2026: the Latin American dub of IG Studios as a mod pack of its
+# own, made for the Steam release; his choice: the voices replaced while the game plays, the disc's files untouched; not a
+# bug of the prototype). snd.cpp SndStrReq tells runtime/mod_voice.cpp of every stream it starts (block 1: the event
+# voices of bgm/bio4evt.sbb); snd_str4.cpp Snd_str_work_calc_ax_vol hands it each stream's volume: a stream the mod's
+# line replaces plays on silently (the event's timing and its waits for the stream stay the game's), the line takes the
+# stream's volume and fades. Without a voice folder in the mods nothing changes (every stream keeps its volume).
+--- a/src/game/snd.cpp
++++ b/src/game/snd.cpp
+@@ -1,6 +1,7 @@
+ // game/snd: game-side sound interface (D:/Bio4/Prog/snd.cpp, -O2) that calls into the C sound
+ // driver (src/game/snd_*.cpp, include/snd_drv.h).
+ #include "types.h"
++extern "C" int re4_mod_voice_prepare_game(unsigned id, int blk, int no, float start); /* port: runtime/mod_voice_game.cpp (patch 0958) */
+ #include "global.h"
+ #include "map_obj.h"
+ #include "light.h"
+@@ -1166,6 +1167,8 @@
+         e += no;
+         Snd_str_blk_init(blk, sf);
+         w->play_id = Snd_str_prepare(blk, no, (char*) FileTbl[StrFileTbl[blk]].name, wk);
++        /* port (patch 0958): a voice mod's line for this event voice (runtime/mod_voice.cpp) */
++        re4_mod_voice_prepare_game(w->play_id, blk, no, s_time);
+         w->play_blk = blk;
+         w->play_no = no;
+         if (blk == 1) {
+--- a/src/game/snd_str4.cpp
++++ b/src/game/snd_str4.cpp
+@@ -3,6 +3,7 @@
+ #include "snd_drv.h"
+ extern "C" int re4_sound_volume(int music); /* port: runtime/sound_volume.cpp (patch 0153) */
+ extern "C" int re4_music_duck_stream(int ambience); /* port: runtime/music.cpp (patch 0929) */
++extern "C" int re4_mod_voice_stream_vol(unsigned id, int axVol, int nowVol, int fading, int fadeEnd); /* port: runtime/mod_voice.cpp (patch 0958) */
+ 
+ // Clears the 4 stream works (numbered).
+ void Snd_str_work_clear(void)
+@@ -78,6 +79,9 @@
+        under its battle track (0..256, runtime/music.cpp) */
+     str->out_vol = (s16) (str->out_vol * re4_music_duck_stream(str->str_type == 2) / 256);
+     str->ax_vol = Snd_vol_syn_to_ax((s16) (str->out_vol >> 8));
++    /* port (patch 0958): a stream a voice mod's line replaces stays silent; the line takes its volume */
++    str->ax_vol = re4_mod_voice_stream_vol(str->snd_id, str->ax_vol, str->now_vol, (str->be_flag & 0x100) != 0,
++                                           str->nml_fade_end);
+ }
+ 
+ // Surround pan sent to MIX: the stream's in DPL2 mode, else 0x7F.

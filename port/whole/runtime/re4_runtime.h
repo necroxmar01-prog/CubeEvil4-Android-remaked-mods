@@ -186,6 +186,9 @@ void re4_mod_music_want(int track, int gain);
 void re4_mod_music_cut(int on);  // 1: silent at once (a radio call)
 int re4_mod_music_level(void);
 void re4_mod_music_mix(short* lr, unsigned frames);
+void re4_mod_voice_reset(void);  // runtime/mod_voice.cpp: the cutscenes' voices of a mod (patch 0958)
+void re4_mod_voice_add(const char* name, const char* path);
+void re4_mod_voice_mix(short* lr, unsigned frames);  // lr NULL: a lost block
 /* Patch 0901, event.cpp ExePacket_SetParts: 1 = a jacket part of costume 0 takes the skin's pl000e
  * (the PC mods replace pl08, Leon without the jacket); logs each part while the player's file is a mod. */
 int re4_mod_event_part(const char* name, const char* bin, const char* tpl, const char* oya, int costume);
