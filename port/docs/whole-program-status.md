@@ -20802,7 +20802,13 @@ Spiel.
   des Events darum (nach dem Lidschlag-Bereich zentriert), Zähne/Zunge mit eigener Farbe, eigene Frontprojektion als
   UV, Rand nur auf die verbleibende Haut gezogen. Am Host gerendert: die Lider des Events stehen als runder, zu weiter
   Ring um die größeren Augäpfel des neuen Kopfs (Glupschaugen-Eindruck), am Rand noch Zacken; nicht brauchbar,
-  Entscheidung des Projektinhabers zum weiteren Weg offen.
+  Entscheidung des Projektinhabers: Transplantat weiter verfolgen (27.11.2026). Dritter Stand: die Augenhöhlen des
+  Event-Kopfs sind geschlossene Taschen (keine offenen Kanten), seine Lider in Ruhe weit offen; die Öffnung wird jetzt
+  an den Lidern gemessen, die der Lidschlag mehr als 3 Einheiten bewegt (≈1,15× Öffnungsbreite), und gleichmäßig auf
+  die Öffnung des neuen Kopfs skaliert (0,86–1,01), Formen mit; das Gesicht wird mit der vergrößerten Ellipse
+  geschnitten, die offenen Kanten des Einsatzes auf die Lochkante der Haut gezogen (Abklingen über 6 Einheiten), die
+  Augäpfel des neuen Kopfs bewegen sich nicht mit. Am Host: Ring um das Auge dunkler als die Haut, Lücken (schwarze
+  Dreiecke) an der Naht; noch nicht brauchbar.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
