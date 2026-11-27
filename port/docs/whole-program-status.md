@@ -20547,3 +20547,11 @@ Spiel.
   Film), nicht die Ereignisstimmen; der Stimmen-Mod ersetzt ihn nicht. Vorschlag an den Tester: `opening_eng.sfd`
   des PC-Mods als `movie/opening.sfd` in den Pack (ob die CRI-Bibliothek des GC-Spiels die PC-Filme abspielt, ist
   ungeprüft). Log der Szenen erbeten.
+- **Absturz „Neues Spiel“ mit dem PC-Vorspann, Glanz der Skins** (DevJunior, 26.11.2026, Log): die als
+  `movie/opening.sfd` eingelegte PC-Datei (`opening_eng.sfd`, 75 MB) verlangt in `cSofdec` (sofdec.cpp 649)
+  0x14907e0 Bytes Puffer, der Heap hat sie nicht („Can't Malloc“), danach `OSFreeToHeap` auf dem fehlenden Block →
+  Signal 11. Die PC-Filme laufen so nicht; dem Tester geraten, den Ordner `movie/` des Packs zu löschen. Im Log keine
+  Zeile zu `voice/`: der Pack enthielt die Stimmen nicht (beim Tester nachfragen). Glanz: neues Werkzeug
+  `skin_matte.py` (Glanzfarbe der Teile höchstens 40, Stärke höchstens 60 %); das neue Haar hatte 112 bei 141 % (von
+  der Remake-Lite-Vorlage). Leon Clásico Remasterizado v15 / Remake v10. Am Host gebaut, auf dem Gerät nicht
+  getestet.
