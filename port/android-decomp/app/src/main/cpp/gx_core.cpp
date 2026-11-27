@@ -1487,6 +1487,41 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
   mtxAt += ((d.layout & RE4_GX_V_COLOR0) ? 4 : 0) + ((d.layout & RE4_GX_V_COLOR1) ? 4 : 0);
   for (int t = 0; t < 8; t++)
     mtxAt += (d.layout & (RE4_GX_V_TEX0 << t)) ? 8 : 0;
+  if (scenery) {
+    // the scenery costs only near last picture's figures (27.11.2026, the owner's device: the render thread took ~10 ms
+    // more): none without a scenery tile last picture (no parallel light 0), none past the budget, and a draw of one
+    // matrix only when its box (model space, its 8 corners through the matrix) comes within kSceneryReach of the
+    // figures' box
+    if (!sceneryLast || sceneryTris.size() >= kSceneryBudget * 9)
+      return;
+    if (!(d.layout & RE4_GX_V_MATRIX)) {
+      float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+      for (std::uint32_t v = 0; v < d.vertexCount; v++) {
+        float pos[3];
+        std::memcpy(pos, chunk.vertices + d.vertexOffset + static_cast<std::size_t>(v) * d.stride, 12);
+        for (int k = 0; k < 3; k++) {
+          lo[k] = std::min(lo[k], pos[k]);
+          hi[k] = std::max(hi[k], pos[k]);
+        }
+      }
+      unsigned row = d.matrices[0] & 63;
+      if (row > 61)
+        row = 0;
+      float blo[3] = {1e30f, 1e30f, 1e30f}, bhi[3] = {-1e30f, -1e30f, -1e30f};
+      for (int c = 0; c < 8; c++) {
+        const float pos[3] = {(c & 1) ? hi[0] : lo[0], (c & 2) ? hi[1] : lo[1], (c & 4) ? hi[2] : lo[2]};
+        for (int r = 0; r < 3; r++) {
+          const float e = xf.posTex[row + r][0] * pos[0] + xf.posTex[row + r][1] * pos[1] +
+                          xf.posTex[row + r][2] * pos[2] + xf.posTex[row + r][3];
+          blo[r] = std::min(blo[r], e);
+          bhi[r] = std::max(bhi[r], e);
+        }
+      }
+      for (int r = 0; r < 3; r++)
+        if (bhi[r] < figLo[r] - kSceneryReach || blo[r] > figHi[r] + kSceneryReach)
+          return;
+    }
+  }
   shadowVerts.resize(static_cast<std::size_t>(d.vertexCount) * 3);
   double cx = 0.0, cy = 0.0, cz = 0.0;
   for (std::uint32_t v = 0; v < d.vertexCount; v++) {
@@ -1507,20 +1542,22 @@ void GxCore::ShadowCollect(const Re4GxDraw &d, const Re4GxChunk &chunk) {
     cz += e[2];
   }
   if (scenery) {
-    // the scenery: each triangle with a corner within kSceneryRange of the camera (a room's big draws reach far)
-    const float r2 = kSceneryRange * kSceneryRange;
+    // the scenery: each triangle that comes within kSceneryReach of last picture's figures' box
     for (std::uint32_t i = 0; i + 2 < d.indexCount; i += 3) {
+      if (sceneryTris.size() >= kSceneryBudget * 9)
+        return;
       const std::uint32_t i0 = chunk.indices[d.indexOffset + i], i1 = chunk.indices[d.indexOffset + i + 1],
                           i2 = chunk.indices[d.indexOffset + i + 2];
       if (i0 >= d.vertexCount || i1 >= d.vertexCount || i2 >= d.vertexCount)
         return;
       const float *c[3] = {&shadowVerts[static_cast<std::size_t>(i0) * 3], &shadowVerts[static_cast<std::size_t>(i1) * 3],
                            &shadowVerts[static_cast<std::size_t>(i2) * 3]};
-      bool near = false;
-      for (int k = 0; k < 3 && !near; k++)
-        near = c[k][0] * c[k][0] + c[k][1] * c[k][1] + c[k][2] * c[k][2] < r2;
-      if (!near)
-        continue;
+      bool away = false;
+      for (int r = 0; r < 3 && !away; r++)
+        away = std::max({c[0][r], c[1][r], c[2][r]}) < figLo[r] - kSceneryReach ||
+               std::min({c[0][r], c[1][r], c[2][r]}) > figHi[r] + kSceneryReach;
+      if (away)
+        continue;  // beside the figures' box by more than a shadow reaches
       for (int k = 0; k < 3; k++)
         sceneryTris.insert(sceneryTris.end(), c[k], c[k] + 3);
     }
@@ -1898,6 +1935,20 @@ void GxCore::ShadowMark(const std::uint32_t *p, std::uint32_t n) {
     if (!casts)
       continue;
     s.lights++;
+  }
+  // the next picture's scenery collecting: only while light 0 is parallel, around these figures (1 m more: the camera
+  // moves between pictures)
+  sceneryLast = shadowLevel >= 2 && k > 0 && s.light[0].lp[3] == 0.0f && !shadowTris.empty();
+  if (sceneryLast) {
+    for (int r = 0; r < 3; r++) {
+      figLo[r] = 1e30f;
+      figHi[r] = -1e30f;
+    }
+    for (std::size_t i = 0; i + 2 < shadowTris.size(); i += 3)
+      for (int r = 0; r < 3; r++) {
+        figLo[r] = std::min(figLo[r], shadowTris[i + r] - 1000.0f);
+        figHi[r] = std::max(figHi[r], shadowTris[i + r] + 1000.0f);
+      }
   }
   // light 0's scenery (tile 3): the map over the figures' square, deep enough towards the light for the scenery
   // above them (kShadowMaskFs: tileInfo w 2 marks it, only the figures' pixels take it)

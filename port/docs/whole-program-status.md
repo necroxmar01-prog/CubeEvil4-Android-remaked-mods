@@ -20735,3 +20735,13 @@ Spiel.
   Lichtanteil). Keine Marken für die Kulisse. Shader mit glslangValidator geprüft, `gx_core.cpp`/`gx_gl.cpp` am Host
   übersetzt, Kern i686 gebaut (0 Fehler); ohne Disc-Daten in der Cloud nicht gerendert, auf dem Gerät nicht getestet
   (offen: ob Decken in Innenräumen mit parallelem Licht Leon abdunkeln, und die Kosten).
+- **Kulissenschatten günstiger** (DevJunior, 27.11.2026, Odin 2 Portal, Bericht: unter 30 FPS; der Renderfaden brauchte
+  in r100/r101 12–18 ms je Chunk, davon „the rest“ ~10 ms, bei warmem Gerät mit gedrosseltem Kern 1478 von 3206 MHz):
+  die Kulisse wird nur noch gesammelt, wenn das vorige Bild ein paralleles Licht 0 und Figuren hatte (`sceneryLast`),
+  höchstens 6000 Dreiecke je Bild (`kSceneryBudget`), und ein Zeichenaufruf mit einer Matrix wird vorab an seiner
+  Kiste (Modellraum, 8 Ecken durch die Matrix) gegen die Kiste der Figuren des vorigen Bildes (+1 m) plus 6 m
+  verworfen, ohne jeden Punkt umzurechnen; jedes Dreieck ebenso statt „10 m um die Kamera“. Am Host übersetzt; auf dem
+  Gerät nicht gemessen.
+- **Haar weniger gelb** (DevJunior, 27.11.2026, Bilder vom Gerät: „demasiado amarillo patito“): Leon-Pakete Klassik
+  v27, Remake v23 mit dunklerem, entsättigtem Aschton (Rampe 28,25,21 → 78,70,58 → 132,121,103), Strähnen 0.08,
+  Detail 0.45 (vorher 0.15/0.8, wirkte auf dem Gerät wie Maserung).

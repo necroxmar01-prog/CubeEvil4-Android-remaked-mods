@@ -829,7 +829,9 @@ struct GxCore {
   // no afecta a Leon"): its shadows are painted into the room, so it casts onto the figures only, from light 0 when
   // that is parallel (the sky), in tile 3 (light 2's figures then cast nothing)
   std::vector<float> sceneryTris;
-  static constexpr float kSceneryRange = 10000.0f;  // a corner within this of the camera (view units)
+  static constexpr std::size_t kSceneryBudget = 6000;  // triangles a picture at most
+  bool sceneryLast = false;           // last picture had a parallel light 0 and figures: collect the scenery
+  float figLo[3] = {}, figHi[3] = {}; // last picture's figures' box (view space, 1 m more)
   static constexpr float kSceneryReach = 6000.0f;   // how far behind the scenery its shadow reaches a figure
   std::vector<float> shadowVerts;    // one draw's corners (ShadowCollect's scratch)
   std::uint32_t shadowXf[12] = {};   // XF 0x101A..0x1025 of the last figure draw: the scene's viewport and projection
