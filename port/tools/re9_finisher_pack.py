@@ -1057,6 +1057,9 @@ PISTOL_POSES = False  # move.dat 0xB8..0xC6: the remake's handgun aim and fire (
 # la escopeta") the remake's shotgun reload (0x90..0x92) and carry (0x98..) off like the handgun's: the game's own
 # (runtime/locomotion.cpp re4_move_reload returns the game's motion, the carry layer is skipped without an entry)
 SHOTGUN_RELOAD = False
+# (Mods, 26.11.2026, DevJunior: "las animaciones de recarga del remake siguen") the handguns' remake reload (0xB0.. /
+# 0xB4..) off too: every reload is the game's own again
+PISTOL_RELOAD = False
 SHOTGUN_CARRY = False
 
 
@@ -1475,7 +1478,8 @@ def moves(root, model, tol, out_path, weapons=None, wep07=None, general2=None, g
         # (DevJunior, 26.11.2026, device video 118288: aiming and firing the handgun the body moved out of step and a
         # gap opened at the neck, the head bent over the gun) the remake's aim and fire poses off: the game's own
         poses = pistol_poses(weapons, mots[0], model, tol, pistols) if PISTOL_POSES else []
-        for code, data in pistol_reloads(weapons, mots[0], model, tol, pistols) + poses:
+        reloads = pistol_reloads(weapons, mots[0], model, tol, pistols) if PISTOL_RELOAD else []
+        for code, data in reloads + poses:
             entries.append(data)
             table.append(struct.pack(">BBHHHHH", code, 0, len(entries) - 1, fcv.parse(data).max_frame, 0xFFFF, 0xFFFF,
                                      0))

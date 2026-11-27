@@ -20584,3 +20584,7 @@ Spiel.
   --lashes 0.2` statt 0,5 (die auf die Gesichtstextur gemalten Wimpernkarten der RE-Engine lagen nach den Formen
   zackig neben den Lidern). Leon Clásico Remasterizado v17 / Remake v13. Am Host gerendert (Ruhestellung, weniger
   Flecken unter den Augen); die Ausdrücke in den Szenen nur auf dem Gerät prüfbar.
+- **Remake-Nachladen der Pistolen aus** (DevJunior, 26.11.2026: „las animaciones de recarga del remake siguen“):
+  `re9_finisher_pack.py` `PISTOL_RELOAD = False` (move.dat ohne 0xB0.. / 0xB4..; `locomotion.cpp re4_move_reload`
+  nimmt die Bewegung des Spiels wie bei der Schrotflinte). RE9 Finishers v43 (move.dat 365 920 Bytes, 23 Einträge
+  statt 29). Auf dem Gerät nicht getestet.
