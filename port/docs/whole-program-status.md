@@ -20828,7 +20828,16 @@ Spiel.
   Lidschlag des Event-Kopfs bewegt die eigenen Lider kaum (die Hälfte der stark bewegten Punkte sind Wimpernkarten,
   das Event schließt die Augen über eigene Augenmodelle); daher neu `--parts mouth` (Standard): nur Lippen, Zähne
   und Zunge aus dem Event, die Augen behalten die Lider des neuen Kopfs mit eigenem Lidschlag (`synth_blink`), am Host
-  geschlossen gerendert. Leon-Pakete Klassik v31, Remake v27 (aus v28/v24); auf dem Gerät nicht getestet.
+  geschlossen gerendert. Leon-Pakete Klassik v31, Remake v27 (aus v28/v24). Gerätetest (DevJunior, 28.11.2026,
+  Video 119672): „es un avance aunque se ve feo de los párpados y la boca“ – Lider schwer/halb geschlossen, Lippen
+  in der falschen Farbe (die Hautfarbe nach x/y getroffen, die Lippen des Events liegen anders), helle Säume an den
+  Mundwinkeln. Fünfter Stand: der Einsatz nimmt Textur und Koordinaten des Event-Kopfs aus der Disc-Eventdatei
+  (`event_texture`, ev0001.tpl; Lippen, Zähne, Zunge, Mundinneres wie im Klassiker), Farben je Kanal an die Haut
+  angeglichen (Median der Hautfarbe an den Stellen der alten Oberfläche), über 5 Einheiten zur Naht in die Hautfarbe
+  geblendet; Gesichtsdreiecke mit der Mitte im Loch fallen weg; die getragenen Augenformen (10..13) mal 0,5 wie in den
+  Skin-Paketen (`--eye-gain`), der eigene Lidschlag bewegt die Haut nur noch 5 statt 9 Einheiten über dem Lidrand
+  (`--lid-reach`: die Brauen kamen mit herunter). Leon-Pakete Klassik v32, Remake v28; am Host gerendert (Ruhe, halber
+  und ganzer Lidschlag, Mund offen und zu); auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →

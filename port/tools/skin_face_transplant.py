@@ -69,6 +69,25 @@ def event_model(path):
         at += 1
 
 
+def event_texture(path, index=2):
+    """The event head's texture `index` (RGBA array) from the disc's event file (its ev0001.tpl), else None."""
+    if path.lower().endswith(".lfs"):
+        return None
+    data = Path(path).read_bytes()
+    name = S.EVENT_HEAD.replace(b".bin", b".tpl")
+    at = 0
+    while True:
+        at = data.find(name, at)
+        if at < 0:
+            return None
+        off, size = struct.unpack_from(">II", data, at + 0x30)
+        if 0 < off and off + size <= len(data) and data[off:off + 4] == bytes.fromhex("0020af30"):
+            hdr, img = G.tpl_images(data[off:off + size])[index]
+            h, w, f = struct.unpack_from(">HHI", hdr)
+            return np.asarray(U.decode_gx(h, w, f, img).convert("RGBA"), dtype=np.float64)
+        at += 1
+
+
 def aligner(Sk, E, shapes):
     """The event's points onto the skin's face (as skin_shapes.carry_shapes puts them)."""
     ls, (sys_, sz) = S.landmarks(Sk)
@@ -193,6 +212,13 @@ def main(argv=None):
                     help="what to take from the event head: the mouth (default; the eyes keep the skin's own lids "
                          "with a blink made for them, skin_shapes' way) or the eyes too (their blink stays weak: the "
                          "event closes them mostly with its lashes and its separate eye models)")
+    ap.add_argument("--lid-reach", type=float, default=5.0,
+                    help="the blink moves the skin this far above the upper lid's rim (skin_shapes: 9, the brows came "
+                         "down with it)")
+    ap.add_argument("--blend", type=float, default=5.0, help="the patch's texture fades into the skin's over this")
+    ap.add_argument("--eye-gain", type=float, default=0.5,
+                    help="the carried eye shapes (10..13) times this (as the skin packs: the event's squint and "
+                         "widening are strong on a larger eye)")
     ap.add_argument("--eye-forward", type=float, default=1.0, help="the event's lids this far ahead of the skin's")
     ap.add_argument("--inside", type=float, default=4.0, help="deeper than this behind the face: the mouth's inside")
     ap.add_argument("--tex", type=int, default=512, help="the patch's texture size")
@@ -234,8 +260,9 @@ def main(argv=None):
     # the skin's face: its triangles outside the holes; the texels of its face texture as a colour source
     fp, fn, ft = U.gc_triangles(head, face_mat)
     holes_grown = [(cx, cy, rx * (1 + a.margin), ry * (1 + a.margin), z) for cx, cy, rx, ry, z in holes]
-    # a face triangle stays unless all its corners lie in a grown hole: its edge covers the patch's (no gap)
-    keep = (inside(fp.reshape(-1, 3), holes_grown) < 0).reshape(-1, 3).any(1)
+    # a face triangle stays unless all its corners lie in a grown hole, or its middle lies in the hole itself: its
+    # edge covers the patch's (no gap)
+    keep = (inside(fp.reshape(-1, 3), holes_grown) < 0).reshape(-1, 3).any(1) & (inside(fp.mean(1), holes) < 0)
     fh, fw, ff = struct.unpack_from(">HHI", imgs[face_mat][0])
     face_img = np.asarray(U.decode_gx(fh, fw, ff, imgs[face_mat][1]).convert("RGBA"), dtype=np.float64)
     fpos = F.uv_positions([head], face_mat, fw, fh)
@@ -366,47 +393,77 @@ def main(argv=None):
     A = A.reshape(P0.shape)
     print("event patch: %d triangles: %d skin, %d eyes, %d teeth, %d the mouth's inside" %
           tuple([len(A)] + [int((k0 == q).sum()) for q in range(4)]))
-    # their texture coordinates are their own: the skin a front projection of the patch's box into one new texture
-    # (beside it a strip for the teeth and one for the mouth's inside), the eyes straight onto the skin's eye texture
-    # by each point's offset from its eye's middle
     new_imgs = list(imgs)
     groups = []
-    S_ = a.tex
-    Tn = np.zeros(A.shape[:2] + (2,))
-    sk = k0 == 0
-    flat = A[sk].reshape(-1, 3)
-    lo, hi = flat.min(0), flat.max(0)
-    Tn[sk, :, 0] = (A[sk][..., 0] - lo[0]) / (hi[0] - lo[0]) * 0.8
-    Tn[sk, :, 1] = 1.0 - (A[sk][..., 1] - lo[1]) / (hi[1] - lo[1])
-    Tn[k0 == 2] = (0.85, 0.5)
-    Tn[k0 == 3] = (0.95, 0.5)
+    etex = event_texture(a.event)
+    if etex is not None:
+        # the disc's event head brings its own texture and coordinates (lips, teeth, tongue, the mouth's inside):
+        # taken as they are, its colours brought to the skin's (per channel, by the skin's front colour at the
+        # patch's skin), and within --blend units of the seam faded into the skin's colour
+        Tn = T0.copy()
+        H_, W_ = etex.shape[:2]
+        pos = np.full((H_, W_, 3), np.nan)
+        lab = np.zeros((H_, W_), np.int8)
+        from skin_face_bake import raster
+        sk = k0 == 0
+        raster(A[sk], Tn[sk], W_, H_, pos, lab, 1)
+        okp = lab > 0
+        Q = pos[okp]
+        fp3_ = fpos[fok]
+        dz, jz = ftree.query(Q)
+        skin_c = fcol[jz]
+        ev_c = etex[okp]
+        near = dz < 1.5  # texels on the old surface: their colours compare
+        gain = np.ones(4)
+        if near.sum() > 50:
+            gain[:3] = np.median(skin_c[near, :3], 0) / np.maximum(np.median(ev_c[near, :3], 0), 1.0)
+        img = etex.copy()
+        img[..., :3] *= gain[:3]
+        seam = boundary(A[sk])
+        if len(seam):
+            ds, _ = cKDTree(seam).query(Q)
+            w = np.clip(1.0 - ds / a.blend, 0, 1)[:, None]
+            img[okp] = img[okp] * (1 - w) + skin_c * w
+        img[..., 3] = 255
+        img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGBA")
+        print("patch: the event's own texture, colours times %s, seam blended over %.1f units" %
+              (np.round(gain[:3], 2).tolist(), a.blend))
+        S_ = W_
+    else:
+        # (the PC release's event file: its coordinates do not survive the conversion) a front projection of the
+        # patch's box into one new texture, beside it a strip for the teeth and one for the mouth's inside
+        S_ = a.tex
+        Tn = np.zeros(A.shape[:2] + (2,))
+        sk = k0 == 0
+        flat = A[sk].reshape(-1, 3)
+        lo, hi = flat.min(0), flat.max(0)
+        Tn[sk, :, 0] = (A[sk][..., 0] - lo[0]) / (hi[0] - lo[0]) * 0.8
+        Tn[sk, :, 1] = 1.0 - (A[sk][..., 1] - lo[1]) / (hi[1] - lo[1])
+        Tn[k0 == 2] = (0.85, 0.5)
+        Tn[k0 == 3] = (0.95, 0.5)
+        fp3 = fpos[fok]
+        gx = np.round(fp3[:, 0] * 2).astype(int)
+        gy = np.round(fp3[:, 1] * 2).astype(int)
+        keyg = gx * 100000 + gy
+        order = np.argsort(keyg)
+        ks, zs = keyg[order], fp3[order, 2]
+        starts = np.r_[0, np.where(np.diff(ks))[0] + 1]
+        zmax = np.maximum.reduceat(zs, starts)
+        front = np.zeros(len(fp3), bool)
+        grp = np.repeat(np.arange(len(starts)), np.diff(np.r_[starts, len(ks)]))
+        front[order] = zs >= zmax[grp] - 2.0
+        fronttree = cKDTree(fp3[front][:, :2])
+        frontcol = fcol[front]
 
-    # the colour: the skin face's front layer seen from the front (its texels within 2 units of the frontmost at
-    # their place on a 0.5 unit grid), looked up by x and y: a point of the patch a little behind the old surface
-    # still takes the old surface's colour, not the mouth's inside behind it
-    fp3 = fpos[fok]
-    gx = np.round(fp3[:, 0] * 2).astype(int)
-    gy = np.round(fp3[:, 1] * 2).astype(int)
-    keyg = gx * 100000 + gy
-    order = np.argsort(keyg)
-    ks, zs = keyg[order], fp3[order, 2]
-    starts = np.r_[0, np.where(np.diff(ks))[0] + 1]
-    zmax = np.maximum.reduceat(zs, starts)
-    front = np.zeros(len(fp3), bool)
-    grp = np.repeat(np.arange(len(starts)), np.diff(np.r_[starts, len(ks)]))
-    front[order] = zs >= zmax[grp] - 2.0
-    fronttree = cKDTree(fp3[front][:, :2])
-    frontcol = fcol[front]
-
-    def colour_of(Q):
-        dd, jj = fronttree.query(Q[:, :2], k=4)
-        ww = 1.0 / np.maximum(dd, 0.05)
-        return (frontcol[jj] * ww[..., None]).sum(1) / ww.sum(1)[:, None]
-    img = bake(A[sk], Tn[sk], (S_, S_), colour_of)
-    arr = np.asarray(img).copy()
-    arr[:, int(0.8 * S_):int(0.9 * S_)] = (196, 186, 166, 255)  # the teeth
-    arr[:, int(0.9 * S_):] = (104, 44, 44, 255)  # the tongue, the mouth's inside
-    img = Image.fromarray(arr, "RGBA")
+        def colour_of(Q):
+            dd, jj = fronttree.query(Q[:, :2], k=4)
+            ww = 1.0 / np.maximum(dd, 0.05)
+            return (frontcol[jj] * ww[..., None]).sum(1) / ww.sum(1)[:, None]
+        img = bake(A[sk], Tn[sk], (S_, S_), colour_of)
+        arr = np.asarray(img).copy()
+        arr[:, int(0.8 * S_):int(0.9 * S_)] = (196, 186, 166, 255)  # the teeth
+        arr[:, int(0.9 * S_):] = (104, 44, 44, 255)  # the tongue, the mouth's inside
+        img = Image.fromarray(arr, "RGBA")
     if a.preview:
         Path(a.preview).mkdir(parents=True, exist_ok=True)
         img.save(Path(a.preview) / "patch.png")
@@ -491,7 +548,7 @@ def main(argv=None):
     # the cutscenes' shapes: the event's own on the patch (each patch position takes its event vertex's movement,
     # faded out over the margin), skin_shapes' carry for the rest of the face
     Pm = G.positions(bytes(model))
-    carried, _ls2, _le2 = S.carry_shapes(Pm, E, shapes)
+    carried, _ls2, _le2 = S.carry_shapes(Pm, E, shapes, eye_gain=a.eye_gain)
     pa = np.concatenate([q for q, _v, _w, _s in patch_src])
     pv = np.concatenate([v for _q, v, _w, _s in patch_src])
     pw = np.concatenate([w for _q, _v, w, _s in patch_src])
@@ -519,7 +576,7 @@ def main(argv=None):
         still = set(np.where(db < 0.1)[0].tolist())
         carried = [{v: d for v, d in sh.items() if v not in still} for sh in carried]
     if not with_eyes and len(carried) > 9:
-        own_blink, line = S.synth_blink(bytes(model))
+        own_blink, line = S.synth_blink(bytes(model), up=a.lid_reach)  # (not the brows: 5 units above the rim)
         print(line)
         if own_blink:
             carried[9] = {v: dv for v, dv in own_blink.items() if max(abs(c) for c in dv) > 0.05}
