@@ -208,10 +208,17 @@ def main(argv=None):
     ap.add_argument("--eye-r", default="21,12", help="the eyes' ellipses (x, y radii, model units)")
     ap.add_argument("--mouth-r", default="27,14", help="the mouth's ellipse (x, y radii)")
     ap.add_argument("--margin", type=float, default=0.3, help="the patch reaches this share beyond the hole")
-    ap.add_argument("--parts", default="mouth", choices=("mouth", "eyes,mouth"),
-                    help="what to take from the event head: the mouth (default; the eyes keep the skin's own lids "
+    ap.add_argument("--parts", default="inside", choices=("inside", "mouth", "eyes,mouth"),
+                    help="what to take from the event head: inside (default, DevJunior 28.11.2026: the transplanted lips "
+                         "looked transplanted): only the mouth's inside (teeth, tongue, its dark walls) behind the "
+                         "skin's own lips, which open onto it instead of onto the back of the head; mouth: the lips too "
+                         "(the eyes keep the skin's own lids "
                          "with a blink made for them, skin_shapes' way) or the eyes too (their blink stays weak: the "
                          "event closes them mostly with its lashes and its separate eye models)")
+    ap.add_argument("--bag-depth", type=float, default=7.0, help="with --parts inside: the skin's triangles this "
+                    "far behind the lips' front (in the mouth) are its mouth bag, drawn dark")
+    ap.add_argument("--bag-colour", default="38,16,16", help="the mouth bag's colour (r,g,b)")
+    ap.add_argument("--inside-back", type=float, default=1.5, help="with --parts inside: the pieces this far back")
     ap.add_argument("--lid-reach", type=float, default=5.0,
                     help="the blink moves the skin this far above the upper lid's rim (skin_shapes: 9, the brows came "
                          "down with it)")
@@ -253,9 +260,12 @@ def main(argv=None):
     erx, ery = (float(v) for v in a.eye_r.split(","))
     mrx, mry = (float(v) for v in a.mouth_r.split(","))
     holes = [(ex, ey, erx, ery, 30.0), (-ex, ey, erx, ery, 30.0), (0.0, ls["mouth"], mrx, mry, 30.0)]
-    with_eyes = a.parts != "mouth"
+    with_eyes = a.parts == "eyes,mouth"
+    only_inside = a.parts == "inside"
     if not with_eyes:
         holes = [holes[2], holes[2], holes[2]]
+    if only_inside:
+        holes = [(0.0, ls["mouth"], 1e-3, 1e-3, 1e9)] * 3  # the face stays whole
     grown = [(cx, cy, rx * (1 + a.margin), ry * (1 + a.margin), z) for cx, cy, rx, ry, z in holes]
     # the skin's face: its triangles outside the holes; the texels of its face texture as a colour source
     fp, fn, ft = U.gc_triangles(head, face_mat)
@@ -370,6 +380,14 @@ def main(argv=None):
     cm = A.reshape(P0.shape).mean(1)
     k0[(k0 == 0) & (dsk > a.inside) & (np.abs(cm[:, 1] - ls["mouth"]) < mry * 0.5) & (np.abs(cm[:, 0]) < mrx * 0.6) &
        (N0.mean(1)[:, 2] < 0.0)] = 3  # (facing back: the walls; the chin's crease in front stays skin)
+    if only_inside:
+        # the teeth, the tongue and the walls only, a little further in (behind the skin's lips: they are fuller)
+        sel = k0 != 0
+        P0, N0, T0, k0, v0 = P0[sel], N0[sel], T0[sel], k0[sel], v0[sel]
+        A = A.reshape(-1, 3, 3)[sel].reshape(-1, 3) - np.array([0.0, 0.0, a.inside_back])
+        take_idx = np.where(take)[0][sel]
+        take = np.zeros(len(P), bool)
+        take[take_idx] = True
     reg = region_of(P0.reshape(-1, 3))
     shape_scale = np.ones((len(A), 3))
     for side in (1, -1):
@@ -378,17 +396,19 @@ def main(argv=None):
     # move fading out over 6 units into the patch
     # (onto the face that stays, 0.4 units behind it: the face's border triangles cover the seam)
     stay = fpos[fok][inside(fpos[fok], holes_grown) < 0]
-    pe = boundary(A.reshape(P0.shape)[tl[take] == head_comp])
+    pe = boundary(A.reshape(P0.shape)[(tl[take] == head_comp) & (k0 == 0)]) if not only_inside else np.zeros((0, 3))
+    if not len(pe):
+        pe = np.array([[0.0, 0.0, -1e6]] * 4) + np.arange(4)[:, None]
     _d, jb = cKDTree(stay).query(pe)
     shift = stay[jb] - pe - np.array([0.0, 0.0, 0.4])
     bt = cKDTree(pe)
     dd, jj = bt.query(A, k=4)
     ww = 1.0 / (dd + 0.5) ** 2
     disp = (shift[jj] * ww[..., None]).sum(1) / ww.sum(1)[:, None]
-    w = np.clip(1.0 - dd[:, 0] / 4.0, 0, 1) * np.repeat(tl[take] == head_comp, 3)
+    w = np.clip(1.0 - dd[:, 0] / 4.0, 0, 1) * np.repeat((tl[take] == head_comp) & (k0 == 0), 3)
     A = A + disp * w[:, None]
     # the shapes: the event's own but within 1.5 units of the seam (there the face's carried ones, so the seam holds)
-    ws = np.clip(1.0 - dd[:, 0] / 1.5, 0, 1) * np.repeat(tl[take] == head_comp, 3)
+    ws = np.clip(1.0 - dd[:, 0] / 1.5, 0, 1) * np.repeat((tl[take] == head_comp) & (k0 == 0), 3)
     patch_src = [(A, v0.reshape(-1), ws, shape_scale)]
     A = A.reshape(P0.shape)
     print("event patch: %d triangles: %d skin, %d eyes, %d teeth, %d the mouth's inside" %
@@ -408,18 +428,17 @@ def main(argv=None):
         sk = k0 == 0
         raster(A[sk], Tn[sk], W_, H_, pos, lab, 1)
         okp = lab > 0
-        Q = pos[okp]
-        fp3_ = fpos[fok]
+        Q = pos[okp] if okp.any() else np.zeros((1, 3))
         dz, jz = ftree.query(Q)
         skin_c = fcol[jz]
-        ev_c = etex[okp]
+        ev_c = etex[okp] if okp.any() else np.zeros((1, 4))
         near = dz < 1.5  # texels on the old surface: their colours compare
         gain = np.ones(4)
-        if near.sum() > 50:
+        if near.sum() > 50 and not only_inside:
             gain[:3] = np.median(skin_c[near, :3], 0) / np.maximum(np.median(ev_c[near, :3], 0), 1.0)
         img = etex.copy()
         img[..., :3] *= gain[:3]
-        seam = boundary(A[sk])
+        seam = boundary(A[sk]) if sk.any() else np.zeros((0, 3))
         if len(seam):
             ds, _ = cKDTree(seam).query(Q)
             w = np.clip(1.0 - ds / a.blend, 0, 1)[:, None]
@@ -505,6 +524,34 @@ def main(argv=None):
 
     if os.environ.get("TRANSPLANT_NO_FACE"):  # (debugging: the patch alone)
         keep = keep & (fp.mean(1)[:, 2] < 0)
+    if only_inside:
+        # the skin's own mouth bag (its triangles behind the lips, inside the mouth's ellipse): dark, so the open
+        # mouth shows a cavity with the event's teeth and tongue, not the lips' pink stretched between them
+        lipz = max(float(fp.reshape(-1, 3)[(np.abs(fp.reshape(-1, 3)[:, 0]) < 4) &
+                                           (np.abs(fp.reshape(-1, 3)[:, 1] - ls["mouth"]) < 4), 2].max()), 0.0)
+        # (hidden at rest: another face surface lies more than 1.5 units in front of it, on a 0.5 unit grid of the
+        # face's corners and middles, or it faces backwards)
+        cf = fp.mean(1)
+        pts = np.concatenate([fp.reshape(-1, 3), cf])
+        key = lambda q: np.round(q[:, 0] * 2).astype(np.int64) * 100000 + np.round(q[:, 1] * 2).astype(np.int64)
+        kz = {}
+        for k_, z_ in zip(key(pts).tolist(), pts[:, 2].tolist()):
+            if z_ > kz.get(k_, -1e9):
+                kz[k_] = z_
+        front_z = np.array([max(kz.get(k_ + dx * 100000 + dy, -1e9) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+                            for k_ in key(cf).tolist()])
+        hidden = (cf[:, 2] < front_z - 1.5) | (fn.mean(1)[:, 2] < -0.2)
+        bag = keep & (inside(cf, [(0.0, ls["mouth"], mrx, mry * 0.8, -1e9)]) > 0) & hidden & \
+            (cf[:, 2] < lipz - 3.0)
+        dark = Image.new("RGBA", (8, 8), tuple(int(v) for v in a.bag_colour.split(",")) + (255,))
+        dh = bytearray(imgs[face_mat][0])
+        struct.pack_into(">HH", dh, 0, 8, 8)
+        new_imgs.append(G.encode_image(dark, bytes(dh)))
+        bh = bytearray(head[face_hdr:face_hdr + 0x18])
+        bh[0xC] = len(new_imgs) - 1
+        add(bytes(bh), fp[bag], fn[bag], np.full(ft[bag].shape, 0.5))
+        keep = keep & ~bag
+        print("mouth bag: %d triangles dark (behind %.1f)" % (int(bag.sum()), lipz - a.bag_depth))
     add(face_hdr, fp[keep], fn[keep], ft[keep])
     wet = [m for _p, m in parts if m not in (face_mat, eye_mat) and
            abs(U.gc_triangles(head, m)[0].reshape(-1, 3)[:, 1].mean() - ey) < 15]

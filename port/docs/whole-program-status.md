@@ -20837,7 +20837,19 @@ Spiel.
   geblendet; Gesichtsdreiecke mit der Mitte im Loch fallen weg; die getragenen Augenformen (10..13) mal 0,5 wie in den
   Skin-Paketen (`--eye-gain`), der eigene Lidschlag bewegt die Haut nur noch 5 statt 9 Einheiten über dem Lidrand
   (`--lid-reach`: die Brauen kamen mit herunter). Leon-Pakete Klassik v32, Remake v28; am Host gerendert (Ruhe, halber
-  und ganzer Lidschlag, Mund offen und zu); auf dem Gerät nicht getestet.
+  und ganzer Lidschlag, Mund offen und zu); auf dem Gerät nicht getestet. Gerätetest (DevJunior, 28.11.2026, Bilder
+  und Video 119677): Mund wirkt traurig und eingesetzt, Texturen passen nicht, Augen „de loco“. Entscheidung des
+  Projektinhabers: zurück zu Klassik v28 / Remake v24 (eigene Lippen und Lider) und die Mimik dort abstimmen.
+- **Werkzeug `event_face_curves.py`** (28.11.2026): liest die Gesichtskurven einer Disc-Eventdatei
+  (`pl0000/face/ev0001_*.fcv`, ShapeData wie `shape.cpp`/`HermiteInterpolation`): je Kanal Formplatz, Schlüssel,
+  Gewichte. r100s03: Platz 9 Lidschlag (0 offen … 100 zu), 1–5 Mund (bis 136 %), 16–18 Brauen (bis 90 %), 13 bis
+  −131 %. Mit dem Event-Kopf und seiner Textur als eigene Datei lassen sich Skin und Original in denselben Posen der
+  Zwischensequenz nebeneinander rendern. Befund für v24: Augen passen; beim Öffnen/Spitzen des Mundes (Platz 3,
+  136 %) trennen sich die Lippen des neuen Kopfs nicht, die Unterlippe hängt vor und nach unten (wirkt wie eine
+  Zunge), statt eine Öffnung mit Zähnen zu zeigen. `skin_face_transplant.py --parts inside` (Zähne/Zunge des Events
+  hinter den eigenen Lippen, eigene Mundtasche dunkel) vorbereitet, hilft erst, wenn sich die Lippen trennen. Nächster
+  Schritt: die Lippenfuge des neuen Kopfs beim Übertragen der Formen trennen (Ober-/Unterlippe nach Zugehörigkeit,
+  nicht nach nächstem Punkt).
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
