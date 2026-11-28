@@ -20812,7 +20812,13 @@ Spiel.
   statt der Ecken gezogen, Lücken kleiner. Befund: der Event-Kopf hat in Ruhe den Mund offen und die Lider weit offen,
   erst die Formen der Zwischensequenz schließen sie; ein Standbild zeigt das Transplantat daher nicht so, wie es in
   einer Zwischensequenz aussieht. Testpakete für das Gerät: Klassik v30, Remake v26 („prueba_trasplante“, aus den
-  fertigen v28/v24-Dateien), Datenteile 5,9–7,4 MB.
+  fertigen v28/v24-Dateien), Datenteile 5,9–7,4 MB. Gerätetest (DevJunior, 28.11.2026, Video 119664, r100-Auto):
+  der Mund steht die ganze Szene offen und zerrissen, Lider in Fetzen. Befund: die Formen kamen aus der Eventdatei der
+  PC-Fassung (`r100s03.evd.lfs`), das Spiel spielt aber die Kurven der Disc-Eventdatei ab (`shape.cpp`: Kanal i nimmt
+  Tabelleneintrag `idx[i]`, Gewicht aus der Hermite-Kurve, auch negativ); passen Ruhepose, Reihenfolge oder Größe der
+  Formen der PC-Fassung nicht zur Disc, wirken sie falsch – das erklärt wohl auch die übertriebene Mimik früherer
+  Stände. Nächster Schritt: Transplantat und `skin_shapes.py` mit der Disc-Eventdatei (`Evd/r100s03.evd`, GameCube,
+  big-endian; `gc_head` liest sie schon).
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
