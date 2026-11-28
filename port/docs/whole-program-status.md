@@ -20850,6 +20850,19 @@ Spiel.
   hinter den eigenen Lippen, eigene Mundtasche dunkel) vorbereitet, hilft erst, wenn sich die Lippen trennen. Nächster
   Schritt: die Lippenfuge des neuen Kopfs beim Übertragen der Formen trennen (Ober-/Unterlippe nach Zugehörigkeit,
   nicht nach nächstem Punkt).
+- **Mund des neuen Kopfs öffnet sich** (DevJunior, 28.11.2026: „¿la cara del remake tiene espacio para una boca?“,
+  Plan bestätigt): Befund: die Lippen des Remake-Kopfs sind vorn eine geschlossene Fläche, und die vermutete
+  Mundhöhe (Nase − 36) liegt gut 6 Einheiten unter der gemalten Lippenfuge – die Formen wurden auf die falschen
+  Lippen getragen (trauriger, hängender Mund). `skin_face_transplant.py --parts inside` (Standard): die Fuge aus der
+  Textur (dunkelste vordere Texel je 2 Einheiten, Parabel) ist die Mundhöhe für Landmarken, Zähne und Lippengruppen;
+  das Gesicht wird an der Fuge aufgeschnitten (vordere Dreiecke je Lippe nach ihrer eigenen Vorderkante, innere nach
+  dem kürzeren Weg über das Netz zur Vorderseite einer Lippe; gemeinsame Ecken bekommen für die Unterlippe und alles
+  darunter eine Kopie 0,07 tiefer); die Lippengruppen des Event-Kopfs nach seiner eigenen Kieferbewegung (Platz 1),
+  seine losen Teile (Zähne, Zunge) tragen keine Formen auf die Haut; dahinter Zähne und Zunge des Events (Disc-Textur)
+  und die eigene Mundtasche dunkel. Augen: eigene Lider, eigener Lidschlag. `skin_shapes.py`: neu `lip_sides`,
+  `model_tris`, Event-Lippen nach Kieferbewegung. Am Host in den Posen der Autoszene (Kurven aus
+  `event_face_curves.py`) neben dem Original gerendert: Mund öffnet sich mit Oberlippe, Zähnen, Unterlippe wie im
+  Original. Leon-Pakete Klassik v33, Remake v29 (aus v28/v24); auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →

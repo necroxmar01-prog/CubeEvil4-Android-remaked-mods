@@ -217,6 +217,12 @@ def main(argv=None):
                          "event closes them mostly with its lashes and its separate eye models)")
     ap.add_argument("--bag-depth", type=float, default=7.0, help="with --parts inside: the skin's triangles this "
                     "far behind the lips' front (in the mouth) are its mouth bag, drawn dark")
+    ap.add_argument("--no-texture-parting", dest="texture_parting", action="store_false",
+                    help="keep the guessed mouth height (nose - 36) instead of the texture's darkest line")
+    ap.add_argument("--no-cut", dest="cut", action="store_false", help="with --parts inside: leave the skin's "
+                    "lips joined in front")
+    ap.add_argument("--bag-behind", type=float, default=3.0, help="with --parts inside: behind both lips' fronts "
+                    "by this, the skin's triangles are the mouth's bag")
     ap.add_argument("--bag-colour", default="38,16,16", help="the mouth bag's colour (r,g,b)")
     ap.add_argument("--inside-back", type=float, default=1.5, help="with --parts inside: the pieces this far back")
     ap.add_argument("--lid-reach", type=float, default=5.0,
@@ -279,6 +285,33 @@ def main(argv=None):
     fok = np.isfinite(fpos[..., 0])
     ftree = cKDTree(fpos[fok])
     fcol = face_img[fok]
+    # the parting as the face's texture paints it (DevJunior's Remake head: the mesh's crease and the painted line sit
+    # some 6 units above the guessed mouth height, nose - 36): per 2 units across, the darkest front texels; it is the
+    # mouth's height from here on (landmarks, the teeth's place, the shapes' lip groups)
+    tex_part = None
+    fq, fl = fpos[fok], fcol[:, :3].mean(1)
+    px, py = [], []
+    for x in np.arange(-16.0, 16.1, 2.0):
+        sel = (np.abs(fq[:, 0] - x) < 1.0) & (np.abs(fq[:, 1] - ls["mouth"]) < 9.0) & (fq[:, 2] > 60)
+        if sel.sum() < 30:
+            continue
+        q, l = fq[sel], fl[sel]
+        yb = np.round(q[:, 1] * 2) / 2
+        best = None
+        for y in np.unique(yb):
+            r = yb == y
+            zt = q[r, 2].max()
+            lum = l[r & (q[:, 2] > zt - 2.0)].mean()
+            if best is None or lum < best[0]:
+                best = (lum, y)
+        px.append(x)
+        py.append(best[1])
+    if len(px) >= 5 and a.texture_parting:
+        cc = np.polyfit(px, py, 2)
+        tex_part = lambda x, cc=cc, lo=min(px), hi=max(px): np.polyval(cc, np.clip(x, lo, hi))
+        print("lips' parting from the texture: %s from the guessed mouth height" %
+              np.round(np.polyval(cc, np.array([-12.0, 0.0, 12.0])) - ls["mouth"], 1).tolist())
+        ls["mouth"] = float(np.polyval(cc, 0.0))
     # the event head (ev0001): texture 2 its head in one piece (the eyes' surfaces in it, the lids around them; the
     # blink, slot 9, moves only the lids) and three loose pieces in the mouth (the teeth above and below, the
     # tongue); texture 0 the lashes' cards (left out: their colour is in the alpha of a texture this tool has not)
@@ -540,9 +573,26 @@ def main(argv=None):
                 kz[k_] = z_
         front_z = np.array([max(kz.get(k_ + dx * 100000 + dy, -1e9) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
                             for k_ in key(cf).tolist()])
-        hidden = (cf[:, 2] < front_z - 1.5) | (fn.mean(1)[:, 2] < -0.2)
-        bag = keep & (inside(cf, [(0.0, ls["mouth"], mrx, mry * 0.8, -1e9)]) > 0) & hidden & \
-            (cf[:, 2] < lipz - 3.0)
+        # every corner hidden (the lips' rims that show at rest keep the skin's colour: no dark sawtooth)
+        cz = fp.reshape(-1, 3)
+        front_c = np.array([max(kz.get(k_ + dx * 100000 + dy, -1e9) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+                            for k_ in key(cz).tolist()]).reshape(-1, 3)
+        # or behind both lips' fronts in its column (the mouth's bag between the lips: seen at rest only as the
+        # parting's line, stretched open by the jaw)
+        lipside = S.lip_sides(cz, None, ls["mouth"])
+        both = np.full(len(cz), -1e9)
+        if lipside is not None:
+            colk = np.round(cz[:, 0] / 2.0).astype(int)
+            for ck in np.unique(colk[lipside > 0]):
+                inc = (np.abs(colk - ck) <= 0) & (lipside > 0)
+                fu = cz[inc & (lipside == 1), 2]
+                fl = cz[inc & (lipside == 2), 2]
+                if len(fu) and len(fl):
+                    both[np.abs(colk - ck) <= 0] = min(fu.max(), fl.max())
+        both = both.reshape(-1, 3)
+        hidden = (fp[..., 2] < front_c - 2.0).all(1) | (fp[..., 2] < both - a.bag_behind - 3.0).all(1)
+        bag = keep & (inside(cf, [(0.0, ls["mouth"], mrx, 6.0, -1e9)]) > 0) & hidden & \
+            (fp[..., 2] < lipz - 3.0).all(1)
         dark = Image.new("RGBA", (8, 8), tuple(int(v) for v in a.bag_colour.split(",")) + (255,))
         dh = bytearray(imgs[face_mat][0])
         struct.pack_into(">HH", dh, 0, 8, 8)
@@ -552,6 +602,98 @@ def main(argv=None):
         add(bytes(bh), fp[bag], fn[bag], np.full(ft[bag].shape, 0.5))
         keep = keep & ~bag
         print("mouth bag: %d triangles dark (behind %.1f)" % (int(bag.sum()), lipz - a.bag_depth))
+    cut_lower, up_only = set(), set()
+    part_curve = None
+    if only_inside and a.cut:
+        # the skin's lips are one closed surface in front (DevJunior, 28.11.2026: "can its mouth really open?"): cut
+        # it along the parting, so the jaw opens them. The front triangles (within 4 units of their column's front)
+        # in the lips' box go to the lip their middle lies in; a corner the two lips share gets a copy for the lower
+        # lip, 0.07 units lower (the model welds equal places)
+        fpk = fp[keep]
+        sides, part = S.lip_sides(fpk.reshape(-1, 3), None, ls["mouth"], curve=True)
+        if tex_part is not None:
+            part = tex_part
+        cmid = fpk.mean(1)
+        colk = np.round(cmid[:, 0] / 2.0).astype(int)
+        inbox = (np.abs(cmid[:, 0]) < 20) & (np.abs(cmid[:, 1] - part(cmid[:, 0])) < 8)
+        below0 = cmid[:, 1] < part(cmid[:, 0])
+        # each lip's own front per column (the lower lip lies further back than the upper)
+        colfront = {}
+        for ck, z_, ib, bl in zip(colk.tolist(), fpk[..., 2].max(1).tolist(), inbox.tolist(), below0.tolist()):
+            if ib:
+                colfront[(ck, bl)] = max(colfront.get((ck, bl), -1e9), z_)
+        front_t = inbox & (cmid[:, 2] > np.array([colfront.get((c, b), 1e9) for c, b in
+                                                  zip(colk.tolist(), below0.tolist())]) - 4.0)
+        # behind the fronts, the lips' inner faces: the lower lip's face up, the upper lip's down (their places say
+        # less: the lower lip's top rises above the parting inside)
+        kk = lambda q: tuple(np.round(q, 3))
+        # (each inner triangle goes to the lip whose front lies nearer along the mesh: the inner faces part in the
+        # bag's depth)
+        below = cmid[:, 1] < part(cmid[:, 0])
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import dijkstra
+        tidx = np.where(inbox)[0]
+        vk = {}
+        for i, t in enumerate(tidx):
+            for c in range(3):
+                vk.setdefault(kk(fpk[t, c]) if False else tuple(np.round(fpk[t, c], 3)), []).append(i)
+        ra, rb = [], []
+        for lst in vk.values():
+            for i in lst:
+                for j in lst:
+                    if i < j:
+                        ra.append(i)
+                        rb.append(j)
+        ra, rb = np.array(ra, int), np.array(rb, int)
+        wgt = np.linalg.norm(cmid[tidx[ra]] - cmid[tidx[rb]], axis=1) + 1e-6
+        gph = coo_matrix((np.r_[wgt, wgt], (np.r_[ra, rb], np.r_[rb, ra])), shape=(len(tidx), len(tidx))).tocsr()
+        fr_l = np.where(front_t[tidx] & below[tidx])[0]
+        fr_u = np.where(front_t[tidx] & ~below[tidx])[0]
+        low_t = inbox & below
+        if len(fr_l) and len(fr_u):
+            dl = dijkstra(gph, indices=fr_l, min_only=True)
+            du = dijkstra(gph, indices=fr_u, min_only=True)
+            sub = np.where(np.isfinite(np.minimum(dl, du)), dl < du, below[tidx])
+            sub[fr_l], sub[fr_u] = True, False
+            low_t = np.zeros(len(fpk), bool)
+            low_t[tidx] = sub
+        up_t = inbox & ~low_t
+        kk = lambda q: tuple(np.round(q, 3))
+        up_keys = {kk(q) for q in fpk[up_t].reshape(-1, 3)}
+        shared = {kk(q) for q in fpk[low_t].reshape(-1, 3)} & up_keys
+        # the lower lip's triangles and every other one below the parting outside the box (the chin, the corners)
+        # take the copies: a triangle left on an original would tear when the lower lip drops
+        lower_any = low_t | (~inbox & (cmid[:, 1] < part(cmid[:, 0])) & (cmid[:, 1] > ls["mouth"] - 30))
+        for t in np.where(lower_any)[0]:
+            for c in range(3):
+                if kk(fpk[t, c]) in shared:
+                    fpk[t, c, 1] -= 0.07
+                    cut_lower.add(kk(fpk[t, c]))
+        low_only = {kk(q) for q in fpk[low_t].reshape(-1, 3)}
+        up_only = {kk(q) for q in fpk[up_t].reshape(-1, 3)} - low_only
+        cut_lower |= low_only
+        part_curve = part
+        fp2 = fp.copy()
+        fp2[keep] = fpk
+        fp = fp2
+        if os.environ.get("TRANSPLANT_DUMP"):
+            for t in np.where((np.abs(cmid[:, 0]) < 8) & (cmid[:, 1] < ls["mouth"] + 1) & (cmid[:, 1] > ls["mouth"] - 8) &
+                              (cmid[:, 2] > 76))[0]:
+                print("  t x%5.1f y%+5.1f z%5.1f below %d front %d low %d" % (cmid[t, 0], cmid[t, 1] - ls["mouth"],
+                      cmid[t, 2], below0[t], front_t[t], low_t[t]))
+        print("lips cut: %d triangles upper, %d lower (%d of them in front)" %
+              (int(up_t.sum()), int(low_t.sum()), int(front_t.sum())))
+    if os.environ.get("TRANSPLANT_SHOW_LOWER") and cut_lower:  # (debugging: the lower lip's triangles green)
+        kq = lambda q: tuple(np.round(q, 3))
+        lowm = keep & np.array([any(kq(c) in cut_lower for c in t) for t in fp])
+        gimg = Image.new("RGBA", (8, 8), (0, 255, 0, 255))
+        gh = bytearray(imgs[face_mat][0])
+        struct.pack_into(">HH", gh, 0, 8, 8)
+        new_imgs.append(G.encode_image(gimg, bytes(gh)))
+        bh = bytearray(head[face_hdr:face_hdr + 0x18])
+        bh[0xC] = len(new_imgs) - 1
+        add(bytes(bh), fp[lowm], fn[lowm], np.full(ft[lowm].shape, 0.5))
+        keep = keep & ~lowm
     add(face_hdr, fp[keep], fn[keep], ft[keep])
     wet = [m for _p, m in parts if m not in (face_mat, eye_mat) and
            abs(U.gc_triangles(head, m)[0].reshape(-1, 3)[:, 1].mean() - ey) < 15]
@@ -595,7 +737,20 @@ def main(argv=None):
     # the cutscenes' shapes: the event's own on the patch (each patch position takes its event vertex's movement,
     # faded out over the margin), skin_shapes' carry for the rest of the face
     Pm = G.positions(bytes(model))
-    carried, _ls2, _le2 = S.carry_shapes(Pm, E, shapes, eye_gain=a.eye_gain)
+    skin_sides = S.lip_sides(Pm, None, ls["mouth"])
+    if part_curve is not None and skin_sides is not None:
+        lipbox = (np.abs(Pm[:, 0]) < 20) & (np.abs(Pm[:, 1] - ls["mouth"]) < 14) & (Pm[:, 2] > 30)
+        skin_sides = np.where(lipbox, np.where(Pm[:, 1] >= part_curve(Pm[:, 0]), 1, 2), 0)
+    if cut_lower and skin_sides is not None:
+        key3 = lambda q: tuple(np.round(q, 3))
+        cl = cKDTree(np.array(sorted(cut_lower)))
+        dcl, _ = cl.query(Pm)
+        skin_sides[dcl < 0.04] = 2
+        cu = cKDTree(np.array(sorted(up_only)))
+        dcu, _ = cu.query(Pm)
+        skin_sides[(dcu < 0.04) & (dcl >= 0.04)] = 1
+    carried, _ls2, _le2 = S.carry_shapes(Pm, E, shapes, eye_gain=a.eye_gain, skin_mouth=ls["mouth"], skin_tris=S.model_tris(bytes(model)),
+                                         event_tris=S.model_tris(gc), skin_sides=skin_sides)
     pa = np.concatenate([q for q, _v, _w, _s in patch_src])
     pv = np.concatenate([v for _q, v, _w, _s in patch_src])
     pw = np.concatenate([w for _q, _v, w, _s in patch_src])

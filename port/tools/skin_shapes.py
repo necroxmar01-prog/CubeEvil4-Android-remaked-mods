@@ -53,6 +53,8 @@ def event_head(path):
             if 0 < off and off + size <= len(data) and size > 0x50 and \
                     struct.unpack_from(e + "I", data, off + 0x3C)[0] in VERSIONS:
                 blob = data[off:off + size]
+                global LAST_EVENT_BLOB
+                LAST_EVENT_BLOB = blob if e == ">" else None  # (the disc's: model_tris reads its triangles)
                 return (pc_head(blob) if e == "<" else gc_head(blob)) + (e,)
         at += 1
 
@@ -123,8 +125,90 @@ def landmarks(P, mouth=None, opening=None):
     return dict(chin=chin, mouth=mouth, nose=ny, eyes=ny + 34, brow=ny + 50, top=ny + 100), (ys, z)
 
 
+LAST_EVENT_BLOB = None
+
+
+def model_tris(blob):
+    """The position index of every triangle corner of a GameCube model (all parts; strips and fans opened up)."""
+    u = lambda o: struct.unpack_from(">I", blob, o)[0]
+    per = 4 if u(0x20) & 0x80000000 else 3
+    out = []
+    p = u(0x1C)
+    for _ in range(struct.unpack_from(">H", blob, 0x1A)[0]):
+        s, e = p + 0x20, p + 0x20 + u(p + 0x18)
+        while s < e and blob[s] != 0:
+            op, cnt = blob[s], struct.unpack_from(">H", blob, s + 1)[0]
+            idx = [struct.unpack_from(">H", blob, s + 3 + k * per * 2)[0] for k in range(cnt)]
+            s += 3 + cnt * per * 2
+            if op == 0x98:
+                out += [(idx[k], idx[k + 1], idx[k + 2]) for k in range(cnt - 2)]
+            elif op == 0x90:
+                out += [(idx[k], idx[k + 1], idx[k + 2]) for k in range(0, cnt - 2, 3)]
+            elif op == 0x80:
+                for k in range(0, cnt - 3, 4):
+                    out += [(idx[k], idx[k + 1], idx[k + 2]), (idx[k], idx[k + 2], idx[k + 3])]
+            elif op == 0xA0:
+                out += [(idx[0], idx[k], idx[k + 1]) for k in range(1, cnt - 1)]
+        p = e
+    return np.array(out, int).reshape(-1, 3)
+
+
+def lip_sides(Q, tris, m, lip_x=20.0, lip_band=14.0, seed=6.0, curve=False):
+    """Which lip each position belongs to (DevJunior, 28.11.2026: the skin's lips did not part, the lower one hung down
+    like a tongue: split at one height, the lower lip's top edge, above it on this face, went with the upper lip).
+    The parting follows the face: per 2 units across, the front profile's deepest dip within 6 units of the mouth's
+    height (where the visible surface folds into the mouth), smoothed by a parabola across; every position in the
+    lips' box above it is the upper lip's, below the lower's. Returns an array: 1 upper, 2 lower, 0 neither (None
+    without positions near the mouth)."""
+    lip = (np.abs(Q[:, 0]) < lip_x) & (np.abs(Q[:, 1] - m) < lip_band) & (Q[:, 2] > 30)
+    if lip.sum() < 20:
+        return None
+    xs, ys = [], []
+    for x in np.arange(-lip_x + 2.0, lip_x - 1.0, 2.0):
+        col = Q[(np.abs(Q[:, 0] - x) < 1.5) & (np.abs(Q[:, 1] - m) < 9.0) & (Q[:, 2] > 30)]
+        if len(col) < 6:
+            continue
+        yb = np.round(col[:, 1] * 2) / 2
+        prof = {}
+        for y, z in zip(yb, col[:, 2]):
+            prof[y] = max(prof.get(y, -1e9), z)
+        yy = np.array(sorted(prof))
+        zz = np.array([prof[y] for y in yy])
+        # the dip: the lowest front between a higher front above and below it
+        # (an opening into the mouth, more than 8 deep, wins; else the shallow crease nearest the mouth's height:
+        # the deeper crease under the lower lip is not the parting)
+        dips = []
+        for i in range(len(yy)):
+            if abs(yy[i] - m) > 6.0:
+                continue
+            above = zz[(yy > yy[i]) & (yy < yy[i] + 6.0)]
+            below = zz[(yy < yy[i]) & (yy > yy[i] - 6.0)]
+            if not len(above) or not len(below):
+                continue
+            depth = min(above.max(), below.max()) - zz[i]
+            if depth > 2.0:
+                dips.append((depth, yy[i]))
+        by, best = None, 0.0
+        slits = [d for d in dips if d[0] > 8.0]
+        if slits:
+            best, by = max(slits)
+        elif dips:
+            best, by = min(dips, key=lambda d: abs(d[1] - m))
+        if by is not None:
+            xs.append(x)
+            ys.append(by)
+    if len(xs) < 3:
+        part = lambda x: np.full(np.shape(x), m)
+    else:
+        c = np.polyfit(xs, ys, 2, w=1.0 / (1.0 + np.abs(np.array(xs)) / 10.0))
+        part = lambda x: np.polyval(c, np.clip(x, min(xs), max(xs)))
+    out = np.where(lip, np.where(Q[:, 1] >= part(Q[:, 0]), 1, 2), 0)
+    return (out, part) if curve else out
+
+
 def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.0, skin_mouth=None,
-                 eye_r=(18.0, 11.0), mouth_gain=1.0, threshold=0.2, slots=None, inside=6.0, face_gain=1.0, eye_gain=1.0):
+                 eye_r=(18.0, 11.0), mouth_gain=1.0, threshold=0.2, slots=None, inside=6.0, face_gain=1.0, eye_gain=1.0,
+                 skin_tris=None, event_tris=None, skin_sides=None):
     """The event's shapes (on positions E) carried onto the skin's positions S. Returns a list of
     {skin vertex: (dx, dy, dz)} in model units, one per shape slot."""
     from scipy.spatial import cKDTree
@@ -147,16 +231,40 @@ def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.
     ey = ls["eyes"]
     # groups that must not mix: the upper and the lower lip (between the mouth's corners), each eye's upper and lower
     # lid (an open mouth or a blink would else pull both alike and tear the skin's lips and lids)
-    def group(Q):
+    def group(Q, sides=None):
         g = np.zeros(len(Q), int)
         lip = (np.abs(Q[:, 0]) < lip_x) & (np.abs(Q[:, 1] - m) < lip_band) & (Q[:, 2] > 30)
         g[lip] = np.where(Q[lip, 1] >= m, 1, 2)
+        if sides is not None:
+            g[lip & (sides > 0)] = sides[lip & (sides > 0)]
         for side, base in ((1, 3), (-1, 5)):
             eye = ((Q[:, 0] * side - 28.0) / eye_r[0]) ** 2 + ((Q[:, 1] - ey) / eye_r[1]) ** 2 < 1.0
             eye &= Q[:, 2] > 30
             g[eye] = np.where(Q[eye, 1] >= ey, base, base + 1)
         return g
-    ge, gs = group(A), group(S)
+    # the event's lips by their own movement: the lower lip goes down with the jaw (slot 1 drops it more than 3 units),
+    # the upper stays; the loose pieces (teeth, tongue: not the head's mesh) take no part (the skin has none)
+    ev_side = None
+    if len(shapes) > 1 and shapes[1]:
+        jaw = np.zeros(len(E))
+        for v, d in shapes[1].items():
+            if v < len(E):
+                jaw[v] = d[1]
+        ev_side = np.where(jaw < -3.0, 2, 1)
+    loose = np.zeros(len(E), bool)
+    if event_tris is not None and len(event_tris):
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+        t = np.asarray(event_tris)
+        r_, c_ = np.r_[t[:, 0], t[:, 1], t[:, 2]], np.r_[t[:, 1], t[:, 2], t[:, 0]]
+        _n, lab = connected_components(coo_matrix((np.ones(len(r_)), (r_, c_)), shape=(len(E), len(E))),
+                                       directed=False)
+        used = np.zeros(len(E), bool)
+        used[t.ravel()] = True
+        main = np.bincount(lab[used]).argmax()
+        loose = used & (lab != main) & (np.abs(E[:, 1] - le["mouth"]) < 20)
+    ge = group(A, ev_side)
+    gs = group(S, skin_sides if skin_sides is not None else lip_sides(S, skin_tris, m, lip_x, lip_band))
     idx = np.zeros((len(S), k), int)
     dist = np.zeros((len(S), k))
     # the event head's inside of the mouth (its teeth, tongue and the mouth's bag, more than `inside` behind the face
@@ -167,7 +275,7 @@ def carry_shapes(S, E, shapes, k=4, near=5.0, far=12.0, lip_x=20.0, lip_band=14.
     for i in np.where(box)[0]:
         near_ = box & (np.abs(A[:, 0] - A[i, 0]) < 2.0) & (np.abs(A[:, 1] - A[i, 1]) < 3.0)
         surface[i] = A[near_, 2].max()
-    outer = ~(box & (surface - A[:, 2] > inside))
+    outer = ~(box & (surface - A[:, 2] > inside)) & ~loose
     outer_idx = np.where(outer)[0]
     full_ = cKDTree(A[outer_idx])
 
@@ -476,7 +584,9 @@ def main(argv=None):
         for part in a.slots.split(","):
             lo, _, hi = part.partition("-")
             slots.update(range(int(lo), int(hi or lo) + 1))
-    shapes, ls, le = carry_shapes(S, E, ev_shapes, skin_mouth=a.mouth, mouth_gain=a.mouth_gain,
+    shapes, ls, le = carry_shapes(S, E, ev_shapes, skin_tris=model_tris(head),
+                                  event_tris=model_tris(LAST_EVENT_BLOB) if LAST_EVENT_BLOB else None,
+                                  skin_mouth=a.mouth, mouth_gain=a.mouth_gain,
                                   threshold=a.threshold, slots=slots, face_gain=a.face_gain, eye_gain=a.eye_gain)
     if a.blink == "own" and (slots is None or 9 in slots) and len(shapes) > 9:
         blink, line = synth_blink(head)
