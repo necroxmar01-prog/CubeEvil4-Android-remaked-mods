@@ -20818,7 +20818,17 @@ Spiel.
   Tabelleneintrag `idx[i]`, Gewicht aus der Hermite-Kurve, auch negativ); passen Ruhepose, Reihenfolge oder Größe der
   Formen der PC-Fassung nicht zur Disc, wirken sie falsch – das erklärt wohl auch die übertriebene Mimik früherer
   Stände. Nächster Schritt: Transplantat und `skin_shapes.py` mit der Disc-Eventdatei (`Evd/r100s03.evd`, GameCube,
-  big-endian; `gc_head` liest sie schon).
+  big-endian; `gc_head` liest sie schon). Mit der Disc-Eventdatei (DevJunior, 28.11.2026): Ruhepose und Formen sind
+  gleich wie in der PC-Fassung (gleiche Punkte, gleiche Ausschläge; die PC-Fassung führt Punkte nur mehrfach), die
+  Vermutung trifft nicht zu. Gefundene Fehler im Werkzeug: die Punkte des Event-Kopfs wurden über die Lage statt über
+  ihre Nummer zugeordnet (doppelte Punkte: Formen auf den falschen Punkt), die Farbe kam von der hinteren Schicht des
+  Mundes (Zahnreihe/Mundinneres) statt von der Vorderseite, offene Säume an der Naht, die Zunge als Zahn gefärbt.
+  Behoben (`tri_indices`, Farbe nur von der vordersten Hautschicht, Gesichtsdreiecke bleiben solange eine Ecke außerhalb
+  liegt, Naht 0,4 Einheiten dahinter, Formen der Event-Punkte bis 1,5 Einheiten vor die Naht). Befund Augen: der
+  Lidschlag des Event-Kopfs bewegt die eigenen Lider kaum (die Hälfte der stark bewegten Punkte sind Wimpernkarten,
+  das Event schließt die Augen über eigene Augenmodelle); daher neu `--parts mouth` (Standard): nur Lippen, Zähne
+  und Zunge aus dem Event, die Augen behalten die Lider des neuen Kopfs mit eigenem Lidschlag (`synth_blink`), am Host
+  geschlossen gerendert. Leon-Pakete Klassik v31, Remake v27 (aus v28/v24); auf dem Gerät nicht getestet.
 - **„Umgebungsschatten“ als eigene Option, Haar im Schatten** (DevJunior, 27.11.2026: „que sea una opción aparte en
   el apartado de sombras“, „el cabello no es afectado en las sombras“): neben „Echtzeitschatten“ ein Schalter
   (`ingame_rt_shadows_scenery`, Hilfe angehängt, 11 Sprachen), ab Werk aus; `CoreBridge.setSceneryShadows` →
